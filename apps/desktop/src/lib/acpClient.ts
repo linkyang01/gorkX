@@ -29,6 +29,10 @@ export interface GrokStatus {
   upgradeSource: string;
   docsUrl: string;
   sourceUrl: string;
+  /** App-owned engine data home */
+  grokHome?: string;
+  engineAppOwned?: boolean;
+  independentReady?: boolean;
 }
 
 export type SessionUpdate = {
@@ -683,13 +687,255 @@ export function extractUpdateText(
   return { kind: null, text: '' };
 }
 
-export function formatToolLine(update: SessionUpdate): string | null {
+/** True if string is a protocol call id (not for humans). */
+export function isToolCallIdLike(s: string | undefined | null): boolean {
+  if (!s) return true;
+  const t = s.trim();
+  if (!t) return true;
+  if (/^call-[0-9a-f-]{8,}/i.test(t)) return true;
+  // "call-xxx · completed" style
+  if (/^call-[0-9a-f-]+(\s*·\s*\w+)?$/i.test(t)) return true;
+  return false;
+}
+
+export type ParsedToolUpdate = {
+  toolCallId: string;
+  /** Human-readable one-liner; empty when this update only carries status. */
+  label: string;
+  status?: string;
+  kind?: string;
+  /** Raw English/protocol detail for expand-if-needed */
+  rawDetail?: string;
+};
+
+/**
+ * Build a human-facing tool summary from ACP tool_call / tool_call_update.
+ * Never uses toolCallId as the display label.
+ */
+export function parseToolUpdate(update: SessionUpdate): ParsedToolUpdate | null {
   if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') {
     return null;
   }
-  const title = update.title || update.kind || update.toolCallId || 'tool';
-  const st = update.status ? ` · ${update.status}` : '';
-  return `${title}${st}`;
+  const anyU = update as Record<string, unknown>;
+  const toolCallId = String(update.toolCallId ?? '');
+  const status = update.status != null ? String(update.status) : undefined;
+
+  const meta = (anyU._meta && typeof anyU._meta === 'object'
+    ? (anyU._meta as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  const xai = (meta['x.ai/tool'] && typeof meta['x.ai/tool'] === 'object'
+    ? (meta['x.ai/tool'] as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+
+  const toolName = String(xai.name ?? anyU.toolName ?? '');
+  const toolLabel = String(xai.label ?? '');
+  const kindRaw = String(update.kind ?? xai.kind ?? '').toLowerCase();
+
+  const rawIn =
+    anyU.rawInput && typeof anyU.rawInput === 'object'
+      ? (anyU.rawInput as Record<string, unknown>)
+      : undefined;
+  const xaiInput =
+    xai.input && typeof xai.input === 'object'
+      ? (xai.input as Record<string, unknown>)
+      : undefined;
+
+  let pathOrTarget = '';
+  let command = '';
+  let description = '';
+
+  const pickStr = (...vals: unknown[]) => {
+    for (const v of vals) {
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  };
+
+  if (rawIn) {
+    command = pickStr(rawIn.command, rawIn.cmd);
+    pathOrTarget = pickStr(
+      rawIn.target_file,
+      rawIn.file_path,
+      rawIn.filePath,
+      rawIn.path,
+      rawIn.target_directory,
+      rawIn.directory,
+    );
+    description = pickStr(rawIn.description);
+  }
+  if (xaiInput) {
+    if (!command) command = pickStr(xaiInput.command, xaiInput.cmd);
+    if (!pathOrTarget) {
+      pathOrTarget = pickStr(
+        xaiInput.path,
+        xaiInput.file,
+        xaiInput.directory,
+        xaiInput.target_file,
+      );
+    }
+  }
+
+  const locations = anyU.locations;
+  if (!pathOrTarget && Array.isArray(locations) && locations[0]) {
+    const loc = locations[0] as Record<string, unknown>;
+    pathOrTarget = pickStr(loc.path, loc.uri, loc.file);
+  }
+
+  // content[] sometimes holds a short description
+  if (!description && Array.isArray(anyU.content)) {
+    for (const block of anyU.content) {
+      if (!block || typeof block !== 'object') continue;
+      const b = block as Record<string, unknown>;
+      const inner = b.content;
+      if (inner && typeof inner === 'object' && typeof (inner as { text?: string }).text === 'string') {
+        description = pickStr((inner as { text?: string }).text) || description;
+      } else if (typeof b.text === 'string') {
+        description = pickStr(b.text) || description;
+      }
+    }
+  }
+
+  let title = typeof update.title === 'string' ? update.title.trim() : '';
+  if (isToolCallIdLike(title)) title = '';
+
+  // Prefer human pieces over protocol names
+  const nameHint = toolLabel || toolName || title || kindRaw;
+
+  // If this is a pure status tick with no new descriptive fields, leave label empty
+  // so UI keeps the previous human title.
+  const hasDesc =
+    Boolean(title) ||
+    Boolean(toolName) ||
+    Boolean(toolLabel) ||
+    Boolean(command) ||
+    Boolean(pathOrTarget) ||
+    Boolean(description) ||
+    (Boolean(kindRaw) && update.sessionUpdate === 'tool_call');
+
+  let label = '';
+  if (hasDesc) {
+    label = composeToolLabel({
+      title,
+      toolName: toolName || nameHint,
+      toolLabel,
+      kind: kindRaw,
+      command,
+      path: pathOrTarget,
+      description,
+    });
+  }
+
+  const rawDetail = [title, command, pathOrTarget, description].filter(Boolean).join('\n') || undefined;
+
+  return {
+    toolCallId: toolCallId || label || 'tool',
+    label,
+    status,
+    kind: kindRaw || undefined,
+    rawDetail,
+  };
+}
+
+function shortPath(p: string): string {
+  const s = p.replace(/^file:\/\//, '').trim();
+  if (!s) return '';
+  const parts = s.split('/').filter(Boolean);
+  if (parts.length <= 2) return s.length > 48 ? `…${s.slice(-46)}` : s;
+  return parts.slice(-2).join('/');
+}
+
+function composeToolLabel(p: {
+  title: string;
+  toolName: string;
+  toolLabel: string;
+  kind: string;
+  command: string;
+  path: string;
+  description: string;
+}): string {
+  const kind = (p.kind || '').toLowerCase();
+  const name = (p.toolName || p.toolLabel || '').toLowerCase();
+  const blob = `${p.title} ${name} ${kind}`;
+
+  // Chinese action
+  let action = '调用工具';
+  if (
+    kind.includes('read') ||
+    /read_file|read\b/.test(name) ||
+    /^read\b/i.test(p.title)
+  ) {
+    action = '读取文件';
+  } else if (
+    kind.includes('edit') ||
+    kind.includes('write') ||
+    /write|edit|search_replace|str_replace/.test(name)
+  ) {
+    action = '编辑文件';
+  } else if (
+    kind.includes('exec') ||
+    kind === 'execute' ||
+    /run_terminal|bash|shell|command/.test(name) ||
+    /^execute\b/i.test(p.title)
+  ) {
+    action = '执行命令';
+  } else if (kind.includes('list') || /list_dir|list files/.test(name) || /list\b/i.test(p.title)) {
+    action = '列出目录';
+  } else if (/grep|search|find|rg\b/.test(blob)) {
+    action = '检索代码';
+  } else if (/web_search|search web/.test(blob)) {
+    action = '检索网页';
+  } else if (/web_fetch|fetch|open_page/.test(blob)) {
+    action = '获取网页';
+  } else if (/git/.test(blob)) {
+    action = 'Git 操作';
+  } else if (/imagine|image|video/.test(blob)) {
+    action = '生成媒体';
+  } else if (p.toolLabel) {
+    action = p.toolLabel;
+  } else if (p.toolName && !isToolCallIdLike(p.toolName)) {
+    // map snake_case tool names
+    action = p.toolName.replace(/_/g, ' ');
+  }
+
+  if (p.command) {
+    const cmd = p.command.replace(/\s+/g, ' ').trim();
+    const short = cmd.length > 56 ? `${cmd.slice(0, 54)}…` : cmd;
+    return `${action} · ${short}`;
+  }
+  if (p.path) {
+    return `${action} · ${shortPath(p.path)}`;
+  }
+  if (p.description && p.description.length < 80) {
+    return `${action} · ${p.description}`;
+  }
+  // Title like `Read \`/path\`` or `Execute \`cmd\``
+  if (p.title && !isToolCallIdLike(p.title)) {
+    const m = p.title.match(/`([^`]+)`/);
+    if (m) {
+      const inner = m[1];
+      if (inner.includes('/') || inner.startsWith('~')) {
+        return `${action} · ${shortPath(inner)}`;
+      }
+      const short = inner.length > 56 ? `${inner.slice(0, 54)}…` : inner;
+      return `${action} · ${short}`;
+    }
+    // bare tool name title
+    if (!/^[a-z_]+$/.test(p.title)) {
+      return p.title.length > 72 ? `${p.title.slice(0, 70)}…` : p.title;
+    }
+  }
+  return action;
+}
+
+/** @deprecated Prefer parseToolUpdate — kept for any external callers. */
+export function formatToolLine(update: SessionUpdate): string | null {
+  const p = parseToolUpdate(update);
+  if (!p) return null;
+  if (p.label) {
+    return p.status ? `${p.label} · ${p.status}` : p.label;
+  }
+  if (p.status) return p.status;
+  return null;
 }
 
 export interface PlanEntry {

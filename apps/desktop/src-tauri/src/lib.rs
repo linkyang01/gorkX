@@ -1,6 +1,9 @@
 mod agent_bridge;
 mod extensions;
 mod git_panel;
+mod memory;
+mod models_config;
+mod paths;
 mod pty;
 mod store;
 mod terminal;
@@ -127,25 +130,48 @@ pub fn run() {
             store::store_clear_chat,
             store::store_clear_project,
             store::home_dir,
+            store::projects_root,
+            store::create_named_project,
+            store::rename_project_folder,
+            store::store_rekey_project,
             store::account_summary,
             store::list_available_models,
             store::model_context_info,
+            memory::memory_status,
+            memory::memory_set_enabled,
+            memory::memory_set_auto_learn,
+            memory::memory_read_file,
+            memory::memory_open_dir,
+            memory::memory_append_note,
+            memory::memory_injection_context,
+            memory::memory_record_session,
+            models_config::models_list_custom,
+            models_config::models_upsert_custom,
+            models_config::models_remove_custom,
+            models_config::models_set_default,
+            models_config::models_open_config,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
             match event {
-                // Red close button: hide to tray, keep agents running.
+                // Red close / Cmd+W: always quit the whole process.
+                // (With a system tray, closing the window alone would otherwise leave the app running.)
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = window.hide();
-                }
-                tauri::WindowEvent::Destroyed => {
                     let app = window.app_handle().clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Some(pool) = app.try_state::<Arc<AgentPool>>() {
-                            let _ = pool.stop_all().await;
-                        }
-                    });
+                    // Best-effort agent cleanup in background — never block exit on it.
+                    if let Some(pool) = app.try_state::<Arc<AgentPool>>() {
+                        let pool = pool.inner().clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = tokio::time::timeout(
+                                std::time::Duration::from_millis(800),
+                                pool.stop_all(),
+                            )
+                            .await;
+                        });
+                    }
+                    // Exit immediately so the red button always feels like Quit.
+                    app.exit(0);
                 }
                 _ => {}
             }

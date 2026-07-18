@@ -1,4 +1,4 @@
-//! Spawn and multiplex up to MAX_AGENTS local `grok agent stdio` processes.
+//! Spawn and multiplex local `grok agent stdio` processes.
 //! Frontend talks JSON-RPC NDJSON over Tauri events + invoke.
 
 use std::collections::HashMap;
@@ -13,8 +13,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex;
 
-/// Codex-class concurrent threads hard cap (product decision).
-pub const MAX_AGENTS: usize = 4;
+use crate::paths;
+
+/// Soft ceiling only to avoid runaway process spawn (not a product "max 4 agents" limit).
+pub const MAX_AGENTS: usize = 64;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -53,40 +55,8 @@ impl AgentPool {
     }
 }
 
-fn default_path() -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let extras = [
-        format!("{home}/.grok/bin"),
-        format!("{home}/.local/bin"),
-        format!("{home}/bin"),
-        "/opt/homebrew/bin".into(),
-        "/usr/local/bin".into(),
-    ];
-    let current = std::env::var("PATH").unwrap_or_default();
-    format!("{}:{current}", extras.join(":"))
-}
-
 fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
-    if let Some(cmd) = override_cmd {
-        if !cmd.trim().is_empty() {
-            return PathBuf::from(cmd);
-        }
-    }
-    if let Ok(cmd) = std::env::var("GORKX_GROK_CMD") {
-        if !cmd.trim().is_empty() {
-            return PathBuf::from(cmd);
-        }
-    }
-    for dir in default_path().split(':') {
-        if dir.is_empty() {
-            continue;
-        }
-        let candidate = Path::new(dir).join("grok");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-    PathBuf::from("grok")
+    paths::resolve_grok_bin(override_cmd)
 }
 
 /// Map gorkX permission modes → grok agent CLI flags.
@@ -136,15 +106,16 @@ pub async fn agent_start(
 
     let bin = resolve_grok_bin(grok_cmd.as_deref());
     let args = agent_cli_args(&mode, reasoning_effort.as_deref());
+    let _ = paths::ensure_dirs();
 
     let mut command = Command::new(&bin);
     command
         .args(&args)
-        .env("PATH", default_path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    paths::apply_engine_env_tokio(&mut command);
 
     #[cfg(unix)]
     unsafe {
@@ -158,7 +129,7 @@ pub async fn agent_start(
 
     let mut child = command.spawn().map_err(|e| {
         format!(
-            "Failed to spawn `{} {}`: {e}. Is Grok CLI installed and on PATH?",
+            "Failed to spawn engine `{} {}`: {e}. Bundle the Grok Build binary into the app (Resources/grok or Application Support/gorkX/runtime/grok).",
             bin.display(),
             args.join(" ")
         )
@@ -299,7 +270,7 @@ pub struct GrokStatus {
     /// Resolved absolute (or as-invoked) path to the grok binary.
     pub grok_path: String,
     pub detail: String,
-    /// `official` | `custom` | `env` | `missing`
+    /// `app` | `runtime` | `custom` | `env` | `legacy` | `missing`
     pub channel: String,
     /// Suggested open-source checkout for source upgrades (if present).
     pub source_repo_hint: String,
@@ -309,6 +280,12 @@ pub struct GrokStatus {
     pub upgrade_source: String,
     pub docs_url: String,
     pub source_url: String,
+    /// App-owned GROK_HOME (sessions/auth/memory).
+    pub grok_home: String,
+    /// True when engine binary is App Resources or App runtime.
+    pub engine_app_owned: bool,
+    /// Product independence readiness (engine bundled + home app-owned).
+    pub independent_ready: bool,
 }
 
 #[tauri::command]
@@ -319,7 +296,8 @@ pub async fn grok_status(grok_cmd: Option<String>) -> Result<GrokStatus, String>
 }
 
 fn channel_for(bin: &Path, override_set: bool) -> String {
-    if !bin.exists() && bin.to_string_lossy() == "grok" {
+    let exists = bin.is_file() || (bin.to_string_lossy() != "grok" && bin.exists());
+    if !exists && bin.to_string_lossy() == "grok" {
         return "missing".into();
     }
     if override_set {
@@ -331,7 +309,17 @@ fn channel_for(bin: &Path, override_set: bool) -> String {
     {
         return "env".into();
     }
-    "official".into()
+    let s = bin.to_string_lossy();
+    if s.contains("/Contents/Resources/") {
+        return "app".into();
+    }
+    if s.contains("/gorkX/runtime/") || s.contains("/gorkX/grok-home/bin/") {
+        return "runtime".into();
+    }
+    if s.contains("/.grok/bin/") || s.contains("/.gorkx/bin/") {
+        return "legacy".into();
+    }
+    "legacy".into()
 }
 
 fn source_repo_hint(home: &str) -> String {
@@ -350,14 +338,16 @@ fn source_repo_hint(home: &str) -> String {
 }
 
 fn collect_grok_status(grok_cmd: Option<String>) -> Result<GrokStatus, String> {
+    let _ = paths::ensure_dirs();
     let override_set = grok_cmd
         .as_deref()
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
     let bin = resolve_grok_bin(grok_cmd.as_deref());
-    let home = std::env::var("HOME").unwrap_or_default();
-    let auth_path = PathBuf::from(&home).join(".grok/auth.json");
-    let auth_dir = PathBuf::from(&home).join(".grok/auth");
+    let user_home = std::env::var("HOME").unwrap_or_default();
+    let ghome = paths::grok_home();
+    let auth_path = paths::auth_json_path();
+    let auth_dir = ghome.join("auth");
     let api_key = std::env::var("XAI_API_KEY")
         .map(|v| !v.trim().is_empty())
         .unwrap_or(false);
@@ -367,22 +357,25 @@ fn collect_grok_status(grok_cmd: Option<String>) -> Result<GrokStatus, String> {
                 .map(|mut d| d.next().is_some())
                 .unwrap_or(false));
     let authenticated = api_key || cached;
-    let source_hint = source_repo_hint(&home);
+    let source_hint = source_repo_hint(&user_home);
     let upgrade_official =
-        "grok update\n# or:\ncurl -fsSL https://x.ai/cli/install.sh | bash".to_string();
+        "Update engine via gorkX Settings → Updates (or rebuild open-source Grok Build into App runtime)."
+            .to_string();
     let upgrade_source = format!(
         "git clone https://github.com/xai-org/grok-build.git\n\
 cd {source_hint}\n\
 git pull\n\
 cargo build -p xai-grok-pager-bin --release\n\
-# then point gorkX kernel path at:\n\
-#   target/release/xai-grok-pager\n\
-# (or install/symlink as `grok`)"
+# copy into gorkX:\n\
+#   Application Support/gorkX/runtime/grok\n\
+# or Contents/Resources/grok when packaging"
     );
     let docs_url = "https://docs.x.ai/build/overview".to_string();
     let source_url = "https://github.com/xai-org/grok-build".to_string();
     let channel = channel_for(&bin, override_set);
     let resolved = dunce_canonicalize(&bin);
+    let engine_app_owned = paths::engine_is_app_owned(&bin) || channel == "app" || channel == "runtime";
+    let independent_ready = engine_app_owned && ghome.starts_with(paths::app_support_dir());
 
     let base = |installed: bool, version: String, detail: String| GrokStatus {
         installed,
@@ -397,12 +390,15 @@ cargo build -p xai-grok-pager-bin --release\n\
         upgrade_source: upgrade_source.clone(),
         docs_url: docs_url.clone(),
         source_url: source_url.clone(),
+        grok_home: ghome.display().to_string(),
+        engine_app_owned,
+        independent_ready,
     };
 
-    let output = std::process::Command::new(&bin)
-        .arg("--version")
-        .env("PATH", default_path())
-        .output();
+    let mut ver_cmd = std::process::Command::new(&bin);
+    ver_cmd.arg("--version");
+    paths::apply_engine_env(&mut ver_cmd);
+    let output = ver_cmd.output();
 
     match output {
         Ok(out) if out.status.success() => {
@@ -412,29 +408,35 @@ cargo build -p xai-grok-pager-bin --release\n\
             } else {
                 version
             };
+            let detail = if !engine_app_owned {
+                "Dev fallback: engine from PATH/legacy. Package Resources/grok for product independence.".into()
+            } else if authenticated {
+                "Engine ready (App-owned). Data under App GROK_HOME.".into()
+            } else {
+                "Engine found — sign in (Settings → Account) so auth lands in App GROK_HOME.".into()
+            };
             Ok(base(
                 true,
                 version,
-                if authenticated {
-                    "Grok kernel ready — upgrade via official install or open-source rebuild"
-                        .into()
+                detail,
+            ))
+        }
+        Ok(out) => {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            Ok(base(
+                false,
+                String::new(),
+                if err.is_empty() {
+                    "Engine binary failed --version".into()
                 } else {
-                    "Kernel found; run `grok login` in Terminal".into()
+                    err
                 },
             ))
         }
-        Ok(out) => Ok(base(
-            false,
-            String::new(),
-            format!(
-                "grok --version failed: {}",
-                String::from_utf8_lossy(&out.stderr)
-            ),
-        )),
         Err(e) => Ok(base(
             false,
             String::new(),
-            format!("Grok kernel not found ({e})"),
+            format!("Engine not found ({e}). Bundle open-source Grok Build into the app."),
         )),
     }
 }

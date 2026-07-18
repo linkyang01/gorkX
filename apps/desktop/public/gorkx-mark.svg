@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="8" x2="64" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1c2c48"/>
+      <stop offset="100%" stop-color="#0c1422"/>
+    </linearGradient>
+    <linearGradient id="xbar" x1="24" y1="24" x2="104" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eef2f8"/>
+    </linearGradient>
+  </defs>
+  <!-- soft plate (not full-bleed chrome) -->
+  <rect x="6" y="6" width="116" height="116" rx="28" fill="url(#bg)"/>
+  <path d="M32 32c16-10 48-10 64 0" stroke="rgba(255,255,255,0.12)" stroke-width="2.5" stroke-linecap="round"/>
+  <g transform="translate(64 68) rotate(-10)">
+    <rect x="-42" y="-10" width="84" height="20" rx="10" fill="url(#xbar)" transform="rotate(45)"/>
+    <rect x="-42" y="-10" width="66" height="20" rx="10" fill="url(#xbar)" transform="rotate(-45)"/>
+    <rect x="16" y="-10" width="26" height="20" rx="10" fill="#2DE2C5" transform="rotate(-45)"/>
+  </g>
+  <circle cx="68" cy="62" r="4" fill="#2DE2C5"/>
+  <circle cx="68" cy="62" r="1.8" fill="#e8fffa"/>
+</svg>

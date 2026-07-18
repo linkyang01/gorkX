@@ -22,6 +22,9 @@ export function ContextRing({
     title: title || `${p.toFixed(0)}%`,
     'aria-label': title || `context ${p.toFixed(0)} percent`,
   } as const;
+  // Empty usage: still draw a short tick so the control never “disappears”
+  const showDash = p > 0.5 ? dash : Math.max(c * 0.06, 2.2);
+  const showGap = p > 0.5 ? c - dash : c - showDash;
   const svg = (
     <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
       <circle
@@ -29,7 +32,7 @@ export function ContextRing({
         cy="12"
         r={r}
         fill="none"
-        stroke="rgba(0,0,0,0.08)"
+        stroke="rgba(0,0,0,0.16)"
         strokeWidth="2.5"
       />
       <circle
@@ -37,10 +40,10 @@ export function ContextRing({
         cy="12"
         r={r}
         fill="none"
-        stroke={stroke}
+        stroke={p > 0.5 ? stroke : 'rgba(0,0,0,0.28)'}
         strokeWidth="2.5"
         strokeLinecap="round"
-        strokeDasharray={`${dash} ${c - dash}`}
+        strokeDasharray={`${showDash} ${showGap}`}
         transform="rotate(-90 12 12)"
       />
     </svg>

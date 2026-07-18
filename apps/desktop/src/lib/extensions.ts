@@ -99,6 +99,20 @@ export async function fetchMarketplace(grokCmd?: string): Promise<{
   return invoke('extensions_marketplace', { grokCmd: grokCmd || null });
 }
 
+/** Enable Playwright MCP pointed at Chrome (agent browser control). */
+export async function enablePlaywrightChromeMcp(grokCmd?: string): Promise<string> {
+  const { shellExec } = await import('./terminal');
+  const bin = (grokCmd || 'grok').trim() || 'grok';
+  // grok mcp add <name> -- <command> ...
+  const cmd = `${JSON.stringify(bin)} mcp add playwright -- npx -y @playwright/mcp@latest --browser chrome`;
+  const r = await shellExec(cmd);
+  const out = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
+  if (r.exitCode != null && r.exitCode !== 0 && !/already|exists/i.test(out)) {
+    throw new Error(out || `exit ${r.exitCode}`);
+  }
+  return out || 'playwright MCP configured (Chrome)';
+}
+
 export async function removeMcp(name: string, grokCmd?: string): Promise<string> {
   return invoke('extensions_mcp_remove', { name, grokCmd: grokCmd || null });
 }

@@ -114,10 +114,35 @@ export function fmt(n: number): string {
   return String(Math.round(n));
 }
 
-/** Human title from first user line (max ~28 chars). */
+/** Human title from first user line (max ~28 chars). Never includes attachment dump. */
 export function titleFromUserText(text: string): string {
-  const s = text.replace(/\s+/g, ' ').trim();
+  let s = text
+    .replace(/\n\n\[Attached files[\s\S]*$/i, '')
+    .replace(/\[Attached files[^\]]*\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!s) return '';
   if (s.length <= 28) return s;
   return s.slice(0, 26) + '…';
+}
+
+/** True if title is still a placeholder (safe to auto-set once). */
+export function isPlaceholderTitle(title: string): boolean {
+  const t = (title || '').trim();
+  if (!t) return true;
+  if (/^session$/i.test(t)) return true;
+  if (/^(wt|plan)\s*·/i.test(t)) return true;
+  // Default seed labels (en/zh) used when a thread is created empty
+  if (/^(new task|新建任务|chat|对话|inbox|worktree)$/i.test(t)) return true;
+  // Attachment-polluted titles from older builds
+  if (/\[Attached/i.test(t)) return true;
+  // UUID-ish or short session id
+  if (/^[0-9a-f]{6,}$/i.test(t)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f-]{20,}$/i.test(t)) return true;
+  return false;
+}
+
+/** Alias: only auto-title while still a placeholder (first user message). */
+export function canAutoTitle(title: string): boolean {
+  return isPlaceholderTitle(title);
 }

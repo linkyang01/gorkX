@@ -1,59 +1,30 @@
-# gorkX feature matrix (v0.2.8)
+# gorkX feature matrix
 
-Target: **Codex-class coding command center** over Grok Build kernel (`grok agent stdio`).
+See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 
-> Honest scope: feature/layout **parity for the coding agent workflow**.  
-> Visual: **macOS 26 Liquid Glass**. Not a pixel/binary clone of ChatGPT Desktop.  
-> Out of scope: OpenAI computer use, Atlas browser, OpenAI plugin store SKUs.
+**Rule:** no fake product surfaces. Real = works end-to-end. Half = wired to engine/local with limits. Planned = not shipped.
 
 | Area | Feature | Status |
 |------|---------|--------|
-| Layout | Single sidebar + main + right Review | ✅ |
-| Layout | **macOS 26 Liquid Glass** (blur, mesh, float panels) | ✅ |
-| Layout | Text truncation fixes (Review title, bars) | ✅ |
-| Kernel | ACP stdio bridge + auth | ✅ |
-| Kernel | Custom path + version + upgrade recipes | ✅ |
-| Threads | Multi-session ≤4, new / stop / cancel | ✅ |
-| Threads | Resume + history stream | ✅ |
-| Threads | Recent sessions list | ✅ |
-| Project | Folder picker + recent + Finder | ✅ |
-| Permissions | Default / Auto / Full Access | ✅ |
-| Modes | Agent / Plan + Apply plan gate | ✅ |
-| Modes | Plan goal banner in main chat | ✅ |
-| Isolation | Worktree create | ✅ |
-| Review | Colored file diff + stage/unstage | ✅ |
-| Review | Plan + tools tabs + empty hints | ✅ |
-| Review | Auto-open on first tool/plan; remember preference | ✅ |
-| Models | set_model + effort restart | ✅ |
-| Chat | Markdown assistant messages | ✅ |
-| Chat | Collapsible thinking | ✅ |
-| Chat | Expandable tool cards | ✅ |
-| Composer | Slash builtins + skills merge | ✅ |
-| Composer | `/compact` via `_x.ai/compact_conversation` | ✅ |
-| Composer | `@file` fuzzy workspace search | ✅ |
-| Hub | Skills discovery + run | ✅ |
-| Hub | MCP list / doctor / remove | ✅ |
-| Hub | Plugins install / enable / disable / uninstall | ✅ |
-| Hub | Marketplace sources list | ✅ |
-| Desktop | Tray, shortcuts, i18n zh/en, ErrorBoundary | ✅ |
-| Terminal | ACP `terminal/*` client handlers | ✅ |
-| Terminal | Bottom dock: user shell + agent terminals | ✅ |
-| Persist | Thread metadata + chat snapshot (SQLite) | ✅ |
-| Persist | localStorage → SQLite one-shot migrate | ✅ |
-| Chat | **@tanstack/react-virtual** message list | ✅ |
-| Onboard | 3-step first-run checklist | ✅ |
-| Kernel | Data dir / SQLite path / clear chat cache | ✅ |
-| Resilience | Agent crash one-shot auto-reconnect | ✅ |
-| Terminal | **Embedded xterm.js + PTY** (real shell) | ✅ |
-| i18n | macOS bundle zh-Hans + CFBundleLocalizations | ✅ |
-| Next | Notarization / Sparkle auto-update | ⏳ (skipped) |
-| Later | Computer use / in-app browser | ⏳ not Grok kernel |
-| Later | SSH remotes, thread automations | ⏳ |
-| Later | Notarization / auto-update | ⏳ |
+| Layout | Codex three-pane + collapsible sidebar | **Real** |
+| Layout | Review / Terminal / Process | **Real** |
+| Kernel | ACP stdio, App `GROK_HOME`, bundled engine path | **Real** |
+| Chat | Stream, tools, permissions, attachments, / @ | **Real** |
+| Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
+| Scheduled | Local jobs; fires while app open | **Real** (app must be running) |
+| Terminal | PTY dock | **Real** |
+| Extensions | Skills / MCP / plugins via engine CLI | **Real** (depends on engine) |
+| Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember writes disk | **Real (v0.4)** — kernel `/flush`/`/dream` still optional extras |
+| Plan mode | setMode + /plan arm + review plan steps | **Half** — engine plan quality varies |
+| Worktree | create / list / remove via engine | **Half** — thin UI |
+| Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
+| Review Diff | Git porcelain + file diff | **Half** — empty if not a git repo |
+| Multi-provider models | Settings → config.toml models | **Half** — engine must honor config |
+| + menu (imagine/goal/fork/…) | Stage or send slash to engine | **Half** — capability is the engine’s |
+| Settings · Appearance / Browser / Computer / Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
 
 ## Run
 
 ```bash
-./scripts/mac-dev.sh
-./scripts/mac-install.sh   # → ~/Applications/gorkX.app
+cd apps/desktop && npm install && npm run tauri dev
 ```

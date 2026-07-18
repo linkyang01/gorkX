@@ -1,9 +1,11 @@
 import { t } from '../lib/i18n';
+import { humanToolTitle } from '../lib/toolHuman';
 
 export interface ToolEvent {
   id: string;
   label: string;
   status?: string;
+  kind?: string;
 }
 
 interface Props {
@@ -21,13 +23,14 @@ export function ToolTimeline({ tools }: Props) {
   return (
     <div className="tool-timeline" aria-label={t('tools')}>
       {slice.map((tool) => {
-        const label = tool.label.replace(/[\u0000-\u001F]/g, '').slice(0, 40);
+        const title = humanToolTitle(tool.label, tool.kind);
+        const label = title.replace(/[\u0000-\u001F]/g, '').slice(0, 40);
         return (
-          <div key={tool.id} className="tool-chip" title={tool.label}>
+          <div key={tool.id} className="tool-chip" title={title}>
             <span className="tool-dot" />
             <span className="tool-label">
               {label}
-              {tool.label.length > 40 ? '…' : ''}
+              {title.length > 40 ? '…' : ''}
             </span>
           </div>
         );

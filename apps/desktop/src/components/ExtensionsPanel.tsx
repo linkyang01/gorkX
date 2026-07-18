@@ -6,6 +6,7 @@ import {
   openExtensionPath,
   openGrokConfig,
   openSkillsDir,
+  enablePlaywrightChromeMcp,
   removeMcp,
   runMcpDoctor,
   setPluginEnabled,
@@ -169,6 +170,24 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
                 onClick={() => void openGrokConfig().catch((e) => setMsg(String(e)))}
               >
                 {t('extOpenConfig')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm primary-sm"
+                disabled={busy}
+                title="npx @playwright/mcp --browser chrome"
+                onClick={() => {
+                  setBusy(true);
+                  void enablePlaywrightChromeMcp(grokCmd || undefined)
+                    .then((s) => {
+                      setMsg(s);
+                      return refresh();
+                    })
+                    .catch((e) => setMsg(String(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {t('enableChromeMcp')}
               </button>
               <button
                 type="button"

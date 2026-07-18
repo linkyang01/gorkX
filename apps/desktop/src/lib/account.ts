@@ -31,8 +31,13 @@ export async function fetchAccountSummary(): Promise<AccountSummary | null> {
   if (!isTauri()) return null;
   try {
     return await invoke<AccountSummary>('account_summary');
-  } catch {
-    return null;
+  } catch (e) {
+    // Surface a synthetic summary so UI can show the error instead of silent "—"
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      authenticated: false,
+      quotaNote: msg || 'account_summary invoke failed',
+    };
   }
 }
 

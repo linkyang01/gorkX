@@ -187,6 +187,137 @@ pub fn home_dir() -> Result<String, String> {
         .ok_or_else(|| "home dir not found".into())
 }
 
+/// Default root for app-created projects: `~/.gorkx/projects`
+#[tauri::command]
+pub fn projects_root() -> Result<String, String> {
+    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
+    let root = home.join(".gorkx").join("projects");
+    std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    Ok(root.display().to_string())
+}
+
+/// Create `~/.gorkx/projects/<safe_name>` (and a small README). Returns absolute path.
+/// Rename a project folder on disk. Returns the new absolute path.
+#[tauri::command]
+pub fn rename_project_folder(old_path: String, new_name: String) -> Result<String, String> {
+    let old = PathBuf::from(old_path.trim());
+    if !old.is_dir() {
+        return Err(format!("not a directory: {}", old.display()));
+    }
+    let raw = new_name.trim();
+    if raw.is_empty() {
+        return Err("new name is empty".into());
+    }
+    let mut safe = String::new();
+    for ch in raw.chars() {
+        if ch.is_alphanumeric() || ch == '-' || ch == '_' {
+            safe.push(ch);
+        } else if ch.is_whitespace() {
+            if !safe.ends_with('-') {
+                safe.push('-');
+            }
+        }
+    }
+    let safe = safe.trim_matches('-').to_string();
+    if safe.is_empty() {
+        return Err("invalid name".into());
+    }
+    let parent = old
+        .parent()
+        .ok_or_else(|| "no parent directory".to_string())?;
+    let new_path = parent.join(&safe);
+    if new_path == old {
+        return Ok(old.display().to_string());
+    }
+    if new_path.exists() {
+        return Err(format!("already exists: {}", new_path.display()));
+    }
+    std::fs::rename(&old, &new_path).map_err(|e| format!("rename failed: {e}"))?;
+    Ok(new_path.display().to_string())
+}
+
+/// Move SQLite thread_meta + chat_lines from one project key to another; fix cwd prefix.
+#[tauri::command]
+pub fn store_rekey_project(
+    store: State<'_, AppStore>,
+    old_project: String,
+    new_project: String,
+) -> Result<(), String> {
+    let old = old_project.trim();
+    let new = new_project.trim();
+    if old.is_empty() || new.is_empty() || old == new {
+        return Ok(());
+    }
+    let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    // Update cwd if it was exactly old or under old/
+    conn.execute(
+        "UPDATE thread_meta SET project = ?1,
+         cwd = CASE
+           WHEN cwd = ?2 THEN ?1
+           WHEN cwd LIKE ?3 THEN ?1 || substr(cwd, length(?2) + 1)
+           ELSE cwd
+         END,
+         worktree_path = CASE
+           WHEN worktree_path IS NULL THEN NULL
+           WHEN worktree_path = ?2 THEN ?1
+           WHEN worktree_path LIKE ?3 THEN ?1 || substr(worktree_path, length(?2) + 1)
+           ELSE worktree_path
+         END
+         WHERE project = ?2",
+        params![new, old, format!("{old}/%")],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE chat_lines SET project = ?1 WHERE project = ?2",
+        params![new, old],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_named_project(name: String) -> Result<String, String> {
+    let raw = name.trim();
+    if raw.is_empty() {
+        return Err("project name is empty".into());
+    }
+    // Allow unicode letters/numbers, dash, underscore, space → hyphen
+    let mut safe = String::new();
+    for ch in raw.chars() {
+        if ch.is_alphanumeric() || ch == '-' || ch == '_' {
+            safe.push(ch);
+        } else if ch.is_whitespace() {
+            if !safe.ends_with('-') {
+                safe.push('-');
+            }
+        }
+    }
+    let safe = safe.trim_matches('-').to_string();
+    if safe.is_empty() {
+        return Err("invalid project name".into());
+    }
+    if safe.len() > 80 {
+        return Err("project name too long".into());
+    }
+    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
+    let root = home.join(".gorkx").join("projects");
+    std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let path = root.join(&safe);
+    if path.exists() {
+        return Err(format!("already exists: {}", path.display()));
+    }
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    // Marker so users know it was created by gorkX
+    let readme = path.join("README.md");
+    let body = format!(
+        "# {safe}\n\nCreated by gorkX on {}.\n\nPath: `{}`\n",
+        chrono_like_now(),
+        path.display()
+    );
+    let _ = std::fs::write(&readme, body);
+    Ok(path.display().to_string())
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountSummary {
@@ -213,45 +344,90 @@ pub struct ProductUsageRow {
 }
 
 fn load_auth_token_and_profile() -> Result<(Option<String>, Option<String>, Option<String>), String> {
-    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
-    let path = home.join(".grok/auth.json");
+    let _ = crate::paths::ensure_dirs();
+    let path = crate::paths::auth_json_path();
+    if !path.exists() {
+        // Fallback: legacy ~/.grok for one transition period
+        if let Some(home) = dirs::home_dir() {
+            let legacy = home.join(".grok/auth.json");
+            if legacy.exists() {
+                return load_auth_from_path(&legacy);
+            }
+        }
+        return Ok((None, None, None));
+    }
+    load_auth_from_path(&path)
+}
+
+fn load_auth_from_path(
+    path: &std::path::Path,
+) -> Result<(Option<String>, Option<String>, Option<String>), String> {
     if !path.exists() {
         return Ok((None, None, None));
     }
     let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    let mut token = None;
+    let mut best_token: Option<String> = None;
+    let mut best_score: i64 = -1;
     let mut email = None;
     let mut first = None;
     let mut last = None;
-    if let Some(obj) = v.as_object() {
-        for (_k, val) in obj {
-            if let Some(o) = val.as_object() {
-                if token.is_none() {
-                    token = o
-                        .get("key")
-                        .or_else(|| o.get("access_token"))
-                        .or_else(|| o.get("token"))
-                        .and_then(|x| x.as_str())
-                        .map(|s| s.to_string());
-                }
-                if email.is_none() {
-                    email = o.get("email").and_then(|x| x.as_str()).map(|s| s.to_string());
-                }
-                if first.is_none() {
-                    first = o
-                        .get("first_name")
-                        .and_then(|x| x.as_str())
-                        .map(|s| s.to_string());
-                }
-                if last.is_none() {
-                    last = o
-                        .get("last_name")
-                        .and_then(|x| x.as_str())
-                        .map(|s| s.to_string());
+
+    let mut consider = |o: &serde_json::Map<String, serde_json::Value>| {
+        let tok = o
+            .get("key")
+            .or_else(|| o.get("access_token"))
+            .or_else(|| o.get("token"))
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string());
+        if let Some(ref t) = tok {
+            // Prefer non-expired / latest expires_at
+            let mut score: i64 = t.len() as i64;
+            if let Some(exp) = o.get("expires_at").and_then(|x| x.as_str()) {
+                // ISO timestamps sort lexicographically for score when valid
+                // Higher score for later expiry
+                score = exp
+                    .bytes()
+                    .fold(0i64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as i64))
+                    .abs()
+                    .max(1);
+                // Prefer still-valid tokens: bump if expires in future-ish string compare vs now is hard;
+                // just prefer longer + has refresh_token
+                if o.get("refresh_token").is_some() {
+                    score += 1_000_000;
                 }
             }
+            if score >= best_score {
+                best_score = score;
+                best_token = Some(t.clone());
+            }
         }
+        if email.is_none() {
+            email = o.get("email").and_then(|x| x.as_str()).map(|s| s.to_string());
+        }
+        if first.is_none() {
+            first = o
+                .get("first_name")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string());
+        }
+        if last.is_none() {
+            last = o
+                .get("last_name")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string());
+        }
+    };
+
+    if let Some(obj) = v.as_object() {
+        // Nested provider entries (normal grok auth.json shape)
+        for (_k, val) in obj {
+            if let Some(o) = val.as_object() {
+                consider(o);
+            }
+        }
+        // Flat top-level fallback
+        consider(obj);
     }
     let display = match (first, last) {
         (Some(f), Some(l)) => Some(format!("{f}{l}")),
@@ -259,7 +435,7 @@ fn load_auth_token_and_profile() -> Result<(Option<String>, Option<String>, Opti
         (None, Some(l)) => Some(l),
         _ => None,
     };
-    Ok((token, email, display))
+    Ok((best_token, email, display))
 }
 
 fn money_val(v: &serde_json::Value) -> Option<f64> {
@@ -284,26 +460,50 @@ pub fn account_summary() -> Result<AccountSummary, String> {
             on_demand_cap: None,
             period_end: None,
             product_usage: None,
-            quota_note: "not logged in".into(),
+            quota_note: "not logged in — run `grok login`".into(),
         });
     }
     let token = token.unwrap();
 
-    // Official CLI billing endpoint (same as `grok` billing extension)
+    // Official CLI billing endpoint (same as Grok Build credits view)
     let url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(12))
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("gorkX/0.3.7")
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = client
+    let resp = match client
         .get(url)
         .header("Authorization", format!("Bearer {token}"))
         .header("Accept", "application/json")
         .header("x-grok-client-mode", "cli")
-        .header("User-Agent", "gorkX/0.2.9")
         .send()
-        .map_err(|e| format!("billing request failed: {e}"))?;
-    if !resp.status().is_success() {
+    {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(AccountSummary {
+                email,
+                display_name: display,
+                authenticated: true,
+                quota_label: None,
+                credit_usage_percent: None,
+                prepaid_balance: None,
+                on_demand_used: None,
+                on_demand_cap: None,
+                period_end: None,
+                product_usage: None,
+                quota_note: format!("billing network error: {e}"),
+            });
+        }
+    };
+    let status = resp.status();
+    if !status.is_success() {
+        let body_txt = resp.text().unwrap_or_default();
+        let hint = if status.as_u16() == 401 || status.as_u16() == 403 {
+            "token expired — run `grok login`"
+        } else {
+            "billing API error"
+        };
         return Ok(AccountSummary {
             email,
             display_name: display,
@@ -315,14 +515,34 @@ pub fn account_summary() -> Result<AccountSummary, String> {
             on_demand_cap: None,
             period_end: None,
             product_usage: None,
-            quota_note: format!("billing HTTP {}", resp.status()),
+            quota_note: format!("{hint} (HTTP {status}) {}", body_txt.chars().take(80).collect::<String>()),
         });
     }
     let body: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
     let cfg = body.get("config").unwrap_or(&body);
-    let pct = cfg
-        .get("creditUsagePercent")
-        .and_then(|x| x.as_f64());
+    let mut pct = cfg.get("creditUsagePercent").and_then(|x| x.as_f64());
+    // Fallback: GrokBuild product usage
+    if pct.is_none() {
+        if let Some(arr) = cfg.get("productUsage").and_then(|x| x.as_array()) {
+            for p in arr {
+                let name = p.get("product").and_then(|x| x.as_str()).unwrap_or("");
+                if name.eq_ignore_ascii_case("GrokBuild") || name.contains("Build") {
+                    pct = p.get("usagePercent").and_then(|x| x.as_f64());
+                    break;
+                }
+            }
+        }
+    }
+    // Fallback: monthly used/limit dollars → percent
+    if pct.is_none() {
+        let used = cfg.get("used").and_then(money_val);
+        let limit = cfg.get("monthlyLimit").and_then(money_val);
+        if let (Some(u), Some(l)) = (used, limit) {
+            if l > 0.0 {
+                pct = Some((u / l * 100.0).clamp(0.0, 100.0));
+            }
+        }
+    }
     let prepaid = cfg.get("prepaidBalance").and_then(money_val);
     let on_used = cfg.get("onDemandUsed").and_then(money_val);
     let on_cap = cfg.get("onDemandCap").and_then(money_val);
@@ -330,6 +550,7 @@ pub fn account_summary() -> Result<AccountSummary, String> {
         .get("currentPeriod")
         .and_then(|p| p.get("end"))
         .and_then(|x| x.as_str())
+        .or_else(|| cfg.get("billingPeriodEnd").and_then(|x| x.as_str()))
         .map(|s| s.to_string());
     let mut products = Vec::new();
     if let Some(arr) = cfg.get("productUsage").and_then(|x| x.as_array()) {
@@ -346,6 +567,7 @@ pub fn account_summary() -> Result<AccountSummary, String> {
             });
         }
     }
+    // Keep label short for sidebar/footer — no reset timestamp in the compact line.
     let label = if let Some(p) = pct {
         let rem = (100.0 - p).max(0.0);
         Some(format!("已用 {p:.0}% · 剩 {rem:.0}%"))
@@ -367,9 +589,14 @@ pub fn account_summary() -> Result<AccountSummary, String> {
         } else {
             Some(products)
         },
-        quota_note: "live from cli-chat-proxy /v1/billing".into(),
+        quota_note: if pct.is_some() {
+            "live from cli-chat-proxy /v1/billing?format=credits".into()
+        } else {
+            "billing ok but no creditUsagePercent field".into()
+        },
     })
 }
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -390,12 +617,25 @@ pub struct CachedModelRow {
     pub hidden: Option<bool>,
 }
 
+fn models_cache_path() -> std::path::PathBuf {
+    crate::paths::grok_home().join("models_cache.json")
+}
+
 fn read_models_cache_value() -> Result<Option<serde_json::Value>, String> {
-    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
-    let path = home.join(".grok/models_cache.json");
-    if !path.exists() {
+    let _ = crate::paths::ensure_dirs();
+    let path = models_cache_path();
+    let path = if path.exists() {
+        path
+    } else if let Some(home) = dirs::home_dir() {
+        let legacy = home.join(".grok/models_cache.json");
+        if legacy.exists() {
+            legacy
+        } else {
+            return Ok(None);
+        }
+    } else {
         return Ok(None);
-    }
+    };
     let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
     Ok(Some(v))
@@ -420,38 +660,58 @@ fn first_model_id(models: &serde_json::Map<String, serde_json::Value>) -> Option
     models.keys().next().cloned()
 }
 
-/// List models from Grok subscription cache (~/.grok/models_cache.json),
-/// optionally refreshing from cli-chat-proxy with the logged-in session token.
+/// List models from App GROK_HOME models cache + custom [model.*] entries.
 #[tauri::command]
 pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow>, String> {
     let do_refresh = refresh.unwrap_or(false);
     if do_refresh {
         let _ = refresh_models_cache_from_network();
     }
-    let Some(v) = read_models_cache_value()? else {
-        return Ok(vec![]);
-    };
-    let models = models_map_from_cache(&v);
     let mut rows: Vec<CachedModelRow> = Vec::new();
-    for (id, entry) in models.iter() {
-        let info = entry.get("info").unwrap_or(entry);
-        let hidden = info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false);
-        if hidden {
-            continue;
+    let mut seen = std::collections::HashSet::new();
+    if let Some(v) = read_models_cache_value()? {
+        let models = models_map_from_cache(&v);
+        for (id, entry) in models.iter() {
+            let info = entry.get("info").unwrap_or(entry);
+            let hidden = info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false);
+            if hidden {
+                continue;
+            }
+            let name = info
+                .get("name")
+                .or_else(|| info.get("system_prompt_label"))
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| Some(id.clone()));
+            let context_window = info.get("context_window").and_then(|x| x.as_u64());
+            seen.insert(id.clone());
+            rows.push(CachedModelRow {
+                model_id: id.clone(),
+                name,
+                context_window,
+                hidden: Some(false),
+            });
         }
-        let name = info
-            .get("name")
-            .or_else(|| info.get("system_prompt_label"))
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_string())
-            .or_else(|| Some(id.clone()));
-        let context_window = info.get("context_window").and_then(|x| x.as_u64());
-        rows.push(CachedModelRow {
-            model_id: id.clone(),
-            name,
-            context_window,
-            hidden: Some(false),
-        });
+    }
+    // Custom / third-party models from config.toml
+    if let Ok(snap) = crate::models_config::list_custom_models() {
+        for m in snap.custom_models {
+            let id = if m.id.is_empty() { m.model.clone() } else { m.id.clone() };
+            if seen.contains(&id) {
+                continue;
+            }
+            seen.insert(id.clone());
+            rows.push(CachedModelRow {
+                model_id: id,
+                name: Some(if m.name.is_empty() {
+                    m.model
+                } else {
+                    format!("{} · custom", m.name)
+                }),
+                context_window: m.context_window,
+                hidden: Some(false),
+            });
+        }
     }
     rows.sort_by(|a, b| a.model_id.cmp(&b.model_id));
     Ok(rows)
@@ -459,7 +719,7 @@ pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow
 
 fn refresh_models_cache_from_network() -> Result<(), String> {
     let (token, _, _) = load_auth_token_and_profile()?;
-    let token = token.ok_or_else(|| "not logged in (no ~/.grok/auth.json session)".to_string())?;
+    let token = token.ok_or_else(|| "not logged in (no auth session in App GROK_HOME)".to_string())?;
     let url = "https://cli-chat-proxy.grok.com/v1/models";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -513,8 +773,8 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
     if map.is_empty() {
         return Err("models response empty".into());
     }
-    let home = dirs::home_dir().ok_or_else(|| "home dir not found".to_string())?;
-    let path = home.join(".grok/models_cache.json");
+    let _ = crate::paths::ensure_dirs();
+    let path = models_cache_path();
     let out = serde_json::json!({
         "fetched_at": chrono_like_now(),
         "auth_method": "session",

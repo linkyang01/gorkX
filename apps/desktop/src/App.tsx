@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
   AcpClient,
   extractUpdateText,
   fetchGrokStatus,
   stopAllAgents,
   parsePlanUpdate,
-  formatToolLine,
+  isToolCallIdLike,
+  parseToolUpdate,
   permissionResult,
   pickPermissionOption,
   type GrokStatus,
@@ -17,13 +17,73 @@ import {
   type ReasoningEffort,
   type SessionUpdate,
 } from './lib/acpClient';
-import { SettingsPanel } from './components/SettingsPanel';
+import { SettingsPanel, type ArchivedTaskRow } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { ExtensionsPanel } from './components/ExtensionsPanel';
 import { MessageList, type ChatLine } from './components/MessageList';
+import { AttachmentStrip } from './components/AttachmentStrip';
+import { AttachmentPreview } from './components/AttachmentPreview';
 import { ReviewPanel } from './components/ReviewPanel';
 import { TerminalDock } from './components/TerminalDock';
+import {
+  TextPromptModal,
+  type TextPromptRequest,
+} from './components/TextPromptModal';
+import { MemoryPanel } from './components/MemoryPanel';
+
+import { WorktreePanel } from './components/WorktreePanel';
+import { ProcessPanel } from './components/ProcessPanel';
+import { PlusMenu, type PlusAction } from './components/PlusMenu';
+import { ProjectPicker, type ProjectPickerAction } from './components/ProjectPicker';
+import { ScheduledPanel } from './components/ScheduledPanel';
+import {
+  type ScheduledJob,
+  computeNextRun,
+  loadJobs,
+  saveJobs,
+} from './lib/scheduled';
+import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
+import {
+  IconExport,
+  IconFork,
+  IconForward,
+  IconProcess,
+  IconReview,
+  IconSidebar,
+  IconTerminal,
+  IconBack,
+} from './components/ChromeIcons';
+import {
+  IconPlus,
+  IconPlugins,
+  IconScheduled,
+  IconMemory,
+  IconFolder,
+  IconFolderPinned,
+  IconMore,
+  IconRename,
+  IconArchive,
+  IconClose,
+  IconSearch,
+  IconPin,
+  IconWorktree,
+  IconRemoteSession,
+  IconOpenFolder,
+} from './components/UiIcons';
+import {
+  exportSessionClipboard,
+  exportSessionMarkdown,
+  inspectProject,
+} from './lib/grokAdmin';
+import {
+  attachmentsPromptBlock,
+  buildAttachment,
+  createNamedProject,
+  projectsRoot,
+  revokeAttachment,
+  type ComposerAttachment,
+} from './lib/attachments';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -32,7 +92,6 @@ import {
   projectDisplayName,
   pushRecentProject,
   removeRecentProject,
-  setProjectAlias,
   togglePinProject,
 } from './lib/projects';
 import {
@@ -55,15 +114,21 @@ import {
 } from './lib/account';
 import type { AccountSummary } from './lib/account';
 import {
+  canAutoTitle,
   estimateContextUsed,
   formatContextBar,
   formatUsage,
+  isPlaceholderTitle,
   titleFromUserText,
   usageFromUnknown,
   type ModelContextInfo,
   type UsageSnapshot,
 } from './lib/usage';
 import { notifyPermission, revealInFinder } from './lib/host';
+import {
+  humanPermissionOptionLabel,
+  summarizePermissionTool,
+} from './lib/toolHuman';
 import {
   fetchExtensionsSnapshot,
   listWorkspaceFiles,
@@ -72,6 +137,10 @@ import {
   type SkillInfo,
 } from './lib/extensions';
 import { t } from './lib/i18n';
+import {
+  isVoiceInputSupported,
+  VoiceInputSession,
+} from './lib/voiceInput';
 import './App.css';
 
 export type ChatMode = 'agent' | 'plan';
@@ -95,6 +164,13 @@ interface Thread {
   effort: ReasoningEffort;
   usage?: UsageSnapshot | null;
   commands?: Array<{ name: string; description?: string }>;
+  /** Last activity — sidebar sort / same-title disambiguation */
+  updatedAt?: number;
+  /** Hermes: inject once on first real user prompt */
+  memoryInject?: string | null;
+  memoryInjected?: boolean;
+  /** user turns completed — for auto-learn */
+  userTurnCount?: number;
 }
 
 interface RecentSession {
@@ -105,14 +181,223 @@ interface RecentSession {
   lastChangeUnixMs?: number;
 }
 
-const MAX_THREADS = 4;
+
 let lineSeq = 1;
+/** Chat line ids (in-memory only). */
 const nid = () => `n${lineSeq++}`;
+/** Stable unique thread ids — never reuse across reloads (avoids same-name collapse). */
+const tid = () => {
+  try {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return `t_${crypto.randomUUID()}`;
+    }
+  } catch {
+    /* */
+  }
+  return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+};
+
+/** Compact local datetime for menu secondary line only. */
+function formatPeriodEnd(raw: string): string {
+  const s = raw.trim();
+  if (!s) return '';
+  try {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const day = d.getDate();
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${y}-${m}-${day} ${hh}:${mm}`;
+    }
+  } catch {
+    /* */
+  }
+  return s.slice(0, 16).replace('T', ' ');
+}
+
+
+function effortShortLabel(e: ReasoningEffort): string {
+  if (e === 'low') return t('effortLow');
+  if (e === 'medium') return t('effortMedium');
+  return t('effortHigh');
+}
+
+function modelShortLabel(modelId: string, models: ModelInfo[]): string {
+  const hit = models.find((m) => m.modelId === modelId);
+  const name = (hit?.name || modelId || 'model').trim();
+  // Compact: drop common vendor prefixes for toolbar width
+  return name
+    .replace(/^Grok\s+/i, '')
+    .replace(/^gpt-?/i, '')
+    .replace(/^Claude\s+/i, '')
+    .slice(0, 22) || name.slice(0, 22);
+}
+
+function MicIcon({ active }: { active?: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden
+      className={active ? 'mic-icon active' : 'mic-icon'}
+    >
+      <rect
+        x="5.5"
+        y="1.5"
+        width="5"
+        height="8"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        fill={active ? 'currentColor' : 'none'}
+        fillOpacity={active ? 0.2 : 0}
+      />
+      <path
+        d="M3.5 7.5a4.5 4.5 0 0 0 9 0"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+      <path
+        d="M8 12v2.5"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Compact shield for permission control (Codex-style). */
+function PermShieldIcon({ mode }: { mode: PermissionMode }) {
+  return (
+    <svg
+      className={`composer-shield-icon perm-${mode}`}
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden
+    >
+      <path
+        d="M8 1.5L3.5 3.4v3.7c0 3.1 2.1 5.9 4.5 6.7 2.4-.8 4.5-3.6 4.5-6.7V3.4L8 1.5z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+        fill={mode === 'full' ? 'currentColor' : 'none'}
+        fillOpacity={mode === 'full' ? 0.18 : 0}
+      />
+      {mode === 'auto' ? (
+        <path
+          d="M5.8 8.1l1.5 1.5 2.9-3"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : mode === 'full' ? (
+        <path
+          d="M8 5.4v3.2M8 10.4h.01"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="M8 5.6v2.8"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
+      )}
+    </svg>
+  );
+}
+
+function cleanStoredTitle(raw: string, fallback: string): string {
+  const stripped = titleFromUserText(raw);
+  if (stripped) return stripped;
+  const s = (raw || '').replace(/\s*\[Attached[\s\S]*$/i, '').trim();
+  return s || fallback;
+}
+
+/** Sidebar rows for one scope (project path or NO_PROJECT_KEY). Newest first. */
+function threadsForScope(list: Thread[], scope: string): Thread[] {
+  const key = projectScopeKey(scope);
+  return list
+    .filter((th) => !th.archived && projectScopeKey(th.projectKey) === key)
+    .slice()
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+/** Short clock for same-title disambiguation, e.g. 14:32 or 7/19 14:32 */
+function formatThreadClock(ms?: number): string {
+  if (!ms) return '';
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return `${hh}:${mm}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
+}
+
+/**
+ * Pick a title that doesn't collide with other threads in the same project.
+ * "foo" → "foo" → "foo · 14:32" → "foo · 14:32 · 2"
+ */
+function uniquifyThreadTitle(
+  base: string,
+  siblings: Thread[],
+  excludeId?: string,
+): string {
+  const root = (base || '').trim() || t('newThread');
+  const taken = new Set(
+    siblings
+      .filter((th) => th.id !== excludeId && !th.archived)
+      .map((th) => (th.title || '').trim().toLowerCase()),
+  );
+  if (!taken.has(root.toLowerCase())) return root;
+  const withTime = `${root} · ${formatThreadClock(Date.now()) || Date.now().toString(36).slice(-4)}`;
+  if (!taken.has(withTime.toLowerCase())) return withTime;
+  for (let n = 2; n < 99; n++) {
+    const cand = `${root} · ${n}`;
+    if (!taken.has(cand.toLowerCase())) return cand;
+  }
+  return `${root} · ${tid().slice(-6)}`;
+}
+
+/** Sidebar label: if several share the same title, show time so each row is distinct. */
+function threadListLabel(th: Thread, siblings: Thread[]): string {
+  const title = (th.title || '').trim() || t('newThread');
+  const same = siblings.filter(
+    (x) => (x.title || '').trim().toLowerCase() === title.toLowerCase(),
+  );
+  if (same.length <= 1) return title;
+  const clock = formatThreadClock(th.updatedAt);
+  // Title may already include a clock from uniquifyThreadTitle
+  if (clock && !title.includes(clock)) return `${title} · ${clock}`;
+  if (same.length > 1) {
+    // stable order by id so labels don't jump
+    const ordered = [...same].sort((a, b) => (a.id < b.id ? -1 : 1));
+    const idx = ordered.findIndex((x) => x.id === th.id) + 1;
+    if (idx > 0 && !/·\s*\d+$/.test(title)) return `${title} · ${idx}`;
+  }
+  return title;
+}
 
 function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
   return {
     id: m.id,
-    title: m.title || m.sessionId?.slice(0, 8) || 'session',
+    title: cleanStoredTitle(m.title || '', m.sessionId?.slice(0, 8) || 'session'),
     sessionId: m.sessionId,
     modelId: m.modelId,
     client: null,
@@ -134,6 +419,7 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     projectKey: projectScopeKey(m.project),
     archived: Boolean(m.archived),
     effort: m.effort || 'high',
+    updatedAt: m.updatedAt || Date.now(),
   };
 }
 
@@ -165,7 +451,12 @@ function App() {
   const [pinnedProjects, setPinnedProjects] = useState<string[]>(() => loadPinnedProjects());
   const [projectAliases, setProjectAliases] = useState(() => loadProjectAliases());
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
+  const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [composerAtts, setComposerAtts] = useState<ComposerAttachment[]>([]);
+  const [previewAtt, setPreviewAtt] = useState<ComposerAttachment | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [perm, setPerm] = useState<PermissionMode>(() => {
@@ -206,6 +497,11 @@ function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  /** Capability armed in composer (user completes request in chat). */
+  const [capabilityArm, setCapabilityArm] = useState<{
+    prefix: string;
+    label: string;
+  } | null>(null);
   const [permReq, setPermReq] = useState<PermissionRequest | null>(null);
   const [permAgentId, setPermAgentId] = useState<string | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
@@ -219,15 +515,122 @@ function App() {
     }
   });
   const [ctxPopOpen, setCtxPopOpen] = useState(false);
+  /** Composer compact menus: model+effort · permission (Codex-style). */
+  const [modelPopOpen, setModelPopOpen] = useState(false);
+  const [permPopOpen, setPermPopOpen] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
+  const voiceSessionRef = useRef<VoiceInputSession | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
   /** Opt-in: show Grok kernel history under selected project (not auto-loaded). */
   const [showGrokHistory, setShowGrokHistory] = useState(false);
-  const [grokHistoryLoading, setGrokHistoryLoading] = useState(false);
+  const [_grokHistoryLoading, _setGrokHistoryLoading] = useState(false);
+  void _grokHistoryLoading;
+  void _setGrokHistoryLoading;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('gorkx.sidebarCollapsed') === '1';
+  });
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
+
+  const [worktreePanelOpen, setWorktreePanelOpen] = useState(false);
+  /** Process stream (thinking/tools) — closed by default like a detachable pane */
+  const [processOpen, setProcessOpen] = useState(() => {
+    return localStorage.getItem('gorkx.processOpen') === '1';
+  });
+  /** Replaces window.prompt (broken/silent in Tauri WKWebView). */
+  const [textPrompt, setTextPrompt] = useState<
+    (TextPromptRequest & { resolve: (v: string | null) => void }) | null
+  >(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const permModeRef = useRef(perm);
   permModeRef.current = perm;
-  const createThreadRef = useRef<((opts?: { worktree?: boolean }) => Promise<void>) | null>(null);
-  const reconnectRef = useRef<((id: string) => Promise<void>) | null>(null);
+  /** Session navigation history (Codex-like back/forward between tasks). */
+  const navStackRef = useRef<Array<string | null>>([]);
+  const navIdxRef = useRef(-1);
+  const navFromHistoryRef = useRef(false);
+  const [navTick, setNavTick] = useState(0); // re-render for disabled state
+
+  const selectThread = useCallback((id: string | null) => {
+    if (navFromHistoryRef.current) {
+      navFromHistoryRef.current = false;
+      setActiveId(id);
+      return;
+    }
+    const cur = navStackRef.current[navIdxRef.current];
+    if (cur === id && navIdxRef.current >= 0) {
+      setActiveId(id);
+      return;
+    }
+    // drop forward entries
+    if (navIdxRef.current < navStackRef.current.length - 1) {
+      navStackRef.current = navStackRef.current.slice(0, navIdxRef.current + 1);
+    }
+    navStackRef.current.push(id);
+    if (navStackRef.current.length > 64) {
+      navStackRef.current = navStackRef.current.slice(-64);
+    }
+    navIdxRef.current = navStackRef.current.length - 1;
+    setActiveId(id);
+    setNavTick((n) => n + 1);
+    // Auto-connect when opening a saved task (no manual reconnect)
+    if (id) {
+      const th = threadsRef.current.find((x) => x.id === id);
+      if (th?.sessionId && !th.client && !th.busy) {
+        void reconnectRef.current?.(id)?.catch(() => {});
+      }
+    }
+  }, []);
+
+  const canNavBack = navIdxRef.current > 0;
+  const canNavForward =
+    navIdxRef.current >= 0 && navIdxRef.current < navStackRef.current.length - 1;
+
+  const navBack = useCallback(() => {
+    if (navIdxRef.current <= 0) return;
+    navIdxRef.current -= 1;
+    navFromHistoryRef.current = true;
+    const id = navStackRef.current[navIdxRef.current] ?? null;
+    setActiveId(id);
+    setNavTick((n) => n + 1);
+    // restore project scope for that thread if needed
+    if (id) {
+      const th = threadsRef.current.find((x) => x.id === id);
+      if (th && th.projectKey && th.projectKey !== NO_PROJECT_KEY) {
+        setProject(th.projectKey);
+        localStorage.setItem('gorkx.project', th.projectKey);
+      }
+    }
+  }, []);
+
+  const navForward = useCallback(() => {
+    if (navIdxRef.current >= navStackRef.current.length - 1) return;
+    navIdxRef.current += 1;
+    navFromHistoryRef.current = true;
+    const id = navStackRef.current[navIdxRef.current] ?? null;
+    setActiveId(id);
+    setNavTick((n) => n + 1);
+    if (id) {
+      const th = threadsRef.current.find((x) => x.id === id);
+      if (th && th.projectKey && th.projectKey !== NO_PROJECT_KEY) {
+        setProject(th.projectKey);
+        localStorage.setItem('gorkx.project', th.projectKey);
+      }
+    }
+  }, []);
+  void navTick; // used for chrome disabled re-render
+  const createThreadRef = useRef<
+    | ((opts?: {
+        worktree?: boolean;
+        initialPrompt?: string;
+        initialAttachments?: ComposerAttachment[];
+      }) => Promise<void>)
+    | null
+  >(null);
+  const reconnectRef = useRef<((id: string) => Promise<AcpClient | null>) | null>(null);
   const threadsRef = useRef<Thread[]>([]);
   /** Prevent reconnect storm if agent keeps dying */
   const autoReconnectTried = useRef<Set<string>>(new Set());
@@ -304,19 +707,79 @@ function App() {
         // Merge loaded stubs without overwriting live clients
         for (const s of loaded) {
           const cur = byId.get(s.id);
-          if (cur?.client) continue;
-          byId.set(s.id, s);
+          if (cur?.client) {
+            // Keep live agent; refresh meta timestamps/title if better
+            byId.set(cur.id, {
+              ...cur,
+              updatedAt: Math.max(cur.updatedAt || 0, s.updatedAt || 0) || cur.updatedAt,
+              title:
+                !isPlaceholderTitle(cur.title) || isPlaceholderTitle(s.title)
+                  ? cur.title
+                  : s.title,
+            });
+            continue;
+          }
+          // Keep live title if stub would re-pollute
+          if (cur && !isPlaceholderTitle(cur.title) && isPlaceholderTitle(s.title)) {
+            byId.set(s.id, {
+              ...s,
+              title: cur.title,
+              lines: cur.lines.length ? cur.lines : s.lines,
+              updatedAt: Math.max(cur.updatedAt || 0, s.updatedAt || 0) || s.updatedAt,
+            });
+            continue;
+          }
+          byId.set(s.id, {
+            ...s,
+            updatedAt: s.updatedAt || cur?.updatedAt || Date.now(),
+            lines: cur?.lines?.length && cur.lines.length > (s.lines?.length || 0) ? cur.lines : s.lines,
+          });
         }
         // Keep any other live/prev threads not in loaded (e.g. brand-new not yet flushed)
         for (const th of prev) {
           if (!byId.has(th.id) && !th.archived) byId.set(th.id, th);
         }
-        return Array.from(byId.values()).sort((a, b) => {
+        // Dedupe only true kernel-session duplicates (same sessionId).
+        // NEVER collapse distinct threads that merely share a title.
+        const bySession = new Map<string, Thread>();
+        const noSession: Thread[] = [];
+        for (const th of byId.values()) {
+          if (!th.sessionId) {
+            noSession.push(th);
+            continue;
+          }
+          const cur = bySession.get(th.sessionId);
+          if (!cur) {
+            bySession.set(th.sessionId, th);
+            continue;
+          }
+          // Same kernel session opened twice → keep one row, merge best fields
+          const preferTh =
+            (th.client && !cur.client) ||
+            (Boolean(th.client) === Boolean(cur.client) && th.lines.length > cur.lines.length) ||
+            (Boolean(th.client) === Boolean(cur.client) &&
+              th.lines.length === cur.lines.length &&
+              (th.updatedAt || 0) > (cur.updatedAt || 0));
+          const winner = preferTh ? th : cur;
+          const loser = preferTh ? cur : th;
+          bySession.set(th.sessionId, {
+            ...winner,
+            title:
+              !isPlaceholderTitle(winner.title)
+                ? winner.title
+                : !isPlaceholderTitle(loser.title)
+                  ? loser.title
+                  : winner.title,
+            lines: winner.lines.length >= loser.lines.length ? winner.lines : loser.lines,
+            client: winner.client || loser.client,
+            updatedAt: Math.max(winner.updatedAt || 0, loser.updatedAt || 0) || undefined,
+          });
+        }
+        const merged = [...bySession.values(), ...noSession];
+        return merged.sort((a, b) => {
           if (a.client && !b.client) return -1;
           if (!a.client && b.client) return 1;
-          return (a.title || '').localeCompare(b.title || '', undefined, {
-            sensitivity: 'base',
-          });
+          return (b.updatedAt || 0) - (a.updatedAt || 0);
         });
       });
     })();
@@ -385,14 +848,18 @@ function App() {
     for (const line of active.lines) {
       if (line.role !== 'tool') continue;
       const id = line.toolKey || line.id;
-      const parts = line.text.split(' · ');
+      // Prefer stored human text; strip trailing " · completed" protocol tails if any
+      let label = line.text || '';
+      label = label.replace(/\s*·\s*(completed|failed|pending|in_progress|running)\s*$/i, '').trim();
+      if (isToolCallIdLike(label)) label = '';
       map.set(id, {
         id,
-        label: parts[0] || line.text,
-        status: parts[1],
+        label: label || line.toolKind || '工具调用',
+        status: line.toolStatus,
+        kind: line.toolKind,
       });
     }
-    return [...map.values()].slice(-12);
+    return [...map.values()].slice(-24);
   }, [active]);
 
   // Auto-open Review when agent starts producing tools/plans (first signal only)
@@ -430,14 +897,45 @@ function App() {
       );
   }, [grokCmd]);
 
+  const refreshAccount = useCallback(async () => {
+    try {
+      const a = await fetchAccountSummary();
+      setAccount(a);
+      if (!a) {
+        setAccountError(t('quotaLoadFailed'));
+      } else if (a.creditUsagePercent == null && a.quotaNote) {
+        setAccountError(a.quotaNote);
+      } else {
+        setAccountError(null);
+      }
+    } catch (e) {
+      setAccount(null);
+      setAccountError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   useEffect(() => {
     refreshStatus();
-    void fetchAccountSummary().then(setAccount);
+    void refreshAccount();
     const iv = window.setInterval(() => {
-      void fetchAccountSummary().then(setAccount);
-    }, 120_000);
-    return () => window.clearInterval(iv);
-  }, [refreshStatus]);
+      void refreshAccount();
+    }, 90_000);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void refreshAccount();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [refreshStatus, refreshAccount]);
+
+  /** Native prompt is unreliable in Tauri — always use in-app modal. */
+  const askText = useCallback((req: TextPromptRequest): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setTextPrompt({ ...req, resolve });
+    });
+  }, []);
 
   /** Models from Grok subscription cache / cli-chat-proxy (not hardcoded). */
   const loadSubscriptionModels = useCallback(async (refresh = false) => {
@@ -482,17 +980,75 @@ function App() {
     refreshExtensions();
   }, [refreshExtensions]);
 
-  /** Insert skill slash command; open a session if needed. */
+  /** Insert skill into composer; user completes the request in chat. */
   const runSkill = useCallback(
     (skill: SkillInfo) => {
       const cmd = `/${skill.name} `;
       setDraft(cmd);
       setSlashOpen(false);
+      setPlusMenuOpen(false);
+      setCapabilityArm({ prefix: `/${skill.name}`, label: skill.name });
+      window.setTimeout(() => {
+        const el = document.querySelector(
+          '.composer textarea',
+        ) as HTMLTextAreaElement | null;
+        el?.focus();
+        el?.setSelectionRange(cmd.length, cmd.length);
+      }, 30);
       if (!active && project) {
         void createThreadRef.current?.();
       }
     },
     [active, project],
+  );
+
+  /**
+   * Arm a Grok capability in the composer: user finishes the request in chat
+   * (no modal). Next Enter sends the real slash/tool line to the agent.
+   */
+  const stageCapability = useCallback((prefix: string, label: string) => {
+    const p = prefix.startsWith('/') ? prefix : `/${prefix}`;
+    const staged = p.endsWith(' ') ? p : `${p} `;
+    setPlusMenuOpen(false);
+    setSlashOpen(false);
+    setAtOpen(false);
+    setDraft(staged);
+    setCapabilityArm({ prefix: staged.trim(), label });
+    // Focus active composer textarea after paint
+    window.setTimeout(() => {
+      const el = document.querySelector(
+        '.composer textarea',
+      ) as HTMLTextAreaElement | null;
+      el?.focus();
+      const len = staged.length;
+      el?.setSelectionRange(len, len);
+    }, 30);
+  }, []);
+
+  /** Only for actions that must fire immediately (flush/dream with no extra text). */
+  const applySlashCommand = useCallback(
+    async (line: string) => {
+      const cmd = line.startsWith('/') ? line : `/${line}`;
+      setPlusMenuOpen(false);
+      setSlashOpen(false);
+      setCapabilityArm(null);
+      if (!active?.client || !active.sessionId) {
+        setDraft(cmd.endsWith(' ') ? cmd : `${cmd} `);
+        return;
+      }
+      appendLine(active.id, { id: nid(), role: 'user', text: cmd });
+      patchThread(active.id, { busy: true, error: null });
+      try {
+        await active.client.prompt(active.sessionId, cmd);
+      } catch (e) {
+        patchThread(active.id, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        patchThread(active.id, { busy: false });
+      }
+    },
+    [active],
   );
 
   const diskSkillCommands = useMemo(() => {
@@ -508,6 +1064,72 @@ function App() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [active?.lines, active?.busy]);
+
+  // Opening any task with a saved sessionId auto-connects (no reconnect button).
+  useEffect(() => {
+    if (!activeId) return;
+    const th = threadsRef.current.find((x) => x.id === activeId);
+    if (th?.sessionId && !th.client && !th.busy) {
+      void reconnectRef.current?.(activeId)?.catch(() => {});
+    }
+  }, [activeId]);
+
+  /** Fire due scheduled jobs while the app is open (Codex「已安排」). */
+  useEffect(() => {
+    const tick = () => {
+      const jobs = loadJobs();
+      const now = Date.now();
+      let changed = false;
+      const nextJobs = jobs.map((j) => {
+        if (!j.enabled || j.nextRunAt > now) return j;
+        // Fire
+        changed = true;
+        void (async () => {
+          try {
+            if (j.projectPath) {
+              setProject(j.projectPath);
+              setRecentProjects(pushRecentProject(j.projectPath));
+              localStorage.setItem('gorkx.project', j.projectPath);
+            } else {
+              setProject('');
+              localStorage.removeItem('gorkx.project');
+            }
+            // small delay so project state applies
+            await new Promise((r) => setTimeout(r, 200));
+            await createThreadRef.current?.({ initialPrompt: j.prompt });
+          } catch {
+            /* ignore single fire failure */
+          }
+        })();
+        return {
+          ...j,
+          lastRunAt: now,
+          nextRunAt: computeNextRun(j, now),
+        };
+      });
+      if (changed) saveJobs(nextJobs);
+    };
+    const id = window.setInterval(tick, 30_000);
+    // also check once shortly after launch
+    const once = window.setTimeout(tick, 3_000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(once);
+    };
+  }, []);
+
+  const runScheduledJob = async (job: ScheduledJob) => {
+    if (job.projectPath) {
+      setProject(job.projectPath);
+      setRecentProjects(pushRecentProject(job.projectPath));
+      localStorage.setItem('gorkx.project', job.projectPath);
+    } else {
+      setProject('');
+      localStorage.removeItem('gorkx.project');
+    }
+    await new Promise((r) => setTimeout(r, 150));
+    await createThreadRef.current?.({ initialPrompt: job.prompt });
+  };
 
   useEffect(() => {
     const shutdown = () => {
@@ -545,7 +1167,17 @@ function App() {
   const patchThread = useCallback(
     (id: string, patch: Partial<Thread>) => {
       setThreads((prev) => {
-        const next = prev.map((th) => (th.id === id ? { ...th, ...patch } : th));
+        const next = prev.map((th) =>
+          th.id === id
+            ? {
+                ...th,
+                ...patch,
+                // Bump activity time unless caller set updatedAt explicitly
+                updatedAt:
+                  patch.updatedAt !== undefined ? patch.updatedAt : Date.now(),
+              }
+            : th,
+        );
         const updated = next.find((t) => t.id === id);
         if (updated) persistThread(updated);
         return next;
@@ -576,18 +1208,39 @@ function App() {
           if (toolKey) {
             const idx = lines.findIndex((l) => l.toolKey === toolKey);
             if (idx >= 0) {
+              const prev = lines[idx];
+              // Never let a call-id status tick wipe a human label
+              let nextText = chunk || prev.text;
+              if (isToolCallIdLike(chunk) && !isToolCallIdLike(prev.text)) {
+                nextText = prev.text;
+              } else if (!chunk.trim() && prev.text) {
+                nextText = prev.text;
+              } else if (
+                chunk &&
+                !isToolCallIdLike(chunk) &&
+                isToolCallIdLike(prev.text)
+              ) {
+                nextText = chunk;
+              } else if (
+                chunk &&
+                !isToolCallIdLike(chunk) &&
+                prev.text &&
+                chunk.length >= prev.text.length
+              ) {
+                nextText = chunk;
+              }
               lines[idx] = {
-                ...lines[idx],
-                text: chunk || lines[idx].text,
-                toolStatus: meta?.toolStatus ?? lines[idx].toolStatus,
-                toolKind: meta?.toolKind ?? lines[idx].toolKind,
+                ...prev,
+                text: nextText,
+                toolStatus: meta?.toolStatus ?? prev.toolStatus,
+                toolKind: meta?.toolKind ?? prev.toolKind,
               };
               return { ...th, lines };
             }
             lines.push({
               id: nid(),
               role,
-              text: chunk,
+              text: chunk || meta?.toolKind || '工具调用',
               toolKey,
               toolStatus: meta?.toolStatus,
               toolKind: meta?.toolKind,
@@ -663,12 +1316,13 @@ function App() {
             );
           });
         } else {
-          const toolLine = formatToolLine(update);
-          if (toolLine) {
-            const key = String(update.toolCallId ?? toolLine);
-            appendOrMerge(threadId, 'tool', toolLine, key, {
-              toolStatus: update.status ? String(update.status) : undefined,
-              toolKind: update.kind ? String(update.kind) : undefined,
+          const tool = parseToolUpdate(update);
+          if (tool) {
+            const key = tool.toolCallId || tool.label || nid();
+            // Pass human label (may be empty on status-only ticks — merge keeps prior)
+            appendOrMerge(threadId, 'tool', tool.label, key, {
+              toolStatus: tool.status,
+              toolKind: tool.kind,
             });
           }
         }
@@ -821,14 +1475,14 @@ function App() {
         return p.filter((t) => t.sessionId !== sessionId);
       });
       if (threadsRef.current.find((t) => t.sessionId === sessionId)?.id === activeId) {
-        setActiveId(null);
+        selectThread(null);
       }
     },
-    [bootstrapClient, dismissSession, scopeKey, activeId],
+    [bootstrapClient, dismissSession, scopeKey, activeId, selectThread],
   );
 
-  /** Opt-in: load Grok kernel history for one project cwd (not auto). */
-  const loadSessionsForProject = useCallback(
+  /** Opt-in: load Grok kernel history for one project cwd (settings migration only; not sidebar primary). */
+  const _loadSessionsForProject = useCallback(
     async (cwd: string) => {
       if (!cwd || !status?.installed) return;
       let client: AcpClient | null = null;
@@ -850,17 +1504,97 @@ function App() {
     },
     [status?.installed, bootstrapClient, dismissedSessions],
   );
+  void _loadSessionsForProject;
 
   useEffect(() => {
     setShowGrokHistory(false);
   }, [project]);
-  const attachFiles = async (opts?: { images?: boolean; folders?: boolean }) => {
+
+  const addAttachmentPaths = useCallback(async (paths: string[]) => {
+    if (!paths.length) return;
+    const built = await Promise.all(paths.map((p) => buildAttachment(p)));
+    setComposerAtts((prev) => {
+      const seen = new Set(prev.map((a) => a.path));
+      const next = [...prev];
+      for (const a of built) {
+        if (seen.has(a.path)) {
+          revokeAttachment(a);
+          continue;
+        }
+        seen.add(a.path);
+        next.push(a);
+      }
+      return next.slice(0, 24);
+    });
+  }, []);
+
+  // Finder → app: Tauri native drag-drop (HTML5 File.path is often empty on macOS)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+        const win = getCurrentWebviewWindow();
+        unlisten = await win.onDragDropEvent((event) => {
+          if (cancelled) return;
+          const payload = event.payload as {
+            type: string;
+            paths?: string[];
+          };
+          if (payload.type === 'over' || payload.type === 'enter') {
+            setDragOver(true);
+          } else if (payload.type === 'leave' || payload.type === 'cancel') {
+            setDragOver(false);
+          } else if (payload.type === 'drop') {
+            setDragOver(false);
+            const paths = payload.paths || [];
+            if (paths.length) void addAttachmentPaths(paths);
+          }
+        });
+      } catch {
+        /* browser preview */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try {
+        unlisten?.();
+      } catch {
+        /* */
+      }
+    };
+  }, [addAttachmentPaths]);
+
+
+  const removeComposerAtt = (id: string) => {
+    setComposerAtts((prev) => {
+      const hit = prev.find((a) => a.id === id);
+      if (hit) revokeAttachment(hit);
+      return prev.filter((a) => a.id !== id);
+    });
+  };
+
+  const attachFiles = async (opts?: { images?: boolean; folders?: boolean; all?: boolean }) => {
+    let defaultPath: string | undefined;
+    if (opts?.folders) {
+      try {
+        defaultPath = await projectsRoot();
+      } catch {
+        /* */
+      }
+    } else if (project) {
+      defaultPath = project;
+    }
     const selected = await open({
       multiple: true,
       directory: Boolean(opts?.folders),
+      ...(defaultPath ? { defaultPath } : {}),
       filters: opts?.images
-        ? [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'] }]
-        : undefined,
+        ? [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'bmp'] }]
+        : opts?.all
+          ? undefined
+          : undefined,
     });
     const paths = Array.isArray(selected)
       ? selected
@@ -868,32 +1602,33 @@ function App() {
         ? [selected]
         : [];
     if (!paths.length) return;
-    if (!active) {
-      // Home: stash paths into draft as @ refs then user can send
-      setDraft((d) => {
-        const refs = paths.map((p) => `@${p}`).join(' ');
-        return d ? `${d.trimEnd()} ${refs} ` : `${refs} `;
-      });
-      setPlusMenuOpen(false);
-      return;
-    }
-    const chunks: string[] = [];
-    for (const p of paths) {
-      if (opts?.folders || opts?.images) {
-        chunks.push(`\n- @${p}`);
-        continue;
-      }
-      try {
-        const body = await readTextFile(p);
-        const name = p.split('/').pop() || p;
-        const trimmed = body.length > 80_000 ? body.slice(0, 80_000) + '\n/* truncated */' : body;
-        chunks.push('\n### @' + name + '\n```\n' + trimmed + '\n```');
-      } catch (e) {
-        chunks.push(`\n### @${p}\n_(unreadable: ${e instanceof Error ? e.message : String(e)})_`);
-      }
-    }
-    setDraft((d) => (d ? d + '\n' : '') + `Attached:${chunks.join('\n')}`);
+    await addAttachmentPaths(paths);
     setPlusMenuOpen(false);
+  };
+
+  const createProjectByName = async () => {
+    let rootHint = '~/.gorkx/projects';
+    try {
+      rootHint = await projectsRoot();
+    } catch {
+      /* */
+    }
+    setAddProjectMenuOpen(false);
+    const name = await askText({
+      title: t('createProjectTitle'),
+      message: t('createProjectPrompt').replace('{root}', rootHint),
+      placeholder: t('createProjectPlaceholder'),
+      okLabel: t('confirm'),
+    });
+    if (name == null || !name.trim()) return;
+    try {
+      const path = await createNamedProject(name.trim());
+      setProject(path);
+      setRecentProjects(pushRecentProject(path));
+      localStorage.setItem('gorkx.project', path);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const archiveProjectTasks = async (path: string) => {
@@ -910,14 +1645,273 @@ function App() {
     setSlashOpen(false);
   };
 
+  /**
+   * Real plan mode:
+   * 1) session/set_mode plan|default when a session exists
+   * 2) Grok TUI path: arm /plan in composer so the next chat turn enters plan mode
+   * Without a live session, only (2)+preference — createThread will set_mode on new.
+   */
+  const changeChatMode = async (next: ChatMode) => {
+    setChatMode(next);
+    const modeId = next === 'plan' ? 'plan' : 'default';
+    let setModeOk = false;
+    let setModeErr: string | null = null;
+
+    if (active?.client && active.sessionId) {
+      try {
+        await active.client.setMode(active.sessionId, modeId);
+        setModeOk = true;
+        patchThread(active.id, { chatMode: next });
+      } catch (e) {
+        // Try alternate ids some builds accept
+        if (next === 'plan') {
+          for (const alt of ['Plan', 'planning']) {
+            try {
+              await active.client.setMode(active.sessionId, alt);
+              setModeOk = true;
+              patchThread(active.id, { chatMode: next });
+              break;
+            } catch {
+              /* try next */
+            }
+          }
+        }
+        if (!setModeOk) {
+          setModeErr = e instanceof Error ? e.message : String(e);
+        }
+      }
+    }
+
+    if (next === 'plan') {
+      // Always arm /plan in chat — Grok activates plan on the next prompt
+      stageCapability('/plan', t('modePlan'));
+      if (active) {
+        appendLine(active.id, {
+          id: nid(),
+          role: 'system',
+          text: setModeOk
+            ? t('planModeOnHint')
+            : setModeErr
+              ? `${t('planModeOnSlashFallback')} (${setModeErr})`
+              : t('planModeOnSlashFallback'),
+        });
+      }
+      return;
+    }
+
+    // Leave plan mode
+    setCapabilityArm(null);
+    if (draft.startsWith('/plan')) setDraft('');
+    if (active) {
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: setModeOk
+          ? t('planModeOffHint')
+          : setModeErr
+            ? `${t('planModeFail')}: ${setModeErr}`
+            : t('planModeOffHint'),
+      });
+    }
+  };
+
+  const handlePlusAction = async (action: PlusAction) => {
+    switch (action.type) {
+      case 'attach-files':
+        await attachFiles({ all: true });
+        return;
+      case 'attach-folders':
+        await attachFiles({ folders: true });
+        return;
+      case 'pick-project':
+        setPlusMenuOpen(false);
+        setProjectPickerOpen(true);
+        return;
+      case 'terminal':
+        setTerminalOpen(true);
+        localStorage.setItem('gorkx.terminalOpen', '1');
+        return;
+      case 'review':
+        setReviewOpen(true);
+        return;
+      case 'extensions':
+        setExtOpen(true);
+        return;
+      case 'memory-panel':
+        setMemoryOpen(true);
+        return;
+      case 'plan-toggle':
+        await changeChatMode(action.on ? 'plan' : 'agent');
+        return;
+      case 'stage':
+        stageCapability(action.cmd, action.label);
+        return;
+      case 'send-now':
+        if (action.cmd === '/new' || action.cmd === '/clear') {
+          selectThread(null);
+          setDraft('');
+          setCapabilityArm(null);
+          return;
+        }
+        await applySlashCommand(action.cmd);
+        return;
+      case 'skill':
+        stageCapability(`/${action.skill.name}`, action.skill.name);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const slashMenuItems = (query: string) => {
+    const q = query.replace(/^\//, '').toLowerCase();
+    const builtins = [
+      { name: 'compact', description: t('slashDescCompact'), source: 'builtin' as const },
+      { name: 'clear', description: t('slashDescNew'), source: 'builtin' as const },
+      { name: 'new', description: t('slashDescNew'), source: 'builtin' as const },
+      { name: 'diff', description: t('slashDescReview'), source: 'builtin' as const },
+      { name: 'review', description: t('slashDescReview'), source: 'builtin' as const },
+      { name: 'plan', description: t('slashDescPlan'), source: 'builtin' as const },
+      { name: 'skills', description: t('slashDescExt'), source: 'builtin' as const },
+      { name: 'mcp', description: t('slashDescExt'), source: 'builtin' as const },
+      { name: 'plugins', description: t('slashDescExt'), source: 'builtin' as const },
+      { name: 'memory', description: t('slashDescMemory'), source: 'local' as const },
+      { name: 'flush', description: t('slashDescFlush'), source: 'agent' as const },
+      { name: 'dream', description: t('slashDescDream'), source: 'agent' as const },
+      { name: 'remember', description: t('slashDescRemember'), source: 'agent' as const },
+      { name: 'fork', description: t('slashDescFork'), source: 'agent' as const },
+      { name: 'rewind', description: t('slashDescRewind'), source: 'agent' as const },
+      { name: 'model', description: t('slashDescModel'), source: 'agent' as const },
+      { name: 'effort', description: t('slashDescEffort'), source: 'agent' as const },
+      { name: 'context', description: t('slashDescContext'), source: 'agent' as const },
+      { name: 'export', description: t('slashDescExport'), source: 'local' as const },
+      { name: 'worktree', description: t('slashDescWorktree'), source: 'local' as const },
+      { name: 'imagine', description: t('plusImagineHint'), source: 'agent' as const },
+      { name: 'imagine-video', description: t('plusImagineVideoHint'), source: 'agent' as const },
+      { name: 'goal', description: t('plusGoalHint'), source: 'agent' as const },
+    ];
+    const fromSession = (active?.commands ?? []).map((c) => ({
+      name: c.name.replace(/^\//, ''),
+      description: c.description,
+      source: 'session' as const,
+    }));
+    const names = new Set(fromSession.map((c) => c.name.toLowerCase()));
+    const fromBuiltins = builtins.filter((c) => !names.has(c.name.toLowerCase()));
+    const fromDisk = diskSkillCommands.filter((c) => !names.has(c.name.toLowerCase()));
+    return [...fromSession, ...fromBuiltins, ...fromDisk]
+      .filter(
+        (c) =>
+          !q ||
+          c.name.toLowerCase().includes(q) ||
+          (c.description || '').toLowerCase().includes(q),
+      )
+      .slice(0, 28);
+  };
+
+  const renderSlashMenu = () => {
+    if (!slashOpen) return null;
+    const merged = slashMenuItems(draft);
+    return (
+      <div className="slash-menu" role="listbox" aria-label={t('slashHint')}>
+        <div className="hint">{t('slashHint')}</div>
+        {merged.length === 0 ? (
+          <div className="hint">{t('slashEmpty')}</div>
+        ) : (
+          merged.map((c) => (
+            <button
+              key={`${c.source}:${c.name}`}
+              type="button"
+              className="slash-item"
+              onClick={() => {
+                if (c.name === 'plan') {
+                  void changeChatMode('plan');
+                  setDraft('');
+                  setSlashOpen(false);
+                  return;
+                }
+                insertSlash(c.name);
+              }}
+            >
+              <span className="mono">
+                /{c.name}
+                <span className="muted"> · {sourceLabel(c.source)}</span>
+              </span>
+              {c.description ? <span className="muted">{c.description}</span> : null}
+            </button>
+          ))
+        )}
+      </div>
+    );
+  };
+
+  /** Open folder picker starting at the default gorkX projects root (~/.gorkx/projects). */
   const pickProject = async () => {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === 'string') setProject(selected);
+    let defaultPath: string | undefined;
+    try {
+      defaultPath = await projectsRoot();
+    } catch {
+      /* still open dialog */
+    }
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t('openProjectFolder'),
+      ...(defaultPath ? { defaultPath } : {}),
+    });
+    if (typeof selected === 'string') {
+      setProject(selected);
+      setRecentProjects(pushRecentProject(selected));
+      localStorage.setItem('gorkx.project', selected);
+    }
+  };
+
+  const handleProjectPicker = async (a: ProjectPickerAction) => {
+    switch (a.type) {
+      case 'select':
+        setProject(a.path);
+        setRecentProjects(pushRecentProject(a.path));
+        localStorage.setItem('gorkx.project', a.path);
+        return;
+      case 'no-project':
+        setProject('');
+        localStorage.removeItem('gorkx.project');
+        return;
+      case 'new-blank':
+        await createProjectByName();
+        return;
+      case 'open-folder':
+        await pickProject();
+        return;
+      default:
+        return;
+    }
+  };
+
+  const sourceLabel = (source: string) => {
+    switch (source) {
+      case 'session':
+        return t('slashSrcSession');
+      case 'builtin':
+        return t('slashSrcBuiltin');
+      case 'skill':
+        return t('slashSrcSkill');
+      case 'agent':
+        return t('slashSrcAgent');
+      case 'local':
+        return t('slashSrcLocal');
+      default:
+        return t('slashLocal');
+    }
   };
 
   const removeProjectFromApp = (path: string) => {
     // UI-only: remove from recent list; never delete files on disk
     setRecentProjects(removeRecentProject(path));
+    setPinnedProjects((prev) => {
+      const next = prev.filter((x) => x !== path);
+      localStorage.setItem('gorkx.pinnedProjects', JSON.stringify(next));
+      return next;
+    });
     if (project === path) {
       setProject('');
       localStorage.setItem('gorkx.project', '');
@@ -926,28 +1920,128 @@ function App() {
     void clearProjectStore(path);
   };
 
-  const createThread = async (opts?: { worktree?: boolean; initialPrompt?: string }) => {
+  /** Rename session title (UI + SQLite meta only). */
+  const renameThread = async (id: string) => {
+    const th = threads.find((x) => x.id === id);
+    if (!th) return;
+    const next = await askText({
+      title: t('renameThread'),
+      message: t('renameThreadPrompt'),
+      defaultValue: th.title,
+      okLabel: t('confirm'),
+    });
+    if (next == null) return;
+    const raw = next.trim().slice(0, 80);
+    if (!raw) return;
+    const siblings = threadsRef.current.filter(
+      (x) =>
+        projectScopeKey(x.projectKey) === projectScopeKey(th.projectKey) && !x.archived,
+    );
+    patchThread(id, { title: uniquifyThreadTitle(raw, siblings, id) });
+  };
+
+  /**
+   * Rename project folder on disk + rekey SQLite + update in-memory paths.
+   * Display alias is cleared so folder name becomes the name.
+   */
+  const renameProjectOnDisk = async (oldPath: string) => {
+    const currentName = projectDisplayName(oldPath, projectAliases);
+    const nextName = await askText({
+      title: t('renameProject'),
+      message: t('renameProjectDiskPrompt'),
+      defaultValue: currentName,
+      okLabel: t('confirm'),
+    });
+    if (nextName == null || !nextName.trim()) return;
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const newPath = await invoke<string>('rename_project_folder', {
+        oldPath,
+        newName: nextName.trim(),
+      });
+      await invoke('store_rekey_project', { oldProject: oldPath, newProject: newPath });
+      // Paths in recent / pinned / current
+      setRecentProjects((prev) => {
+        const next = prev.map((p) => (p === oldPath ? newPath : p));
+        localStorage.setItem('gorkx.recentProjects', JSON.stringify(next));
+        return next;
+      });
+      setPinnedProjects((prev) => {
+        const next = prev.map((p) => (p === oldPath ? newPath : p));
+        localStorage.setItem('gorkx.pinnedProjects', JSON.stringify(next));
+        return next;
+      });
+      setProjectAliases((prev) => {
+        const map = { ...prev };
+        delete map[oldPath];
+        delete map[newPath];
+        localStorage.setItem('gorkx.projectAliases', JSON.stringify(map));
+        return map;
+      });
+      if (project === oldPath) {
+        setProject(newPath);
+        localStorage.setItem('gorkx.project', newPath);
+      }
+      // In-memory threads
+      setThreads((prev) =>
+        prev.map((th) => {
+          if (th.projectKey !== oldPath && th.cwd !== oldPath && !th.cwd?.startsWith(oldPath + '/')) {
+            return th;
+          }
+          const repath = (p?: string | null) => {
+            if (!p) return p;
+            if (p === oldPath) return newPath;
+            if (p.startsWith(oldPath + '/')) return newPath + p.slice(oldPath.length);
+            return p;
+          };
+          return {
+            ...th,
+            projectKey: th.projectKey === oldPath ? newPath : th.projectKey,
+            cwd: repath(th.cwd) || th.cwd,
+            worktreePath: repath(th.worktreePath) ?? null,
+          };
+        }),
+      );
+      setProjectSessions((m) => {
+        const out = { ...m };
+        if (out[oldPath]) {
+          out[newPath] = out[oldPath];
+          delete out[oldPath];
+        }
+        return out;
+      });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const createThread = async (opts?: {
+    worktree?: boolean;
+    initialPrompt?: string;
+    initialAttachments?: ComposerAttachment[];
+  }) => {
     const useWorktree = Boolean(opts?.worktree);
     const initialPrompt = (opts?.initialPrompt || '').trim();
+    const initialAttachments = opts?.initialAttachments || [];
     if (useWorktree && !project) {
       alert(t('worktreeNeedProject'));
       return;
     }
     const scope = projectScopeKey(project);
-    const liveInScope = threads.filter((th) => th.projectKey === scope && !th.archived && th.client);
-    if (liveInScope.length >= MAX_THREADS) {
-      alert(t('maxThreads'));
-      return;
-    }
     const cwdBase = project || (await homeDir());
-    const id = nid();
-    const seedTitle = initialPrompt
+    const id = tid();
+    const rawSeed = initialPrompt
       ? titleFromUserText(initialPrompt) || (project ? t('newThread') : t('inboxChat'))
       : useWorktree
         ? t('worktree')
         : project
           ? t('newThread')
           : t('inboxChat');
+    const siblings = threadsRef.current.filter(
+      (th) => projectScopeKey(th.projectKey) === scope && !th.archived,
+    );
+    const seedTitle = uniquifyThreadTitle(rawSeed, siblings);
+    const createdAt = Date.now();
     setThreads((p) => [
       ...p,
       {
@@ -965,9 +2059,10 @@ function App() {
         worktreePath: null,
         effort,
         archived: false,
+        updatedAt: createdAt,
       },
     ]);
-    setActiveId(id);
+    selectThread(id);
     try {
       const client = await bootstrapClient();
       wireClient(id, client);
@@ -1030,16 +2125,14 @@ function App() {
       }
 
       const mid = modelId || session.models?.currentModelId || null;
-      const baseTitle = project
-        ? project.split('/').filter(Boolean).pop() ?? t('newThread')
-        : t('inboxChat');
-      const title = initialPrompt
-        ? titleFromUserText(initialPrompt) || baseTitle
-        : useWorktree
-          ? `wt · ${baseTitle}`
-          : chatMode === 'plan'
-            ? `plan · ${baseTitle}`
-            : baseTitle;
+      // Hermes: load durable memory for first prompt injection
+      let memInject = '';
+      try {
+        memInject = await fetchMemoryInjection(project || undefined);
+      } catch {
+        memInject = '';
+      }
+      // Title is fixed at create (seedTitle). Do not rewrite after agent runs.
       patchThread(id, {
         client,
         sessionId,
@@ -1049,14 +2142,27 @@ function App() {
         projectKey: scope,
         worktreePath,
         chatMode,
-        title,
+        title: seedTitle,
+        memoryInject: memInject || null,
+        memoryInjected: false,
+        userTurnCount: 0,
       });
 
       // Home-style: first message creates the session
       if (initialPrompt) {
-        appendLine(id, { id: nid(), role: 'user', text: initialPrompt });
+        const userVisible =
+          initialPrompt.replace(/\n\n\[Attached files[\s\S]*$/i, '').trim() || initialPrompt;
+        appendLine(id, {
+          id: nid(),
+          role: 'user',
+          text: userVisible,
+          attachments: initialAttachments.length ? initialAttachments : undefined,
+        });
+        const enginePrompt = memInject
+          ? `${memInject}\n\n---\n\n用户请求：\n${initialPrompt}`
+          : initialPrompt;
         try {
-          const result = await client.prompt(sessionId, initialPrompt);
+          const result = await client.prompt(sessionId, enginePrompt);
           if (result?.stopReason && result.stopReason !== 'end_turn') {
             appendLine(id, {
               id: nid(),
@@ -1064,12 +2170,23 @@ function App() {
               text: `stop: ${result.stopReason}`,
             });
           }
+          patchThread(id, {
+            memoryInjected: true,
+            memoryInject: null,
+            userTurnCount: 1,
+          });
         } catch (e) {
           patchThread(id, {
             error: e instanceof Error ? e.message : String(e),
           });
         } finally {
           patchThread(id, { busy: false });
+          // Auto-learn: persist session dump after first turn
+          void recordSessionMemory(
+            project || undefined,
+            seedTitle,
+            userVisible.slice(0, 2000),
+          );
         }
       }
     } catch (e) {
@@ -1084,24 +2201,48 @@ function App() {
 
   const resumeSession = async (sessionId: string, title?: string | null) => {
     const scope = projectScopeKey(project);
-    const liveInScope = threads.filter((th) => th.projectKey === scope && th.client);
-    if (liveInScope.length >= MAX_THREADS) {
-      alert(t('maxThreads'));
-      return;
-    }
-    // already open?
-    const existing = threads.find((th) => th.sessionId === sessionId && th.client);
+    // Reuse any local row for this kernel session (with or without live client)
+    const existing = threadsRef.current.find((th) => th.sessionId === sessionId);
     if (existing) {
-      setActiveId(existing.id);
+      selectThread(existing.id);
+      if (existing.client) return;
+      // Fall through to reconnect into the same row id
+      try {
+        const client = await bootstrapClient();
+        wireClient(existing.id, client);
+        const cwdBase = existing.cwd || project || (await homeDir());
+        const session = await client.loadSession(sessionId, cwdBase);
+        rememberModels(session);
+        patchThread(existing.id, {
+          client,
+          sessionId: session.sessionId || sessionId,
+          busy: false,
+          title: existing.title || title || sessionId.slice(0, 8),
+          cwd: cwdBase,
+          projectKey: existing.projectKey || scope,
+        });
+      } catch (e) {
+        patchThread(existing.id, {
+          busy: false,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
       return;
     }
     const cwdBase = project || (await homeDir());
-    const id = nid();
+    const id = tid();
+    const siblings = threadsRef.current.filter(
+      (th) => projectScopeKey(th.projectKey) === scope && !th.archived,
+    );
+    const seedTitle = uniquifyThreadTitle(
+      (title || '').trim() || sessionId.slice(0, 8),
+      siblings,
+    );
     setThreads((p) => [
       ...p,
       {
         id,
-        title: title || sessionId.slice(0, 8),
+        title: seedTitle,
         sessionId,
         modelId: null,
         client: null,
@@ -1114,9 +2255,10 @@ function App() {
         worktreePath: null,
         effort,
         archived: false,
+        updatedAt: Date.now(),
       },
     ]);
-    setActiveId(id);
+    selectThread(id);
     try {
       const client = await bootstrapClient();
       wireClient(id, client);
@@ -1158,28 +2300,52 @@ function App() {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text) return;
-    // No active session: create one and send (Codex home composer)
-    if (!active?.client || !active.sessionId) {
-      if (active?.busy) return;
-      setDraft('');
-      setSlashOpen(false);
-      setAtOpen(false);
-      await createThread({ initialPrompt: text });
+    const atts = composerAtts;
+    if (!text && atts.length === 0) return;
+    const promptBody = `${text}${attachmentsPromptBlock(atts)}`.trim();
+
+    // Restored snapshot has sessionId but no live agent — reconnect in place (do NOT create a 2nd row)
+    if (active?.sessionId && !active.client) {
+      if (active.busy) return;
+      try {
+        await reconnectThread(active.id);
+      } catch {
+        return;
+      }
+    }
+
+    // No thread / brand-new stub without session: create one and send (Codex home composer)
+    const live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
+    if (!live?.client || !live.sessionId) {
+      if (live?.busy) return;
+      if (!active || !active.sessionId) {
+        setDraft('');
+        setComposerAtts([]);
+        setSlashOpen(false);
+        setAtOpen(false);
+        await createThread({ initialPrompt: promptBody, initialAttachments: atts });
+        return;
+      }
+      // sessionId present but reconnect failed
       return;
     }
-    if (active.busy) return;
+    if (live.busy) return;
+
+    // Use the live agent (may have been reconnected above)
+    const agent = live;
+    const client = agent.client!;
+    const sessionId = agent.sessionId!;
 
     // Silent auto-compact near model threshold (always on; no UI toggle)
-    if (!text.startsWith('/') && active.sessionId && active.client && !compactingRef.current) {
-      const limit = modelCtx?.contextWindow || active.usage?.contextLimit || 500_000;
-      const used = estimateContextUsed(active.usage);
+    if (!text.startsWith('/') && !compactingRef.current) {
+      const limit = modelCtx?.contextWindow || agent.usage?.contextLimit || 500_000;
+      const used = estimateContextUsed(agent.usage);
       const thr = (modelCtx?.autoCompactPercent ?? 80) / 100;
       if (limit > 0 && used / limit >= thr) {
         compactingRef.current = true;
         try {
-          await active.client.compact(active.sessionId);
-          appendLine(active.id, {
+          await client.compact(sessionId);
+          appendLine(agent.id, {
             id: nid(),
             role: 'system',
             text: t('autoCompactDone'),
@@ -1200,33 +2366,34 @@ function App() {
       if (name === 'compact') {
         setDraft('');
         setSlashOpen(false);
-        patchThread(active.id, { busy: true, error: null });
-        appendLine(active.id, { id: nid(), role: 'user', text });
+        patchThread(agent.id, { busy: true, error: null });
+        appendLine(agent.id, { id: nid(), role: 'user', text });
         try {
-          await active.client.compact(active.sessionId, arg || undefined);
-          appendLine(active.id, {
+          await client.compact(sessionId, arg || undefined);
+          appendLine(agent.id, {
             id: nid(),
             role: 'system',
             text: arg ? `compact requested (${arg})` : 'compact requested',
           });
-        } catch (e) {
+        } catch {
           // Fallback: send as normal slash to agent
           try {
-            await active.client.prompt(active.sessionId, text);
+            await client.prompt(sessionId, text);
           } catch (e2) {
-            patchThread(active.id, {
+            patchThread(agent.id, {
               error: e2 instanceof Error ? e2.message : String(e2),
             });
           }
         } finally {
-          patchThread(active.id, { busy: false });
+          patchThread(agent.id, { busy: false });
         }
         return;
       }
       if (name === 'clear' || name === 'new') {
         setDraft('');
         setSlashOpen(false);
-        void createThread();
+        selectThread(null);
+        setCapabilityArm(null);
         return;
       }
       if (name === 'diff' || name === 'review') {
@@ -1241,33 +2408,139 @@ function App() {
         setExtOpen(true);
         return;
       }
+      if (name === 'memory' || name === 'mem') {
+        setDraft('');
+        setSlashOpen(false);
+        setMemoryOpen(true);
+        return;
+      }
+      if (name === 'export') {
+        setDraft('');
+        setSlashOpen(false);
+        if (sessionId) {
+          void exportSessionClipboard(sessionId, grokCmd || undefined)
+            .then(() => alert(t('exportSessionClipboard')))
+            .catch((e) => alert(String(e)));
+        }
+        return;
+      }
+      if (name === 'sessions' || name === 'resume') {
+        setDraft('');
+        setSlashOpen(false);
+        // Product: only gorkX tasks — open archived list in settings, not kernel import
+        setKernelOpen(true);
+        return;
+      }
+      if (name === 'worktree' || name === 'worktrees') {
+        setDraft('');
+        setSlashOpen(false);
+        setWorktreePanelOpen(true);
+        return;
+      }
+      if (name === 'plan') {
+        setDraft('');
+        setSlashOpen(false);
+        void (async () => {
+          await changeChatMode('plan');
+          if (arg) {
+            // /plan <description> — mode on, then send description as first plan turn
+            appendLine(agent.id, { id: nid(), role: 'user', text: arg });
+            patchThread(agent.id, { busy: true, error: null });
+            try {
+              await client.prompt(sessionId, arg);
+            } catch (e) {
+              patchThread(agent.id, {
+                error: e instanceof Error ? e.message : String(e),
+              });
+            } finally {
+              patchThread(agent.id, { busy: false });
+            }
+          }
+        })();
+        return;
+      }
     }
 
     setDraft('');
+    setComposerAtts([]);
     setSlashOpen(false);
     setAtOpen(false);
-    const userCount = active.lines.filter((l) => l.role === 'user').length;
-    appendLine(active.id, { id: nid(), role: 'user', text });
-    if (userCount === 0) {
-      const nice = titleFromUserText(text);
-      if (nice) patchThread(active.id, { title: nice });
+    setCapabilityArm(null);
+    const userCount = agent.lines.filter((l) => l.role === 'user').length;
+    const displayText = text || (atts.length ? t('attachmentsOnlyMessage') : '');
+    appendLine(agent.id, {
+      id: nid(),
+      role: 'user',
+      text: displayText,
+      attachments: atts.length ? atts : undefined,
+    });
+    // Lock title on first user message only — never auto-rename later.
+    // If the name is already used in this project, append time / index so rows stay distinct.
+    if (userCount === 0 && canAutoTitle(agent.title)) {
+      const nice =
+        titleFromUserText(text) || (atts[0]?.name ? titleFromUserText(atts[0].name) : '');
+      if (nice) {
+        const siblings = threadsRef.current.filter(
+          (th) =>
+            projectScopeKey(th.projectKey) === projectScopeKey(agent.projectKey) &&
+            !th.archived,
+        );
+        patchThread(agent.id, { title: uniquifyThreadTitle(nice, siblings, agent.id) });
+      }
     }
-    patchThread(active.id, { busy: true, error: null });
+    patchThread(agent.id, { busy: true, error: null });
+    // Hermes: inject long-term memory once on first real user turn
+    let engineBody = promptBody;
+    let markInjected = false;
+    if (!agent.memoryInjected && !text.startsWith('/')) {
+      let inject = agent.memoryInject || '';
+      if (!inject) {
+        try {
+          inject = await fetchMemoryInjection(
+            agent.projectKey === NO_PROJECT_KEY ? undefined : agent.cwd || project || undefined,
+          );
+        } catch {
+          inject = '';
+        }
+      }
+      if (inject) {
+        engineBody = `${inject}\n\n---\n\n用户请求：\n${promptBody}`;
+        markInjected = true;
+      }
+    }
     try {
-      const result = await active.client.prompt(active.sessionId, text);
+      const result = await client.prompt(sessionId, engineBody);
       if (result?.stopReason && result.stopReason !== 'end_turn') {
-        appendLine(active.id, {
+        appendLine(agent.id, {
           id: nid(),
           role: 'system',
           text: `stop: ${result.stopReason}`,
         });
       }
+      if (markInjected) {
+        patchThread(agent.id, { memoryInjected: true, memoryInject: null });
+      }
     } catch (e) {
-      patchThread(active.id, {
+      patchThread(agent.id, {
         error: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      patchThread(active.id, { busy: false });
+      const turns = (agent.userTurnCount || 0) + 1;
+      patchThread(agent.id, { busy: false, userTurnCount: turns });
+      // Auto-learn: after each meaningful non-slash turn, dump session notes
+      if (!text.startsWith('/') && displayText.trim().length >= 8) {
+        const th = threadsRef.current.find((x) => x.id === agent.id);
+        const recent = (th?.lines || [])
+          .filter((l) => l.role === 'user' || l.role === 'assistant')
+          .slice(-6)
+          .map((l) => `${l.role}: ${l.text.slice(0, 400)}`)
+          .join('\n');
+        void recordSessionMemory(
+          agent.projectKey === NO_PROJECT_KEY ? undefined : agent.cwd || project || undefined,
+          th?.title || agent.title,
+          recent || displayText,
+        );
+      }
     }
   };
 
@@ -1305,8 +2578,61 @@ function App() {
     if (!active?.client || !active.sessionId) return;
     await active.client.cancel(active.sessionId);
     patchThread(active.id, { busy: false });
-    appendLine(active.id, { id: nid(), role: 'system', text: 'cancel requested' });
+    appendLine(active.id, { id: nid(), role: 'system', text: t('stop') });
   };
+
+  const mapVoiceError = (code: string): string => {
+    if (code === 'unsupported') return t('voiceUnsupported');
+    if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'PermissionDeniedError') {
+      return t('voiceErrorDenied');
+    }
+    if (code === 'network') return t('voiceErrorNetwork');
+    if (code === 'no-speech') return t('voiceErrorNoSpeech');
+    if (code === 'no-device' || code === 'NotFoundError') return t('voiceErrorNoDevice');
+    if (code === 'no-mediadevices') return t('voiceUnsupported');
+    return `${t('voiceErrorGeneric')} (${code})`;
+  };
+
+  const stopVoiceInput = useCallback(() => {
+    voiceSessionRef.current?.stop();
+    voiceSessionRef.current = null;
+    setVoiceListening(false);
+  }, []);
+
+  const toggleVoiceInput = useCallback(() => {
+    if (voiceSessionRef.current?.isListening()) {
+      stopVoiceInput();
+      setVoiceHint(null);
+      return;
+    }
+    if (!isVoiceInputSupported()) {
+      setVoiceHint(t('voiceUnsupported'));
+      window.setTimeout(() => setVoiceHint(null), 3200);
+      return;
+    }
+    setVoiceHint(t('voiceListening'));
+    const session = new VoiceInputSession({
+      onDraft: (text) => setDraft(text),
+      onListeningChange: (on) => {
+        setVoiceListening(on);
+        if (on) setVoiceHint(t('voiceListening'));
+        else setVoiceHint((h) => (h === t('voiceListening') ? null : h));
+      },
+      onError: (code) => {
+        setVoiceHint(mapVoiceError(code));
+        window.setTimeout(() => setVoiceHint(null), 3600);
+      },
+    });
+    voiceSessionRef.current = session;
+    session.start(draftRef.current);
+  }, [stopVoiceInput]);
+
+  useEffect(() => {
+    return () => {
+      voiceSessionRef.current?.dispose();
+      voiceSessionRef.current = null;
+    };
+  }, []);
 
   /** Plan gate: leave plan mode → agent mode, then prompt to implement selected steps. */
   const applyPlan = async () => {
@@ -1390,23 +2716,6 @@ function App() {
         };
       }),
     );
-  };
-
-  const switchThreadToAgent = async () => {
-    if (!active?.client || !active.sessionId) return;
-    try {
-      await active.client.setMode(active.sessionId, 'default');
-      patchThread(active.id, { chatMode: 'agent' });
-      appendLine(active.id, {
-        id: nid(),
-        role: 'system',
-        text: 'switched to agent mode (no auto-implement)',
-      });
-    } catch (e) {
-      patchThread(active.id, {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
   };
 
   const changeModel = async (next: string) => {
@@ -1517,7 +2826,7 @@ function App() {
     }
     if (th) void removeThreadMeta(th.projectKey || scopeKey, id);
     setThreads((p) => p.filter((x) => x.id !== id));
-    if (activeId === id) setActiveId(null);
+    if (activeId === id) selectThread(null);
   };
 
   /** Archive: hide in gorkX only — keeps Grok session files. */
@@ -1528,22 +2837,33 @@ function App() {
     const next = { ...th, client: null, busy: false, archived: true };
     persistThread(next);
     setThreads((p) => p.filter((x) => x.id !== id));
-    if (activeId === id) setActiveId(null);
+    if (activeId === id) selectThread(null);
   };
 
-  const reconnectThread = async (id: string) => {
-    const th = threadsRef.current.find((x) => x.id === id);
-    if (!th?.sessionId || th.busy) return;
-    patchThread(id, { busy: true, error: null });
-    appendLine(id, { id: nid(), role: 'system', text: 'reconnecting agent…' });
-    try {
-      if (th.client) {
-        try {
-          await th.client.stop();
-        } catch {
-          /* already dead */
-        }
+  /** Restore archived task back into the sidebar list (not "import kernel"). */
+  const restoreArchivedTask = async (row: ArchivedTaskRow) => {
+    const scope = projectScopeKey(row.projectKey);
+    const metas = await loadThreadMetas(scope);
+    const m = metas.find((x) => x.id === row.id);
+    if (!m) return;
+    const restored = { ...m, archived: false, updatedAt: Date.now() };
+    await upsertThreadMeta(scope, restored);
+    const snaps = await loadChatSnapshot(scope, restored.id);
+    const stub = metaToStub({ ...restored, project: scope }, snapToLines(snaps));
+    setThreads((p) => {
+      if (p.some((x) => x.id === stub.id)) {
+        return p.map((x) => (x.id === stub.id ? { ...x, archived: false } : x));
       }
+      return [stub, ...p];
+    });
+  };
+
+  const reconnectThread = async (id: string): Promise<AcpClient | null> => {
+    const th = threadsRef.current.find((x) => x.id === id);
+    if (!th?.sessionId || th.busy) return th?.client ?? null;
+    if (th.client) return th.client;
+    patchThread(id, { busy: true, error: null });
+    try {
       const client = await AcpClient.start(perm, grokCmd || undefined, th.effort || effort);
       await client.initialize();
       await client.authenticate('cached_token');
@@ -1563,9 +2883,13 @@ function App() {
           /* ignore */
         }
       }
+      // Sync ref immediately so send() can use client before next render
+      threadsRef.current = threadsRef.current.map((x) =>
+        x.id === id ? { ...x, client, busy: false, error: null } : x,
+      );
       patchThread(id, { client, busy: false, error: null });
-      appendLine(id, { id: nid(), role: 'system', text: 'reconnected' });
       autoReconnectTried.current.delete(id);
+      return client;
     } catch (e) {
       patchThread(id, {
         busy: false,
@@ -1591,15 +2915,21 @@ function App() {
     setPermAgentId(null);
   };
 
-  // Close context usage popover on outside click / Escape
+  // Close composer popovers on outside click / Escape
   useEffect(() => {
-    if (!ctxPopOpen) return;
+    if (!ctxPopOpen && !modelPopOpen && !permPopOpen) return;
     const onDown = (e: MouseEvent) => {
-      const el = (e.target as HTMLElement | null)?.closest?.('.ctx-ring-wrap');
-      if (!el) setCtxPopOpen(false);
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest?.('.ctx-ring-wrap')) setCtxPopOpen(false);
+      if (!t?.closest?.('.composer-model-wrap')) setModelPopOpen(false);
+      if (!t?.closest?.('.composer-perm-wrap')) setPermPopOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setCtxPopOpen(false);
+      if (e.key === 'Escape') {
+        setCtxPopOpen(false);
+        setModelPopOpen(false);
+        setPermPopOpen(false);
+      }
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -1607,10 +2937,12 @@ function App() {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [ctxPopOpen]);
+  }, [ctxPopOpen, modelPopOpen, permPopOpen]);
 
   useEffect(() => {
     setCtxPopOpen(false);
+    setModelPopOpen(false);
+    setPermPopOpen(false);
   }, [activeId]);
 
   useEffect(() => {
@@ -1623,8 +2955,123 @@ function App() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [accountMenuOpen]);
 
+  useEffect(() => {
+    if (!projectMenuPath && !addProjectMenuOpen && !plusMenuOpen && !projectPickerOpen)
+      return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.('.project-pop-menu') || t?.closest?.('.thread-menu-btn')) return;
+      if (t?.closest?.('.add-project-wrap')) return;
+      if (t?.closest?.('.plus-wrap')) return;
+      if (t?.closest?.('.home-project-wrap') || t?.closest?.('.project-picker-menu')) return;
+      setProjectMenuPath(null);
+      setAddProjectMenuOpen(false);
+      setPlusMenuOpen(false);
+      setProjectPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [projectMenuPath, addProjectMenuOpen, plusMenuOpen, projectPickerOpen]);
+
   return (
-    <div className={`shell${reviewOpen ? ' with-review' : ''}`}>
+    <div
+      className={`shell${reviewOpen ? ' with-review' : ''}${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}
+    >
+      {/* Codex titlebar: traffic lights · sidebar · back/forward …… process · review · terminal */}
+      <div
+        className="app-chrome"
+        data-tauri-drag-region
+        onMouseDown={(e) => {
+          // Overlay titlebar: must call startDragging (permission: core:window:allow-start-dragging)
+          if (e.button !== 0) return;
+          const el = e.target as HTMLElement;
+          if (el.closest('button, a, input, select, textarea, [data-no-drag]')) return;
+          void import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
+            getCurrentWindow().startDragging(),
+          );
+        }}
+      >
+        <div className="chrome-left chrome-cluster" data-no-drag>
+          <button
+            type="button"
+            className="chrome-btn"
+            title={sidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+            aria-label={sidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+            aria-expanded={!sidebarCollapsed}
+            onClick={() => {
+              setSidebarCollapsed((v) => {
+                const next = !v;
+                localStorage.setItem('gorkx.sidebarCollapsed', next ? '1' : '0');
+                return next;
+              });
+            }}
+          >
+            <IconSidebar open={!sidebarCollapsed} />
+          </button>
+          <span className="chrome-sep" aria-hidden />
+          <button
+            type="button"
+            className="chrome-btn"
+            title={t('navBackHint')}
+            aria-label={t('navBack')}
+            disabled={!canNavBack}
+            onClick={navBack}
+          >
+            <IconBack />
+          </button>
+          <button
+            type="button"
+            className="chrome-btn"
+            title={t('navForwardHint')}
+            aria-label={t('navForward')}
+            disabled={!canNavForward}
+            onClick={navForward}
+          >
+            <IconForward />
+          </button>
+        </div>
+        <div className="chrome-right chrome-cluster" data-no-drag data-tauri-drag-region="false">
+          <button
+            type="button"
+            className={processOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('processHint')}
+            aria-label={t('processTitle')}
+            onClick={() => {
+              setProcessOpen((v) => {
+                const next = !v;
+                localStorage.setItem('gorkx.processOpen', next ? '1' : '0');
+                return next;
+              });
+            }}
+          >
+            <IconProcess />
+          </button>
+          <button
+            type="button"
+            className={reviewOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('reviewTitle')}
+            aria-label={t('reviewToggle')}
+            onClick={() => setReviewOpen((v) => !v)}
+          >
+            <IconReview />
+            {activeTools.length + activePlanEntries.length > 0 ? (
+              <span className="icon-badge">
+                {Math.min(99, activeTools.length + activePlanEntries.length)}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            className={terminalOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('terminalTitle')}
+            aria-label={t('terminalToggle')}
+            onClick={() => setTerminalOpen((v) => !v)}
+          >
+            <IconTerminal />
+          </button>
+        </div>
+      </div>
+
       {status && (!status.installed || !status.authenticated) ? (
         <div className="banner warn">
           {!status.installed
@@ -1643,11 +3090,13 @@ function App() {
         </div>
       ) : null}
 
-      {/* Codex-style single left sidebar */}
+      {/* Codex-style sidebar — fully hidden when collapsed; toggle is in app-chrome */}
       <aside className="sidebar">
         <div className="brand">
-          <div className="logo">gX</div>
-          <div>
+          <div className="logo" title={t('appName')}>
+            <img src="/gorkx-icon.png" alt="" className="logo-img" draggable={false} />
+          </div>
+          <div className="brand-text">
             <div className="brand-name">{t('appName')}</div>
             <div className="brand-sub">{t('tagline')}</div>
           </div>
@@ -1657,59 +3106,63 @@ function App() {
           <button
             type="button"
             className="nav-item primary"
-            disabled={
-              threads.filter((th) => th.projectKey === scopeKey && th.client).length >= MAX_THREADS
-            }
-            title={t('newTask')}
-            onClick={() => void createThread()}
+            title={t('newSessionHint')}
+            aria-label={t('newSession')}
+            onClick={() => {
+              // Home empty state (pick project / starter / type) — do not auto-create under project
+              selectThread(null);
+              setDraft('');
+              setComposerAtts([]);
+              setSlashOpen(false);
+              setCapabilityArm(null);
+              setPlusMenuOpen(false);
+            }}
           >
-            <span className="nav-ico">＋</span>
-            {t('newSession')}
+            <span className="nav-ico">
+              <IconPlus />
+            </span>
+            <span className="nav-label">{t('newSession')}</span>
           </button>
           <button
             type="button"
             className={extOpen ? 'nav-item on' : 'nav-item'}
-            title={t('extHubHint')}
+            title={t('navPlugins')}
+            aria-label={t('navPlugins')}
             onClick={() => setExtOpen(true)}
           >
-            <span className="nav-ico">✦</span>
-            {t('navPlugins')}
+            <span className="nav-ico">
+              <IconPlugins />
+            </span>
+            <span className="nav-label">{t('navPlugins')}</span>
           </button>
           <button
             type="button"
-            className={reviewOpen ? 'nav-item on' : 'nav-item'}
-            title={t('reviewTitle')}
-            onClick={() => setReviewOpen((v) => !v)}
+            className={scheduledOpen ? 'nav-item on' : 'nav-item'}
+            title={t('navScheduled')}
+            aria-label={t('navScheduled')}
+            onClick={() => setScheduledOpen(true)}
           >
-            <span className="nav-ico">±</span>
-            {t('reviewTitle')}
-            {(activeTools.length > 0 || activePlanEntries.length > 0) ? (
-              <span className="nav-badge">
-                {activeTools.length + activePlanEntries.length}
-              </span>
-            ) : null}
+            <span className="nav-ico">
+              <IconScheduled />
+            </span>
+            <span className="nav-label">{t('navScheduled')}</span>
           </button>
           <button
             type="button"
-            className="nav-item"
-            disabled={!project || threads.length >= MAX_THREADS}
-            title={t('worktreeHint')}
-            onClick={() => void createThread({ worktree: true })}
+            className={memoryOpen ? 'nav-item on' : 'nav-item'}
+            title={t('navMemoryHint')}
+            aria-label={t('memoryManageNav')}
+            onClick={() => setMemoryOpen(true)}
           >
-            <span className="nav-ico">⎇</span>
-            {t('worktree')}
-          </button>
-          <button
-            type="button"
-            className={terminalOpen ? 'nav-item on' : 'nav-item'}
-            title={t('terminalTitle')}
-            onClick={() => setTerminalOpen((v) => !v)}
-          >
-            <span className="nav-ico">{'>_'}</span>
-            {t('terminalTitle')}
+            <span className="nav-ico">
+              <IconMemory />
+            </span>
+            <span className="nav-label">{t('memoryManageNav')}</span>
           </button>
         </nav>
 
+        {/* Lists hidden when collapsed — must expand to pick projects */}
+        <div className="sidebar-lists">
         <div className="nav-divider" />
 
         {/* Codex-style: 项目 (folder-based) + 任务 (no project) */}
@@ -1717,28 +3170,68 @@ function App() {
           {/* ── 项目 ── */}
           <div className="block-head">
             <span className="block-title">{t('projectsSection')}</span>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => void pickProject()}
-              title={t('pickFolder')}
-            >
-              +
-            </button>
+            <div className="add-project-wrap">
+              <button
+                type="button"
+                className="btn btn-sm"
+                title={t('addProject')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAddProjectMenuOpen((v) => !v);
+                  setProjectMenuPath(null);
+                }}
+              >
+                <IconPlus size={14} />
+              </button>
+              {addProjectMenuOpen ? (
+                <div className="pop-menu project-pop-menu" role="menu" style={{ right: 0, left: 'auto' }}>
+                  <button
+                    type="button"
+                    className="pop-menu-item"
+                    onClick={() => {
+                      setAddProjectMenuOpen(false);
+                      void createProjectByName();
+                    }}
+                  >
+                    <IconPlus size={14} /> {t('createProjectByName')}
+                  </button>
+                  <button
+                    type="button"
+                    className="pop-menu-item"
+                    onClick={() => {
+                      setAddProjectMenuOpen(false);
+                      void pickProject();
+                    }}
+                  >
+                    <IconOpenFolder size={14} /> {t('openProjectFolder')}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           {(() => {
             const projectList = orderedProjects(project, recentProjects, pinnedProjects);
             if (projectList.length === 0) {
-              return <div className="hint">{t('noProjectsYet')}</div>;
+              return (
+                <div className="hint">
+                  {t('noProjectsYet')}
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ marginTop: 8, display: 'block' }}
+                    onClick={() => void pickProject()}
+                  >
+                    {t('openProjectFolder')}
+                  </button>
+                </div>
+              );
             }
             return projectList.map((p) => {
               const name = projectDisplayName(p, projectAliases);
               const selected = p === project;
               const pinned = pinnedProjects.includes(p);
-              const live = threads.filter(
-                (th) => th.projectKey === projectScopeKey(p) && !th.archived,
-              );
+              const live = threadsForScope(threads, projectScopeKey(p));
               const remote =
                 selected && showGrokHistory
                   ? (projectSessions[p] || []).filter(
@@ -1747,100 +3240,136 @@ function App() {
                   : [];
               return (
                 <div key={p} className="proj-group">
-                  <div className={selected ? 'thread on project-row' : 'thread project-row'}>
-                    <button
-                      type="button"
-                      className="thread-main"
-                      title={p}
-                      onClick={() => setProject(p)}
-                    >
-                      <span className="thread-title">
-                        <span className="proj-folder-ico" aria-hidden>
-                          {pinned ? '📌' : '📁'}
-                        </span>
-                        {name}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="thread-x"
-                      title={t('projectMenu')}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setProjectMenuPath((cur) => (cur === p ? null : p));
-                      }}
-                    >
-                      ···
-                    </button>
-                  </div>
-                  {projectMenuPath === p ? (
-                    <div className="pop-menu project-pop-menu" role="menu">
+                  {/* Anchor ··· menu to the project row only (not whole group incl. threads) */}
+                  <div className="project-row-anchor">
+                    <div className={selected ? 'thread on project-row' : 'thread project-row'}>
                       <button
                         type="button"
-                        className="pop-menu-item"
-                        onClick={() => {
-                          setPinnedProjects(togglePinProject(p));
-                          setProjectMenuPath(null);
-                        }}
-                      >
-                        {pinned ? t('unpinProject') : t('pinProject')}
-                      </button>
-                      <button
-                        type="button"
-                        className="pop-menu-item"
-                        onClick={() => {
-                          void revealInFinder(p).catch(() => {});
-                          setProjectMenuPath(null);
-                        }}
-                      >
-                        {t('revealFinder')}
-                      </button>
-                      <button
-                        type="button"
-                        className="pop-menu-item"
+                        className="thread-main"
+                        title={p}
                         onClick={() => {
                           setProject(p);
                           setProjectMenuPath(null);
-                          void createThread({ worktree: true });
                         }}
                       >
-                        {t('createWorktreeMenu')}
+                        <span className="thread-title">
+                          <span className="proj-folder-ico" aria-hidden>
+                            {pinned ? <IconFolderPinned size={14} /> : <IconFolder size={14} />}
+                          </span>
+                          {name}
+                        </span>
                       </button>
                       <button
                         type="button"
-                        className="pop-menu-item"
-                        onClick={() => {
-                          const next = window.prompt(t('renameProjectPrompt'), name);
-                          if (next != null) setProjectAliases(setProjectAlias(p, next));
-                          setProjectMenuPath(null);
+                        className="thread-x thread-menu-btn"
+                        title={t('projectMenu')}
+                        aria-label={t('projectMenu')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAddProjectMenuOpen(false);
+                          setProjectMenuPath((cur) => (cur === p ? null : p));
                         }}
                       >
-                        {t('renameProject')}
-                      </button>
-                      <button
-                        type="button"
-                        className="pop-menu-item"
-                        onClick={() => {
-                          if (confirm(t('archiveProjectTasksConfirm'))) {
-                            void archiveProjectTasks(p);
-                          }
-                          setProjectMenuPath(null);
-                        }}
-                      >
-                        {t('archiveProjectTasks')}
-                      </button>
-                      <button
-                        type="button"
-                        className="pop-menu-item danger"
-                        onClick={() => {
-                          if (confirm(t('removeProjectConfirm'))) removeProjectFromApp(p);
-                          setProjectMenuPath(null);
-                        }}
-                      >
-                        {t('removeProjectMenu')}
+                        <IconMore size={14} />
                       </button>
                     </div>
-                  ) : null}
+                    {projectMenuPath === p ? (
+                      <div className="pop-menu project-pop-menu" role="menu">
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            setPinnedProjects(togglePinProject(p));
+                            setProjectMenuPath(null);
+                          }}
+                        >
+                          <IconPin size={14} /> {pinned ? t('unpinProject') : t('pinProject')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            void revealInFinder(p).catch(() => {});
+                            setProjectMenuPath(null);
+                          }}
+                        >
+                          <IconOpenFolder size={14} /> {t('revealFinder')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            setProject(p);
+                            setProjectMenuPath(null);
+                            void createThread({ worktree: true });
+                          }}
+                        >
+                          <IconWorktree size={14} /> {t('createWorktreeMenu')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            setProject(p);
+                            setProjectMenuPath(null);
+                            setWorktreePanelOpen(true);
+                          }}
+                        >
+                          <IconWorktree size={14} /> {t('worktreeManage')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            setProjectMenuPath(null);
+                            void inspectProject(p, grokCmd || undefined)
+                              .then((raw) => {
+                                try {
+                                  alert(JSON.stringify(JSON.parse(raw), null, 2).slice(0, 3500));
+                                } catch {
+                                  alert(raw.slice(0, 3500));
+                                }
+                              })
+                              .catch((e) => alert(String(e)));
+                          }}
+                        >
+                          <IconSearch size={14} /> {t('inspectProject')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            setProjectMenuPath(null);
+                            void renameProjectOnDisk(p);
+                          }}
+                        >
+                          <IconRename size={14} /> {t('renameProject')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item"
+                          onClick={() => {
+                            if (confirm(t('archiveProjectTasksConfirm'))) {
+                              void archiveProjectTasks(p);
+                            }
+                            setProjectMenuPath(null);
+                          }}
+                        >
+                          <IconArchive size={14} /> {t('archiveProjectTasks')}
+                        </button>
+                        <button
+                          type="button"
+                          className="pop-menu-item danger"
+                          onClick={() => {
+                            if (confirm(t('removeProjectConfirm'))) removeProjectFromApp(p);
+                            setProjectMenuPath(null);
+                          }}
+                        >
+                          <IconClose size={14} /> {t('removeProjectMenu')}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <div className="proj-threads">
                       {live.map((th) => (
                         <div
@@ -1852,15 +3381,33 @@ function App() {
                           <button
                             type="button"
                             className="thread-main"
+                            title={
+                              th.updatedAt
+                                ? `${th.title}\n${formatThreadClock(th.updatedAt)}`
+                                : th.title
+                            }
                             onClick={() => {
                               if (!selected) setProject(p);
-                              setActiveId(th.id);
+                              selectThread(th.id);
                             }}
                           >
                             <span className="thread-title">
-                              {th.busy ? '● ' : ''}
-                              {th.title}
+                              {th.busy ? (
+                                <span className="thread-busy-dot" aria-hidden />
+                              ) : null}
+                              {threadListLabel(th, live)}
                             </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="thread-x"
+                            title={t('renameThread')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void renameThread(th.id);
+                            }}
+                          >
+                            <IconRename size={14} />
                           </button>
                           <button
                             type="button"
@@ -1871,7 +3418,7 @@ function App() {
                               void archiveThread(th.id);
                             }}
                           >
-                            ⬇
+                            <IconArchive size={14} />
                           </button>
                           <button
                             type="button"
@@ -1882,54 +3429,48 @@ function App() {
                               if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
                             }}
                           >
-                            ×
+                            <IconClose size={14} />
                           </button>
                         </div>
                       ))}
-                      {live.length === 0 && !(selected && showGrokHistory) ? (
+                      {live.length === 0 ? (
                         <div className="hint">{t('noProjectTasks')}</div>
-                      ) : null}
-                      {selected ? (
-                        <button
-                          type="button"
-                          className="btn btn-sm side-link"
-                          disabled={grokHistoryLoading}
-                          title={t('grokHistoryHint')}
-                          onClick={() => {
-                            if (showGrokHistory) {
-                              setShowGrokHistory(false);
-                              return;
-                            }
-                            setShowGrokHistory(true);
-                            setGrokHistoryLoading(true);
-                            void loadSessionsForProject(p).finally(() =>
-                              setGrokHistoryLoading(false),
-                            );
-                          }}
-                        >
-                          {grokHistoryLoading
-                            ? '…'
-                            : showGrokHistory
-                              ? t('hideGrokHistory')
-                              : t('showGrokHistory')}
-                        </button>
                       ) : null}
                       {remote.map((s) => {
                         const raw = (s.title || '').trim();
                         const looksId = !raw || /^[0-9a-f-]{8,}$/i.test(raw);
-                        const label = looksId
+                        let label = looksId
                           ? t('inboxChat')
                           : titleFromUserText(raw) || raw.slice(0, 28);
+                        // Disambiguate same-title kernel history rows
+                        const sameTitleCount = remote.filter((o) => {
+                          const r = (o.title || '').trim();
+                          const lid = !r || /^[0-9a-f-]{8,}$/i.test(r);
+                          const l = lid
+                            ? t('inboxChat')
+                            : titleFromUserText(r) || r.slice(0, 28);
+                          return l.toLowerCase() === label.toLowerCase();
+                        }).length;
+                        if (sameTitleCount > 1 && s.lastChangeUnixMs) {
+                          const clock = formatThreadClock(s.lastChangeUnixMs);
+                          if (clock) label = `${label} · ${clock}`;
+                        }
                         return (
                           <div key={s.sessionId} className="thread project-row">
                             <button
                               type="button"
                               className="thread-main"
+                              title={s.sessionId}
                               onClick={() =>
                                 void resumeSession(s.sessionId, looksId ? label : raw)
                               }
                             >
-                              <span className="thread-title">○ {label}</span>
+                              <span className="thread-title">
+                                <span className="proj-folder-ico" aria-hidden>
+                                  <IconRemoteSession size={12} />
+                                </span>
+                                {label}
+                              </span>
                             </button>
                             <button
                               type="button"
@@ -1940,7 +3481,7 @@ function App() {
                                 dismissSession(s.sessionId);
                               }}
                             >
-                              ⬇
+                              <IconArchive size={14} />
                             </button>
                             <button
                               type="button"
@@ -1953,7 +3494,7 @@ function App() {
                                 }
                               }}
                             >
-                              ×
+                              <IconClose size={14} />
                             </button>
                           </div>
                         );
@@ -1969,9 +3510,9 @@ function App() {
             <span className="block-title">{t('tasksSection')}</span>
           </div>
           <div className="task-list">
-            {threads
-              .filter((th) => th.projectKey === NO_PROJECT_KEY && !th.archived)
-              .map((th) => (
+            {(() => {
+              const inbox = threadsForScope(threads, NO_PROJECT_KEY);
+              return inbox.map((th) => (
                 <div
                   key={th.id}
                   className={th.id === activeId ? 'thread on project-row' : 'thread project-row'}
@@ -1979,15 +3520,33 @@ function App() {
                   <button
                     type="button"
                     className="thread-main"
+                    title={
+                      th.updatedAt
+                        ? `${th.title}\n${formatThreadClock(th.updatedAt)}`
+                        : th.title
+                    }
                     onClick={() => {
                       setProject('');
-                      setActiveId(th.id);
+                      selectThread(th.id);
                     }}
                   >
                     <span className="thread-title">
-                      {th.busy ? '● ' : ''}
-                      {th.title}
+                      {th.busy ? (
+                        <span className="thread-busy-dot" aria-hidden />
+                      ) : null}
+                      {threadListLabel(th, inbox)}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="thread-x"
+                    title={t('renameThread')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void renameThread(th.id);
+                    }}
+                  >
+                    <IconRename size={14} />
                   </button>
                   <button
                     type="button"
@@ -1998,7 +3557,7 @@ function App() {
                       void archiveThread(th.id);
                     }}
                   >
-                    ⬇
+                    <IconArchive size={14} />
                   </button>
                   <button
                     type="button"
@@ -2009,16 +3568,17 @@ function App() {
                       if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
                     }}
                   >
-                    ×
+                    <IconClose size={14} />
                   </button>
                 </div>
-              ))}
-            {threads.filter((th) => th.projectKey === NO_PROJECT_KEY && !th.archived).length ===
-            0 ? (
+              ));
+            })()}
+            {threadsForScope(threads, NO_PROJECT_KEY).length === 0 ? (
               <div className="hint">{t('noTasksYet')}</div>
             ) : null}
           </div>
         </section>
+        </div>
 
         <footer className="status">
           <div className="account-menu-wrap">
@@ -2026,7 +3586,10 @@ function App() {
               type="button"
               className="account-chip"
               title={account?.email || t('subBadgeFull')}
-              onClick={() => setAccountMenuOpen((v) => !v)}
+              onClick={() => {
+                setAccountMenuOpen((v) => !v);
+                void refreshAccount();
+              }}
             >
               <span
                 className={
@@ -2050,12 +3613,10 @@ function App() {
                         t('subBadgeFull')}
                 </span>
                 <span className="account-quota">
-                  {account?.quotaLabel ||
-                    (account?.creditUsagePercent != null
-                      ? `${t('remainingQuota')} ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                      : status?.authenticated
-                        ? t('subBadgeFull')
-                        : '—')}
+                  {account?.creditUsagePercent != null
+                    ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                    : account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') ||
+                      (status?.authenticated ? t('subBadgeFull') : '—')}
                 </span>
               </span>
               {status?.authenticated || account?.authenticated ? (
@@ -2077,22 +3638,35 @@ function App() {
                     <div className="account-quota">{account?.email || t('subBadgeFull')}</div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="account-menu-item"
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    setKernelOpen(true);
-                  }}
-                >
-                  {t('remainingQuota')}
-                  <span className="muted">
-                    {account?.quotaLabel ||
-                      (account?.creditUsagePercent != null
-                        ? `${Math.round(account.creditUsagePercent)}%`
-                        : '—')}
-                  </span>
-                </button>
+                <div className="account-menu-quota-block">
+                  <div className="account-menu-quota-title">{t('remainingQuota')}</div>
+                  <div className="account-menu-quota-line">
+                    {account?.creditUsagePercent != null
+                      ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                      : account?.quotaLabel || accountError || '—'}
+                  </div>
+                  {account?.periodEnd ? (
+                    <div className="account-menu-quota-reset">
+                      {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
+                    </div>
+                  ) : null}
+                  {account?.productUsage?.length ? (
+                    <div className="account-menu-quota-reset">
+                      {account.productUsage
+                        .map((p) =>
+                          p.usagePercent != null
+                            ? `${p.product} ${Math.round(p.usagePercent)}%`
+                            : p.product,
+                        )
+                        .join(' · ')}
+                    </div>
+                  ) : null}
+                  {accountError && account?.creditUsagePercent == null ? (
+                    <div className="account-menu-quota-reset" title={accountError}>
+                      {accountError.slice(0, 80)}
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   type="button"
                   className="account-menu-item"
@@ -2133,7 +3707,9 @@ function App() {
         {!active ? (
           <div className="main-home">
             <div className="empty">
-              <div className="empty-icon">gX</div>
+              <div className="empty-icon">
+                <img src="/gorkx-icon.png" alt="" className="empty-icon-img" draggable={false} />
+              </div>
               <h2>{t('emptyHello')}</h2>
               <p>{project ? t('emptyHelloSub') : t('emptyTasksSub')}</p>
               <div className="starter-grid">
@@ -2177,33 +3753,120 @@ function App() {
             </div>
             <div className="composer-dock">
               <div className="composer-home-bar">
-                <button
-                  type="button"
-                  className="home-project-chip"
-                  onClick={() => void pickProject()}
-                  title={project || t('selectProject')}
-                >
-                  📁{' '}
-                  {project
-                    ? projectDisplayName(project, projectAliases)
-                    : t('selectProject')}
-                </button>
+                <div className="home-project-wrap">
+                  <button
+                    type="button"
+                    className="home-project-chip"
+                    onClick={() => {
+                      setPlusMenuOpen(false);
+                      setProjectPickerOpen((v) => !v);
+                    }}
+                    title={project || t('selectProject')}
+                  >
+                    📁{' '}
+                    {project
+                      ? projectDisplayName(project, projectAliases)
+                      : t('projectPickerNoProject')}
+                  </button>
+                  <ProjectPicker
+                    open={projectPickerOpen}
+                    projects={[
+                      ...pinnedProjects.filter((p) => recentProjects.includes(p) || true),
+                      ...recentProjects.filter((p) => !pinnedProjects.includes(p)),
+                    ].filter((p, i, arr) => arr.indexOf(p) === i)}
+                    aliases={projectAliases}
+                    current={project || undefined}
+                    onClose={() => setProjectPickerOpen(false)}
+                    onAction={(a) => void handleProjectPicker(a)}
+                  />
+                </div>
               </div>
-              <div className="composer">
+              <div
+                className={`composer${dragOver ? ' drag-over' : ''}`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget === e.target) setDragOver(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const files = Array.from(e.dataTransfer.files || []);
+                  const paths = files
+                    .map((f) => (f as File & { path?: string }).path)
+                    .filter((p): p is string => Boolean(p));
+                  if (paths.length) void addAttachmentPaths(paths);
+                }}
+              >
+                {composerAtts.length ? (
+                  <AttachmentStrip
+                    items={composerAtts}
+                    onRemove={removeComposerAtt}
+                    onOpen={setPreviewAtt}
+                  />
+                ) : null}
+                {dragOver ? <div className="composer-drop-hint">{t('dropFilesHint')}</div> : null}
+                {capabilityArm ? (
+                  <div className="capability-arm">
+                    <span>
+                      {t('capabilityArmed').replace('{name}', capabilityArm.label)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setCapabilityArm(null);
+                        setDraft('');
+                      }}
+                    >
+                      {t('capabilityClear')}
+                    </button>
+                  </div>
+                ) : null}
+                {renderSlashMenu()}
                 <textarea
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={t('homeComposerPlaceholder')}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDraft(v);
+                    setSlashOpen(v.startsWith('/') && !v.includes('\n'));
+                    if (
+                      capabilityArm &&
+                      !v.startsWith(capabilityArm.prefix) &&
+                      !v.startsWith(`${capabilityArm.prefix} `)
+                    ) {
+                      setCapabilityArm(null);
+                    }
+                  }}
+                  placeholder={
+                    capabilityArm
+                      ? t('capabilityPlaceholder').replace('{name}', capabilityArm.label)
+                      : t('homeComposerPlaceholder')
+                  }
                   rows={2}
                   onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSlashOpen(false);
+                      if (capabilityArm) {
+                        setCapabilityArm(null);
+                        setDraft('');
+                      }
+                    }
                     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                       e.preventDefault();
+                      setSlashOpen(false);
                       void send();
                     }
                   }}
                 />
                 <div className="composer-send-row">
-                  <div className="composer-toolbar">
+                  <div className="composer-toolbar-left">
                     <div className="plus-wrap">
                       <button
                         type="button"
@@ -2213,95 +3876,138 @@ function App() {
                       >
                         ＋
                       </button>
-                      {plusMenuOpen ? (
-                        <div className="pop-menu plus-pop-menu home-plus" role="menu">
-                          <div className="pop-menu-label">{t('plusMenu')}</div>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => void attachFiles()}
-                          >
-                            {t('attachFilesFolders')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => void attachFiles({ images: true })}
-                          >
-                            {t('attachImages')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              void pickProject();
-                            }}
-                          >
-                            {t('chooseProjectForTask')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              setChatMode('plan');
-                            }}
-                          >
-                            {t('enablePlanMode')}
-                          </button>
-                          <div className="pop-menu-label">{t('pluginsSection')}</div>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              setExtOpen(true);
-                            }}
-                          >
-                            {t('openPlugins')}
-                          </button>
+                      <PlusMenu
+                        open={plusMenuOpen}
+                        home
+                        planModeOn={chatMode === 'plan'}
+                        skills={extSnap?.skills ?? []}
+                        hasActiveSession={false}
+                        onClose={() => setPlusMenuOpen(false)}
+                        onAction={(a) => void handlePlusAction(a)}
+                      />
+                    </div>
+                    {chatMode === 'plan' ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('planModeActive')}
+                        onClick={() => void changeChatMode('agent')}
+                      >
+                        {t('modePlan')}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="composer-toolbar-right">
+                    <div className="composer-model-wrap">
+                      <button
+                        type="button"
+                        className="composer-ctl"
+                        title={`${t('modelFromSub')} · ${t('effortHintReal')}`}
+                        onClick={() => {
+                          setModelPopOpen((v) => !v);
+                          setPermPopOpen(false);
+                        }}
+                      >
+                        <span className="composer-ctl-main">
+                          {modelShortLabel(
+                            modelId || availableModels[0]?.modelId || '',
+                            availableModels,
+                          ) || 'model'}
+                        </span>
+                        <span className="composer-ctl-meta">{effortShortLabel(effort)}</span>
+                      </button>
+                      {modelPopOpen ? (
+                        <div className="composer-pop composer-pop-end" role="dialog">
+                          <div className="composer-pop-title">{t('modelFromSub')}</div>
+                          {(availableModels.length
+                            ? availableModels
+                            : modelId
+                              ? [{ modelId, name: modelId }]
+                              : []
+                          ).map((m) => (
+                            <button
+                              key={m.modelId}
+                              type="button"
+                              className={`composer-pop-item${modelId === m.modelId ? ' active' : ''}`}
+                              onClick={() => {
+                                setModelId(m.modelId);
+                                setModelPopOpen(false);
+                              }}
+                            >
+                              {m.name || m.modelId}
+                            </button>
+                          ))}
+                          <div className="composer-pop-title">{t('effortFromModel')}</div>
+                          {(['low', 'medium', 'high'] as ReasoningEffort[]).map((e) => (
+                            <button
+                              key={e}
+                              type="button"
+                              className={`composer-pop-item${effort === e ? ' active' : ''}`}
+                              onClick={() => {
+                                setEffort(e);
+                                setModelPopOpen(false);
+                              }}
+                            >
+                              {effortShortLabel(e)}
+                            </button>
+                          ))}
                         </div>
                       ) : null}
                     </div>
-                    <label className="chip" title={t('modelFromSub')}>
-                      <select
-                        value={modelId}
-                        onChange={(e) => setModelId(e.target.value)}
-                        disabled={availableModels.length === 0 && !modelId}
-                      >
-                        {availableModels.length === 0 ? (
-                          <option value={modelId || ''}>{modelId || 'Grok 4.5'}</option>
-                        ) : (
-                          availableModels.map((m) => (
-                            <option key={m.modelId} value={m.modelId}>
-                              {m.name || m.modelId}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </label>
-                    <label className="chip" title={t('effortHintReal')}>
-                      <select
-                        value={effort}
-                        onChange={(e) => setEffort(e.target.value as ReasoningEffort)}
-                      >
-                        <option value="low">low</option>
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
-                      </select>
-                    </label>
+                    {(() => {
+                      const limit = modelCtx?.contextWindow || 500_000;
+                      const bar = formatContextBar(0, limit);
+                      return (
+                        <div className="ctx-ring-wrap">
+                          <ContextRing
+                            pct={0}
+                            title={t('contextClickHint')}
+                            onClick={() => {
+                              setCtxPopOpen((v) => !v);
+                              setModelPopOpen(false);
+                              setPermPopOpen(false);
+                            }}
+                          />
+                          {ctxPopOpen ? (
+                            <div className="ctx-popover align-right" role="dialog">
+                              <div className="ctx-pop-title">{t('contextWindow')}</div>
+                              <div className="ctx-pop-row">
+                                <span>{bar.label}</span>
+                                <strong>0%</strong>
+                              </div>
+                              <div className="ctx-pop-bar">
+                                <span style={{ width: '0%' }} />
+                              </div>
+                              <div className="ctx-pop-detail muted">{t('autoCompactHint')}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
+                    <button
+                      type="button"
+                      className={`composer-icon-btn voice-btn${voiceListening ? ' listening' : ''}`}
+                      title={voiceListening ? t('voiceInputStop') : t('voiceInput')}
+                      aria-pressed={voiceListening}
+                      onClick={() => toggleVoiceInput()}
+                    >
+                      <MicIcon active={voiceListening} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-send"
+                      title={t('send')}
+                      disabled={!draft.trim() && composerAtts.length === 0}
+                      onClick={() => {
+                        stopVoiceInput();
+                        void send();
+                      }}
+                    >
+                      ↑
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="btn-send"
-                    title={t('send')}
-                    disabled={!draft.trim()}
-                    onClick={() => void send()}
-                  >
-                    ↑
-                  </button>
                 </div>
+                {voiceHint ? <div className="voice-hint">{voiceHint}</div> : null}
               </div>
             </div>
           </div>
@@ -2311,7 +4017,6 @@ function App() {
               <div className="main-title" title={active.title}>
                 {active.title}
               </div>
-              {active.chatMode === 'plan' ? <span className="pill plan">Plan</span> : null}
               {active.worktreePath ? (
                 <button
                   type="button"
@@ -2321,56 +4026,99 @@ function App() {
                     void revealInFinder(active.worktreePath!).catch(() => {})
                   }
                 >
-                  worktree
+                  {t('worktree')}
                 </button>
               ) : null}
               <div className="main-bar-spacer" />
-              {active.busy ? (
-                <button type="button" className="btn btn-sm" onClick={() => void cancelTurn()}>
-                  {t('stop')}
+              {/* 有可执行的计划步骤时才显示「执行计划」 */}
+              {active.chatMode === 'plan' &&
+              activePlanEntries.length > 0 &&
+              !active.busy ? (
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  title={t('applyPlanHint')}
+                  onClick={() => void applyPlan()}
+                >
+                  {t('applyPlan')}
                 </button>
-              ) : null}
-              {active.chatMode === 'plan' && !active.busy ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-sm primary-sm"
-                    title={t('applyPlanHint')}
-                    onClick={() => void applyPlan()}
-                  >
-                    {t('applyPlan')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => void switchThreadToAgent()}
-                  >
-                    {t('switchToAgent')}
-                  </button>
-                </>
               ) : null}
               {active.error ? (
                 <span className="pill err" title={active.error}>
                   {t('error')}
                 </span>
               ) : null}
-              {!active.client && active.sessionId && !active.busy ? (
-                <button
-                  type="button"
-                  className="btn btn-sm primary-sm"
-                  onClick={() => void reconnectThread(active.id)}
-                >
-                  {t('reconnect')}
-                </button>
+              {active.sessionId ? (
+                <>
+                  <button
+                    type="button"
+                    className="chrome-btn"
+                    title={t('exportSession')}
+                    aria-label={t('exportSession')}
+                    disabled={active.busy}
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const { save } = await import('@tauri-apps/plugin-dialog');
+                          const path = await save({
+                            defaultPath: `gorkx-${active.sessionId!.slice(0, 8)}.md`,
+                            filters: [{ name: 'Markdown', extensions: ['md'] }],
+                          });
+                          if (typeof path !== 'string' || !path) return;
+                          await exportSessionMarkdown(active.sessionId!, path, grokCmd || undefined);
+                          alert(`${t('exportSessionDone')}: ${path}`);
+                        } catch (e) {
+                          try {
+                            await exportSessionClipboard(active.sessionId!, grokCmd || undefined);
+                            alert(t('exportSessionClipboard'));
+                          } catch (e2) {
+                            alert(e2 instanceof Error ? e2.message : String(e));
+                          }
+                        }
+                      })();
+                    }}
+                  >
+                    <IconExport />
+                  </button>
+                  <button
+                    type="button"
+                    className="chrome-btn"
+                    title={t('forkSession')}
+                    aria-label={t('forkSession')}
+                    disabled={active.busy || !active.client}
+                    onClick={() => {
+                      void (async () => {
+                        if (!active.client || !active.sessionId) return;
+                        appendLine(active.id, { id: nid(), role: 'user', text: '/fork' });
+                        patchThread(active.id, { busy: true, error: null });
+                        try {
+                          await active.client.prompt(active.sessionId, '/fork');
+                        } catch (e) {
+                          patchThread(active.id, {
+                            error: e instanceof Error ? e.message : String(e),
+                          });
+                        } finally {
+                          patchThread(active.id, { busy: false });
+                        }
+                      })();
+                    }}
+                  >
+                    <IconFork />
+                  </button>
+                </>
               ) : null}
             </header>
-            {active.chatMode === 'plan' || activePlanEntries.length > 0 ? (
+            {/* 仅在有计划步骤时显示进度条；模式切换在底部「规划/执行」 */}
+            {activePlanEntries.length > 0 ? (
               <div className="goal-banner">
-                <strong>Plan</strong>
+                <strong>{t('modePlan')}</strong>
                 <span>
-                  {activePlanEntries.length > 0
-                    ? `${activePlanEntries.filter((e) => e.checked).length}/${activePlanEntries.length} steps selected`
-                    : t('modePlanHint')}
+                  {t('reviewPlanProgress')
+                    .replace(
+                      '{done}',
+                      String(activePlanEntries.filter((e) => e.checked).length),
+                    )
+                    .replace('{total}', String(activePlanEntries.length))}
                 </span>
                 {active.chatMode === 'plan' && !active.busy ? (
                   <button
@@ -2384,64 +4132,57 @@ function App() {
                 ) : null}
               </div>
             ) : null}
-            <ToolTimeline tools={activeTools} />
+            <ProcessPanel
+              open={processOpen}
+              onClose={() => {
+                setProcessOpen(false);
+                localStorage.setItem('gorkx.processOpen', '0');
+              }}
+              lines={active.lines}
+              busy={active.busy}
+            />
+            {!processOpen ? <ToolTimeline tools={activeTools} /> : null}
             <MessageList
               lines={active.lines}
               bottomRef={bottomRef}
               onTogglePlanEntry={togglePlanEntry}
               onToggleAllPlan={toggleAllPlanEntries}
+              onOpenAttachment={setPreviewAtt}
+              showProcessInChat={false}
             />
             <div className="composer-dock">
-              <div className="composer">
-                {slashOpen ? (
-                  <div className="slash-menu">
-                    <div className="hint">{t('slashHint')} · skills · builtins</div>
-                    {(() => {
-                      const q = draft.replace(/^\//, '').toLowerCase();
-                      const builtins = [
-                        { name: 'compact', description: 'Compress context', source: 'builtin' as const },
-                        { name: 'clear', description: 'New session', source: 'builtin' as const },
-                        { name: 'diff', description: 'Open review panel', source: 'builtin' as const },
-                        { name: 'skills', description: 'Open extensions hub', source: 'builtin' as const },
-                      ];
-                      const fromSession = (active.commands ?? []).map((c) => ({
-                        name: c.name,
-                        description: c.description,
-                        source: 'session' as const,
-                      }));
-                      const names = new Set(
-                        [...builtins, ...fromSession].map((c) => c.name.toLowerCase()),
-                      );
-                      const fromDisk = diskSkillCommands.filter(
-                        (c) => !names.has(c.name.toLowerCase()),
-                      );
-                      const merged = [...builtins, ...fromSession, ...fromDisk]
-                        .filter((c) => !q || c.name.toLowerCase().includes(q))
-                        .slice(0, 18);
-                      if (merged.length === 0) {
-                        return <div className="hint">{t('extNoSkills')}</div>;
-                      }
-                      return merged.map((c) => (
-                        <button
-                          key={`${c.source}:${c.name}`}
-                          type="button"
-                          className="slash-item"
-                          onClick={() => insertSlash(c.name)}
-                        >
-                          <span className="mono">
-                            /{c.name}
-                            {c.source !== 'session' ? (
-                              <span className="muted"> · {c.source}</span>
-                            ) : null}
-                          </span>
-                          {c.description ? (
-                            <span className="muted">{c.description}</span>
-                          ) : null}
-                        </button>
-                      ));
-                    })()}
-                  </div>
+              <div
+                className={`composer${dragOver ? ' drag-over' : ''}`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={(e) => {
+                  if (e.currentTarget === e.target) setDragOver(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const files = Array.from(e.dataTransfer.files || []);
+                  const paths = files
+                    .map((f) => (f as File & { path?: string }).path)
+                    .filter((p): p is string => Boolean(p));
+                  if (paths.length) void addAttachmentPaths(paths);
+                }}
+              >
+                {composerAtts.length ? (
+                  <AttachmentStrip
+                    items={composerAtts}
+                    onRemove={removeComposerAtt}
+                    onOpen={setPreviewAtt}
+                  />
                 ) : null}
+                {dragOver ? <div className="composer-drop-hint">{t('dropFilesHint')}</div> : null}
+                {renderSlashMenu()}
                 {atOpen ? (
                   <div className="slash-menu">
                     <div className="hint">@ files · {atQuery || '*'}</div>
@@ -2461,12 +4202,36 @@ function App() {
                     )}
                   </div>
                 ) : null}
+                {capabilityArm ? (
+                  <div className="capability-arm">
+                    <span>
+                      {t('capabilityArmed').replace('{name}', capabilityArm.label)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setCapabilityArm(null);
+                        setDraft('');
+                      }}
+                    >
+                      {t('capabilityClear')}
+                    </button>
+                  </div>
+                ) : null}
                 <textarea
                   value={draft}
                   onChange={(e) => {
                     const v = e.target.value;
                     setDraft(v);
                     setSlashOpen(v.startsWith('/') && !v.includes('\n'));
+                    if (
+                      capabilityArm &&
+                      !v.startsWith(capabilityArm.prefix) &&
+                      !v.startsWith(`${capabilityArm.prefix} `)
+                    ) {
+                      setCapabilityArm(null);
+                    }
                     const at = v.match(/(^|\s)@([^\s@]*)$/);
                     if (at) {
                       setAtOpen(true);
@@ -2476,12 +4241,20 @@ function App() {
                       setAtQuery('');
                     }
                   }}
-                  placeholder={t('composerPlaceholder')}
+                  placeholder={
+                    capabilityArm
+                      ? t('capabilityPlaceholder').replace('{name}', capabilityArm.label)
+                      : t('composerPlaceholder')
+                  }
                   rows={2}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                       setSlashOpen(false);
                       setAtOpen(false);
+                      if (capabilityArm) {
+                        setCapabilityArm(null);
+                        setDraft('');
+                      }
                     }
                     // Enter send · Shift+Enter newline
                     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -2493,7 +4266,7 @@ function App() {
                   }}
                 />
                 <div className="composer-send-row">
-                  <div className="composer-toolbar">
+                  <div className="composer-toolbar-left">
                     <div className="plus-wrap">
                       <button
                         type="button"
@@ -2504,107 +4277,151 @@ function App() {
                       >
                         ＋
                       </button>
-                      {plusMenuOpen ? (
-                        <div className="pop-menu plus-pop-menu" role="menu">
-                          <div className="pop-menu-label">{t('plusMenu')}</div>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => void attachFiles()}
-                          >
-                            {t('attachFilesFolders')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => void attachFiles({ folders: true })}
-                          >
-                            📁 {t('attachFilesFolders')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => void attachFiles({ images: true })}
-                          >
-                            {t('attachImages')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              void pickProject();
-                            }}
-                          >
-                            {t('chooseProjectForTask')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              setChatMode('plan');
-                              setDraft((d) =>
-                                d.trim()
-                                  ? d
-                                  : '请先列出清晰的分步计划，等我确认后再实现。',
-                              );
-                            }}
-                          >
-                            {t('enablePlanMode')}
-                          </button>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              setDraft((d) =>
-                                d.trim()
-                                  ? d
-                                  : '目标：请把本会话当作持续目标跟踪，先复述目标再推进。',
-                              );
-                            }}
-                          >
-                            {t('setGoal')}
-                          </button>
-                          <div className="pop-menu-label">{t('pluginsSection')}</div>
-                          <button
-                            type="button"
-                            className="pop-menu-item"
-                            onClick={() => {
-                              setPlusMenuOpen(false);
-                              setExtOpen(true);
-                            }}
-                          >
-                            {t('openPlugins')}
-                          </button>
+                      <PlusMenu
+                        open={plusMenuOpen}
+                        planModeOn={(active.chatMode ?? chatMode) === 'plan'}
+                        skills={extSnap?.skills ?? []}
+                        hasActiveSession={Boolean(active.client && active.sessionId)}
+                        onClose={() => setPlusMenuOpen(false)}
+                        onAction={(a) => void handlePlusAction(a)}
+                      />
+                      <ProjectPicker
+                        open={projectPickerOpen && Boolean(active)}
+                        projects={[
+                          ...pinnedProjects,
+                          ...recentProjects.filter((p) => !pinnedProjects.includes(p)),
+                        ].filter((p, i, arr) => arr.indexOf(p) === i)}
+                        aliases={projectAliases}
+                        current={project || undefined}
+                        onClose={() => setProjectPickerOpen(false)}
+                        onAction={(a) => void handleProjectPicker(a)}
+                      />
+                    </div>
+                    <div className="composer-perm-wrap">
+                      <button
+                        type="button"
+                        className={`composer-icon-btn perm-${perm}`}
+                        title={`${t('permission')}: ${
+                          perm === 'auto'
+                            ? t('permAuto')
+                            : perm === 'full'
+                              ? t('permFull')
+                              : t('permDefault')
+                        }`}
+                        disabled={active.busy}
+                        onClick={() => {
+                          setPermPopOpen((v) => !v);
+                          setModelPopOpen(false);
+                          setCtxPopOpen(false);
+                        }}
+                      >
+                        <PermShieldIcon mode={perm} />
+                      </button>
+                      {permPopOpen ? (
+                        <div className="composer-pop composer-pop-sm" role="dialog">
+                          <div className="composer-pop-title">{t('permission')}</div>
+                          {(
+                            [
+                              ['default', t('permDefault'), t('permDefaultHint')],
+                              ['auto', t('permAuto'), t('permAutoHint')],
+                              ['full', t('permFull'), t('permFullHint')],
+                            ] as const
+                          ).map(([id, label, hint]) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={`composer-pop-item stacked${perm === id ? ' active' : ''}`}
+                              onClick={() => {
+                                setPerm(id);
+                                setPermPopOpen(false);
+                              }}
+                            >
+                              <span>{label}</span>
+                              <span className="composer-pop-hint">{hint}</span>
+                            </button>
+                          ))}
                         </div>
                       ) : null}
                     </div>
-                    <label
-                      className="chip"
-                      title={
-                        availableModels.length <= 1
-                          ? t('modelSubOnlyOneHint')
-                          : t('modelFromSub')
-                      }
-                    >
-                      <select
-                        value={modelId}
-                        onChange={(e) => void changeModel(e.target.value)}
-                        disabled={availableModels.length === 0 && !modelId}
+                    {(active.chatMode ?? chatMode) === 'plan' ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('planModeActive')}
+                        disabled={active.busy}
+                        onClick={() => void changeChatMode('agent')}
                       >
-                        {availableModels.length === 0 ? (
-                          <option value={modelId || ''}>{modelId || 'model'}</option>
-                        ) : (
-                          availableModels.map((m) => (
-                            <option key={m.modelId} value={m.modelId}>
+                        {t('modePlan')}
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="composer-toolbar-right">
+                    <div className="composer-model-wrap">
+                      <button
+                        type="button"
+                        className="composer-ctl"
+                        title={
+                          availableModels.length <= 1
+                            ? t('modelSubOnlyOneHint')
+                            : `${t('modelFromSub')} · ${t('effortHintReal')}`
+                        }
+                        disabled={active.busy}
+                        onClick={() => {
+                          setModelPopOpen((v) => !v);
+                          setPermPopOpen(false);
+                          setCtxPopOpen(false);
+                        }}
+                      >
+                        <span className="composer-ctl-main">
+                          {modelShortLabel(
+                            modelId || availableModels[0]?.modelId || '',
+                            availableModels,
+                          ) || 'model'}
+                        </span>
+                        <span className="composer-ctl-meta">
+                          {effortShortLabel(active ? active.effort : effort)}
+                        </span>
+                      </button>
+                      {modelPopOpen ? (
+                        <div className="composer-pop composer-pop-end" role="dialog">
+                          <div className="composer-pop-title">{t('modelFromSub')}</div>
+                          {(availableModels.length
+                            ? availableModels
+                            : modelId
+                              ? [{ modelId, name: modelId }]
+                              : []
+                          ).map((m) => (
+                            <button
+                              key={m.modelId}
+                              type="button"
+                              className={`composer-pop-item${modelId === m.modelId ? ' active' : ''}`}
+                              onClick={() => {
+                                void changeModel(m.modelId);
+                                setModelPopOpen(false);
+                              }}
+                            >
                               {m.name || m.modelId}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </label>
+                            </button>
+                          ))}
+                          <div className="composer-pop-title">{t('effortFromModel')}</div>
+                          {(['low', 'medium', 'high'] as ReasoningEffort[]).map((e) => (
+                            <button
+                              key={e}
+                              type="button"
+                              className={`composer-pop-item${
+                                (active ? active.effort : effort) === e ? ' active' : ''
+                              }`}
+                              onClick={() => {
+                                void changeEffort(e);
+                                setModelPopOpen(false);
+                              }}
+                            >
+                              {effortShortLabel(e)}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                     {(() => {
                       const limit =
                         modelCtx?.contextWindow || active.usage?.contextLimit || 500_000;
@@ -2615,10 +4432,14 @@ function App() {
                           <ContextRing
                             pct={bar.pct}
                             title={t('contextClickHint')}
-                            onClick={() => setCtxPopOpen((v) => !v)}
+                            onClick={() => {
+                              setCtxPopOpen((v) => !v);
+                              setModelPopOpen(false);
+                              setPermPopOpen(false);
+                            }}
                           />
                           {ctxPopOpen ? (
-                            <div className="ctx-popover" role="dialog">
+                            <div className="ctx-popover align-right" role="dialog">
                               <div className="ctx-pop-title">{t('contextWindow')}</div>
                               <div className="ctx-pop-row">
                                 <span>{bar.label}</span>
@@ -2638,51 +4459,49 @@ function App() {
                         </div>
                       );
                     })()}
-                    <label className="chip" title={t('effortHintReal')}>
-                      <select
-                        value={active ? active.effort : effort}
-                        onChange={(e) => void changeEffort(e.target.value as ReasoningEffort)}
-                      >
-                        <option value="low">low</option>
-                        <option value="medium">medium</option>
-                        <option value="high">high</option>
-                      </select>
-                    </label>
-                    <label className="chip" title={t('permHintReal')}>
-                      <select
-                        value={perm}
-                        onChange={(e) => setPerm(e.target.value as PermissionMode)}
-                      >
-                        <option value="default">{t('permDefault')}</option>
-                        <option value="auto">{t('permAuto')}</option>
-                        <option value="full">{t('permFull')}</option>
-                      </select>
-                    </label>
-                    <label className="chip" title={t('modeHintReal')}>
-                      <select
-                        value={chatMode}
-                        onChange={(e) => setChatMode(e.target.value as ChatMode)}
-                      >
-                        <option value="agent">{t('modeAgent')}</option>
-                        <option value="plan">{t('modePlan')}</option>
-                      </select>
-                    </label>
+                    <button
+                      type="button"
+                      className={`composer-icon-btn voice-btn${voiceListening ? ' listening' : ''}`}
+                      title={voiceListening ? t('voiceInputStop') : t('voiceInput')}
+                      aria-pressed={voiceListening}
+                      disabled={active.busy}
+                      onClick={() => toggleVoiceInput()}
+                    >
+                      <MicIcon active={voiceListening} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn-send${active.busy ? ' btn-send-stop' : ''}`}
+                      title={active.busy ? t('stop') : t('send')}
+                      disabled={
+                        active.busy
+                          ? false
+                          : (!draft.trim() && composerAtts.length === 0) || !active.client
+                      }
+                      onClick={() => {
+                        if (active.busy) void cancelTurn();
+                        else {
+                          stopVoiceInput();
+                          void send();
+                        }
+                      }}
+                    >
+                      {active.busy ? (
+                        <span className="btn-send-stop-icon" aria-hidden />
+                      ) : (
+                        '↑'
+                      )}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="btn-send"
-                    title={t('send')}
-                    disabled={!draft.trim() || active.busy || !active.client}
-                    onClick={() => void send()}
-                  >
-                    ↑
-                  </button>
                 </div>
+                {voiceHint ? <div className="voice-hint">{voiceHint}</div> : null}
               </div>
             </div>
           </>
         )}
       </main>
+
+      <AttachmentPreview item={previewAtt} onClose={() => setPreviewAtt(null)} />
 
       <ReviewPanel
         open={reviewOpen}
@@ -2719,10 +4538,16 @@ function App() {
         status={status}
         onRefresh={refreshStatus}
         project={project}
+        recentProjects={recentProjects}
         account={account}
         onModelsRefreshed={() => void loadSubscriptionModels(true)}
         perm={perm}
         onPerm={setPerm}
+        onOpenMemory={() => setMemoryOpen(true)}
+        onOpenExtensions={() => setExtOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenWorktrees={() => setWorktreePanelOpen(true)}
+        onRestoreArchived={(row) => void restoreArchivedTask(row)}
       />
 
       <ExtensionsPanel
@@ -2736,13 +4561,97 @@ function App() {
         onRunSkill={runSkill}
       />
 
+      <TextPromptModal
+        request={textPrompt}
+        onCancel={() => {
+          textPrompt?.resolve(null);
+          setTextPrompt(null);
+        }}
+        onSubmit={(v) => {
+          textPrompt?.resolve(v);
+          setTextPrompt(null);
+        }}
+      />
+
+      <ScheduledPanel
+        open={scheduledOpen}
+        onClose={() => setScheduledOpen(false)}
+        projects={[...pinnedProjects, ...recentProjects].filter(
+          (p, i, a) => a.indexOf(p) === i,
+        )}
+        aliases={projectAliases}
+        currentProject={project || undefined}
+        onRunJob={(job) => void runScheduledJob(job)}
+      />
+
+      <MemoryPanel
+        open={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
+        project={project || undefined}
+        grokCmd={grokCmd}
+        onSendSlash={(cmd) => {
+          setMemoryOpen(false);
+          if (!active?.client || !active.sessionId) {
+            setDraft(cmd.startsWith('/') ? cmd : `/${cmd}`);
+            return;
+          }
+          void (async () => {
+            const line = cmd.startsWith('/') ? cmd : `/${cmd}`;
+            appendLine(active.id, { id: nid(), role: 'user', text: line });
+            patchThread(active.id, { busy: true, error: null });
+            try {
+              await active.client!.prompt(active.sessionId!, line);
+            } catch (e) {
+              patchThread(active.id, {
+                error: e instanceof Error ? e.message : String(e),
+              });
+            } finally {
+              patchThread(active.id, { busy: false });
+            }
+          })();
+        }}
+      />
+
+      <WorktreePanel
+        open={worktreePanelOpen}
+        onClose={() => setWorktreePanelOpen(false)}
+        grokCmd={grokCmd}
+        project={project || undefined}
+        onCreate={() => {
+          setWorktreePanelOpen(false);
+          void createThread({ worktree: true });
+        }}
+      />
+
       {permReq ? (
         <div className="modal-backdrop">
-          <div className="modal">
+          <div className="modal perm-modal">
             <h2>{t('permissionTitle')}</h2>
-            <pre className="modal-body">
-              {JSON.stringify(permReq.toolCall ?? permReq.raw, null, 2)}
-            </pre>
+            <p className="perm-explain">{t('permissionExplain')}</p>
+            {(() => {
+              const sum = summarizePermissionTool(permReq.toolCall ?? permReq.raw);
+              return (
+                <div className="perm-summary">
+                  <div className="perm-kind">{sum.kindLabel}</div>
+                  <div className="perm-title">{sum.title}</div>
+                  {sum.description ? (
+                    <p className="perm-desc">{sum.description}</p>
+                  ) : null}
+                  {sum.command ? (
+                    <div className="perm-cmd-block">
+                      <div className="perm-cmd-label">{t('permissionCommand')}</div>
+                      <pre className="perm-cmd">{sum.command}</pre>
+                    </div>
+                  ) : null}
+                  <details className="perm-raw">
+                    <summary>{t('permissionShowRaw')}</summary>
+                    <pre>
+                      {JSON.stringify(permReq.toolCall ?? permReq.raw, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              );
+            })()}
             <div className="modal-actions">
               <button
                 type="button"
@@ -2754,16 +4663,24 @@ function App() {
               <button type="button" className="btn" onClick={() => void answerPermission('reject')}>
                 {t('reject')}
               </button>
-              {(permReq.options ?? []).map((opt) => (
-                <button
-                  key={opt.optionId}
-                  type="button"
-                  className="btn"
-                  onClick={() => void answerPermission(opt.optionId)}
-                >
-                  {opt.name ?? opt.optionId}
-                </button>
-              ))}
+              {(permReq.options ?? [])
+                .filter((opt) => {
+                  // Avoid duplicating Allow/Reject with English engine labels
+                  const id = opt.optionId.toLowerCase();
+                  if (/allow-once|allow_once|^allow$|reject-once|reject_once|^reject$/.test(id))
+                    return false;
+                  return true;
+                })
+                .map((opt) => (
+                  <button
+                    key={opt.optionId}
+                    type="button"
+                    className="btn"
+                    onClick={() => void answerPermission(opt.optionId)}
+                  >
+                    {humanPermissionOptionLabel(opt.name, opt.optionId)}
+                  </button>
+                ))}
             </div>
           </div>
         </div>

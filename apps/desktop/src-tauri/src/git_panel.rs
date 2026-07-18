@@ -68,7 +68,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
             dirty: false,
             files: vec![],
             diff: String::new(),
-            error: "Not a git repository".into(),
+            error: "不是 Git 仓库".into(),
         });
     }
 
@@ -94,7 +94,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
     let mut diff = String::new();
     if let Ok(staged) = run_git(root, &["diff", "--cached"]) {
         if !staged.trim().is_empty() {
-            diff.push_str("### staged\n");
+            diff.push_str("### 已暂存\n");
             diff.push_str(&staged);
             if !diff.ends_with('\n') {
                 diff.push('\n');
@@ -103,7 +103,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
     }
     if let Ok(unstaged) = run_git(root, &["diff"]) {
         if !unstaged.trim().is_empty() {
-            diff.push_str("### unstaged\n");
+            diff.push_str("### 未暂存\n");
             diff.push_str(&unstaged);
         }
     }
@@ -111,7 +111,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
     if let Ok(untracked) = run_git(root, &["ls-files", "--others", "--exclude-standard"]) {
         let u = untracked.trim();
         if !u.is_empty() {
-            diff.push_str("\n### untracked\n");
+            diff.push_str("\n### 未跟踪\n");
             for p in u.lines() {
                 diff.push_str(p);
                 diff.push('\n');
@@ -157,8 +157,8 @@ pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> 
 
         // Untracked / new directory: list entries (no file hunk)
         if full.is_dir() {
-            let mut out = format!("### untracked directory: {rel}/\n\n");
-            out.push_str("# Review 这里显示 git 变更内容。\n");
+            let mut out = format!("### 未跟踪目录: {rel}/\n\n");
+            out.push_str("# 此处显示 Git 变更内容。\n");
             out.push_str("# 目录无法做行级 diff，下列为目录内容（最多 80 项）：\n\n");
             let mut names: Vec<String> = Vec::new();
             if let Ok(rd) = std::fs::read_dir(&full) {
@@ -175,10 +175,10 @@ pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> 
                 out.push('\n');
             }
             if total > 80 {
-                out.push_str(&format!("… and {} more\n", total - 80));
+                out.push_str(&format!("… 另有 {} 项\n", total - 80));
             }
             if total == 0 {
-                out.push_str("(empty directory)\n");
+                out.push_str("（空目录）\n");
             }
             return Ok(out);
         }
@@ -187,7 +187,7 @@ pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> 
         if full.is_file() {
             match std::fs::read_to_string(&full) {
                 Ok(content) => {
-                    let mut out = format!("### new file: {rel}\n");
+                    let mut out = format!("### 新文件: {rel}\n");
                     for line in content.lines().take(400) {
                         out.push('+');
                         out.push_str(line);

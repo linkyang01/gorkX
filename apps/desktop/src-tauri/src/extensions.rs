@@ -63,28 +63,15 @@ fn home_dir() -> PathBuf {
 }
 
 fn grok_bin(override_cmd: Option<&str>) -> PathBuf {
-    if let Some(c) = override_cmd {
-        let t = c.trim();
-        if !t.is_empty() {
-            return PathBuf::from(t);
-        }
-    }
-    if let Ok(c) = std::env::var("GORKX_GROK_CMD") {
-        if !c.trim().is_empty() {
-            return PathBuf::from(c.trim());
-        }
-    }
-    let home = home_dir();
-    let local = home.join(".grok/bin/grok");
-    if local.is_file() {
-        return local;
-    }
-    PathBuf::from("grok")
+    crate::paths::resolve_grok_bin(override_cmd)
 }
 
 fn run_grok_json(bin: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
-    let out = Command::new(bin)
-        .args(args)
+    let _ = crate::paths::ensure_dirs();
+    let mut cmd = Command::new(bin);
+    cmd.args(args);
+    crate::paths::apply_engine_env(&mut cmd);
+    let out = cmd
         .output()
         .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();

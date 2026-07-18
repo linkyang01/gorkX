@@ -5,9 +5,51 @@ import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 import type { ToolEvent } from './ToolTimeline';
 import type { PlanEntry } from '../lib/acpClient';
-import { humanPlanStatus, humanToolStatus, humanToolTitle } from '../lib/toolHuman';
+import {
+  humanFileName,
+  humanPlanStatus,
+  humanPlanText,
+  humanToolStatus,
+  humanToolTitle,
+} from '../lib/toolHuman';
+import { IconClose, IconRefresh } from './UiIcons';
 
 type Tab = 'diff' | 'plan' | 'tools';
+
+/** Porcelain-ish status → short Chinese label for the file list. */
+function gitStatusLabel(st: string): string {
+  const s = (st || '').trim();
+  if (!s || s === '??') return t('gitStatusUntracked');
+  if (s.includes('A') || s === 'A ') return t('gitStatusAdded');
+  if (s.includes('D')) return t('gitStatusDeleted');
+  if (s.includes('R')) return t('gitStatusRenamed');
+  if (s.includes('M') || s.includes('U')) return t('gitStatusModified');
+  return t('gitStatusModified');
+}
+
+/** Soften raw git/engine errors for the review header. */
+function humanRepoSubtitle(
+  loading: boolean,
+  snap: GitSnapshot | null,
+  cwd: string,
+): string {
+  if (loading) return t('reviewLoading');
+  if (!cwd) return t('reviewNeedProject');
+  const folder = cwd.split('/').filter(Boolean).pop() || cwd;
+  if (!snap) return folder;
+  if (snap.ok) {
+    const branch = snap.branch || 'HEAD';
+    return snap.dirty
+      ? `${folder} · ${branch} · ${t('gitDirty')}`
+      : `${folder} · ${branch} · ${t('gitClean')}`;
+  }
+  const err = (snap.error || '').toLowerCase();
+  if (err.includes('git') || err.includes('不是') || err.includes('not a git')) {
+    return `${folder} · ${t('reviewNotGit')}`;
+  }
+  if (snap.error) return `${folder} · ${snap.error}`;
+  return folder;
+}
 
 interface Props {
   open: boolean;
@@ -38,7 +80,10 @@ export function ReviewPanel({
   const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = () => {
-    if (!cwd) return;
+    if (!cwd) {
+      setSnap(null);
+      return;
+    }
     setLoading(true);
     void fetchGitSnapshot(cwd)
       .then((s) => {
@@ -69,14 +114,35 @@ export function ReviewPanel({
     if (!src.trim()) return null;
     return src.split('\n').map((line, i) => {
       let cls = 'diff-line';
+      let display = line;
       if (line.startsWith('+') && !line.startsWith('+++')) cls += ' add';
       else if (line.startsWith('-') && !line.startsWith('---')) cls += ' del';
-      else if (line.startsWith('@@')) cls += ' hunk';
-      else if (line.startsWith('###') || line.startsWith('diff ') || line.startsWith('# '))
+      else if (line.startsWith('@@')) {
+        cls += ' hunk';
+        // @@ -1,3 +1,4 @@ context → 变更位置
+        display = line.replace(
+          /^@@\s*-\d+(?:,\d+)?\s*\+\d+(?:,\d+)?\s*@@\s*/,
+          `${t('reviewDiffHunk')} `,
+        );
+      } else if (
+        line.startsWith('###') ||
+        line.startsWith('diff ') ||
+        line.startsWith('index ') ||
+        line.startsWith('--- ') ||
+        line.startsWith('+++ ') ||
+        line.startsWith('# ')
+      ) {
         cls += ' meta';
+        if (line.startsWith('diff --git')) {
+          const m = line.match(/b\/(.+)$/);
+          display = m ? `${t('reviewDiffFile')}: ${m[1]}` : t('reviewDiffFile');
+        } else if (line.startsWith('###')) {
+          display = line.replace(/^###\s*/, '');
+        }
+      }
       return (
         <div key={i} className={cls}>
-          {line || ' '}
+          {display || ' '}
         </div>
       );
     });
@@ -84,14 +150,10 @@ export function ReviewPanel({
 
   if (!open) return null;
 
-  const branchLabel = loading
-    ? '…'
-    : snap?.ok
-      ? `${snap.branch}${snap.dirty ? ' · dirty' : ' · clean'}`
-      : snap?.error || (cwd ? cwd.split('/').filter(Boolean).pop() : '—');
-
+  const branchLabel = humanRepoSubtitle(loading, snap, cwd);
   const doneCount = planEntries.filter((e) => e.checked).length;
   const toolsSorted = [...tools].reverse();
+  const isGit = Boolean(snap?.ok);
 
   return (
     <aside className="review-panel" aria-label={t('reviewTitle')}>
@@ -103,11 +165,24 @@ export function ReviewPanel({
           </div>
         </div>
         <div className="diff-actions">
-          <button type="button" className="btn btn-sm" onClick={refresh} disabled={loading} title="Refresh">
-            ↻
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={refresh}
+            disabled={loading || !cwd}
+            title={t('refresh')}
+            aria-label={t('refresh')}
+          >
+            <IconRefresh size={15} />
           </button>
-          <button type="button" className="btn btn-sm" onClick={onClose} title={t('reviewClose')}>
-            ×
+          <button
+            type="button"
+            className="btn-icon"
+            onClick={onClose}
+            title={t('reviewClose')}
+            aria-label={t('reviewClose')}
+          >
+            <IconClose size={15} />
           </button>
         </div>
       </div>
@@ -132,95 +207,142 @@ export function ReviewPanel({
         ))}
       </div>
 
-      {msg ? <pre className="ext-msg">{msg}</pre> : null}
+      {msg ? <div className="ext-msg review-toast">{msg}</div> : null}
 
-      {!cwd ? <div className="review-empty">{t('reviewNeedProject')}</div> : null}
-
-      {cwd && tab === 'diff' ? (
+      {tab === 'diff' ? (
         <div className="review-body">
-          <div className="diff-files review-files">
-            {(snap?.files ?? []).length === 0 ? (
-              <div className="review-empty">
-                {snap?.ok ? t('diffClean') : snap?.error || t('reviewNeedProject')}
-                <div className="hint" style={{ marginTop: 8 }}>
-                  {t('reviewDiffHint')}
+          {!cwd ? (
+            <div className="review-empty pad">{t('reviewNeedProject')}</div>
+          ) : (
+            <>
+              <div className="diff-files review-files">
+                {!isGit ? (
+                  <div className="review-empty">
+                    <strong>{t('reviewNotGit')}</strong>
+                    <p className="hint" style={{ marginTop: 8 }}>
+                      {t('reviewNotGitHint')}
+                    </p>
+                  </div>
+                ) : (snap?.files ?? []).length === 0 ? (
+                  <div className="review-empty">
+                    {t('diffClean')}
+                    <div className="hint" style={{ marginTop: 8 }}>
+                      {t('reviewDiffHint')}
+                    </div>
+                  </div>
+                ) : (
+                  snap!.files.map((f) => {
+                    const { name, dir } = humanFileName(f.path);
+                    return (
+                      <button
+                        key={f.path}
+                        type="button"
+                        className={selected === f.path ? 'diff-file-btn on' : 'diff-file-btn'}
+                        onClick={() => setSelected(f.path)}
+                        title={f.path}
+                      >
+                        <span className="diff-st">{gitStatusLabel(f.status)}</span>
+                        <span className="diff-file-text">
+                          <span className="diff-file-name">{name}</span>
+                          {dir ? <span className="diff-file-dir">{dir}</span> : null}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              {isGit ? (
+                <div className="review-diff-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    title={t('gitStage')}
+                    disabled={!selected || !cwd}
+                    onClick={() =>
+                      void invoke('git_stage', { cwd, path: selected })
+                        .then(() => {
+                          const { name } = humanFileName(selected || '');
+                          setMsg(t('reviewStagedHint').replace('{path}', name || selected || ''));
+                          refresh();
+                        })
+                        .catch((e) => setMsg(String(e)))
+                    }
+                  >
+                    {t('gitStage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    title={t('gitUnstage')}
+                    disabled={!selected || !cwd}
+                    onClick={() =>
+                      void invoke('git_unstage', { cwd, path: selected })
+                        .then(() => {
+                          const { name } = humanFileName(selected || '');
+                          setMsg(
+                            t('reviewUnstagedHint').replace('{path}', name || selected || ''),
+                          );
+                          refresh();
+                        })
+                        .catch((e) => setMsg(String(e)))
+                    }
+                  >
+                    {t('gitUnstage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    title={t('openFolder')}
+                    disabled={!cwd}
+                    onClick={() => void revealInFinder(cwd).catch(() => {})}
+                  >
+                    {t('openFolder')}
+                  </button>
                 </div>
+              ) : cwd ? (
+                <div className="review-diff-actions">
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    title={t('openFolder')}
+                    onClick={() => void revealInFinder(cwd).catch(() => {})}
+                  >
+                    {t('openFolder')}
+                  </button>
+                </div>
+              ) : null}
+              <div
+                className={`diff-body colored-diff${
+                  !loading && diffSrc.trim() ? ' has-diff' : ' is-empty'
+                }`}
+              >
+                {loading ? (
+                  <div className="diff-empty-hint">{t('reviewLoading')}</div>
+                ) : !isGit ? (
+                  <div className="diff-empty-hint">
+                    <strong>{t('reviewDiffTitle')}</strong>
+                    <p>{t('reviewNotGitHint')}</p>
+                  </div>
+                ) : !selected && !(snap?.files?.length) ? (
+                  <div className="diff-empty-hint">
+                    <strong>{t('reviewDiffTitle')}</strong>
+                    <p>{t('diffClean')}</p>
+                  </div>
+                ) : !diffSrc.trim() ? (
+                  <div className="diff-empty-hint">
+                    <strong>{t('reviewDiffEmpty')}</strong>
+                    <p>{t('reviewDiffEmptyHint')}</p>
+                  </div>
+                ) : (
+                  colored
+                )}
               </div>
-            ) : (
-              snap!.files.map((f) => (
-                <button
-                  key={f.path}
-                  type="button"
-                  className={selected === f.path ? 'diff-file-btn on' : 'diff-file-btn'}
-                  onClick={() => setSelected(f.path)}
-                >
-                  <span className="diff-st">{f.status}</span>
-                  <span className="mono">{f.path}</span>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="review-diff-actions">
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={!selected || !cwd}
-              onClick={() =>
-                void invoke('git_stage', { cwd, path: selected })
-                  .then(() => {
-                    setMsg(`staged ${selected}`);
-                    refresh();
-                  })
-                  .catch((e) => setMsg(String(e)))
-              }
-            >
-              {t('gitStage')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={!selected || !cwd}
-              onClick={() =>
-                void invoke('git_unstage', { cwd, path: selected })
-                  .then(() => {
-                    setMsg(`unstaged ${selected}`);
-                    refresh();
-                  })
-                  .catch((e) => setMsg(String(e)))
-              }
-            >
-              {t('gitUnstage')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={!cwd}
-              onClick={() => void revealInFinder(cwd).catch(() => {})}
-            >
-              {t('openFolder')}
-            </button>
-          </div>
-          <div className="diff-body colored-diff">
-            {loading ? (
-              <div className="diff-empty-hint">…</div>
-            ) : !selected && !(snap?.files?.length) ? (
-              <div className="diff-empty-hint">
-                <strong>{t('reviewDiffTitle')}</strong>
-                <p>{t('reviewDiffHint')}</p>
-              </div>
-            ) : !diffSrc.trim() ? (
-              <div className="diff-empty-hint">
-                <strong>{t('reviewDiffEmpty')}</strong>
-                <p>{t('reviewDiffEmptyHint')}</p>
-              </div>
-            ) : (
-              colored
-            )}
-          </div>
+            </>
+          )}
         </div>
       ) : null}
 
-      {cwd && tab === 'plan' ? (
+      {tab === 'plan' ? (
         <div className="review-body pad">
           <div className="review-explain">
             <strong>{t('reviewPlanExplainTitle')}</strong>
@@ -259,8 +381,8 @@ export function ReviewPanel({
                     const text = planEntries
                       .map(
                         (e, i) =>
-                          `${e.checked ? '[x]' : '[ ]'} ${i + 1}. ${e.text}${
-                            e.status ? ` (${humanPlanStatus(e.status)})` : ''
+                          `${e.checked ? '✓' : '○'} ${i + 1}. ${humanPlanText(e.text)}${
+                            e.status ? `（${humanPlanStatus(e.status)}）` : ''
                           }`,
                       )
                       .join('\n');
@@ -281,7 +403,7 @@ export function ReviewPanel({
                         onChange={() => onTogglePlanEntry?.(e.id)}
                       />
                       <span className="plan-idx">{i + 1}.</span>
-                      <span className="plan-text">{e.text}</span>
+                      <span className="plan-text">{humanPlanText(e.text)}</span>
                       {e.status ? (
                         <span className="plan-st">{humanPlanStatus(e.status)}</span>
                       ) : null}
@@ -308,7 +430,7 @@ export function ReviewPanel({
         </div>
       ) : null}
 
-      {cwd && tab === 'tools' ? (
+      {tab === 'tools' ? (
         <div className="review-body pad">
           <div className="review-explain">
             <strong>{t('reviewToolsExplainTitle')}</strong>
@@ -320,14 +442,19 @@ export function ReviewPanel({
             <ul className="tool-human-list">
               {toolsSorted.map((tool) => {
                 const st = humanToolStatus(tool.status);
-                const title = humanToolTitle(tool.label);
+                const title = humanToolTitle(tool.label, tool.kind);
+                const showRaw =
+                  tool.label &&
+                  tool.label !== title &&
+                  !/^call-/i.test(tool.label) &&
+                  tool.label.length > 8;
                 return (
                   <li key={tool.id} className={`tool-human-item tone-${st.tone}`}>
                     <div className="tool-human-top">
                       <span className={`tool-human-badge ${st.tone}`}>{st.label}</span>
                       <span className="tool-human-title">{title}</span>
                     </div>
-                    {tool.label && tool.label !== title ? (
+                    {showRaw ? (
                       <details className="tool-human-detail">
                         <summary>{t('reviewToolsRaw')}</summary>
                         <pre>{tool.label}</pre>
@@ -347,7 +474,7 @@ export function ReviewPanel({
               const text = toolsSorted
                 .map((tool) => {
                   const st = humanToolStatus(tool.status);
-                  return `- [${st.label}] ${humanToolTitle(tool.label)}`;
+                  return `- 【${st.label}】${humanToolTitle(tool.label, tool.kind)}`;
                 })
                 .join('\n');
               void navigator.clipboard.writeText(text).then(() => setMsg(t('copied')));
