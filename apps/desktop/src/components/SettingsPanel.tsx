@@ -15,8 +15,10 @@ import { revealInFinder } from '../lib/host';
 import {
   checkAppUpdate,
   checkKernelUpdate,
+  formatBytes,
   GORKX_GITHUB,
   GROK_KERNEL_GITHUB,
+  installAppUpdate,
   openUrlSafe,
   runKernelUpdate,
   type AppUpdateInfo,
@@ -33,7 +35,7 @@ import {
 } from '../lib/modelsConfig';
 import { t } from '../lib/i18n';
 
-const APP_VERSION = '0.4.1'; // keep in sync with package.json
+const APP_VERSION = '0.4.2'; // keep in sync with package.json
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
 export type SettingsSection =
@@ -382,15 +384,36 @@ export function SettingsPanel({
     try {
       const info = await checkAppUpdate(APP_VERSION);
       setAppUp(info);
-      setMsg(
-        info.error
-          ? `${t('updateFail')}: ${info.error}`
-          : info.updateAvailable
-            ? t('updateAvailable')
-                .replace('{cur}', info.currentVersion)
-                .replace('{latest}', info.latestVersion)
-            : t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion),
-      );
+      if (info.error && !info.latestVersion) {
+        setMsg(`${t('updateFail')}: ${info.error}`);
+      } else if (info.updateAvailable) {
+        const size = formatBytes(info.dmgBytes);
+        setMsg(
+          t('updateAvailable')
+            .replace('{cur}', info.currentVersion)
+            .replace('{latest}', info.latestVersion) + (size ? ` · ${size}` : ''),
+        );
+      } else {
+        setMsg(t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion));
+      }
+    } finally {
+      setUpBusy(false);
+    }
+  };
+
+  const applyApp = async () => {
+    setUpBusy(true);
+    setMsg(t('updateAppDownloading'));
+    try {
+      let info = appUp;
+      if (!info?.dmgUrl) {
+        info = await checkAppUpdate(APP_VERSION);
+        setAppUp(info);
+      }
+      const r = await installAppUpdate(info);
+      setMsg(r.note || (r.ok ? t('updateAppDone') : t('updateFail')));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
     } finally {
       setUpBusy(false);
     }
@@ -1056,6 +1079,16 @@ export function SettingsPanel({
                         ? ` · latest ${appUp.latestVersion}`
                         : ''}
                     </div>
+                    <div className="settings-row-hint">
+                      {appUp?.updateAvailable
+                        ? t('updateAppReady')
+                            .replace('{v}', appUp.latestVersion)
+                            .replace(
+                              '{size}',
+                              formatBytes(appUp.dmgBytes) || appUp.dmgName || 'DMG',
+                            )
+                        : appUp?.note || t('updateAppHint')}
+                    </div>
                     <div className="settings-row-hint mono">{GORKX_GITHUB.sourceUrl}</div>
                   </div>
                 </div>
@@ -1071,7 +1104,15 @@ export function SettingsPanel({
                   <button
                     type="button"
                     className="btn primary"
-                    disabled={!appUp?.htmlUrl}
+                    disabled={upBusy || !appUp?.updateAvailable || !appUp?.dmgUrl}
+                    onClick={() => void applyApp()}
+                  >
+                    {t('updateAppNow')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={upBusy}
                     onClick={() =>
                       void openUrlSafe(appUp?.htmlUrl || GORKX_GITHUB.releasesUrl)
                     }

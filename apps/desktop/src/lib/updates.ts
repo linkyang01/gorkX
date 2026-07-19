@@ -1,4 +1,4 @@
-/** Update checks: Grok kernel (CLI) + gorkX app (GitHub releases). */
+/** Update checks: Grok kernel (CLI) + gorkX app (GitHub releases + DMG install). */
 
 import { invoke } from '@tauri-apps/api/core';
 import { shellExec } from './terminal';
@@ -30,9 +30,20 @@ export interface AppUpdateInfo {
   currentVersion: string;
   latestVersion: string;
   updateAvailable: boolean;
-  htmlUrl?: string;
-  body?: string;
+  htmlUrl?: string | null;
+  body?: string | null;
+  dmgUrl?: string | null;
+  dmgName?: string | null;
+  dmgBytes?: number | null;
+  arch?: string | null;
   error?: string | null;
+  note?: string | null;
+}
+
+export interface AppInstallResult {
+  ok: boolean;
+  path?: string | null;
+  note: string;
 }
 
 function isTauri(): boolean {
@@ -96,56 +107,70 @@ export async function runKernelUpdate(grokBin?: string): Promise<{ ok: boolean; 
   }
 }
 
-export async function checkAppUpdate(currentVersion: string): Promise<AppUpdateInfo> {
-  try {
-    const url = `https://api.github.com/repos/${GORKX_GITHUB.owner}/${GORKX_GITHUB.repo}/releases/latest`;
-    const resp = await fetch(url, {
-      headers: { Accept: 'application/vnd.github+json' },
-    });
-    if (!resp.ok) {
-      return {
-        currentVersion,
-        latestVersion: '—',
-        updateAvailable: false,
-        error: `GitHub HTTP ${resp.status}`,
-      };
-    }
-    const j = (await resp.json()) as {
-      tag_name?: string;
-      html_url?: string;
-      body?: string;
-    };
-    const latest = (j.tag_name || '').replace(/^v/i, '');
-    const cur = currentVersion.replace(/^v/i, '');
-    const updateAvailable = Boolean(latest && cur && latest !== cur && compareSemver(latest, cur) > 0);
+/** Native check: GitHub API + release-page fallback, includes DMG asset for this Mac. */
+export async function checkAppUpdate(currentVersion?: string): Promise<AppUpdateInfo> {
+  const cur = (currentVersion || (await appVersion())).replace(/^v/i, '');
+  if (!isTauri()) {
     return {
       currentVersion: cur,
-      latestVersion: latest || '—',
-      updateAvailable,
-      htmlUrl: j.html_url || GORKX_GITHUB.releasesUrl,
-      body: j.body,
+      latestVersion: '—',
+      updateAvailable: false,
+      error: 'not in app',
+      htmlUrl: GORKX_GITHUB.releasesUrl,
+    };
+  }
+  try {
+    const r = await invoke<{
+      currentVersion: string;
+      latestVersion: string;
+      updateAvailable: boolean;
+      htmlUrl?: string | null;
+      dmgUrl?: string | null;
+      dmgName?: string | null;
+      dmgBytes?: number | null;
+      arch?: string | null;
+      error?: string | null;
+      note?: string | null;
+    }>('app_update_check', { currentVersion: cur });
+    return {
+      currentVersion: r.currentVersion,
+      latestVersion: r.latestVersion,
+      updateAvailable: r.updateAvailable,
+      htmlUrl: r.htmlUrl,
+      dmgUrl: r.dmgUrl,
+      dmgName: r.dmgName,
+      dmgBytes: r.dmgBytes,
+      arch: r.arch,
+      error: r.error,
+      note: r.note,
     };
   } catch (e) {
     return {
-      currentVersion,
+      currentVersion: cur,
       latestVersion: '—',
       updateAvailable: false,
       error: e instanceof Error ? e.message : String(e),
+      htmlUrl: GORKX_GITHUB.releasesUrl,
     };
   }
 }
 
-/** naive semver compare: a>b → 1 */
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(/[.+-]/).map((x) => parseInt(x, 10) || 0);
-  const pb = b.split(/[.+-]/).map((x) => parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const da = pa[i] || 0;
-    const db = pb[i] || 0;
-    if (da > db) return 1;
-    if (da < db) return -1;
+/**
+ * Download DMG to ~/Downloads and open it so the user can drag into Applications.
+ * This is the supported path for unsigned .app installs.
+ */
+export async function installAppUpdate(info?: AppUpdateInfo | null): Promise<AppInstallResult> {
+  if (!isTauri()) {
+    return { ok: false, note: 'not in app' };
   }
-  return 0;
+  try {
+    return await invoke<AppInstallResult>('app_update_install', {
+      dmgUrl: info?.dmgUrl ?? null,
+      dmgName: info?.dmgName ?? null,
+    });
+  } catch (e) {
+    return { ok: false, note: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function openUrlSafe(url: string): Promise<void> {
@@ -162,14 +187,16 @@ export async function openUrlSafe(url: string): Promise<void> {
 }
 
 export async function appVersion(): Promise<string> {
-  if (!isTauri()) return '0.3.6';
+  if (!isTauri()) return '0.4.2';
   try {
-    // fall back constant if no command
-    return '0.4.1';
+    return await invoke<string>('app_current_version');
   } catch {
-    return '0.4.1';
+    return '0.4.2';
   }
 }
 
-// silence unused invoke
-void invoke;
+export function formatBytes(n?: number | null): string {
+  if (n == null || n <= 0) return '';
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}

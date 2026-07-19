@@ -139,7 +139,7 @@ fn auth_login_browser_sync() -> Result<AuthLoginResult, String> {
 
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
-        .user_agent("gorkX/0.4.1")
+        .user_agent("gorkX/0.4.2")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -585,7 +585,7 @@ pub fn profile_asset_from_auth_file() -> Option<String> {
 pub fn fetch_profile_asset_id(token: &str) -> Option<String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(12))
-        .user_agent("gorkX/0.4.1")
+        .user_agent("gorkX/0.4.2")
         .build()
         .ok()?;
     let resp = client
@@ -1097,7 +1097,7 @@ fn refresh_and_persist(path: &Path, file: &AuthFile) -> Result<AuthFile, String>
 
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("gorkX/0.4.1")
+        .user_agent("gorkX/0.4.2")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -1162,7 +1162,7 @@ fn discover_token_endpoint(issuer: &str) -> Option<String> {
     let url = format!("{issuer}/.well-known/openid-configuration");
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(8))
-        .user_agent("gorkX/0.4.1")
+        .user_agent("gorkX/0.4.2")
         .build()
         .ok()?;
     let resp = client.get(&url).send().ok()?;

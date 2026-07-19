@@ -1,4 +1,5 @@
 mod agent_bridge;
+mod app_update;
 mod auth;
 mod extensions;
 mod git_panel;
@@ -141,6 +142,9 @@ pub fn run() {
             auth::auth_logout,
             auth::auth_login_browser,
             auth::auth_session_present,
+            app_update::app_update_check,
+            app_update::app_update_install,
+            app_update::app_current_version,
             memory::memory_status,
             memory::memory_set_enabled,
             memory::memory_set_auto_learn,
