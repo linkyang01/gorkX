@@ -324,6 +324,10 @@ pub struct AccountSummary {
     pub email: Option<String>,
     pub display_name: Option<String>,
     pub authenticated: bool,
+    /// Membership plan label e.g. "SuperGrok" / "SuperGrok Heavy" (from token/API).
+    pub membership_label: Option<String>,
+    /// Profile photo URL (https://assets.x.ai/…)
+    pub avatar_url: Option<String>,
     /// Human label e.g. "已用 80%" or "剩余额度充足"
     pub quota_label: Option<String>,
     /// 0–100 used percent when known
@@ -343,99 +347,31 @@ pub struct ProductUsageRow {
     pub usage_percent: Option<f64>,
 }
 
+/// Load profile + a **usable** bearer (OIDC refresh / adopt ~/.grok when needed).
 fn load_auth_token_and_profile() -> Result<(Option<String>, Option<String>, Option<String>), String> {
-    let _ = crate::paths::ensure_dirs();
-    let path = crate::paths::auth_json_path();
-    if !path.exists() {
-        // Fallback: legacy ~/.grok for one transition period
-        if let Some(home) = dirs::home_dir() {
-            let legacy = home.join(".grok/auth.json");
-            if legacy.exists() {
-                return load_auth_from_path(&legacy);
-            }
-        }
-        return Ok((None, None, None));
-    }
-    load_auth_from_path(&path)
-}
-
-fn load_auth_from_path(
-    path: &std::path::Path,
-) -> Result<(Option<String>, Option<String>, Option<String>), String> {
-    if !path.exists() {
-        return Ok((None, None, None));
-    }
-    let raw = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let v: serde_json::Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    let mut best_token: Option<String> = None;
-    let mut best_score: i64 = -1;
-    let mut email = None;
-    let mut first = None;
-    let mut last = None;
-
-    let mut consider = |o: &serde_json::Map<String, serde_json::Value>| {
-        let tok = o
-            .get("key")
-            .or_else(|| o.get("access_token"))
-            .or_else(|| o.get("token"))
-            .and_then(|x| x.as_str())
-            .map(|s| s.to_string());
-        if let Some(ref t) = tok {
-            // Prefer non-expired / latest expires_at
-            let mut score: i64 = t.len() as i64;
-            if let Some(exp) = o.get("expires_at").and_then(|x| x.as_str()) {
-                // ISO timestamps sort lexicographically for score when valid
-                // Higher score for later expiry
-                score = exp
-                    .bytes()
-                    .fold(0i64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as i64))
-                    .abs()
-                    .max(1);
-                // Prefer still-valid tokens: bump if expires in future-ish string compare vs now is hard;
-                // just prefer longer + has refresh_token
-                if o.get("refresh_token").is_some() {
-                    score += 1_000_000;
+    match crate::auth::ensure_bearer_token() {
+        Ok(p) => Ok((Some(p.token), p.email, p.display_name)),
+        Err(e) => {
+            // Soft: still try to surface email from stale auth for UI
+            let path = crate::paths::auth_json_path();
+            if path.is_file() {
+                if let Ok(raw) = std::fs::read_to_string(&path) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let email = v
+                            .as_object()
+                            .and_then(|obj| {
+                                obj.values().find_map(|val| {
+                                    val.get("email").and_then(|x| x.as_str()).map(|s| s.to_string())
+                                })
+                            });
+                        return Ok((None, email, None));
+                    }
                 }
             }
-            if score >= best_score {
-                best_score = score;
-                best_token = Some(t.clone());
-            }
+            eprintln!("[auth] {e}");
+            Ok((None, None, None))
         }
-        if email.is_none() {
-            email = o.get("email").and_then(|x| x.as_str()).map(|s| s.to_string());
-        }
-        if first.is_none() {
-            first = o
-                .get("first_name")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string());
-        }
-        if last.is_none() {
-            last = o
-                .get("last_name")
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string());
-        }
-    };
-
-    if let Some(obj) = v.as_object() {
-        // Nested provider entries (normal grok auth.json shape)
-        for (_k, val) in obj {
-            if let Some(o) = val.as_object() {
-                consider(o);
-            }
-        }
-        // Flat top-level fallback
-        consider(obj);
     }
-    let display = match (first, last) {
-        (Some(f), Some(l)) => Some(format!("{f}{l}")),
-        (Some(f), None) => Some(f),
-        (None, Some(l)) => Some(l),
-        _ => None,
-    };
-    Ok((best_token, email, display))
 }
 
 fn money_val(v: &serde_json::Value) -> Option<f64> {
@@ -444,81 +380,213 @@ fn money_val(v: &serde_json::Value) -> Option<f64> {
         .or_else(|| v.as_f64())
 }
 
+fn account_shell(
+    email: Option<String>,
+    display: Option<String>,
+    authenticated: bool,
+    membership: Option<String>,
+    avatar_url: Option<String>,
+    note: String,
+) -> AccountSummary {
+    AccountSummary {
+        email,
+        display_name: display,
+        authenticated,
+        membership_label: membership,
+        avatar_url,
+        quota_label: None,
+        credit_usage_percent: None,
+        prepaid_balance: None,
+        on_demand_used: None,
+        on_demand_cap: None,
+        period_end: None,
+        product_usage: None,
+        quota_note: note,
+    }
+}
+
+/// Fetch avatar as a `data:` URL so WebView CSP / Cloudflare bot rules cannot block it.
+fn resolve_avatar_url(token: &str) -> Option<String> {
+    crate::auth::resolve_avatar_data_url(token)
+}
+
 /// Safe account + **real** billing/credits from cli-chat-proxy (never returns tokens).
 #[tauri::command]
 pub fn account_summary() -> Result<AccountSummary, String> {
     let (token, email, display) = load_auth_token_and_profile()?;
     if token.is_none() {
-        return Ok(AccountSummary {
+        return Ok(account_shell(
             email,
-            display_name: display,
-            authenticated: false,
-            quota_label: None,
-            credit_usage_percent: None,
-            prepaid_balance: None,
-            on_demand_used: None,
-            on_demand_cap: None,
-            period_end: None,
-            product_usage: None,
-            quota_note: "not logged in — run `grok login`".into(),
-        });
+            display,
+            false,
+            None,
+            None,
+            "not logged in — open Settings → Account, or run `grok login`".into(),
+        ));
     }
-    let token = token.unwrap();
+    let mut token = token.unwrap();
+    let mut email = email;
+    let mut display = display;
+    let mut membership = crate::auth::membership_label_from_token(&token);
+    let mut avatar = resolve_avatar_url(&token);
+
+    // Weak login (browser OIDC without grok-cli:access) cannot read quota
+    if !crate::auth::token_has_cli_access(&token) {
+        return Ok(account_shell(
+            email,
+            display,
+            true,
+            membership,
+            avatar,
+            "登录缺少 CLI 权限，请先「退出登录」再重新「登录」以读取额度".into(),
+        ));
+    }
 
     // Official CLI billing endpoint (same as Grok Build credits view)
     let url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("gorkX/0.3.7")
+        .user_agent("gorkX/0.4.1")
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = match client
-        .get(url)
-        .header("Authorization", format!("Bearer {token}"))
-        .header("Accept", "application/json")
-        .header("x-grok-client-mode", "cli")
-        .send()
-    {
+
+    let send_billing = |tok: &str| {
+        client
+            .get(url)
+            .header("Authorization", format!("Bearer {tok}"))
+            .header("Accept", "application/json")
+            .header("x-grok-client-mode", "cli")
+            // Official CLI middleware flag for session tokens
+            .header("X-XAI-Token-Auth", "xai-grok-cli")
+            .send()
+    };
+
+    let mut resp = match send_billing(&token) {
         Ok(r) => r,
         Err(e) => {
-            return Ok(AccountSummary {
+            return Ok(account_shell(
                 email,
-                display_name: display,
-                authenticated: true,
-                quota_label: None,
-                credit_usage_percent: None,
-                prepaid_balance: None,
-                on_demand_used: None,
-                on_demand_cap: None,
-                period_end: None,
-                product_usage: None,
-                quota_note: format!("billing network error: {e}"),
-            });
+                display,
+                true,
+                membership,
+                avatar,
+                format!("billing network error: {e}"),
+            ));
         }
     };
+
+    // One forced refresh + retry on auth failure (token can die mid-session)
+    if resp.status().as_u16() == 401 || resp.status().as_u16() == 403 {
+        if let Ok(p) = crate::auth::force_refresh_bearer_token() {
+            token = p.token;
+            email = p.email.or(email);
+            display = p.display_name.or(display);
+            membership = crate::auth::membership_label_from_token(&token).or(membership);
+            avatar = resolve_avatar_url(&token).or(avatar);
+            if crate::auth::token_has_cli_access(&token) {
+                match send_billing(&token) {
+                    Ok(r) => resp = r,
+                    Err(e) => {
+                        return Ok(account_shell(
+                            email,
+                            display,
+                            true,
+                            membership,
+                            avatar,
+                            format!("billing network error after refresh: {e}"),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     let status = resp.status();
     if !status.is_success() {
         let body_txt = resp.text().unwrap_or_default();
-        let hint = if status.as_u16() == 401 || status.as_u16() == 403 {
-            "token expired — run `grok login`"
+        let hint = if body_txt.contains("grok-cli-token")
+            || body_txt.contains("Grok Code CLI")
+            || body_txt.contains("CLI permission")
+        {
+            "当前登录无 CLI 额度权限 — 请退出后重新登录"
+        } else if status.as_u16() == 401 || status.as_u16() == 403 {
+            "token 失效 — 请退出后重新登录"
         } else {
             "billing API error"
         };
-        return Ok(AccountSummary {
+        return Ok(account_shell(
             email,
-            display_name: display,
-            authenticated: true,
-            quota_label: None,
-            credit_usage_percent: None,
-            prepaid_balance: None,
-            on_demand_used: None,
-            on_demand_cap: None,
-            period_end: None,
-            product_usage: None,
-            quota_note: format!("{hint} (HTTP {status}) {}", body_txt.chars().take(80).collect::<String>()),
-        });
+            display,
+            true,
+            membership,
+            avatar,
+            format!(
+                "{hint} (HTTP {status}) {}",
+                body_txt.chars().take(60).collect::<String>()
+            ),
+        ));
     }
     let body: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+    // Enrich membership from billing JSON if present
+    membership = membership_from_billing(&body).or(membership);
+    if avatar.is_none() {
+        avatar = resolve_avatar_url(&token);
+    }
+    parse_billing_body(body, email, display, membership, avatar)
+}
+
+/// Pull plan name from billing payload when the API includes it.
+fn membership_from_billing(body: &serde_json::Value) -> Option<String> {
+    let cfg = body.get("config").unwrap_or(body);
+    for key in [
+        "subscriptionTier",
+        "subscription_tier",
+        "plan",
+        "planName",
+        "plan_name",
+        "tier",
+        "tierName",
+        "productPlan",
+    ] {
+        if let Some(v) = cfg.get(key).or_else(|| body.get(key)) {
+            if let Some(s) = v.as_str() {
+                if let Some(l) = crate::auth::plan_id_to_label(s) {
+                    return Some(l);
+                }
+                if !s.is_empty() {
+                    return Some(s.to_string());
+                }
+            }
+            if let Some(n) = v.as_i64().or_else(|| v.as_u64().map(|u| u as i64)) {
+                // reuse jwt tier mapping via membership_label path
+                let fake = format!(r#"{{"tier":{n}}}"#);
+                // direct map
+                if let Some(l) = match n {
+                    0 => Some("Free"),
+                    1 => Some("SuperGrok"),
+                    2 => Some("SuperGrok Heavy"),
+                    3 => Some("SuperGrok Lite"),
+                    4 => Some("X Premium+"),
+                    5 => Some("X Premium"),
+                    6 => Some("X Basic"),
+                    _ => None,
+                } {
+                    return Some(l.into());
+                }
+                let _ = fake;
+            }
+        }
+    }
+    None
+}
+
+fn parse_billing_body(
+    body: serde_json::Value,
+    email: Option<String>,
+    display: Option<String>,
+    membership: Option<String>,
+    avatar_url: Option<String>,
+) -> Result<AccountSummary, String> {
     let cfg = body.get("config").unwrap_or(&body);
     let mut pct = cfg.get("creditUsagePercent").and_then(|x| x.as_f64());
     // Fallback: GrokBuild product usage
@@ -578,6 +646,8 @@ pub fn account_summary() -> Result<AccountSummary, String> {
         email,
         display_name: display,
         authenticated: true,
+        membership_label: membership,
+        avatar_url,
         quota_label: label,
         credit_usage_percent: pct,
         prepaid_balance: prepaid,
@@ -720,6 +790,9 @@ pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow
 fn refresh_models_cache_from_network() -> Result<(), String> {
     let (token, _, _) = load_auth_token_and_profile()?;
     let token = token.ok_or_else(|| "not logged in (no auth session in App GROK_HOME)".to_string())?;
+    if !crate::auth::token_has_cli_access(&token) {
+        return Err("login missing grok-cli:access — sign out and log in again".into());
+    }
     let url = "https://cli-chat-proxy.grok.com/v1/models";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -730,7 +803,8 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
         .header("Authorization", format!("Bearer {token}"))
         .header("Accept", "application/json")
         .header("x-grok-client-mode", "cli")
-        .header("User-Agent", "gorkX/0.3.2")
+        .header("X-XAI-Token-Auth", "xai-grok-cli")
+        .header("User-Agent", "gorkX/0.4.1")
         .send()
         .map_err(|e| format!("models request failed: {e}"))?;
     if !resp.status().is_success() {

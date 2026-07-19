@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   appendMemoryNote,
+  deleteMemoryFile,
   fetchMemoryStatus,
+  forgetMemory,
   openMemoryDir,
   readMemoryFile,
   setMemoryAutoLearn,
@@ -29,6 +31,9 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
   const [err, setErr] = useState<string | null>(null);
   const [rememberDraft, setRememberDraft] = useState('');
   const [rememberOpen, setRememberOpen] = useState(false);
+  const [forgetDraft, setForgetDraft] = useState('');
+  const [forgetOpen, setForgetOpen] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setErr(null);
@@ -170,11 +175,25 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
           <button
             type="button"
             className="btn btn-sm primary-sm"
-            onClick={() => setRememberOpen((v) => !v)}
+            onClick={() => {
+              setRememberOpen((v) => !v);
+              setForgetOpen(false);
+            }}
           >
             {t('memoryRemember')}
           </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setForgetOpen((v) => !v);
+              setRememberOpen(false);
+            }}
+          >
+            {t('memoryForget')}
+          </button>
         </div>
+        {msg ? <div className="hint" style={{ marginBottom: 8 }}>{msg}</div> : null}
         {st ? (
           <div className="hint" style={{ marginBottom: 10 }}>
             {t('memoryUsageLine')
@@ -199,7 +218,7 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
                       setSt(s);
                       setRememberDraft('');
                       setRememberOpen(false);
-                      // also arm agent remember when session lives
+                      setMsg(t('memoryRememberOk'));
                       onSendSlash?.(`/remember ${note}`);
                     })
                     .catch((e) => setErr(String(e)))
@@ -225,6 +244,7 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
                       setSt(s);
                       setRememberDraft('');
                       setRememberOpen(false);
+                      setMsg(t('memoryRememberOk'));
                       onSendSlash?.(`/remember ${note}`);
                     })
                     .catch((e) => setErr(String(e)))
@@ -232,6 +252,75 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
                 }}
               >
                 {t('confirm')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {forgetOpen ? (
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label>{t('memoryForgetPrompt')}</label>
+            <input
+              type="text"
+              value={forgetDraft}
+              onChange={(e) => setForgetDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && forgetDraft.trim().length >= 2) {
+                  const q = forgetDraft.trim();
+                  setBusy(true);
+                  setErr(null);
+                  void forgetMemory(q, 'all', project)
+                    .then((r) => {
+                      if (!r) return;
+                      setSt(r.status);
+                      setForgetDraft('');
+                      setForgetOpen(false);
+                      setMsg(
+                        t('memoryForgetOk')
+                          .replace('{n}', String(r.removedLines))
+                          .replace('{files}', String(r.filesTouched.length)),
+                      );
+                      if (sel) void openFile(sel);
+                    })
+                    .catch((e) => setErr(String(e)))
+                    .finally(() => setBusy(false));
+                }
+              }}
+              placeholder={t('memoryForgetPlaceholder')}
+            />
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('memoryForgetHint')}
+            </p>
+            <div className="modal-actions" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn-sm" onClick={() => setForgetOpen(false)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={forgetDraft.trim().length < 2 || busy}
+                onClick={() => {
+                  const q = forgetDraft.trim();
+                  if (q.length < 2) return;
+                  setBusy(true);
+                  setErr(null);
+                  void forgetMemory(q, 'all', project)
+                    .then((r) => {
+                      if (!r) return;
+                      setSt(r.status);
+                      setForgetDraft('');
+                      setForgetOpen(false);
+                      setMsg(
+                        t('memoryForgetOk')
+                          .replace('{n}', String(r.removedLines))
+                          .replace('{files}', String(r.filesTouched.length)),
+                      );
+                      if (sel) void openFile(sel);
+                    })
+                    .catch((e) => setErr(String(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {t('memoryForgetConfirm')}
               </button>
             </div>
           </div>
@@ -257,12 +346,38 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
               ))
             )}
           </div>
-          <pre
-            className="modal-body"
-            style={{ margin: 0, maxHeight: 360, whiteSpace: 'pre-wrap', fontSize: 12 }}
-          >
-            {body ?? t('memoryPickFile')}
-          </pre>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, gap: 8 }}>
+            {sel ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!sel || !confirm(t('memoryDeleteFileConfirm'))) return;
+                    setBusy(true);
+                    void deleteMemoryFile(sel)
+                      .then((s) => {
+                        setSt(s);
+                        setSel(null);
+                        setBody(null);
+                        setMsg(t('memoryDeleteFileOk'));
+                      })
+                      .catch((e) => setErr(String(e)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {t('memoryDeleteFile')}
+                </button>
+              </div>
+            ) : null}
+            <pre
+              className="modal-body"
+              style={{ margin: 0, maxHeight: 360, whiteSpace: 'pre-wrap', fontSize: 12, flex: 1 }}
+            >
+              {body ?? t('memoryPickFile')}
+            </pre>
+          </div>
         </div>
       </div>
     </div>

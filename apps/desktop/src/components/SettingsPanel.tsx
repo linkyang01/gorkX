@@ -12,7 +12,6 @@ import {
   storeDbPath,
 } from '../lib/threads';
 import { revealInFinder } from '../lib/host';
-import { shellExec } from '../lib/terminal';
 import {
   checkAppUpdate,
   checkKernelUpdate,
@@ -34,7 +33,7 @@ import {
 } from '../lib/modelsConfig';
 import { t } from '../lib/i18n';
 
-const APP_VERSION = '0.3.7'; // keep in sync with package.json
+const APP_VERSION = '0.4.1'; // keep in sync with package.json
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
 export type SettingsSection =
@@ -303,18 +302,17 @@ export function SettingsPanel({
     setLoginBusy(true);
     setMsg(t('subLoginHint'));
     try {
-      const bin = (status?.grokPath || grokCmd || 'grok').trim() || 'grok';
-      const ghome = status?.grokHome || '';
-      const loginCmd = ghome
-        ? `export GROK_HOME=${JSON.stringify(ghome)}; ${bin} login`
-        : `${bin} login`;
-      const script = `tell application "Terminal" to do script ${JSON.stringify(loginCmd)}`;
-      await shellExec(`osascript -e ${JSON.stringify(script)}`);
-      setMsg(t('subLoginDone'));
-      window.setTimeout(() => {
-        onRefresh();
-        void fetchAccountSummary().then(setAccount);
-      }, 4000);
+      const { startLoginFlow } = await import('../lib/account');
+      const result = await startLoginFlow({
+        onTick: (m) => setMsg(m),
+      });
+      setMsg(result.note || t('subLoginDone'));
+      if (result.account) setAccount(result.account);
+      else {
+        const a = await fetchAccountSummary();
+        setAccount(a);
+      }
+      onRefresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -324,11 +322,11 @@ export function SettingsPanel({
 
   const doLogout = async () => {
     try {
-      const bin = (status?.grokPath || grokCmd || 'grok').trim() || 'grok';
-      await shellExec(`${JSON.stringify(bin)} logout`);
+      const { logoutAccount } = await import('../lib/account');
+      await logoutAccount();
       setMsg(t('logout'));
-      onRefresh();
       setAccount(null);
+      onRefresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     }
@@ -659,14 +657,21 @@ export function SettingsPanel({
                 <div className="settings-row">
                   <div>
                     <div className="settings-row-title">
-                      {account?.displayName || account?.email || t('statusNeedLogin')}
+                      {(() => {
+                        const name =
+                          account?.displayName || account?.email || t('statusNeedLogin');
+                        const plan = account?.membershipLabel?.trim();
+                        return plan ? `${name}（${plan}）` : name;
+                      })()}
                     </div>
                     <div className="settings-row-hint mono">{account?.email || '—'}</div>
+                    {account?.membershipLabel ? (
+                      <div className="settings-row-hint">{account.membershipLabel}</div>
+                    ) : null}
                     {account?.quotaLabel ? (
                       <div className="settings-row-hint">{account.quotaLabel}</div>
                     ) : null}
                   </div>
-                  <span className="account-sub-badge">{t('subBadge')}</span>
                 </div>
                 <div className="field-row" style={{ marginTop: 10 }}>
                   <button

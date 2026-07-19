@@ -85,16 +85,17 @@ export function KernelPanel({
     setLoginBusy(true);
     setMsg(t('subLoginHint'));
     try {
-      const bin = (status?.grokPath || grokCmd || 'grok').trim() || 'grok';
-      // Interactive OIDC needs a real Terminal (shell_exec has no TTY).
-      const script = `tell application "Terminal" to do script ${JSON.stringify(`${bin} login`)}`;
-      await shellExec(`osascript -e ${JSON.stringify(script)}`);
-      setMsg(t('subLoginDone'));
-      // Give user time to finish browser login, then recheck
-      window.setTimeout(() => {
-        onRefresh();
-        void fetchAccountSummary().then(setAccount);
-      }, 4000);
+      const { startLoginFlow } = await import('../lib/account');
+      const result = await startLoginFlow({
+        onTick: (m) => setMsg(m),
+      });
+      setMsg(result.note || t('subLoginDone'));
+      if (result.account) setAccount(result.account);
+      else {
+        const a = await fetchAccountSummary();
+        setAccount(a);
+      }
+      onRefresh();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {

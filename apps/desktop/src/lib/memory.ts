@@ -91,3 +91,28 @@ export async function recordSessionMemory(
     /* best-effort */
   }
 }
+
+export interface MemoryForgetResult {
+  removedLines: number;
+  filesTouched: string[];
+  status: MemoryStatus;
+}
+
+/** Forget by keyword across memory layers (default: all). */
+export async function forgetMemory(
+  query: string,
+  scope: 'all' | 'user' | 'agent' | 'project' | 'sessions' = 'all',
+  project?: string,
+): Promise<MemoryForgetResult | null> {
+  if (!isTauri()) return null;
+  return invoke<MemoryForgetResult>('memory_forget', {
+    query,
+    scope,
+    project: project || null,
+  });
+}
+
+export async function deleteMemoryFile(path: string): Promise<MemoryStatus | null> {
+  if (!isTauri()) return null;
+  return invoke<MemoryStatus>('memory_delete_file', { path });
+}

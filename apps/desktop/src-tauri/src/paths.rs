@@ -56,7 +56,11 @@ pub fn ensure_dirs() -> Result<(), String> {
 
 /// One-time soft seed: if App home has no auth but legacy ~/.grok has login, copy auth
 /// so existing SuperGrok users are not stranded when we switch home.
+/// Skipped after explicit gorkX logout (`.gorkx_logged_out`).
 fn maybe_seed_from_legacy_home(app_home: &Path) {
+    if app_home.join(".gorkx_logged_out").exists() {
+        return;
+    }
     let marker = app_home.join(".gorkx_seeded_auth");
     if marker.exists() {
         return;

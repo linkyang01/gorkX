@@ -1,4 +1,5 @@
 mod agent_bridge;
+mod auth;
 mod extensions;
 mod git_panel;
 mod memory;
@@ -137,6 +138,9 @@ pub fn run() {
             store::account_summary,
             store::list_available_models,
             store::model_context_info,
+            auth::auth_logout,
+            auth::auth_login_browser,
+            auth::auth_session_present,
             memory::memory_status,
             memory::memory_set_enabled,
             memory::memory_set_auto_learn,
@@ -145,6 +149,8 @@ pub fn run() {
             memory::memory_append_note,
             memory::memory_injection_context,
             memory::memory_record_session,
+            memory::memory_forget,
+            memory::memory_delete_file,
             models_config::models_list_custom,
             models_config::models_upsert_custom,
             models_config::models_remove_custom,

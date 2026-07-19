@@ -165,9 +165,9 @@ export async function appVersion(): Promise<string> {
   if (!isTauri()) return '0.3.6';
   try {
     // fall back constant if no command
-    return '0.3.7';
+    return '0.4.1';
   } catch {
-    return '0.3.7';
+    return '0.4.1';
   }
 }
 

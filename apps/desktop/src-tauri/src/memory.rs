@@ -66,19 +66,33 @@ fn read_bool_in_section(section: &str, key: &str, default: bool) -> bool {
     default
 }
 
+/// Normalize section header: `"[memory]"` or `"memory"` → `"[memory]"`.
+fn section_header(section: &str) -> String {
+    let s = section.trim();
+    if s.starts_with('[') {
+        s.to_string()
+    } else {
+        format!("[{s}]")
+    }
+}
+
 fn write_bool_in_section(section: &str, key: &str, value: bool) -> Result<(), String> {
     let _ = ensure_dirs();
     let path = config_path();
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    // Repair a past bug that wrote `[[memory]]` (array-of-tables) instead of `[memory]`.
+    repair_double_bracket_memory_section(&path)?;
+
+    let header = section_header(section);
     let raw = std::fs::read_to_string(&path).unwrap_or_default();
     let val = if value { "true" } else { "false" };
     let mut out = String::new();
     let mut in_sec = false;
     let mut wrote = false;
     if raw.trim().is_empty() {
-        out.push_str(&format!("[{section}]\n{key} = {val}\n"));
+        out.push_str(&format!("{header}\n{key} = {val}\n"));
         std::fs::write(&path, out).map_err(|e| e.to_string())?;
         return Ok(());
     }
@@ -89,7 +103,8 @@ fn write_bool_in_section(section: &str, key: &str, value: bool) -> Result<(), St
                 out.push_str(&format!("{key} = {val}\n"));
                 wrote = true;
             }
-            in_sec = t == section;
+            // Match `[memory]` only — not `[[memory]]` leftovers
+            in_sec = t == header;
             out.push_str(line);
             out.push('\n');
             continue;
@@ -110,9 +125,54 @@ fn write_bool_in_section(section: &str, key: &str, value: bool) -> Result<(), St
         if !out.ends_with('\n') {
             out.push('\n');
         }
-        out.push_str(&format!("\n[{section}]\n{key} = {val}\n"));
+        out.push_str(&format!("\n{header}\n{key} = {val}\n"));
     }
     std::fs::write(&path, out).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Convert accidental `[[memory]]` array tables into a single `[memory]` table.
+fn repair_double_bracket_memory_section(path: &Path) -> Result<(), String> {
+    if !path.is_file() {
+        return Ok(());
+    }
+    let raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if !raw.contains("[[memory]]") {
+        return Ok(());
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut enabled = true;
+    let mut auto_learn = true;
+    let mut i = 0;
+    let lines: Vec<&str> = raw.lines().collect();
+    while i < lines.len() {
+        let t = lines[i].trim();
+        if t == "[[memory]]" || t == "[memory]" {
+            i += 1;
+            while i < lines.len() && !lines[i].trim().starts_with('[') {
+                let l = lines[i].trim();
+                if let Some(rest) = l.strip_prefix("enabled") {
+                    let v = rest.trim().trim_start_matches('=').trim();
+                    enabled = matches!(v, "true" | "1" | "yes");
+                } else if let Some(rest) = l.strip_prefix("auto_learn") {
+                    let v = rest.trim().trim_start_matches('=').trim();
+                    auto_learn = matches!(v, "true" | "1" | "yes");
+                }
+                i += 1;
+            }
+            continue;
+        }
+        out.push(lines[i].to_string());
+        i += 1;
+    }
+    let mut body = out.join("\n");
+    body = body.trim_end().to_string();
+    body.push_str(&format!(
+        "\n\n[memory]\nenabled = {}\nauto_learn = {}\n",
+        if enabled { "true" } else { "false" },
+        if auto_learn { "true" } else { "false" },
+    ));
+    std::fs::write(path, body).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -194,13 +254,11 @@ pub fn ensure_memory_layout(project: Option<&str>) -> Result<(), String> {
         )?;
     }
     // Ensure config has memory section with defaults if missing
-    if !config_path().exists()
-        || !std::fs::read_to_string(config_path())
-            .unwrap_or_default()
-            .contains("[memory]")
-    {
-        write_bool_in_section("[memory]", "enabled", true)?;
-        write_bool_in_section("[memory]", "auto_learn", true)?;
+    let _ = repair_double_bracket_memory_section(&config_path());
+    let cfg_raw = std::fs::read_to_string(config_path()).unwrap_or_default();
+    if !config_path().exists() || !cfg_raw.contains("[memory]") {
+        write_bool_in_section("memory", "enabled", true)?;
+        write_bool_in_section("memory", "auto_learn", true)?;
     }
     Ok(())
 }
@@ -292,9 +350,11 @@ pub fn memory_status(project: Option<String>) -> Result<MemoryStatus, String> {
         files,
         note: if enabled {
             if auto_learn {
-                "记忆已开启 · 自动学习开 — 会话结束会沉淀要点，新任务开局注入".into()
+                format!(
+                    "记忆已开启 · 自动学习开 — 开局注入优先文件最新内容；会话摘要最多保留 {MAX_SESSION_DUMPS} 份，超额合并进 _archive.md"
+                )
             } else {
-                "记忆已开启 · 自动学习关 — 仅显式「记一条」写入".into()
+                "记忆已开启 · 自动学习关 — 仅显式「记一条」写入；开局注入优先最新内容".into()
             }
         } else {
             "记忆已关闭 — 在设置中开启后，跨任务才会记住约定".into()
@@ -395,6 +455,8 @@ pub fn memory_append_note(
 }
 
 /// Build compact context string for new session injection (next-turn / first prompt).
+/// Growing files (USER / AGENT / MEMORY) are read from the **tail** so recent
+/// appends win when the char budget is exceeded — not the seed headers at the top.
 #[tauri::command]
 pub fn memory_injection_context(project: Option<String>) -> Result<String, String> {
     let _ = ensure_memory_layout(project.as_deref())?;
@@ -402,16 +464,19 @@ pub fn memory_injection_context(project: Option<String>) -> Result<String, Strin
         return Ok(String::new());
     }
     let root = memory_root();
+    // Housekeeping: prune session dumps even when the user only starts a task
+    let _ = gc_session_dumps(&root.join("sessions"));
     let mut parts: Vec<String> = Vec::new();
     let user = std::fs::read_to_string(root.join("USER.md")).unwrap_or_default();
     let agent = std::fs::read_to_string(root.join("AGENT.md")).unwrap_or_default();
     let u = strip_seed_noise(&user);
     let a = strip_seed_noise(&agent);
+    // Tail-prefer: append-heavy memory keeps newest preferences in context
     if !u.is_empty() {
-        parts.push(format!("【用户画像】\n{}", truncate(&u, 1200)));
+        parts.push(format!("【用户画像】\n{}", truncate_tail(&u, 1200)));
     }
     if !a.is_empty() {
-        parts.push(format!("【工作笔记】\n{}", truncate(&a, 1200)));
+        parts.push(format!("【工作笔记】\n{}", truncate_tail(&a, 1200)));
     }
     if let Some(proj) = project.filter(|p| !p.trim().is_empty()) {
         let slug = project_slug(&proj);
@@ -419,7 +484,7 @@ pub fn memory_injection_context(project: Option<String>) -> Result<String, Strin
             .unwrap_or_default();
         let p = strip_seed_noise(&pm);
         if !p.is_empty() {
-            parts.push(format!("【项目约定 · {proj}】\n{}", truncate(&p, 1500)));
+            parts.push(format!("【项目约定 · {proj}】\n{}", truncate_tail(&p, 1500)));
         }
     }
     if parts.is_empty() {
@@ -431,7 +496,133 @@ pub fn memory_injection_context(project: Option<String>) -> Result<String, Strin
     ))
 }
 
-/// After a non-trivial session: append a short dump (auto-learn).
+/// Keep at most this many raw session dump files under memory/sessions/.
+const MAX_SESSION_DUMPS: usize = 24;
+/// Soft cap for sessions/_archive.md (chars); older archive lines are dropped from the head.
+const MAX_ARCHIVE_CHARS: usize = 24_000;
+
+/// After writing a new dump: index overflow into `_archive.md`, then delete oldest dumps.
+fn gc_session_dumps(sessions_dir: &Path) -> Result<u32, String> {
+    if !sessions_dir.is_dir() {
+        return Ok(0);
+    }
+    let Ok(rd) = std::fs::read_dir(sessions_dir) else {
+        return Ok(0);
+    };
+    let mut files: Vec<(PathBuf, std::time::SystemTime)> = Vec::new();
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let name = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        // Never GC the merge archive itself
+        if name == "_archive.md" {
+            continue;
+        }
+        let mtime = ent
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        files.push((p, mtime));
+    }
+    if files.len() <= MAX_SESSION_DUMPS {
+        return Ok(0);
+    }
+    // Newest first — drop the tail
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+    let to_drop: Vec<PathBuf> = files
+        .into_iter()
+        .skip(MAX_SESSION_DUMPS)
+        .map(|(p, _)| p)
+        .collect();
+
+    let mut index_lines = String::new();
+    for p in &to_drop {
+        if let Ok(body) = std::fs::read_to_string(p) {
+            let title = body
+                .lines()
+                .find(|l| l.trim_start().starts_with("- 标题：") || l.trim_start().starts_with("# "))
+                .unwrap_or("(session)")
+                .trim()
+                .trim_start_matches('#')
+                .trim()
+                .trim_start_matches("- 标题：")
+                .trim();
+            let preview: String = body
+                .lines()
+                .filter(|l| {
+                    let t = l.trim();
+                    !t.is_empty()
+                        && !t.starts_with('#')
+                        && !t.starts_with("- 标题")
+                        && !t.starts_with("- 时间")
+                        && !t.starts_with("- 项目")
+                })
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(" · ");
+            index_lines.push_str(&format!(
+                "- {} — {}\n",
+                truncate_head(title, 60),
+                truncate_head(preview.trim(), 120)
+            ));
+        } else {
+            index_lines.push_str(&format!(
+                "- {}\n",
+                p.file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("dump")
+            ));
+        }
+    }
+    if !index_lines.is_empty() {
+        let archive = sessions_dir.join("_archive.md");
+        let stamp = chrono_lite_now();
+        let chunk = format!("\n## 归档 {stamp}\n\n{index_lines}");
+        use std::io::Write;
+        {
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&archive)
+                .map_err(|e| e.to_string())?;
+            if archive.metadata().map(|m| m.len()).unwrap_or(0) == 0 {
+                f.write_all(
+                    "# 会话摘要归档\n\n> 超额 session dump 合并为一行索引；原文文件已删。\n"
+                        .as_bytes(),
+                )
+                .map_err(|e| e.to_string())?;
+            }
+            f.write_all(chunk.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        // Cap archive size: keep the newest tail
+        if let Ok(raw) = std::fs::read_to_string(&archive) {
+            if raw.chars().count() > MAX_ARCHIVE_CHARS {
+                let kept = truncate_tail(&raw, MAX_ARCHIVE_CHARS);
+                let body = if kept.starts_with('#') {
+                    kept
+                } else {
+                    format!("# 会话摘要归档\n\n{kept}")
+                };
+                let _ = std::fs::write(&archive, body);
+            }
+        }
+    }
+
+    let mut removed = 0u32;
+    for p in to_drop {
+        if std::fs::remove_file(&p).is_ok() {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+/// After a non-trivial session: append a short dump (auto-learn), then GC old dumps.
 #[tauri::command]
 pub fn memory_record_session(
     project: Option<String>,
@@ -461,7 +652,8 @@ pub fn memory_record_session(
         title.trim(),
         chrono_lite_now(),
         project.as_deref().unwrap_or("（无）"),
-        truncate(summary, 4000)
+        // Written dump: keep the start of the model summary (usually the gist)
+        truncate_head(summary, 4000)
     );
     std::fs::write(&path, body).map_err(|e| e.to_string())?;
 
@@ -477,6 +669,8 @@ pub fn memory_record_session(
             let _ = memory_append_note(target.into(), line, project.clone());
         }
     }
+    // Cap growth: merge old dumps into _archive.md index, delete raw files
+    let _ = gc_session_dumps(&sessions);
     Ok(())
 }
 
@@ -504,12 +698,31 @@ fn extract_preference_lines(summary: &str) -> Vec<String> {
     out
 }
 
-fn truncate(s: &str, max: usize) -> String {
+/// Prefer the **start** of the text (coherent summaries / one-liners).
+fn truncate_head(s: &str, max: usize) -> String {
     let n = s.chars().count();
     if n <= max {
         return s.to_string();
     }
     s.chars().take(max).collect::<String>() + "…"
+}
+
+/// Prefer the **end** of the text (newest appends in growing memory files).
+/// Snaps to the next line boundary so injection does not start mid-bullet.
+fn truncate_tail(s: &str, max: usize) -> String {
+    let trimmed = s.trim();
+    let n = trimmed.chars().count();
+    if n <= max {
+        return trimmed.to_string();
+    }
+    let skip = n.saturating_sub(max);
+    let tail: String = trimmed.chars().skip(skip).collect();
+    if let Some(pos) = tail.find('\n') {
+        if pos + 1 < tail.len() {
+            return format!("…\n{}", &tail[pos + 1..]);
+        }
+    }
+    format!("…{tail}")
 }
 
 fn chrono_lite_now() -> String {
@@ -521,4 +734,186 @@ fn chrono_lite_now() -> String {
         .unwrap_or(0);
     // format as unix for portability; UI can show as-is
     format!("{secs}")
+}
+
+fn assert_under_memory(path: &Path) -> Result<PathBuf, String> {
+    let root = memory_root();
+    let root_c = root.canonicalize().unwrap_or(root.clone());
+    let ps = path.display().to_string();
+    let rs = root.display().to_string();
+    if let Ok(canon) = path.canonicalize() {
+        if !canon.starts_with(&root_c) {
+            return Err("path outside memory directory".into());
+        }
+        return Ok(canon);
+    }
+    if !ps.starts_with(&rs) {
+        return Err("path outside memory directory".into());
+    }
+    Ok(path.to_path_buf())
+}
+
+/// Remove matching content from a markdown memory file.
+/// Drops any `###` section whose body matches, plus standalone matching bullet lines.
+fn forget_in_file(path: &Path, query: &str) -> Result<u32, String> {
+    if !path.is_file() {
+        return Ok(0);
+    }
+    let raw = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return Ok(0);
+    }
+    let lines: Vec<&str> = raw.lines().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut removed = 0u32;
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let is_heading = line.trim_start().starts_with("### ");
+        if is_heading {
+            let start = i;
+            i += 1;
+            while i < lines.len() && !lines[i].trim_start().starts_with("### ") {
+                i += 1;
+            }
+            let section = &lines[start..i];
+            let hit = section.iter().any(|l| l.to_lowercase().contains(&q));
+            if hit {
+                removed += section.len() as u32;
+            } else {
+                for l in section {
+                    out.push((*l).to_string());
+                }
+            }
+            continue;
+        }
+        if line.to_lowercase().contains(&q) {
+            let t = line.trim();
+            if t.starts_with('#') && !t.starts_with("###") {
+                out.push(line.to_string());
+            } else {
+                removed += 1;
+            }
+        } else {
+            out.push(line.to_string());
+        }
+        i += 1;
+    }
+    if removed > 0 {
+        let mut body = out.join("\n");
+        if !body.ends_with('\n') {
+            body.push('\n');
+        }
+        std::fs::write(path, body).map_err(|e| e.to_string())?;
+    }
+    Ok(removed)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryForgetResult {
+    pub removed_lines: u32,
+    pub files_touched: Vec<String>,
+    pub status: MemoryStatus,
+}
+
+/// Forget by keyword: scrub USER / AGENT / project MEMORY / session dumps.
+/// scope: all | user | agent | project | sessions
+#[tauri::command]
+pub fn memory_forget(
+    query: String,
+    scope: Option<String>,
+    project: Option<String>,
+) -> Result<MemoryForgetResult, String> {
+    let q = query.trim();
+    if q.chars().count() < 2 {
+        return Err("forget query too short".into());
+    }
+    let _ = ensure_memory_layout(project.as_deref())?;
+    let root = memory_root();
+    let sc = scope.unwrap_or_else(|| "all".into());
+    let mut paths: Vec<PathBuf> = Vec::new();
+    match sc.as_str() {
+        "user" => paths.push(root.join("USER.md")),
+        "agent" => paths.push(root.join("AGENT.md")),
+        "project" => {
+            if let Some(proj) = project.as_ref().filter(|p| !p.trim().is_empty()) {
+                let slug = project_slug(proj);
+                paths.push(root.join("workspaces").join(slug).join("MEMORY.md"));
+            } else {
+                paths.push(root.join("AGENT.md"));
+            }
+        }
+        "sessions" => {
+            let sess = root.join("sessions");
+            if let Ok(rd) = std::fs::read_dir(sess) {
+                for ent in rd.flatten() {
+                    let p = ent.path();
+                    if p.extension().and_then(|e| e.to_str()) == Some("md") {
+                        paths.push(p);
+                    }
+                }
+            }
+        }
+        _ => {
+            paths.push(root.join("USER.md"));
+            paths.push(root.join("AGENT.md"));
+            if let Some(proj) = project.as_ref().filter(|p| !p.trim().is_empty()) {
+                let slug = project_slug(proj);
+                paths.push(root.join("workspaces").join(slug).join("MEMORY.md"));
+            }
+            let sess = root.join("sessions");
+            if let Ok(rd) = std::fs::read_dir(sess) {
+                for ent in rd.flatten() {
+                    let p = ent.path();
+                    if p.extension().and_then(|e| e.to_str()) == Some("md") {
+                        paths.push(p);
+                    }
+                }
+            }
+        }
+    }
+    let mut removed = 0u32;
+    let mut touched: Vec<String> = Vec::new();
+    for p in paths {
+        if let Ok(n) = forget_in_file(&p, q) {
+            if n > 0 {
+                removed += n;
+                touched.push(p.display().to_string());
+            }
+        }
+    }
+    let status = memory_status(project)?;
+    Ok(MemoryForgetResult {
+        removed_lines: removed,
+        files_touched: touched,
+        status,
+    })
+}
+
+/// Delete one memory file under GROK_HOME/memory.
+/// USER/AGENT/MEMORY.md are reset to seed instead of removed.
+#[tauri::command]
+pub fn memory_delete_file(path: String) -> Result<MemoryStatus, String> {
+    let p = PathBuf::from(path.trim());
+    let safe = assert_under_memory(&p)?;
+    let name = safe
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    if name == "USER.md" || name == "AGENT.md" || name == "MEMORY.md" {
+        let seed = if name == "USER.md" {
+            "# 用户画像 (USER)\n\n> 跨任务偏好。Agent 开局会加载此文件。\n\n## 沟通\n\n## 技术偏好\n\n## 禁忌\n\n"
+        } else if name == "AGENT.md" {
+            "# 工作笔记 (AGENT)\n\n> 环境、工具链、通用习惯。\n\n## 环境\n\n## 教训\n\n"
+        } else {
+            "# 项目记忆\n\n## 约定\n\n## 命令\n\n## 坑\n\n"
+        };
+        std::fs::write(&safe, seed).map_err(|e| e.to_string())?;
+    } else if safe.is_file() {
+        std::fs::remove_file(&safe).map_err(|e| e.to_string())?;
+    }
+    memory_status(None)
 }

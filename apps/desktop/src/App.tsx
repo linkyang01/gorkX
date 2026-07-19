@@ -107,10 +107,14 @@ import {
   type ThreadMeta,
 } from './lib/threads';
 import { ContextRing } from './components/ContextRing';
+import { AccountAvatar } from './components/AccountAvatar';
 import {
   fetchAccountSummary,
   fetchModelContext,
   fetchSubscriptionModels,
+  loadDisplayNameOverride,
+  saveDisplayNameOverride,
+  uiDisplayName,
 } from './lib/account';
 import type { AccountSummary } from './lib/account';
 import {
@@ -525,6 +529,10 @@ function App() {
   draftRef.current = draft;
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+  /** Local-only nickname for the sidebar chip (API name stays unchanged). */
+  const [nameOverride, setNameOverride] = useState(() => loadDisplayNameOverride());
+  const [nameEditOpen, setNameEditOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
   /** Opt-in: show Grok kernel history under selected project (not auto-loaded). */
   const [showGrokHistory, setShowGrokHistory] = useState(false);
   const [_grokHistoryLoading, _setGrokHistoryLoading] = useState(false);
@@ -3072,17 +3080,12 @@ function App() {
         </div>
       </div>
 
-      {status && (!status.installed || !status.authenticated) ? (
+      {/* Engine missing only — login lives in the bottom-left account menu */}
+      {status && !status.installed ? (
         <div className="banner warn">
-          {!status.installed
-            ? t('statusMissing') + ' — ' + (status.detail || '')
-            : t('statusNeedLogin') + ' — ' + t('subLogin')}
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => setKernelOpen(true)}
-          >
-            {t('subLogin')}
+          {t('statusMissing') + ' — ' + (status.detail || '')}
+          <button type="button" className="btn btn-sm" onClick={() => setKernelOpen(true)}>
+            {t('settings')}
           </button>
           <button type="button" className="btn btn-sm" onClick={refreshStatus}>
             {t('kernelRefresh')}
@@ -3591,112 +3594,243 @@ function App() {
                 void refreshAccount();
               }}
             >
-              <span
-                className={
-                  status?.authenticated || account?.authenticated
-                    ? 'account-avatar'
-                    : 'account-avatar guest'
+              <AccountAvatar
+                src={account?.avatarUrl}
+                label={
+                  uiDisplayName(account, nameOverride) ||
+                  account?.displayName ||
+                  account?.email ||
+                  '?'
                 }
-                aria-hidden
-              >
-                {(account?.displayName || account?.email || '?').trim().slice(0, 1).toUpperCase() ||
-                  '?'}
-              </span>
+                guest={!status?.authenticated && !account?.authenticated}
+              />
               <span className="account-meta">
                 <span className="account-name">
                   {!status?.installed
                     ? t('statusMissing')
                     : !status?.authenticated && !account?.authenticated
                       ? t('statusNeedLogin')
-                      : account?.displayName ||
-                        account?.email?.split('@')[0] ||
-                        t('subBadgeFull')}
+                      : (() => {
+                          const name =
+                            uiDisplayName(account, nameOverride) ||
+                            t('subBadgeFull');
+                          const plan = account?.membershipLabel?.trim();
+                          return plan ? `${name}（${plan}）` : name;
+                        })()}
                 </span>
                 <span className="account-quota">
                   {account?.creditUsagePercent != null
                     ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
                     : account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') ||
-                      (status?.authenticated ? t('subBadgeFull') : '—')}
+                      (status?.authenticated || account?.authenticated
+                        ? account?.membershipLabel || '—'
+                        : '—')}
                 </span>
               </span>
-              {status?.authenticated || account?.authenticated ? (
-                <span className="account-sub-badge" title={t('subBadgeFull')}>
-                  {t('subBadge')}
-                </span>
-              ) : null}
             </button>
             {accountMenuOpen ? (
               <div className="account-menu" role="menu">
-                <div className="account-menu-head">
-                  <span className="account-avatar" aria-hidden>
-                    {(account?.displayName || account?.email || '?').trim().slice(0, 1).toUpperCase()}
-                  </span>
-                  <div className="account-meta">
-                    <div className="account-name">
-                      {account?.displayName || account?.email || '—'}
+                {status?.authenticated || account?.authenticated ? (
+                  <>
+                    <div className="account-menu-head">
+                      <AccountAvatar
+                        src={account?.avatarUrl}
+                        label={
+                          uiDisplayName(account, nameOverride) ||
+                          account?.displayName ||
+                          account?.email ||
+                          '?'
+                        }
+                      />
+                      <div className="account-meta">
+                        <div className="account-name">
+                          {(() => {
+                            const name =
+                              uiDisplayName(account, nameOverride) ||
+                              t('subBadgeFull');
+                            const plan = account?.membershipLabel?.trim();
+                            return plan ? `${name}（${plan}）` : name;
+                          })()}
+                        </div>
+                        <div className="account-quota">
+                          {account?.email || account?.membershipLabel || t('subBadgeFull')}
+                          {account?.displayName &&
+                          nameOverride &&
+                          nameOverride !== account.displayName ? (
+                            <span className="muted"> · {account.displayName}</span>
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
-                    <div className="account-quota">{account?.email || t('subBadgeFull')}</div>
-                  </div>
-                </div>
-                <div className="account-menu-quota-block">
-                  <div className="account-menu-quota-title">{t('remainingQuota')}</div>
-                  <div className="account-menu-quota-line">
-                    {account?.creditUsagePercent != null
-                      ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                      : account?.quotaLabel || accountError || '—'}
-                  </div>
-                  {account?.periodEnd ? (
-                    <div className="account-menu-quota-reset">
-                      {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
+                    {nameEditOpen ? (
+                      <div className="account-menu-name-edit">
+                        <input
+                          className="account-name-input"
+                          value={nameDraft}
+                          autoFocus
+                          maxLength={40}
+                          placeholder={account?.displayName || t('displayNamePlaceholder')}
+                          onChange={(e) => setNameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const next = nameDraft.trim();
+                              saveDisplayNameOverride(next);
+                              setNameOverride(next);
+                              setNameEditOpen(false);
+                            } else if (e.key === 'Escape') {
+                              setNameEditOpen(false);
+                            }
+                          }}
+                        />
+                        <div className="account-name-edit-actions">
+                          <button
+                            type="button"
+                            className="btn btn-sm primary-sm"
+                            onClick={() => {
+                              const next = nameDraft.trim();
+                              saveDisplayNameOverride(next);
+                              setNameOverride(next);
+                              setNameEditOpen(false);
+                            }}
+                          >
+                            {t('confirm')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => {
+                              saveDisplayNameOverride('');
+                              setNameOverride('');
+                              setNameDraft('');
+                              setNameEditOpen(false);
+                            }}
+                          >
+                            {t('displayNameReset')}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="account-menu-item"
+                        onClick={() => {
+                          setNameDraft(nameOverride || uiDisplayName(account) || '');
+                          setNameEditOpen(true);
+                        }}
+                      >
+                        {t('displayNameEdit')}
+                      </button>
+                    )}
+                    <div className="account-menu-quota-block">
+                      <div className="account-menu-quota-title">{t('remainingQuota')}</div>
+                      <div className="account-menu-quota-line">
+                        {account?.creditUsagePercent != null
+                          ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                          : account?.quotaLabel || accountError || '—'}
+                      </div>
+                      {account?.periodEnd ? (
+                        <div className="account-menu-quota-reset">
+                          {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
+                        </div>
+                      ) : null}
+                      {account?.productUsage?.length ? (
+                        <div className="account-menu-quota-reset">
+                          {account.productUsage
+                            .map((p) =>
+                              p.usagePercent != null
+                                ? `${p.product} ${Math.round(p.usagePercent)}%`
+                                : p.product,
+                            )
+                            .join(' · ')}
+                        </div>
+                      ) : null}
+                      {accountError && account?.creditUsagePercent == null ? (
+                        <div className="account-menu-quota-reset" title={accountError}>
+                          {accountError.slice(0, 80)}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {account?.productUsage?.length ? (
-                    <div className="account-menu-quota-reset">
-                      {account.productUsage
-                        .map((p) =>
-                          p.usagePercent != null
-                            ? `${p.product} ${Math.round(p.usagePercent)}%`
-                            : p.product,
-                        )
-                        .join(' · ')}
-                    </div>
-                  ) : null}
-                  {accountError && account?.creditUsagePercent == null ? (
-                    <div className="account-menu-quota-reset" title={accountError}>
-                      {accountError.slice(0, 80)}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="account-menu-item"
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    setKernelOpen(true);
-                  }}
-                >
-                  {t('settings')}
-                </button>
-                <button
-                  type="button"
-                  className="account-menu-item"
-                  onClick={() => {
-                    setAccountMenuOpen(false);
-                    void (async () => {
-                      try {
-                        const { shellExec } = await import('./lib/terminal');
-                        const bin = (status?.grokPath || grokCmd || 'grok').trim() || 'grok';
-                        await shellExec(`${JSON.stringify(bin)} logout`);
-                      } catch {
-                        /* */
-                      }
-                      refreshStatus();
-                      setAccount(null);
-                    })();
-                  }}
-                >
-                  {t('logout')}
-                </button>
+                    {account?.creditUsagePercent == null ? (
+                      <button
+                        type="button"
+                        className="account-menu-item account-menu-item-primary"
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          void (async () => {
+                            try {
+                              const { startLoginFlow } = await import('./lib/account');
+                              const result = await startLoginFlow();
+                              if (result.account) setAccount(result.account);
+                              if (result.ok) setAccountError(null);
+                              else if (result.note) setAccountError(result.note);
+                            } catch (e) {
+                              setAccountError(e instanceof Error ? e.message : String(e));
+                            }
+                            refreshStatus();
+                            void refreshAccount();
+                          })();
+                        }}
+                      >
+                        {t('subLogin')}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="account-menu-item"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        setKernelOpen(true);
+                      }}
+                    >
+                      {t('settings')}
+                    </button>
+                    <button
+                      type="button"
+                      className="account-menu-item"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        void (async () => {
+                          try {
+                            const { logoutAccount } = await import('./lib/account');
+                            await logoutAccount();
+                          } catch {
+                            /* */
+                          }
+                          setAccount(null);
+                          setAccountError(null);
+                          refreshStatus();
+                          void refreshAccount();
+                        })();
+                      }}
+                    >
+                      {t('logout')}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="account-menu-item account-menu-item-primary"
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      void (async () => {
+                        try {
+                          const { startLoginFlow } = await import('./lib/account');
+                          const result = await startLoginFlow();
+                          if (result.account) setAccount(result.account);
+                          if (result.ok) setAccountError(null);
+                          else if (result.note) setAccountError(result.note);
+                        } catch (e) {
+                          setAccountError(e instanceof Error ? e.message : String(e));
+                        }
+                        refreshStatus();
+                        void refreshAccount();
+                      })();
+                    }}
+                  >
+                    {t('subLogin')}
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
