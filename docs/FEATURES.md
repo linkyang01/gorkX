@@ -44,3 +44,12 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 ```bash
 cd apps/desktop && npm install && npm run tauri dev
 ```
+
+## macOS bundle gate
+
+After a local app-only build (not a release), validate its embedded engine without
+using a system Grok installation:
+
+```bash
+scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
+```
