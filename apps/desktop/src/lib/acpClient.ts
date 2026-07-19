@@ -969,6 +969,8 @@ export function parseToolUpdate(update: SessionUpdate): ParsedToolUpdate | null 
   if (rawIn) {
     command = pickStr(rawIn.command, rawIn.cmd);
     pathOrTarget = pickStr(
+      rawIn.url,
+      rawIn.uri,
       rawIn.target_file,
       rawIn.file_path,
       rawIn.filePath,
@@ -982,6 +984,8 @@ export function parseToolUpdate(update: SessionUpdate): ParsedToolUpdate | null 
     if (!command) command = pickStr(xaiInput.command, xaiInput.cmd);
     if (!pathOrTarget) {
       pathOrTarget = pickStr(
+        xaiInput.url,
+        xaiInput.uri,
         xaiInput.path,
         xaiInput.file,
         xaiInput.directory,
@@ -1054,6 +1058,12 @@ export function parseToolUpdate(update: SessionUpdate): ParsedToolUpdate | null 
 function shortPath(p: string): string {
   const s = p.replace(/^file:\/\//, '').trim();
   if (!s) return '';
+  try {
+    const url = new URL(s);
+    return `${url.host}${url.pathname === '/' ? '' : url.pathname}`.slice(0, 56);
+  } catch {
+    // Local path, command target, or a non-URL protocol token.
+  }
   const parts = s.split('/').filter(Boolean);
   if (parts.length <= 2) return s.length > 48 ? `…${s.slice(-46)}` : s;
   return parts.slice(-2).join('/');
@@ -1080,6 +1090,12 @@ function composeToolLabel(p: {
     /^read\b/i.test(p.title)
   ) {
     action = '读取文件';
+  } else if (
+    /playwright|browser|navigate|open_page|click|fill|type_text|select_option|press_key|screenshot/.test(blob)
+  ) {
+    // Browser MCP remains engine-owned; this only makes its already-emitted
+    // tool calls visible and intelligible in gorkX's process timeline.
+    action = '浏览器操作';
   } else if (
     kind.includes('edit') ||
     kind.includes('write') ||

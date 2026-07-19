@@ -27,7 +27,7 @@
 | 日常编码 | 任务、流式 ACP、权限、终端、Review、工作树、记忆可用 | Plan/Review 的成熟度仍受内核质量影响 |
 | 多模型 | API/兼容网关、Keychain、分组、连接测试可用 | 缺订阅 OAuth、账号用量与可靠会话中切换验证 |
 | Hooks/MCP | 真实列表、信任与启停；MCP/插件入口可用 | 缺 Hook 创作体验和连接器产品化 |
-| Browser/Computer | Playwright MCP 配置、用户主动截图 | 缺可观察浏览器与受控桌面自动化 |
+| Browser/Computer | Playwright MCP 配置、Browser MCP 工具动作/URL 在过程面板可见、用户主动截图 | 缺域名许可、浏览器截图流与受控桌面自动化 |
 | 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；内核原生子 Agent 的启动/进度/完成事件可见，运行中子任务可走 ACP 真实取消，结束后可按需读取内核快照，并在会话重连后恢复 | 缺用户可控的委派契约、显式 resume、隔离策略与退出后 worker |
 | 远程工程协作 | 本地 Git Review | 缺 GitHub PR、CI、评论线程与授权连接器 |
 
