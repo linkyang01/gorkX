@@ -1169,8 +1169,8 @@ export function SettingsPanel({
                   <div>
                     <div className="settings-row-title">
                       {browserSnap?.mcp.some((m) => m.name === 'playwright' && m.enabled)
-                        ? t('settingsBrowserConnected')
-                        : t('settingsBrowserNotConnected')}
+                        ? t('settingsBrowserConfigured')
+                        : t('settingsBrowserNotConfigured')}
                     </div>
                     <div className="settings-row-hint">
                       {t('settingsBrowserConnectionHint')}
