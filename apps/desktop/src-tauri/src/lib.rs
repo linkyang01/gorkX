@@ -4,6 +4,7 @@ mod auth;
 mod capture;
 mod extensions;
 mod git_panel;
+mod github;
 mod grok_admin;
 mod memory;
 mod models_config;
@@ -101,6 +102,11 @@ pub fn run() {
             git_panel::git_file_diff,
             git_panel::git_stage,
             git_panel::git_unstage,
+            github::github_status,
+            github::github_connect_readonly,
+            github::github_test_connection,
+            github::github_disconnect,
+            github::github_list_open_prs,
             grok_admin::grok_admin_exec,
             workspace::workspace_list_files,
             workspace::read_workspace_file_preview,

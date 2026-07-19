@@ -49,6 +49,15 @@ import {
   runMcpDoctor,
   type ExtensionsSnapshot,
 } from '../lib/extensions';
+import {
+  githubConnectReadonly,
+  githubDisconnect,
+  githubListOpenPrs,
+  githubStatus as fetchGithubStatus,
+  githubTestConnection,
+  type GithubPullRequest,
+  type GithubStatus,
+} from '../lib/github';
 
 const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
@@ -185,6 +194,10 @@ export function SettingsPanel({
   const [doctorBusy, setDoctorBusy] = useState(false);
   const [hooks, setHooks] = useState<HooksSnapshot | null>(null);
   const [hooksBusy, setHooksBusy] = useState(false);
+  const [github, setGithub] = useState<GithubStatus | null>(null);
+  const [githubToken, setGithubToken] = useState('');
+  const [githubPrs, setGithubPrs] = useState<GithubPullRequest[]>([]);
+  const [githubBusy, setGithubBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -197,6 +210,7 @@ export function SettingsPanel({
     void fetchMemoryStatus().then(setMemory);
     void listCustomModels().then(setModelsSnap);
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
+    void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
   }, [isOpen, initialSection]);
 
   const refreshBrowser = async () => {
@@ -213,6 +227,43 @@ export function SettingsPanel({
       setMsg(error instanceof Error ? error.message : String(error));
     } finally {
       setDoctorBusy(false);
+    }
+  };
+
+  const withGithub = async (action: () => Promise<GithubStatus>) => {
+    setGithubBusy(true);
+    try {
+      const next = await action();
+      setGithub(next);
+      setMsg(next.error || next.note);
+      return next;
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+      return null;
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  const connectGithub = async () => {
+    const next = await withGithub(() => githubConnectReadonly(githubToken));
+    if (next?.connected) setGithubToken('');
+  };
+
+  const loadGithubPrs = async () => {
+    if (!project) {
+      setMsg(t('githubProjectRequired'));
+      return;
+    }
+    setGithubBusy(true);
+    try {
+      const prs = await githubListOpenPrs(project);
+      setGithubPrs(prs);
+      setMsg(prs.length ? t('githubPrsLoaded').replace('{n}', String(prs.length)) : t('githubPrsEmpty'));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubBusy(false);
     }
   };
 
@@ -1222,6 +1273,44 @@ export function SettingsPanel({
                 >
                   {t('settingsGitOpenReview')}
                 </button>
+              </div>
+              <h3 className="subhead">{t('githubTitle')}</h3>
+              <div className="settings-card">
+                <p className="hint">{t('githubHint')}</p>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">
+                      {github?.connected
+                        ? t('githubConnected').replace('{login}', github.login || 'GitHub')
+                        : github?.configured
+                          ? t('githubConfigured')
+                          : t('githubNotConnected')}
+                    </div>
+                    {github?.error ? <div className="settings-row-hint">{github.error}</div> : null}
+                  </div>
+                </div>
+                {!github?.configured ? (
+                  <div className="field-row" style={{ marginTop: 10 }}>
+                    <input type="password" value={githubToken} onChange={(e) => setGithubToken(e.target.value)} placeholder={t('githubTokenPlaceholder')} aria-label={t('githubTokenPlaceholder')} />
+                    <button type="button" className="btn primary" disabled={githubBusy || !githubToken.trim()} onClick={() => void connectGithub()}>{t('githubConnect')}</button>
+                  </div>
+                ) : (
+                  <div className="field-row" style={{ marginTop: 10 }}>
+                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void withGithub(githubTestConnection)}>{t('githubTest')}</button>
+                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void loadGithubPrs()}>{t('githubLoadPrs')}</button>
+                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void withGithub(githubDisconnect)}>{t('githubDisconnect')}</button>
+                  </div>
+                )}
+                {githubPrs.length ? (
+                  <ul className="settings-list" style={{ marginTop: 10 }}>
+                    {githubPrs.map((pr) => (
+                      <li key={pr.number}>
+                        <button type="button" className="link-btn" onClick={() => void openUrlSafe(pr.url)}>#{pr.number} {pr.title}</button>
+                        <span className="muted"> · {pr.author}{pr.draft ? ` · ${t('githubDraft')}` : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </>
           ) : null}
