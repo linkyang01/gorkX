@@ -1642,6 +1642,67 @@ function App() {
     [appendLine, appendOrMerge, patchThread],
   );
 
+  /**
+   * Rehydrate only the engine's currently-running child tasks after a session
+   * load. Finished tasks come from the persisted session replay; this query is
+   * solely for work that survived while the desktop process was absent.
+   */
+  const reconcileRunningSubagents = useCallback(
+    async (threadId: string, client: AcpClient, sessionId: string) => {
+      try {
+        const snapshots = await client.listRunningSubagents(sessionId);
+        const rows = snapshots.flatMap((snapshot) => {
+          if (!snapshot || typeof snapshot !== 'object') return [];
+          const raw = snapshot as Record<string, unknown>;
+          const subagentId = String(raw.subagentId ?? raw.subagent_id ?? '');
+          if (!subagentId) return [];
+          const type = String(raw.subagentType ?? raw.subagent_type ?? 'general-purpose');
+          const description = String(raw.description ?? '').trim();
+          const turns = Number(raw.turnCount ?? raw.turn_count ?? 0);
+          const tools = Number(raw.toolCallCount ?? raw.tool_call_count ?? 0);
+          const usage = Number(raw.contextUsagePct ?? raw.context_usage_pct ?? 0);
+          const detail = [
+            turns > 0 ? `${turns} turns` : '',
+            tools > 0 ? `${tools} tools` : '',
+            usage > 0 ? `${usage}% context` : '',
+          ].filter(Boolean);
+          return [{
+            key: `subagent:${subagentId}`,
+            text: `子任务 · ${type}${description ? ` · ${description}` : ''}`,
+            status: detail.length ? `running · ${detail.join(' · ')}` : 'running',
+          }];
+        });
+        if (!rows.length) return;
+        setThreads((prev) =>
+          prev.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            const lines = [...thread.lines];
+            for (const row of rows) {
+              const index = lines.findIndex((line) => line.toolKey === row.key);
+              if (index >= 0) {
+                lines[index] = { ...lines[index], toolStatus: row.status, toolKind: 'subagent' };
+              } else {
+                lines.push({
+                  id: nid(),
+                  role: 'tool',
+                  text: row.text,
+                  toolKey: row.key,
+                  toolStatus: row.status,
+                  toolKind: 'subagent',
+                });
+              }
+            }
+            return { ...thread, lines };
+          }),
+        );
+      } catch {
+        // This extension is optional on older kernels. Session replay remains
+        // usable even when a running-list probe is unavailable.
+      }
+    },
+    [],
+  );
+
   const bootstrapClient = useCallback(async () => {
     const client = await AcpClient.start(perm, grokCmd || undefined, effort);
     await client.initialize();
@@ -2420,6 +2481,7 @@ function App() {
           try {
             const loaded = await client.loadSession(wt.sessionId, cwd);
             sessionId = loaded.sessionId || wt.sessionId;
+            void reconcileRunningSubagents(id, client, sessionId);
           } catch {
             sessionId = wt.sessionId;
           }
@@ -2554,6 +2616,7 @@ function App() {
           cwd: cwdBase,
           projectKey: existing.projectKey || scope,
         });
+        void reconcileRunningSubagents(existing.id, client, session.sessionId || sessionId);
       } catch (e) {
         patchThread(existing.id, {
           busy: false,
@@ -2597,6 +2660,7 @@ function App() {
       wireClient(id, client);
       const session = await client.loadSession(sessionId, cwdBase);
       rememberModels(session);
+      void reconcileRunningSubagents(id, client, session.sessionId || sessionId);
       await new Promise((r) => setTimeout(r, 400));
       let mid = session.models?.currentModelId ?? null;
       if (modelId && modelId !== mid) {
@@ -3271,6 +3335,7 @@ function App() {
       await client.authenticate('cached_token');
       wireClient(threadId, client);
       await client.loadSession(sid, cwd);
+      void reconcileRunningSubagents(threadId, client, sid);
       if (mode === 'plan') {
         try {
           await client.setMode(sid, 'plan');
@@ -3367,6 +3432,7 @@ function App() {
       await client.authenticate('cached_token');
       wireClient(id, client);
       await client.loadSession(th.sessionId, th.cwd || project);
+      void reconcileRunningSubagents(id, client, th.sessionId);
       if (th.chatMode === 'plan') {
         try {
           await client.setMode(th.sessionId, 'plan');
