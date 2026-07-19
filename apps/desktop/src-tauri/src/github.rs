@@ -34,6 +34,16 @@ pub struct GithubPullRequest {
     pub draft: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCheckRun {
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub url: String,
+    pub details_url: String,
+}
+
 #[cfg(target_os = "macos")]
 fn token_read() -> Option<String> {
     let out = Command::new("security")
@@ -272,6 +282,78 @@ pub fn github_list_open_prs(cwd: String) -> Result<Vec<GithubPullRequest>, Strin
                     .to_string(),
                 draft: row.get("draft").and_then(|v| v.as_bool()).unwrap_or(false),
             })
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCheckRun>, String> {
+    let token = token_read()
+        .ok_or_else(|| "GitHub is not connected. Add a read-only token first.".to_string())?;
+    let (owner, repo) = github_repo_from_remote(&cwd)?;
+    let pull = client()?
+        .get(format!("{API}/repos/{owner}/{repo}/pulls/{pr_number}"))
+        .bearer_auth(&token)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|e| format!("GitHub network: {e}"))?;
+    if !pull.status().is_success() {
+        return Err(format!(
+            "GitHub HTTP {} while reading PR #{pr_number}",
+            pull.status()
+        ));
+    }
+    let pull: serde_json::Value = pull.json().map_err(|e| format!("GitHub response: {e}"))?;
+    let sha = pull
+        .get("head")
+        .and_then(|v| v.get("sha"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "GitHub PR response has no head commit.".to_string())?;
+    let checks = client()?
+        .get(format!(
+            "{API}/repos/{owner}/{repo}/commits/{sha}/check-runs"
+        ))
+        .bearer_auth(&token)
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .map_err(|e| format!("GitHub network: {e}"))?;
+    if !checks.status().is_success() {
+        return Err(format!(
+            "GitHub HTTP {} while reading checks for PR #{pr_number}",
+            checks.status()
+        ));
+    }
+    let body: serde_json::Value = checks.json().map_err(|e| format!("GitHub response: {e}"))?;
+    Ok(body
+        .get("check_runs")
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .map(|row| GithubCheckRun {
+            name: row
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unnamed check")
+                .to_string(),
+            status: row
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            conclusion: row
+                .get("conclusion")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            url: row
+                .get("html_url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            details_url: row
+                .get("details_url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
         })
         .collect())
 }

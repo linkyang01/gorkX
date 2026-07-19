@@ -19,6 +19,14 @@ export interface GithubPullRequest {
   draft: boolean;
 }
 
+export interface GithubCheckRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  url: string;
+  detailsUrl: string;
+}
+
 export const githubStatus = () => invoke<GithubStatus>('github_status');
 export const githubConnectReadonly = (token: string) =>
   invoke<GithubStatus>('github_connect_readonly', { token });
@@ -26,3 +34,5 @@ export const githubTestConnection = () => invoke<GithubStatus>('github_test_conn
 export const githubDisconnect = () => invoke<GithubStatus>('github_disconnect');
 export const githubListOpenPrs = (cwd: string) =>
   invoke<GithubPullRequest[]>('github_list_open_prs', { cwd });
+export const githubListPrChecks = (cwd: string, prNumber: number) =>
+  invoke<GithubCheckRun[]>('github_list_pr_checks', { cwd, prNumber });

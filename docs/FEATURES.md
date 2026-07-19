@@ -23,7 +23,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Worktree | create / list / use / new task / Finder / **back to main repo** | **Half→improved** |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
-| GitHub | User-provided fine-grained token in macOS Keychain; verify account and read current origin's open PRs | **Half** — real REST reads only after the user connects; OAuth/App, CI checks, comment threads, PR creation and all remote writes are not shipped |
+| GitHub | User-provided fine-grained token in macOS Keychain; verify account and read current origin's open PRs and their check-runs | **Half** — real REST reads only after the user connects; OAuth/App, comment threads, PR creation and all remote writes are not shipped |
 | Multi-provider models | Settings → config.toml; connection probe; **set default**; provider/account labels and grouped custom models; macOS Keychain for new API keys | **Half→improved** — routing still depends on engine; legacy plaintext keys are visibly migratable |
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu | Local actions always available; engine Slash actions appear only when the live session advertises them | **Real** |

@@ -74,7 +74,7 @@ Local worker or hosted worker
 
 ### P3 — GitHub 与工程协作（3–4 周）
 
-**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR；不读取 `gh` 凭据，不做远端写操作。OAuth/App、Checks 和评论线程仍未实现。
+**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR 及其 head commit 的 check-runs；不读取 `gh` 凭据，不做远端写操作。OAuth/App、评论线程和远端写入仍未实现。
 
 **出口**：在测试仓库中可读取 PR、定位失败 CI、生成建议并由用户确认后提交评论/PR；所有远端写操作有审计记录。
 

@@ -52,9 +52,11 @@ import {
 import {
   githubConnectReadonly,
   githubDisconnect,
+  githubListPrChecks,
   githubListOpenPrs,
   githubStatus as fetchGithubStatus,
   githubTestConnection,
+  type GithubCheckRun,
   type GithubPullRequest,
   type GithubStatus,
 } from '../lib/github';
@@ -197,6 +199,7 @@ export function SettingsPanel({
   const [github, setGithub] = useState<GithubStatus | null>(null);
   const [githubToken, setGithubToken] = useState('');
   const [githubPrs, setGithubPrs] = useState<GithubPullRequest[]>([]);
+  const [githubChecks, setGithubChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [githubBusy, setGithubBusy] = useState(false);
 
   useEffect(() => {
@@ -260,6 +263,20 @@ export function SettingsPanel({
       const prs = await githubListOpenPrs(project);
       setGithubPrs(prs);
       setMsg(prs.length ? t('githubPrsLoaded').replace('{n}', String(prs.length)) : t('githubPrsEmpty'));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  const loadGithubChecks = async (prNumber: number) => {
+    if (!project) return;
+    setGithubBusy(true);
+    try {
+      const checks = await githubListPrChecks(project, prNumber);
+      setGithubChecks((current) => ({ ...current, [prNumber]: checks }));
+      setMsg(t('githubChecksLoaded').replace('{n}', String(checks.length)));
     } catch (error) {
       setMsg(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1307,6 +1324,18 @@ export function SettingsPanel({
                       <li key={pr.number}>
                         <button type="button" className="link-btn" onClick={() => void openUrlSafe(pr.url)}>#{pr.number} {pr.title}</button>
                         <span className="muted"> · {pr.author}{pr.draft ? ` · ${t('githubDraft')}` : ''}</span>
+                        <button type="button" className="btn btn-sm" style={{ marginLeft: 8 }} disabled={githubBusy} onClick={() => void loadGithubChecks(pr.number)}>{t('githubLoadChecks')}</button>
+                        {githubChecks[pr.number] ? (
+                          <ul className="settings-list" style={{ margin: '6px 0 0 12px' }}>
+                            {githubChecks[pr.number].map((check) => (
+                              <li key={`${check.name}-${check.url}`}>
+                                {check.url || check.detailsUrl ? <button type="button" className="link-btn" onClick={() => void openUrlSafe(check.detailsUrl || check.url)}>{check.name}</button> : check.name}
+                                <span className="muted"> · {check.conclusion || check.status}</span>
+                              </li>
+                            ))}
+                            {!githubChecks[pr.number].length ? <li className="muted">{t('githubChecksEmpty')}</li> : null}
+                          </ul>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
