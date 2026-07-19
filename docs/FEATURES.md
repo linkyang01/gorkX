@@ -10,6 +10,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Layout | Review / Terminal / Process | **Real** |
 | Kernel | ACP stdio, App `GROK_HOME`, bundled engine path, Doctor | **Real** — normal installs do not scan `~/.grok` or PATH; Doctor reports missing bundle, auth and data-folder access |
 | Chat | Stream, tools, permissions, ACP resource-link attachments, / @ keyboard nav | **Real** |
+| Image / video generation | `/imagine` and `/imagine-video` passed straight to Grok Build | **Engine-gated** — supported by the locked source, but the active Grok account and engine configuration decide whether a request can run |
 | Goal | Stage `/goal`, persist banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
 | Scheduled | SQLite jobs; foreground tasks plus opt-in macOS launchd worker | **Real with limits** — background runs every 5 minutes in Grok plan mode only (no silent repository writes), save output locally, and require the installed macOS app |
