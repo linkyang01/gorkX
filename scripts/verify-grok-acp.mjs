@@ -4,7 +4,7 @@
 // Pass --authenticated only with an explicit disposable GROK_HOME/CWD pair.
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
@@ -24,6 +24,17 @@ const cwd = authenticated ? process.env.GORKX_ACP_TEST_CWD : home;
 if (!home || !cwd) {
   console.error('--authenticated requires explicit GROKX_ACP_TEST_HOME and GROKX_ACP_TEST_CWD');
   process.exit(2);
+}
+if (authenticated) {
+  const userHome = process.env.HOME;
+  const protectedHomes = userHome ? [
+    resolve(userHome, '.grok'),
+    resolve(userHome, 'Library/Application Support/gorkX/grok-home'),
+  ] : [];
+  if (protectedHomes.includes(resolve(home))) {
+    console.error('refusing to run authenticated smoke against a standard user GROK_HOME; use a disposable test home');
+    process.exit(2);
+  }
 }
 const child = spawn(bin, ['agent', 'stdio'], {
   env: { ...process.env, GROK_HOME: home },
