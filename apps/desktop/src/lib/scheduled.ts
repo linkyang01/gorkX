@@ -1,4 +1,4 @@
-/** App-local scheduled tasks (Codex「已安排」). Run while gorkX is open. */
+/** App-local scheduled tasks; optional native worker reads the same SQLite store. */
 import { invoke } from '@tauri-apps/api/core';
 
 export type ScheduleKind = 'interval' | 'daily';
@@ -28,6 +28,33 @@ export interface ScheduledJob {
 
 const LS_KEY = 'gorkx.scheduledJobs.v1';
 const STORE_KEY = 'scheduled_jobs_v1';
+
+export interface BackgroundSchedulerStatus {
+  supported: boolean;
+  enabled: boolean;
+  label: string;
+  detail: string;
+}
+
+export interface BackgroundSchedulerRun {
+  jobId: string;
+  title: string;
+  startedAt: number;
+  ok: boolean;
+  output: string;
+}
+
+export async function getBackgroundSchedulerStatus(): Promise<BackgroundSchedulerStatus> {
+  return invoke<BackgroundSchedulerStatus>('scheduler_status');
+}
+
+export async function setBackgroundSchedulerEnabled(enabled: boolean): Promise<BackgroundSchedulerStatus> {
+  return invoke<BackgroundSchedulerStatus>(enabled ? 'scheduler_enable' : 'scheduler_disable');
+}
+
+export async function listBackgroundSchedulerRuns(): Promise<BackgroundSchedulerRun[]> {
+  return invoke<BackgroundSchedulerRun[]>('scheduler_list_runs');
+}
 
 export function loadJobs(): ScheduledJob[] {
   try {

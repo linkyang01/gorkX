@@ -46,7 +46,7 @@ pub struct ChatLineRow {
     pub tool_kind: Option<String>,
 }
 
-fn db_path() -> Result<PathBuf, String> {
+pub fn db_path() -> Result<PathBuf, String> {
     let base = dirs::data_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join("Library/Application Support")))
         .ok_or_else(|| "no data dir".to_string())?;

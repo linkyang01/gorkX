@@ -213,7 +213,7 @@ const dict = {
     navMemoryHint: 'Preferences and facts remembered across tasks',
     schedTitle: 'Scheduled tasks',
     schedLead:
-      'Have the agent run a prompt on a schedule while gorkX is open — briefings, reviews, or follow-ups.',
+      'Run briefings, reviews, or follow-ups on a schedule. Foreground runs create tasks; the optional background worker is plan-only.',
     schedCreate: 'New schedule',
     schedSuggestions: 'Suggestions',
     schedMyJobs: 'Your schedules',
@@ -241,7 +241,18 @@ const dict = {
     schedEveryN: 'Every {n} min',
     schedDailyAt: 'Daily {h}:{m}',
     schedFootnote:
-      'Jobs run only while this app is open. Each run starts a new task with the saved prompt.',
+      'Without the optional background worker, jobs run only while gorkX is open. Foreground runs create a new task; background output stays local.',
+    schedBackgroundTitle: 'Run while gorkX is closed',
+    schedBackgroundHint:
+      'Optional macOS launchd worker checks every 5 minutes. Background runs are plan-only, create no interactive task, and save their output locally.',
+    schedBackgroundEnable: 'Enable background runs',
+    schedBackgroundDisable: 'Disable background runs',
+    schedBackgroundOn: 'Background worker enabled',
+    schedBackgroundOff: 'Background worker disabled',
+    schedBackgroundUnavailable: 'Requires the installed macOS app',
+    schedBackgroundRecent: 'Recent background runs',
+    schedBackgroundSuccess: 'completed',
+    schedBackgroundFailed: 'failed',
     extNote:
       'Skills, connections, and plugins installed for this app appear here. You can browse, enable, or open them from this panel.',
     extSkills: 'Skills',
@@ -977,7 +988,7 @@ const dict = {
     navMemoryHint: '跨任务记住的偏好与项目约定',
     schedTitle: '已安排的任务',
     schedLead:
-      '在 gorkX 打开时，按计划自动开任务并发送提示——适合每日简报、周回顾或跟进检查。',
+      '可按计划执行简报、审阅或跟进。前台执行会新建任务；可选后台 worker 只允许规划。',
     schedCreate: '新建安排',
     schedSuggestions: '建议',
     schedMyJobs: '我的安排',
@@ -1005,7 +1016,18 @@ const dict = {
     schedEveryN: '每 {n} 分钟',
     schedDailyAt: '每天 {h}:{m}',
     schedFootnote:
-      '仅在本应用打开时会触发。每次触发会新建一个任务并发送保存的提示。',
+      '未启用后台 worker 时，任务只在 gorkX 打开期间触发。前台执行会新建任务；后台输出仅保存在本机。',
+    schedBackgroundTitle: '应用关闭后继续运行',
+    schedBackgroundHint:
+      '可选的 macOS launchd worker 每 5 分钟检查一次。后台执行只允许规划，不创建交互任务，输出仅保存到本机。',
+    schedBackgroundEnable: '启用后台执行',
+    schedBackgroundDisable: '关闭后台执行',
+    schedBackgroundOn: '后台 worker 已启用',
+    schedBackgroundOff: '后台 worker 已关闭',
+    schedBackgroundUnavailable: '需要已安装的 macOS 应用',
+    schedBackgroundRecent: '最近后台执行',
+    schedBackgroundSuccess: '已完成',
+    schedBackgroundFailed: '失败',
     extNote: '这里可以查看、启用或打开本机已安装的技能、连接与插件。',
     extSkills: 'Skills',
     extMcp: 'MCP',

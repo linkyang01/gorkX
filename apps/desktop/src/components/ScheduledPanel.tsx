@@ -1,15 +1,19 @@
 /**
- * 已安排任务 — Codex-style scheduled jobs that fire while the app is open.
+ * 已安排任务 — foreground jobs plus an opt-in, read-only macOS worker.
  */
 import { useEffect, useState } from 'react';
 import {
+  type BackgroundSchedulerRun,
   type ScheduledJob,
   computeNextRun,
   computeRetryRun,
   formatNextRun,
+  getBackgroundSchedulerStatus,
+  listBackgroundSchedulerRuns,
   loadPersistentJobs,
   nid,
   savePersistentJobs,
+  setBackgroundSchedulerEnabled,
   SUGGESTIONS,
 } from '../lib/scheduled';
 import { projectDisplayName } from '../lib/projects';
@@ -44,10 +48,23 @@ export function ScheduledPanel({
   const [dailyHour, setDailyHour] = useState(9);
   const [dailyMinute, setDailyMinute] = useState(0);
   const [weekdaysOnly, setWeekdaysOnly] = useState(true);
+  const [backgroundEnabled, setBackgroundEnabled] = useState(false);
+  const [backgroundSupported, setBackgroundSupported] = useState(false);
+  const [backgroundBusy, setBackgroundBusy] = useState(false);
+  const [backgroundMsg, setBackgroundMsg] = useState<string | null>(null);
+  const [backgroundRuns, setBackgroundRuns] = useState<BackgroundSchedulerRun[]>([]);
 
   useEffect(() => {
     if (!open) return;
     void loadPersistentJobs().then(setJobs);
+    void getBackgroundSchedulerStatus()
+      .then((status) => {
+        setBackgroundSupported(status.supported);
+        setBackgroundEnabled(status.enabled);
+        setBackgroundMsg(null);
+      })
+      .catch(() => setBackgroundSupported(false));
+    void listBackgroundSchedulerRuns().then(setBackgroundRuns).catch(() => setBackgroundRuns([]));
   }, [open]);
 
   useEffect(() => {
@@ -148,6 +165,21 @@ export function ScheduledPanel({
     });
   };
 
+  const toggleBackground = async () => {
+    setBackgroundBusy(true);
+    try {
+      const status = await setBackgroundSchedulerEnabled(!backgroundEnabled);
+      setBackgroundEnabled(status.enabled);
+      setBackgroundSupported(status.supported);
+      setBackgroundMsg(status.enabled ? t('schedBackgroundOn') : t('schedBackgroundOff'));
+      if (status.enabled) void listBackgroundSchedulerRuns().then(setBackgroundRuns).catch(() => {});
+    } catch (error) {
+      setBackgroundMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBackgroundBusy(false);
+    }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -163,6 +195,32 @@ export function ScheduledPanel({
           </button>
         </div>
         <p className="sched-lead">{t('schedLead')}</p>
+
+        <div className="settings-card" style={{ marginBottom: 12 }}>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-title">{t('schedBackgroundTitle')}</div>
+              <div className="settings-row-hint">{t('schedBackgroundHint')}</div>
+            </div>
+            {backgroundSupported ? (
+              <button type="button" className="btn btn-sm" disabled={backgroundBusy} onClick={() => void toggleBackground()}>
+                {backgroundEnabled ? t('schedBackgroundDisable') : t('schedBackgroundEnable')}
+              </button>
+            ) : <span className="muted">{t('schedBackgroundUnavailable')}</span>}
+          </div>
+          {backgroundMsg ? <div className="settings-row-hint" style={{ marginTop: 6 }}>{backgroundMsg}</div> : null}
+          {backgroundRuns.length ? (
+            <div className="settings-row-hint" style={{ marginTop: 8 }}>
+              <div>{t('schedBackgroundRecent')}</div>
+              {backgroundRuns.slice(0, 3).map((run) => (
+                <details key={`${run.jobId}-${run.startedAt}`} style={{ marginTop: 4 }}>
+                  <summary>{`${run.title} · ${run.ok ? t('schedBackgroundSuccess') : t('schedBackgroundFailed')} · ${formatNextRun(run.startedAt)}`}</summary>
+                  <pre style={{ maxHeight: 120, overflow: 'auto', whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{run.output || '—'}</pre>
+                </details>
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         <div className="sched-toolbar">
           <button

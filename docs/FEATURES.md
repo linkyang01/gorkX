@@ -12,7 +12,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Chat | Stream, tools, permissions, ACP resource-link attachments, / @ keyboard nav | **Real** |
 | Goal | Stage `/goal`, persist banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
-| Scheduled | Local jobs; fires while app open | **Real** (app must be running) |
+| Scheduled | SQLite jobs; foreground tasks plus opt-in macOS launchd worker | **Real with limits** — background runs every 5 minutes in Grok plan mode only (no silent repository writes), save output locally, and require the installed macOS app |
 | Terminal | PTY dock | **Real** |
 | Extensions | Skills / MCP / plugins via engine CLI | **Real** (depends on engine) |
 | Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember / Forget / keyword search / local compact | **Real (v0.4+)** — kernel `/flush`/`/dream` still optional extras |
@@ -37,7 +37,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 - **Computer automation:** only user-triggered local screen capture exists; no background capture or mouse/keyboard control.
 - **Hooks authoring:** gorkX manages hooks the engine discovers; it does not yet create or edit hook files/configuration.
 - **Provider subscriptions:** Grok login is real. OpenAI/Anthropic are API-key or compatible-gateway configurations; a ChatGPT/Claude web subscription is not treated as an API login.
-- **Background schedules:** local scheduled tasks run only while gorkX is open.
+- **Background schedules:** available only through the user-enabled macOS launchd worker; it is deliberately plan-only and does not create an interactive task while the app is closed.
 
 ## Run
 

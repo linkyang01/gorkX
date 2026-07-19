@@ -9,6 +9,7 @@ mod memory;
 mod models_config;
 mod paths;
 mod pty;
+mod scheduler;
 mod store;
 mod terminal;
 mod workspace;
@@ -135,6 +136,10 @@ pub fn run() {
             store::store_kv_set,
             store::store_db_path,
             store::store_data_dir,
+            scheduler::scheduler_status,
+            scheduler::scheduler_enable,
+            scheduler::scheduler_disable,
+            scheduler::scheduler_list_runs,
             store::store_clear_chat,
             store::store_clear_project,
             store::home_dir,
@@ -199,6 +204,11 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running gorkX");
+}
+
+/// Entry point used by the launchd worker mode in the app executable.
+pub fn run_scheduled_jobs() -> Result<scheduler::SchedulerRunSummary, String> {
+    scheduler::run_due_jobs()
 }
 
 /// Open a path in Finder (macOS) / file manager.
