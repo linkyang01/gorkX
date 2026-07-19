@@ -291,6 +291,30 @@ export class AcpClient {
       return;
     }
 
+    // Older/leader-routed Grok Build sessions use the compatibility envelope.
+    // Its body is the same SessionNotification shape as x.ai/session/update.
+    if (method === 'x.ai/session_notification' || method === '_x.ai/session_notification') {
+      const outer = (msg.params ?? {}) as Record<string, unknown>;
+      const params = (
+        typeof outer.params === 'object' &&
+        outer.params !== null &&
+        typeof outer.method === 'string' &&
+        String(outer.method).endsWith('session_notification')
+          ? outer.params
+          : outer
+      ) as {
+        sessionId?: string;
+        session_id?: string;
+        update?: SessionUpdate;
+        _meta?: unknown;
+      };
+      const update = (params.update ?? params) as SessionUpdate;
+      if (params._meta) this.onUsageMeta?.(params);
+      else if ((update as { _meta?: unknown })._meta) this.onUsageMeta?.(update);
+      this.onSessionUpdate?.(update, params.sessionId ?? params.session_id);
+      return;
+    }
+
     if (
       method === '_x.ai/session/prompt_complete' ||
       method === '_x.ai/session_notification'
@@ -717,6 +741,43 @@ export class AcpClient {
       result?: unknown[];
     };
     return (raw?.result as unknown[]) ?? [];
+  }
+
+  /** Native Grok Build control plane for a child created by its task tool. */
+  async cancelSubagent(subagentId: string): Promise<{
+    subagentId: string;
+    cancelled: boolean;
+    outcome?: { kind?: string; status?: string };
+  }> {
+    const raw = (await this.request('x.ai/subagent/cancel', { subagentId }, 15_000)) as {
+      result?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    const result = (raw.result ?? raw) as Record<string, unknown>;
+    const outcome = result.outcome;
+    return {
+      subagentId: String(result.subagentId ?? subagentId),
+      cancelled: Boolean(result.cancelled),
+      outcome:
+        outcome && typeof outcome === 'object'
+          ? {
+              kind: typeof (outcome as Record<string, unknown>).kind === 'string'
+                ? String((outcome as Record<string, unknown>).kind)
+                : undefined,
+              status: typeof (outcome as Record<string, unknown>).status === 'string'
+                ? String((outcome as Record<string, unknown>).status)
+                : undefined,
+            }
+          : undefined,
+    };
+  }
+
+  /** Read-only reconciliation after reconnect; returns only engine-owned state. */
+  async listRunningSubagents(sessionId: string): Promise<unknown[]> {
+    const raw = (await this.request('x.ai/subagent/list_running', { sessionId }, 15_000)) as {
+      result?: { subagents?: unknown[] };
+      subagents?: unknown[];
+    };
+    return raw.result?.subagents ?? raw.subagents ?? [];
   }
 
   async stop() {

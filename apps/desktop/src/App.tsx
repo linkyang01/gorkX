@@ -4978,6 +4978,65 @@ function App() {
               }}
               lines={active.lines}
               busy={active.busy}
+              onCancelSubagent={(subagentId) => {
+                const client = active.client;
+                if (!client) return;
+                setThreads((prev) =>
+                  prev.map((thread) =>
+                    thread.id === active.id
+                      ? {
+                          ...thread,
+                          lines: thread.lines.map((line) =>
+                            line.toolKey === `subagent:${subagentId}`
+                              ? { ...line, toolStatus: 'cancelling' }
+                              : line,
+                          ),
+                        }
+                      : thread,
+                  ),
+                );
+                void client.cancelSubagent(subagentId).then((result) => {
+                  // A live cancellation emits subagent_finished. If the engine
+                  // says it was already terminal, no follow-up event is sent,
+                  // so settle the row from the typed response.
+                  if (result.cancelled) return;
+                  const terminal = result.outcome?.status || 'cancelled';
+                  setThreads((prev) =>
+                    prev.map((thread) =>
+                      thread.id === active.id
+                        ? {
+                            ...thread,
+                            lines: thread.lines.map((line) =>
+                              line.toolKey === `subagent:${subagentId}`
+                                ? { ...line, toolStatus: terminal }
+                                : line,
+                            ),
+                          }
+                        : thread,
+                    ),
+                  );
+                }).catch((error) => {
+                  setThreads((prev) =>
+                    prev.map((thread) =>
+                      thread.id === active.id
+                        ? {
+                            ...thread,
+                            lines: thread.lines.map((line) =>
+                              line.toolKey === `subagent:${subagentId}`
+                                ? { ...line, toolStatus: 'running' }
+                                : line,
+                            ),
+                          }
+                        : thread,
+                    ),
+                  );
+                  appendLine(active.id, {
+                    id: nid(),
+                    role: 'system',
+                    text: `停止子任务失败：${error instanceof Error ? error.message : String(error)}`,
+                  });
+                });
+              }}
             />
             {!processOpen ? <ToolTimeline tools={activeTools} /> : null}
             <MessageList
