@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { GrokStatus, PermissionMode } from '../lib/acpClient';
+import { runKernelDoctor, type GrokStatus, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
 import type { AccountSummary } from '../lib/account';
 import { fetchAccountSummary, fetchSubscriptionModels } from '../lib/account';
 import {
@@ -27,6 +27,7 @@ import {
 import { fetchMemoryStatus, setMemoryEnabled, type MemoryStatus } from '../lib/memory';
 import {
   listCustomModels,
+  migratePlaintextModelKeys,
   openModelsConfig,
   removeCustomModel,
   setDefaultModel,
@@ -176,6 +177,8 @@ export function SettingsPanel({
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
+  const [kernelDoctor, setKernelDoctor] = useState<KernelDoctor | null>(null);
+  const [doctorBusy, setDoctorBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -194,6 +197,17 @@ export function SettingsPanel({
     const snap = await fetchExtensionsSnapshot(project, grokCmd);
     setBrowserSnap(snap);
     return snap;
+  };
+
+  const checkKernelDoctor = async () => {
+    setDoctorBusy(true);
+    try {
+      setKernelDoctor(await runKernelDoctor(grokCmd || undefined));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDoctorBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -962,6 +976,16 @@ export function SettingsPanel({
                   {t('settingsModelsDefaultLine').replace('{id}', modelsSnap.defaultModel)}
                 </div>
               ) : null}
+              {modelsSnap?.customModels?.some((m) => m.hasPlaintextSecret) ? (
+                <div className="settings-card" style={{ marginBottom: 10 }}>
+                  <div className="settings-row-title">{t('settingsModelsPlaintextTitle')}</div>
+                  <div className="settings-row-hint">{t('settingsModelsPlaintextHint')}</div>
+                  <button type="button" className="btn" disabled={modelBusy} onClick={() => {
+                    setModelBusy(true);
+                    void migratePlaintextModelKeys().then(setModelsSnap).then(() => setMsg(t('settingsModelsMigrated'))).catch((e) => setMsg(String(e))).finally(() => setModelBusy(false));
+                  }}>{t('settingsModelsMigrate')}</button>
+                </div>
+              ) : null}
               {(modelsSnap?.customModels?.length ?? 0) > 0 ? (
                 <div className="settings-card">
                   {modelsSnap!.customModels.map((m) => {
@@ -981,6 +1005,9 @@ export function SettingsPanel({
                           </div>
                           <div className="settings-row-hint mono">
                             {m.model} · {m.baseUrl}
+                          </div>
+                          <div className="settings-row-hint">
+                            {m.hasPlaintextSecret ? t('settingsModelsPlaintextStatus') : m.hasKeychainSecret ? t('settingsModelsKeychainStatus') : m.apiKey.startsWith('env:') ? t('settingsModelsEnvStatus') : t('settingsModelsNoKeyStatus')}
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1273,6 +1300,9 @@ export function SettingsPanel({
                 <button type="button" className="btn primary" onClick={onRefresh}>
                   {t('kernelRefresh')}
                 </button>
+                <button type="button" className="btn" disabled={doctorBusy} onClick={() => void checkKernelDoctor()}>
+                  {doctorBusy ? t('kernelDoctorRunning') : t('kernelDoctor')}
+                </button>
               </div>
               <div className="kernel-meta" style={{ marginTop: 12 }}>
                 <div className="full">
@@ -1284,6 +1314,20 @@ export function SettingsPanel({
                   <div>{status?.detail || '—'}</div>
                 </div>
               </div>
+              {kernelDoctor ? (
+                <div className="settings-card" style={{ marginTop: 12 }}>
+                  <div className="settings-row-title">{t('kernelDoctor')}</div>
+                  <div className="settings-row-hint">{kernelDoctor.repairHint}</div>
+                  <div className="settings-row-hint">
+                    {t('kernelDoctorHomeWritable')}: {kernelDoctor.grokHomeWritable ? t('kernelDoctorYes') : t('kernelDoctorNo')}
+                  </div>
+                  {kernelDoctor.issues.length ? (
+                    <ul className="settings-list">
+                      {kernelDoctor.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                    </ul>
+                  ) : <div className="settings-row-hint">{t('kernelDoctorClean')}</div>}
+                </div>
+              ) : null}
             </>
           ) : null}
 

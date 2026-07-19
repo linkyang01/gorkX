@@ -6,6 +6,8 @@ export interface CustomModelRow {
   name: string;
   baseUrl: string;
   apiKey: string;
+  hasKeychainSecret?: boolean;
+  hasPlaintextSecret?: boolean;
   apiBackend: string;
   providerLabel: string;
   contextWindow?: number | null;
@@ -49,6 +51,10 @@ export async function setDefaultModel(modelId: string): Promise<ModelsConfigSnap
 
 export async function openModelsConfig(): Promise<string> {
   return invoke<string>('models_open_config');
+}
+
+export async function migratePlaintextModelKeys(): Promise<ModelsConfigSnapshot> {
+  return invoke<ModelsConfigSnapshot>('models_migrate_plaintext_keys');
 }
 
 export interface ModelTestResult {

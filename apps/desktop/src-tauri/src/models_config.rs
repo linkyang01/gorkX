@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+const KEYCHAIN_SERVICE: &str = "com.gorkx.model-api-key";
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomModelRow {
@@ -17,6 +19,10 @@ pub struct CustomModelRow {
     pub base_url: String,
     #[serde(default)]
     pub api_key: String,
+    #[serde(default)]
+    pub has_keychain_secret: bool,
+    #[serde(default)]
+    pub has_plaintext_secret: bool,
     /// chat_completions | responses | messages
     #[serde(default = "default_backend")]
     pub api_backend: String,
@@ -25,6 +31,28 @@ pub struct CustomModelRow {
     #[serde(default)]
     pub context_window: Option<u64>,
 }
+
+fn keychain_account(id: &str) -> String { format!("gorkx:model:{}", sanitize_id(id)) }
+fn key_env_name(id: &str) -> String { format!("GORKX_MODEL_{}", sanitize_id(id).replace('-', "_").to_ascii_uppercase()) }
+
+#[cfg(target_os = "macos")]
+fn keychain_store(id: &str, secret: &str) -> Result<(), String> {
+    let status = std::process::Command::new("security")
+        .args(["add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", &keychain_account(id), "-w", secret])
+        .status().map_err(|e| format!("macOS Keychain unavailable: {e}"))?;
+    if status.success() { Ok(()) } else { Err("Could not save the API key in macOS Keychain.".into()) }
+}
+#[cfg(not(target_os = "macos"))]
+fn keychain_store(_id: &str, _secret: &str) -> Result<(), String> { Err("Secure custom-model keys are currently supported on macOS only.".into()) }
+#[cfg(target_os = "macos")]
+fn keychain_read(id: &str) -> Option<String> {
+    let out = std::process::Command::new("security").args(["find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", &keychain_account(id), "-w"]).output().ok()?;
+    if !out.status.success() { return None; }
+    let value = String::from_utf8(out.stdout).ok()?.trim().to_string();
+    (!value.is_empty()).then_some(value)
+}
+#[cfg(not(target_os = "macos"))]
+fn keychain_read(_id: &str) -> Option<String> { None }
 
 fn default_backend() -> String {
     "chat_completions".into()
@@ -81,6 +109,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
         name: String::new(),
         base_url: String::new(),
         api_key: String::new(),
+        has_keychain_secret: false,
+        has_plaintext_secret: false,
         api_backend: default_backend(),
         provider_label: String::new(),
         context_window: None,
@@ -123,6 +153,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
                     name: String::new(),
                     base_url: String::new(),
                     api_key: String::new(),
+                    has_keychain_secret: false,
+                    has_plaintext_secret: false,
                     api_backend: default_backend(),
                     provider_label: String::new(),
                     context_window: None,
@@ -150,12 +182,13 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
         } else if let Some(v) = parse_str_assign(t, "base_url") {
             cur.base_url = v;
         } else if let Some(v) = parse_str_assign(t, "api_key") {
-            cur.api_key = v;
+            cur.has_plaintext_secret = !v.is_empty();
         } else if let Some(v) = parse_str_assign(t, "api_backend") {
             cur.api_backend = v;
         } else if let Some(v) = parse_str_assign(t, "env_key") {
-            if cur.api_key.is_empty() {
-                cur.api_key = format!("env:{v}");
+            cur.api_key = format!("env:{v}");
+            if v == key_env_name(cur_id.as_deref().unwrap_or_default()) {
+                cur.has_keychain_secret = keychain_read(cur_id.as_deref().unwrap_or_default()).is_some();
             }
         } else if let Some(n) = parse_u64_assign(t, "context_window") {
             cur.context_window = Some(n);
@@ -235,10 +268,8 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
     };
     body.push_str(&format!("api_backend = \"{backend}\"\n"));
     if !model.api_key.trim().is_empty() && !model.api_key.starts_with("env:") {
-        body.push_str(&format!(
-            "api_key = \"{}\"\n",
-            escape_toml_str(model.api_key.trim())
-        ));
+        keychain_store(&id, model.api_key.trim())?;
+        body.push_str(&format!("env_key = \"{}\"\n", key_env_name(&id)));
     } else if let Some(env) = model.api_key.strip_prefix("env:") {
         body.push_str(&format!("env_key = \"{}\"\n", escape_toml_str(env.trim())));
     }
@@ -252,6 +283,51 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
     }
     fs::write(&path, new_raw).map_err(|e| e.to_string())?;
     list_custom_models()
+}
+
+/// Inject Keychain secrets only into the spawned engine process. The persisted model
+/// configuration refers to these values via `env_key` and contains no new plaintext key.
+pub fn apply_keychain_env_tokio(cmd: &mut tokio::process::Command) {
+    if let Ok(snapshot) = list_custom_models() {
+        for model in snapshot.custom_models {
+            if model.api_key == format!("env:{}", key_env_name(&model.id)) {
+                if let Some(secret) = keychain_read(&model.id) {
+                    cmd.env(key_env_name(&model.id), secret);
+                }
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn models_migrate_plaintext_keys() -> Result<ModelsConfigSnapshot, String> {
+    let path = config_toml_path();
+    let raw = fs::read_to_string(&path).unwrap_or_default();
+    let mut current: Option<String> = None;
+    let mut found: Option<(String, String)> = None;
+    for line in raw.lines() {
+        let t = line.trim();
+        if let Some(rest) = t.strip_prefix("[model.") {
+            current = Some(rest.trim_end_matches(']').trim().to_string());
+        } else if t.starts_with('[') {
+            current = None;
+        } else if let (Some(id), Some(key)) = (current.as_deref(), parse_str_assign(t, "api_key")) {
+            if !key.is_empty() { found = Some((id.to_string(), key)); break; }
+        }
+    }
+    let Some((id, key)) = found else { return list_custom_models(); };
+    keychain_store(&id, &key)?;
+    let section = format!("[model.{id}]");
+    let start = raw.find(&section).ok_or_else(|| "Model section disappeared during migration.".to_string())?;
+    let tail = &raw[start..];
+    let end = tail.find("\n[").map(|n| start + n + 1).unwrap_or(raw.len());
+    let replacement = raw[start..end].lines().map(|line| {
+        if parse_str_assign(line.trim(), "api_key").is_some() {
+            format!("env_key = \"{}\"", key_env_name(&id))
+        } else { line.to_string() }
+    }).collect::<Vec<_>>().join("\n");
+    fs::write(&path, format!("{}{}{}", &raw[..start], replacement, &raw[end..])).map_err(|e| e.to_string())?;
+    models_migrate_plaintext_keys()
 }
 
 #[tauri::command]
@@ -320,7 +396,12 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     }
     let key = model.api_key.trim();
     let key = if let Some(envn) = key.strip_prefix("env:") {
-        std::env::var(envn.trim()).unwrap_or_default()
+        let envn = envn.trim();
+        std::env::var(envn).unwrap_or_else(|_| {
+            if envn == key_env_name(&model.id) { keychain_read(&model.id).unwrap_or_default() } else { String::new() }
+        })
+    } else if key.is_empty() {
+        keychain_read(&model.id).unwrap_or_default()
     } else {
         key.to_string()
     };

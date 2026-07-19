@@ -14,6 +14,7 @@ use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex;
 
 use crate::paths;
+use crate::models_config;
 
 /// Soft ceiling only to avoid runaway process spawn (not a product "max 4 agents" limit).
 pub const MAX_AGENTS: usize = 64;
@@ -116,6 +117,7 @@ pub async fn agent_start(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     paths::apply_engine_env_tokio(&mut command);
+    models_config::apply_keychain_env_tokio(&mut command);
 
     #[cfg(unix)]
     unsafe {
@@ -288,6 +290,15 @@ pub struct GrokStatus {
     pub independent_ready: bool,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelDoctor {
+    pub status: GrokStatus,
+    pub grok_home_writable: bool,
+    pub issues: Vec<String>,
+    pub repair_hint: String,
+}
+
 #[tauri::command]
 pub async fn grok_status(grok_cmd: Option<String>) -> Result<GrokStatus, String> {
     tauri::async_runtime::spawn_blocking(move || collect_grok_status(grok_cmd))
@@ -295,9 +306,50 @@ pub async fn grok_status(grok_cmd: Option<String>) -> Result<GrokStatus, String>
         .map_err(|e| e.to_string())?
 }
 
+/// Diagnose the local engine without downloading or modifying it. Repairing a missing
+/// bundled binary requires reinstalling a verified gorkX build; this command must not
+/// pretend that an arbitrary network download is a safe repair path.
+#[tauri::command]
+pub async fn kernel_doctor(grok_cmd: Option<String>) -> Result<KernelDoctor, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = collect_grok_status(grok_cmd)?;
+        let home = paths::grok_home();
+        let probe = home.join(".gorkx-write-probe");
+        let grok_home_writable = std::fs::write(&probe, b"ok")
+            .and_then(|_| std::fs::remove_file(&probe))
+            .is_ok();
+        let mut issues = Vec::new();
+        if !status.installed {
+            issues.push("Bundled engine is missing or cannot run.".into());
+        }
+        if !status.engine_app_owned {
+            issues.push("The selected engine is external; it is not part of this gorkX install.".into());
+        }
+        if !grok_home_writable {
+            issues.push("App GROK_HOME is not writable.".into());
+        }
+        if !status.authenticated {
+            issues.push("No sign-in was found in App GROK_HOME.".into());
+        }
+        let repair_hint = if !status.installed {
+            "Reinstall a gorkX build that contains Contents/Resources/grok, or select an explicit development engine path.".into()
+        } else if !grok_home_writable {
+            "Restore write access to Application Support/gorkX, then run the doctor again.".into()
+        } else if !status.authenticated {
+            "Sign in from Settings → Account; credentials will be stored under App GROK_HOME.".into()
+        } else if !status.engine_app_owned {
+            "Clear the advanced engine path to return to the app-bundled engine.".into()
+        } else {
+            "No repair is needed.".into()
+        };
+        Ok(KernelDoctor { status, grok_home_writable, issues, repair_hint })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 fn channel_for(bin: &Path, override_set: bool) -> String {
-    let exists = bin.is_file() || (bin.to_string_lossy() != "grok" && bin.exists());
-    if !exists && bin.to_string_lossy() == "grok" {
+    if !bin.is_file() {
         return "missing".into();
     }
     if override_set {

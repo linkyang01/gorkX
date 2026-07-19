@@ -8,7 +8,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 |------|---------|--------|
 | Layout | Codex three-pane + collapsible sidebar | **Real** |
 | Layout | Review / Terminal / Process | **Real** |
-| Kernel | ACP stdio, App `GROK_HOME`, bundled engine path | **Real** |
+| Kernel | ACP stdio, App `GROK_HOME`, bundled engine path, Doctor | **Real** — normal installs do not scan `~/.grok` or PATH; Doctor reports missing bundle, auth and data-folder access |
 | Chat | Stream, tools, permissions, ACP resource-link attachments, / @ keyboard nav | **Real** |
 | Goal | Stage `/goal`, persist banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
@@ -23,7 +23,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Worktree | create / list / use / new task / Finder / **back to main repo** | **Half→improved** |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
-| Multi-provider models | Settings → config.toml; connection probe; **set default**; custom models in picker | **Half→improved** — routing still depends on engine |
+| Multi-provider models | Settings → config.toml; connection probe; **set default**; custom models in picker; macOS Keychain for new API keys | **Half→improved** — routing still depends on engine; legacy plaintext keys are visibly migratable |
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu | Local actions always available; engine Slash actions appear only when the live session advertises them | **Real** |
 | Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
@@ -31,6 +31,13 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
 | Settings · Computer | Explicit macOS screen-region picker → local PNG attached to the composer | **Half** — capture is real; computer-use automation is not shipped |
 | Settings · Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
+
+## Deliberate limits still not shipped
+
+- **Computer automation:** only user-triggered local screen capture exists; no background capture or mouse/keyboard control.
+- **Hooks:** no lifecycle hook runner or editor yet.
+- **Provider subscriptions:** Grok login is real. OpenAI/Anthropic are API-key or compatible-gateway configurations; a ChatGPT/Claude web subscription is not treated as an API login.
+- **Background schedules:** local scheduled tasks run only while gorkX is open.
 
 ## Run
 

@@ -35,6 +35,13 @@ export interface GrokStatus {
   independentReady?: boolean;
 }
 
+export interface KernelDoctor {
+  status: GrokStatus;
+  grokHomeWritable: boolean;
+  issues: string[];
+  repairHint: string;
+}
+
 export type SessionUpdate = {
   sessionUpdate: string;
   content?: { type?: string; text?: string } | string;
@@ -687,6 +694,10 @@ export class AcpClient {
 
 export async function fetchGrokStatus(grokCmd?: string): Promise<GrokStatus> {
   return invoke<GrokStatus>('grok_status', { grokCmd: grokCmd ?? null });
+}
+
+export async function runKernelDoctor(grokCmd?: string): Promise<KernelDoctor> {
+  return invoke<KernelDoctor>('kernel_doctor', { grokCmd: grokCmd ?? null });
 }
 
 export async function stopAllAgents(): Promise<number> {

@@ -94,6 +94,7 @@ pub fn run() {
             agent_bridge::agent_stop_all,
             agent_bridge::agent_list,
             agent_bridge::grok_status,
+            agent_bridge::kernel_doctor,
             git_panel::git_snapshot,
             git_panel::git_file_diff,
             git_panel::git_stage,
@@ -166,6 +167,7 @@ pub fn run() {
             models_config::models_set_default,
             models_config::models_open_config,
             models_config::models_test_connection,
+            models_config::models_migrate_plaintext_keys,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {

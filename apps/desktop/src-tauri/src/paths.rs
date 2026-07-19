@@ -50,53 +50,12 @@ pub fn ensure_dirs() -> Result<(), String> {
         let _ = std::fs::create_dir_all(home.join(sub));
     }
     let _ = std::fs::create_dir_all(app_support_dir().join("runtime"));
-    maybe_seed_from_legacy_home(&home);
     Ok(())
-}
-
-/// One-time soft seed: if App home has no auth but legacy ~/.grok has login, copy auth
-/// so existing SuperGrok users are not stranded when we switch home.
-/// Skipped after explicit gorkX logout (`.gorkx_logged_out`).
-fn maybe_seed_from_legacy_home(app_home: &Path) {
-    if app_home.join(".gorkx_logged_out").exists() {
-        return;
-    }
-    let marker = app_home.join(".gorkx_seeded_auth");
-    if marker.exists() {
-        return;
-    }
-    let legacy = match dirs::home_dir() {
-        Some(h) => h.join(".grok"),
-        None => return,
-    };
-    if !legacy.is_dir() || legacy == app_home {
-        return;
-    }
-    let app_auth = app_home.join("auth.json");
-    let legacy_auth = legacy.join("auth.json");
-    if app_auth.exists() || !legacy_auth.is_file() {
-        let _ = std::fs::write(&marker, b"1");
-        return;
-    }
-    if let Ok(bytes) = std::fs::read(&legacy_auth) {
-        let _ = std::fs::write(&app_auth, bytes);
-    }
-    // Optional: seed models cache for offline picker
-    let legacy_models = legacy.join("models_cache.json");
-    let app_models = app_home.join("models_cache.json");
-    if !app_models.exists() && legacy_models.is_file() {
-        if let Ok(bytes) = std::fs::read(&legacy_models) {
-            let _ = std::fs::write(&app_models, bytes);
-        }
-    }
-    let _ = std::fs::write(&marker, b"1");
 }
 
 fn default_path_env() -> String {
     let home = std::env::var("HOME").unwrap_or_default();
     let extras = [
-        format!("{home}/.gorkx/bin"),
-        format!("{home}/.grok/bin"),
         format!("{home}/.local/bin"),
         format!("{home}/bin"),
         "/opt/homebrew/bin".into(),
@@ -107,9 +66,10 @@ fn default_path_env() -> String {
 }
 
 /// Resolve engine binary.
-/// Priority: explicit override → GORKX_GROK_CMD → App Resources → App runtime →
-/// App grok-home/bin → (dev only) ~/.gorkx/bin → ~/.grok/bin → PATH.
-/// Product default is App-owned; PATH is last resort for development.
+/// Priority: explicit override → explicit env override → App Resources → App runtime →
+/// App grok-home/bin → development bundle resource. Legacy/PATH lookup is opt-in in
+/// debug builds with `GORKX_ALLOW_LEGACY_ENGINE=1`.
+/// Product default never reads or executes an engine from `~/.grok` or PATH.
 pub fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
     if let Some(cmd) = override_cmd {
         if !cmd.trim().is_empty() {
@@ -148,24 +108,37 @@ pub fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
     if in_home.is_file() {
         return in_home;
     }
-    if let Some(home) = dirs::home_dir() {
-        for rel in [".gorkx/bin/grok", ".grok/bin/grok"] {
-            let p = home.join(rel);
-            if p.is_file() {
-                return p;
+    #[cfg(debug_assertions)]
+    {
+        let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("grok");
+        if bundled.is_file() {
+            return bundled;
+        }
+        if std::env::var("GORKX_ALLOW_LEGACY_ENGINE")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes"))
+            .unwrap_or(false)
+        {
+            if let Some(home) = dirs::home_dir() {
+                for rel in [".gorkx/bin/grok", ".grok/bin/grok"] {
+                    let p = home.join(rel);
+                    if p.is_file() {
+                        return p;
+                    }
+                }
+            }
+            for dir in default_path_env().split(':') {
+                if !dir.is_empty() {
+                    let candidate = Path::new(dir).join("grok");
+                    if candidate.is_file() {
+                        return candidate;
+                    }
+                }
             }
         }
     }
-    for dir in default_path_env().split(':') {
-        if dir.is_empty() {
-            continue;
-        }
-        let candidate = Path::new(dir).join("grok");
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-    PathBuf::from("grok")
+    // An absolute app-owned candidate gives a truthful "missing" error and avoids
+    // Command::new silently finding a user's PATH-installed Grok binary.
+    runtime_grok_bin()
 }
 
 /// Apply env for any process that must use App-owned Grok data.
@@ -210,4 +183,3 @@ pub fn engine_is_app_owned(bin: &Path) -> bool {
     }
     false
 }
-
