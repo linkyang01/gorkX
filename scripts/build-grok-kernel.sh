@@ -12,6 +12,8 @@ binary="$(sed -n 's/^binary = "\([^"]*\)"/\1/p' "$lock")"
 
 [[ -n "$expected" && -n "$package" && -n "$binary" ]] || { echo "Invalid kernel lock: $lock" >&2; exit 2; }
 [[ -d "$source_dir/.git" ]] || { echo "Missing Grok Build checkout: $source_dir" >&2; exit 2; }
+command -v cargo >/dev/null || { echo "Rust cargo is required to build Grok Build." >&2; exit 2; }
+command -v dotslash >/dev/null || { echo "Grok Build requires dotslash for its pinned protoc; run: cargo install dotslash" >&2; exit 2; }
 actual="$(git -C "$source_dir" rev-parse HEAD)"
 [[ "$actual" == "$expected" ]] || { echo "Kernel checkout is $actual; lock requires $expected" >&2; exit 3; }
 
