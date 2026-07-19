@@ -565,6 +565,14 @@ const dict = {
     settingsBrowserManage: 'Manage MCP',
     settingsComputer: 'Computer control',
     settingsComputerSoon: 'Desktop computer control is not available yet.',
+    settingsComputerHint:
+      'Screen capture is explicit and local: gorkX opens the macOS picker, then adds your chosen image to the next message.',
+    settingsComputerCaptureTitle: 'Capture part of the screen',
+    settingsComputerCaptureHint:
+      'macOS will ask you to choose an area. The capture is saved in gorkX data and attached to the composer; nothing is captured in the background.',
+    settingsComputerCapture: 'Choose area to capture',
+    settingsComputerCapturing: 'Waiting for a screen area…',
+    settingsComputerCaptured: 'Added to the composer: {path}',
     settingsHooks: 'Hooks',
     settingsHooksHint:
       'Project rules and hooks will be manageable here. For now, edit AGENTS.md in your project.',
@@ -1285,6 +1293,14 @@ const dict = {
     settingsBrowserManage: '管理 MCP',
     settingsComputer: '电脑操控',
     settingsComputerSoon: '桌面操控尚未开放。',
+    settingsComputerHint:
+      '截图完全由你主动触发且只存本机：gorkX 打开 macOS 选区，随后将所选图片加入下一条消息。',
+    settingsComputerCaptureTitle: '截取屏幕区域',
+    settingsComputerCaptureHint:
+      'macOS 会让你选择区域。截图保存到 gorkX 数据目录并加入输入框；不会在后台采集任何屏幕内容。',
+    settingsComputerCapture: '选择区域截图',
+    settingsComputerCapturing: '等待选择屏幕区域…',
+    settingsComputerCaptured: '已加入输入框：{path}',
     settingsHooks: '钩子',
     settingsHooksHint: '项目规则与钩子将在此管理。目前可编辑项目中的 AGENTS.md。',
     settingsMcp: '连接',

@@ -109,6 +109,7 @@ import {
   revokeAttachment,
   type ComposerAttachment,
 } from './lib/attachments';
+import { captureScreenRegion } from './lib/host';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -5417,6 +5418,11 @@ function App() {
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenWorktrees={() => setWorktreePanelOpen(true)}
         onOpenReview={() => setReviewOpen(true)}
+        onCaptureDesktop={async () => {
+          const path = await captureScreenRegion();
+          await addAttachmentPaths([path]);
+          return path;
+        }}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
       />
 

@@ -102,6 +102,7 @@ interface Props {
   onOpenShortcuts?: () => void;
   onOpenWorktrees?: () => void;
   onOpenReview?: () => void;
+  onCaptureDesktop?: () => Promise<string>;
   onRestoreArchived?: (row: ArchivedTaskRow) => void | Promise<void>;
   initialSection?: SettingsSection;
 }
@@ -144,6 +145,7 @@ export function SettingsPanel({
   onOpenShortcuts,
   onOpenWorktrees,
   onOpenReview,
+  onCaptureDesktop,
   onRestoreArchived,
   initialSection,
 }: Props) {
@@ -1096,7 +1098,30 @@ export function SettingsPanel({
           {section === 'computer' ? (
             <>
               <h2>{t('settingsComputer')}</h2>
-              <Soon text={t('settingsComputerSoon')} />
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsComputerHint')}
+              </p>
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsComputerCaptureTitle')}</div>
+                    <div className="settings-row-hint">{t('settingsComputerCaptureHint')}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={!onCaptureDesktop}
+                  onClick={() => {
+                    setMsg(t('settingsComputerCapturing'));
+                    void onCaptureDesktop?.()
+                      .then((path) => setMsg(t('settingsComputerCaptured').replace('{path}', path)))
+                      .catch((e) => setMsg(e instanceof Error ? e.message : String(e)));
+                  }}
+                >
+                  {t('settingsComputerCapture')}
+                </button>
+              </div>
             </>
           ) : null}
 

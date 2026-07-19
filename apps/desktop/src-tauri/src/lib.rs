@@ -1,6 +1,7 @@
 mod agent_bridge;
 mod app_update;
 mod auth;
+mod capture;
 mod extensions;
 mod git_panel;
 mod memory;
@@ -146,6 +147,7 @@ pub fn run() {
             app_update::app_update_check,
             app_update::app_update_install,
             app_update::app_current_version,
+            capture::capture_screen_region,
             memory::memory_status,
             memory::memory_set_enabled,
             memory::memory_set_auto_learn,
