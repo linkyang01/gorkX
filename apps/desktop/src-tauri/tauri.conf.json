@@ -51,7 +51,9 @@
     "resources": {
       "resources/zh-Hans.lproj": "zh-Hans.lproj",
       "resources/en.lproj": "en.lproj",
-      "resources/grok": "grok"
+      "resources/grok": "grok",
+      "resources/grok-LICENSE": "grok-LICENSE",
+      "resources/grok-THIRD-PARTY-NOTICES": "grok-THIRD-PARTY-NOTICES"
     },
     "macOS": {
       "infoPlist": "Info.plist",
