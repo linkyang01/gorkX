@@ -56,7 +56,7 @@ Local worker or hosted worker
 
 **出口**：每个 gorkX 版本都可回答“内核来自哪个 commit、有哪些补丁、升级是否通过回归”；包内二进制在隔离 `GROK_HOME` 通过 ACP 对话测试。
 
-**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建和隔离 ACP `initialize` 握手；它尚未替换当前包内 `0.2.103` 引擎。登录、会话、模型、Plan、Hooks、worktree 与资源附件 smoke 在 P0.2 继续补齐。
+**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建和隔离 ACP `initialize` 握手；它尚未替换当前包内 `0.2.103` 引擎。传入显式、独立的 `GROKX_ACP_TEST_HOME`、`GROKX_ACP_TEST_CWD` 并加 `--authenticated` 后，回归会额外验证认证、会话新建/恢复、Plan 模式、Hooks 列表与 worktree 列表；资源附件、Hooks 改写和 worktree 创建仍需受控测试仓库中的人工真链路验收。
 
 ### P1 — 多 Agent 与任务编排（3–4 周）
 
