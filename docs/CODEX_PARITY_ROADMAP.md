@@ -56,6 +56,8 @@ Local worker or hosted worker
 
 **出口**：每个 gorkX 版本都可回答“内核来自哪个 commit、有哪些补丁、升级是否通过回归”；包内二进制在隔离 `GROK_HOME` 通过 ACP 对话测试。
 
+**当前门禁命令**：`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。登录、会话、模型、Plan、Hooks、worktree 与资源附件 smoke 在 P0.2 继续补齐。
+
 ### P1 — 多 Agent 与任务编排（3–4 周）
 
 **工作**：任务树、委派契约、最多 N 个并行子 Agent、取消/重试/汇总、每个子 Agent 独立 worktree/权限/日志；父任务只聚合结果。
