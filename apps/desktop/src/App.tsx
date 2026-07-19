@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   AcpClient,
@@ -473,6 +480,10 @@ function App() {
   const [previewAtt, setPreviewAtt] = useState<ComposerAttachment | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [slashOpen, setSlashOpen] = useState(false);
+  /** Highlight index in / command menu (keyboard + hover). */
+  const [slashIndex, setSlashIndex] = useState(0);
+  /** Highlight index in @ file menu. */
+  const [atIndex, setAtIndex] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [perm, setPerm] = useState<PermissionMode>(() => {
     const v = localStorage.getItem('gorkx.perm');
@@ -1741,6 +1752,18 @@ function App() {
       return rest ? `${rest} /${name} ` : `/${name} `;
     });
     setSlashOpen(false);
+    setSlashIndex(0);
+  };
+
+  const applySlashPick = (name: string) => {
+    if (name === 'plan') {
+      void changeChatMode('plan');
+      setDraft('');
+      setSlashOpen(false);
+      setSlashIndex(0);
+      return;
+    }
+    insertSlash(name);
   };
 
   /**
@@ -1909,26 +1932,22 @@ function App() {
   const renderSlashMenu = () => {
     if (!slashOpen) return null;
     const merged = slashMenuItems(draft);
+    const hi = merged.length ? Math.min(slashIndex, merged.length - 1) : 0;
     return (
       <div className="slash-menu" role="listbox" aria-label={t('slashHint')}>
-        <div className="hint">{t('slashHint')}</div>
+        <div className="hint">{t('slashHintNav')}</div>
         {merged.length === 0 ? (
           <div className="hint">{t('slashEmpty')}</div>
         ) : (
-          merged.map((c) => (
+          merged.map((c, i) => (
             <button
               key={`${c.source}:${c.name}`}
               type="button"
-              className="slash-item"
-              onClick={() => {
-                if (c.name === 'plan') {
-                  void changeChatMode('plan');
-                  setDraft('');
-                  setSlashOpen(false);
-                  return;
-                }
-                insertSlash(c.name);
-              }}
+              role="option"
+              aria-selected={i === hi}
+              className={i === hi ? 'slash-item on' : 'slash-item'}
+              onMouseEnter={() => setSlashIndex(i)}
+              onClick={() => applySlashPick(c.name)}
             >
               <span className="mono">
                 /{c.name}
@@ -1940,6 +1959,81 @@ function App() {
         )}
       </div>
     );
+  };
+
+  /**
+   * Shared composer keyboard: slash / @ menus take Arrow · Tab · Enter · Esc
+   * before send. Returns true if the event was handled (caller should stop).
+   */
+  const handleComposerMenuKeys = (e: ReactKeyboardEvent): boolean => {
+    if (e.nativeEvent.isComposing) return false;
+
+    if (slashOpen) {
+      const items = slashMenuItems(draft);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (items.length) setSlashIndex((i) => (i + 1) % items.length);
+        return true;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (items.length) setSlashIndex((i) => (i - 1 + items.length) % items.length);
+        return true;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        if (items.length) {
+          e.preventDefault();
+          const pick = items[Math.min(slashIndex, items.length - 1)];
+          if (pick) applySlashPick(pick.name);
+          return true;
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          return true;
+        }
+        // Enter with empty menu → fall through to send
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashOpen(false);
+        setSlashIndex(0);
+        return true;
+      }
+    }
+
+    if (atOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (atHits.length) setAtIndex((i) => (i + 1) % atHits.length);
+        return true;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (atHits.length) setAtIndex((i) => (i - 1 + atHits.length) % atHits.length);
+        return true;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        if (atHits.length) {
+          e.preventDefault();
+          const hit = atHits[Math.min(atIndex, atHits.length - 1)];
+          if (hit) insertAtFile(hit.path);
+          return true;
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          return true;
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setAtOpen(false);
+        setAtQuery('');
+        setAtIndex(0);
+        return true;
+      }
+    }
+
+    return false;
   };
 
   /** Open folder picker starting at the default gorkX projects root (~/.gorkx/projects). */
@@ -2654,7 +2748,13 @@ function App() {
     });
     setAtOpen(false);
     setAtQuery('');
+    setAtIndex(0);
   };
+
+  // Reset highlight when slash filter text changes
+  useEffect(() => {
+    if (slashOpen) setSlashIndex(0);
+  }, [draft, slashOpen]);
 
   // @file fuzzy search
   useEffect(() => {
@@ -2662,8 +2762,14 @@ function App() {
     if (!atOpen || !cwd) return;
     const handle = window.setTimeout(() => {
       void listWorkspaceFiles(cwd, atQuery, 40)
-        .then(setAtHits)
-        .catch(() => setAtHits([]));
+        .then((hits) => {
+          setAtHits(hits);
+          setAtIndex(0);
+        })
+        .catch(() => {
+          setAtHits([]);
+          setAtIndex(0);
+        });
     }, 120);
     return () => window.clearTimeout(handle);
   }, [atOpen, atQuery, active?.cwd, project]);
@@ -4219,8 +4325,8 @@ function App() {
                   }
                   rows={2}
                   onKeyDown={(e) => {
+                    if (handleComposerMenuKeys(e)) return;
                     if (e.key === 'Escape') {
-                      setSlashOpen(false);
                       if (capabilityArm) {
                         setCapabilityArm(null);
                         setDraft('');
@@ -4552,21 +4658,29 @@ function App() {
                 {dragOver ? <div className="composer-drop-hint">{t('dropFilesHint')}</div> : null}
                 {renderSlashMenu()}
                 {atOpen ? (
-                  <div className="slash-menu">
-                    <div className="hint">@ files · {atQuery || '*'}</div>
+                  <div className="slash-menu" role="listbox" aria-label={t('atFilesHint')}>
+                    <div className="hint">
+                      {t('atFilesHintNav').replace('{q}', atQuery || '*')}
+                    </div>
                     {atHits.length === 0 ? (
-                      <div className="hint">…</div>
+                      <div className="hint">{t('atFilesEmpty')}</div>
                     ) : (
-                      atHits.map((h) => (
-                        <button
-                          key={h.path}
-                          type="button"
-                          className="slash-item"
-                          onClick={() => insertAtFile(h.path)}
-                        >
-                          <span className="mono">{h.path}</span>
-                        </button>
-                      ))
+                      atHits.map((h, i) => {
+                        const hi = Math.min(atIndex, atHits.length - 1);
+                        return (
+                          <button
+                            key={h.path}
+                            type="button"
+                            role="option"
+                            aria-selected={i === hi}
+                            className={i === hi ? 'slash-item on' : 'slash-item'}
+                            onMouseEnter={() => setAtIndex(i)}
+                            onClick={() => insertAtFile(h.path)}
+                          >
+                            <span className="mono">{h.path}</span>
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 ) : null}
@@ -4616,9 +4730,8 @@ function App() {
                   }
                   rows={2}
                   onKeyDown={(e) => {
+                    if (handleComposerMenuKeys(e)) return;
                     if (e.key === 'Escape') {
-                      setSlashOpen(false);
-                      setAtOpen(false);
                       if (capabilityArm) {
                         setCapabilityArm(null);
                         setDraft('');

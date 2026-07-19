@@ -3559,8 +3559,13 @@ button.pill:hover {
   min-width: 0;
 }
 
-.slash-item:hover {
+.slash-item:hover,
+.slash-item.on {
   background: var(--glass-fill);
+}
+
+.slash-item.on {
+  outline: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .slash-item .muted {

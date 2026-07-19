@@ -8,6 +8,8 @@ interface Props {
 const ROWS: Array<{ keys: string; action: string }> = [
   { keys: 'Enter', action: 'send' },
   { keys: 'Shift + Enter', action: 'newline' },
+  { keys: '↑ / ↓', action: 'Navigate / and @ menus' },
+  { keys: 'Enter / Tab', action: 'Insert selected / or @ item' },
   { keys: '⌘/Ctrl + N', action: 'newThread' },
   { keys: '⌘/Ctrl + D', action: 'Review panel' },
   { keys: '⇧⌘/Ctrl + J', action: 'Terminal dock' },
