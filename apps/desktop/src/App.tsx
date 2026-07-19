@@ -49,6 +49,7 @@ import {
   saveJobs,
 } from './lib/scheduled';
 import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
+import { listCustomModels } from './lib/modelsConfig';
 import {
   IconExport,
   IconFork,
@@ -486,6 +487,15 @@ function App() {
   });
   const [modelId, setModelId] = useState(() => localStorage.getItem('gorkx.modelId') ?? '');
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  const [taskFilter, setTaskFilter] = useState('');
+  /** When user opens a worktree path as project, remember the original repo. */
+  const [worktreeMainProject, setWorktreeMainProject] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('gorkx.worktreeMainProject');
+    } catch {
+      return null;
+    }
+  });
   const [grokCmd, setGrokCmd] = useState(() => localStorage.getItem('gorkx.grokCmd') ?? '');
   const [kernelOpen, setKernelOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(() => {
@@ -986,10 +996,43 @@ function App() {
     });
   }, []);
 
+  /** Merge custom [model.*] rows into the composer picker. */
+  const loadCustomModels = useCallback(async () => {
+    const snap = await listCustomModels();
+    if (!snap?.customModels?.length && !snap?.defaultModel) return;
+    const custom: ModelInfo[] = (snap.customModels ?? []).map((m) => ({
+      modelId: m.model || m.id,
+      name: m.name ? `${m.name} · custom` : `${m.model || m.id} · custom`,
+      _meta: m.contextWindow ? { totalContextTokens: m.contextWindow } : undefined,
+    }));
+    if (custom.length) {
+      setAvailableModels((prev) => {
+        const byId = new Map(prev.map((m) => [m.modelId, m]));
+        for (const c of custom) {
+          const existing = byId.get(c.modelId);
+          byId.set(c.modelId, existing ? { ...existing, name: c.name, _meta: c._meta ?? existing._meta } : c);
+        }
+        return Array.from(byId.values());
+      });
+    }
+    // Seed default only when user has never chosen a model
+    try {
+      if (snap.defaultModel && !localStorage.getItem('gorkx.modelId')) {
+        setModelId(snap.defaultModel);
+        localStorage.setItem('gorkx.modelId', snap.defaultModel);
+      }
+    } catch {
+      /* */
+    }
+  }, []);
+
   /** Models from Grok subscription cache / cli-chat-proxy (not hardcoded). */
   const loadSubscriptionModels = useCallback(async (refresh = false) => {
     const rows = await fetchSubscriptionModels(refresh);
-    if (!rows.length) return;
+    if (!rows.length) {
+      void loadCustomModels();
+      return;
+    }
     const mapped: ModelInfo[] = rows.map((r) => ({
       modelId: r.modelId,
       name: r.name || r.modelId,
@@ -1004,9 +1047,15 @@ function App() {
     });
     setModelId((cur) => {
       if (cur && mapped.some((m) => m.modelId === cur)) return cur;
+      if (cur) return cur; // keep custom default even if not in subscription list
       return mapped[0]?.modelId || cur;
     });
-  }, []);
+    void loadCustomModels();
+  }, [loadCustomModels]);
+
+  useEffect(() => {
+    void loadCustomModels();
+  }, [loadCustomModels]);
 
   useEffect(() => {
     if (!status?.authenticated) return;
@@ -2755,6 +2804,11 @@ function App() {
       const body = `${t('applyPlanPrompt')}\n\n--- plan ---\n${planBody}`;
       appendLine(active.id, { id: nid(), role: 'user', text: body });
       const result = await active.client.prompt(active.sessionId, body);
+      // Success path: leave plan UI state clean for agent work
+      setChatMode('agent');
+      setCapabilityArm(null);
+      setDraft((d) => (d.trim().startsWith('/plan') ? '' : d));
+      patchThread(active.id, { chatMode: 'agent' });
       if (result?.stopReason && result.stopReason !== 'end_turn') {
         appendLine(active.id, {
           id: nid(),
@@ -3342,7 +3396,35 @@ function App() {
             </div>
           </div>
 
+          <div className="sidebar-task-filter" style={{ padding: '0 10px 8px' }}>
+            <label className="sr-only" htmlFor="task-filter-input">
+              {t('taskSearchPlaceholder')}
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconSearch size={14} />
+              <input
+                id="task-filter-input"
+                type="search"
+                value={taskFilter}
+                onChange={(e) => setTaskFilter(e.target.value)}
+                placeholder={t('taskSearchPlaceholder')}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  border: '1px solid var(--hairline)',
+                  background: 'var(--bg-elevated, transparent)',
+                }}
+              />
+            </div>
+          </div>
+
           {(() => {
+            const q = taskFilter.trim().toLowerCase();
+            const matchTitle = (title: string) =>
+              !q || title.toLowerCase().includes(q);
             const projectList = orderedProjects(project, recentProjects, pinnedProjects);
             if (projectList.length === 0) {
               return (
@@ -3363,13 +3445,22 @@ function App() {
               const name = projectDisplayName(p, projectAliases);
               const selected = p === project;
               const pinned = pinnedProjects.includes(p);
-              const live = threadsForScope(threads, projectScopeKey(p));
-              const remote =
+              const liveAll = threadsForScope(threads, projectScopeKey(p));
+              const live = liveAll.filter((th) => matchTitle(threadListLabel(th, liveAll)));
+              const remoteAll =
                 selected && showGrokHistory
                   ? (projectSessions[p] || []).filter(
-                      (s) => !live.some((th) => th.sessionId === s.sessionId),
+                      (s) => !liveAll.some((th) => th.sessionId === s.sessionId),
                     )
                   : [];
+              const remote = remoteAll.filter((s) => {
+                const raw = (s.title || '').trim();
+                return matchTitle(raw || t('inboxChat'));
+              });
+              // When filtering, hide project groups with no matching tasks
+              if (q && live.length === 0 && remote.length === 0 && !matchTitle(name)) {
+                return null;
+              }
               return (
                 <div key={p} className="proj-group">
                   {/* Anchor ··· menu to the project row only (not whole group incl. threads) */}
@@ -3565,8 +3656,10 @@ function App() {
                           </button>
                         </div>
                       ))}
-                      {live.length === 0 ? (
-                        <div className="hint">{t('noProjectTasks')}</div>
+                      {live.length === 0 && remote.length === 0 ? (
+                        <div className="hint">
+                          {q ? t('taskSearchEmpty') : t('noProjectTasks')}
+                        </div>
                       ) : null}
                       {remote.map((s) => {
                         const raw = (s.title || '').trim();
@@ -3643,7 +3736,11 @@ function App() {
           </div>
           <div className="task-list">
             {(() => {
-              const inbox = threadsForScope(threads, NO_PROJECT_KEY);
+              const q = taskFilter.trim().toLowerCase();
+              const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
+              const inbox = inboxAll.filter(
+                (th) => !q || threadListLabel(th, inboxAll).toLowerCase().includes(q),
+              );
               return inbox.map((th) => (
                 <div
                   key={th.id}
@@ -3666,7 +3763,7 @@ function App() {
                       {th.busy ? (
                         <span className="thread-busy-dot" aria-hidden />
                       ) : null}
-                      {threadListLabel(th, inbox)}
+                      {threadListLabel(th, inboxAll)}
                     </span>
                   </button>
                   <button
@@ -3705,9 +3802,17 @@ function App() {
                 </div>
               ));
             })()}
-            {threadsForScope(threads, NO_PROJECT_KEY).length === 0 ? (
-              <div className="hint">{t('noTasksYet')}</div>
-            ) : null}
+            {(() => {
+              const q = taskFilter.trim().toLowerCase();
+              const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
+              const count = inboxAll.filter(
+                (th) => !q || threadListLabel(th, inboxAll).toLowerCase().includes(q),
+              ).length;
+              if (count > 0) return null;
+              return (
+                <div className="hint">{q ? t('taskSearchEmpty') : t('noTasksYet')}</div>
+              );
+            })()}
           </div>
         </section>
         </div>
@@ -4290,21 +4395,20 @@ function App() {
                     void revealInFinder(active.worktreePath!).catch(() => {})
                   }
                 >
-                  {t('worktree')}
+                  {t('worktree')} ·{' '}
+                  {active.worktreePath.replace(/\/+$/, '').split('/').slice(-2).join('/')}
                 </button>
               ) : null}
               <div className="main-bar-spacer" />
-              {/* 有可执行的计划步骤时才显示「执行计划」 */}
-              {active.chatMode === 'plan' &&
-              activePlanEntries.length > 0 &&
-              !active.busy ? (
+              {/* 有可执行的计划步骤时显示「执行/重试」 */}
+              {activePlanEntries.length > 0 && !active.busy ? (
                 <button
                   type="button"
                   className="btn btn-sm primary-sm"
                   title={t('applyPlanHint')}
                   onClick={() => void applyPlan()}
                 >
-                  {t('applyPlan')}
+                  {active.chatMode === 'plan' ? t('applyPlan') : t('applyPlanRetry')}
                 </button>
               ) : null}
               {active.error ? (
@@ -4384,14 +4488,14 @@ function App() {
                     )
                     .replace('{total}', String(activePlanEntries.length))}
                 </span>
-                {active.chatMode === 'plan' && !active.busy ? (
+                {!active.busy ? (
                   <button
                     type="button"
                     className="btn btn-sm primary-sm"
                     style={{ marginLeft: 'auto' }}
                     onClick={() => void applyPlan()}
                   >
-                    {t('applyPlan')}
+                    {active.chatMode === 'plan' ? t('applyPlan') : t('applyPlanRetry')}
                   </button>
                 ) : null}
               </div>
@@ -4822,7 +4926,9 @@ function App() {
         planEntries={activePlanEntries}
         onClose={() => setReviewOpen(false)}
         onApplyPlan={
-          active?.chatMode === 'plan' && !active.busy ? () => void applyPlan() : undefined
+          active && activePlanEntries.length > 0 && !active.busy
+            ? () => void applyPlan()
+            : undefined
         }
         onTogglePlanEntry={(entryId) => {
           const line = active?.lines.find((l) => l.planEntries?.some((e) => e.id === entryId));
@@ -4852,7 +4958,10 @@ function App() {
         project={project}
         recentProjects={recentProjects}
         account={account}
-        onModelsRefreshed={() => void loadSubscriptionModels(true)}
+        onModelsRefreshed={() => {
+          void loadSubscriptionModels(true);
+          void loadCustomModels();
+        }}
         perm={perm}
         onPerm={setPerm}
         onOpenMemory={() => setMemoryOpen(true)}
@@ -4929,26 +5038,51 @@ function App() {
         onClose={() => setWorktreePanelOpen(false)}
         grokCmd={grokCmd}
         project={project || undefined}
+        mainProject={worktreeMainProject}
         onCreate={() => {
           setWorktreePanelOpen(false);
           void createThread({ worktree: true });
         }}
         onOpenPath={(path) => {
-          setProject(path);
           try {
+            const prev = project || localStorage.getItem('gorkx.project') || '';
+            if (prev && prev !== path) {
+              const main = worktreeMainProject || prev;
+              setWorktreeMainProject(main);
+              localStorage.setItem('gorkx.worktreeMainProject', main);
+            }
             localStorage.setItem('gorkx.project', path);
           } catch {
             /* */
           }
+          setProject(path);
         }}
         onOpenAsTask={(path) => {
-          setProject(path);
           try {
+            const prev = project || localStorage.getItem('gorkx.project') || '';
+            if (prev && prev !== path) {
+              const main = worktreeMainProject || prev;
+              setWorktreeMainProject(main);
+              localStorage.setItem('gorkx.worktreeMainProject', main);
+            }
             localStorage.setItem('gorkx.project', path);
           } catch {
             /* */
           }
+          setProject(path);
           void createThread({ cwdOverride: path });
+        }}
+        onBackToMain={() => {
+          const main = worktreeMainProject;
+          if (!main) return;
+          setProject(main);
+          try {
+            localStorage.setItem('gorkx.project', main);
+            localStorage.removeItem('gorkx.worktreeMainProject');
+          } catch {
+            /* */
+          }
+          setWorktreeMainProject(null);
         }}
       />
 

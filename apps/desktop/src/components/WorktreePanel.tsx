@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { worktreeGc, worktreeListJson, worktreeRemove } from '../lib/grokAdmin';
+import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 
 interface Props {
@@ -7,11 +8,15 @@ interface Props {
   onClose: () => void;
   grokCmd: string;
   project?: string;
+  /** Original main repo when currently inside a worktree path */
+  mainProject?: string | null;
   onCreate: () => void;
   /** Switch the app project cwd to this worktree path */
   onOpenPath?: (path: string) => void;
   /** Start a new task whose cwd is this worktree */
   onOpenAsTask?: (path: string) => void;
+  /** Leave worktree and restore main project folder */
+  onBackToMain?: () => void;
 }
 
 function asObj(w: unknown): Record<string, unknown> {
@@ -40,14 +45,21 @@ function rowLabel(w: unknown): string {
   return String(o.name ?? o.id ?? JSON.stringify(w).slice(0, 80));
 }
 
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/\/+$/, '');
+  return Boolean(a) && Boolean(b) && norm(a) === norm(b);
+}
+
 export function WorktreePanel({
   open,
   onClose,
   grokCmd,
   project,
+  mainProject,
   onCreate,
   onOpenPath,
   onOpenAsTask,
+  onBackToMain,
 }: Props) {
   const [rows, setRows] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,6 +84,11 @@ export function WorktreePanel({
   }, [open, refresh]);
 
   if (!open) return null;
+
+  const canBack =
+    Boolean(mainProject && onBackToMain) &&
+    Boolean(project) &&
+    !samePath(project || '', mainProject || '');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -107,6 +124,19 @@ export function WorktreePanel({
           <button type="button" className="btn btn-sm" disabled={loading} onClick={() => void refresh()}>
             {loading ? '…' : t('extRefresh')}
           </button>
+          {canBack ? (
+            <button
+              type="button"
+              className="btn btn-sm"
+              title={t('worktreeBackMainHint')}
+              onClick={() => {
+                onBackToMain?.();
+                onClose();
+              }}
+            >
+              {t('worktreeBackMain')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn-sm"
@@ -134,22 +164,45 @@ export function WorktreePanel({
               const id = rowId(w) || String(i);
               const path = rowPath(w);
               const branch = rowBranch(w);
+              const isCurrent = path && project ? samePath(path, project) : false;
               return (
                 <div key={id} className="ext-row">
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {branch ? (
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>{branch}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
+                        {branch}
+                        {isCurrent ? (
+                          <span className="muted" style={{ marginLeft: 8, fontWeight: 500 }}>
+                            {t('worktreeCurrent')}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : isCurrent ? (
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
+                        {t('worktreeCurrent')}
+                      </div>
                     ) : null}
                     <div className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>
                       {rowLabel(w)}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                    {path ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        title={t('worktreeOpenFinderHint')}
+                        onClick={() => void revealInFinder(path).catch(() => {})}
+                      >
+                        {t('worktreeOpenFinder')}
+                      </button>
+                    ) : null}
                     {path && onOpenPath ? (
                       <button
                         type="button"
                         className="btn btn-sm primary-sm"
                         title={t('worktreeUseHint')}
+                        disabled={isCurrent}
                         onClick={() => {
                           onOpenPath(path);
                           onClose();

@@ -14,12 +14,13 @@
 
 | 项 | 后续 |
 |----|------|
-| Plan mode | 引擎 plan 质量 + 执行门闩 |
-| Worktree | 更完整列表/切换 UX |
+| Plan mode | 执行/重试与状态清理已加；引擎 plan 质量仍依赖内核 |
+| Worktree | 用作项目 / 新任务 / Finder / 返回主仓已加 |
 | Voice | 原生 STT 或 Whisper 后备 |
 | Review 非 Git | 工作区文件变更摘要 |
 | + 菜单 slash | 与引擎 available_commands 对齐，隐藏无效项 |
-| 多模型 | 连接测试已加；默认路由 / 引擎侧仍依赖 config |
+| 多模型 | 连接测试 + 设默认 + 选择器合并自定义；引擎路由仍依赖 config |
+| 侧栏任务筛选 | 已加标题过滤 |
 
 ## 规划（设置 Soon，不假装可用）
 

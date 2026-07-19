@@ -1,5 +1,6 @@
 import type { PlanEntry } from '../lib/acpClient';
 import { t } from '../lib/i18n';
+import { humanPlanStatus } from '../lib/toolHuman';
 
 interface Props {
   entries: PlanEntry[];
@@ -29,7 +30,9 @@ export function PlanCard({ entries, onToggle, onToggleAll }: Props) {
               />
               <span className="plan-idx">{i + 1}.</span>
               <span className="plan-text">{e.text}</span>
-              {e.status ? <span className="plan-st">{e.status}</span> : null}
+              {e.status ? (
+                <span className="plan-st">{humanPlanStatus(e.status)}</span>
+              ) : null}
             </label>
           </li>
         ))}

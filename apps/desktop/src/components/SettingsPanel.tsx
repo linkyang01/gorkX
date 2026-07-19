@@ -29,6 +29,7 @@ import {
   listCustomModels,
   openModelsConfig,
   removeCustomModel,
+  setDefaultModel,
   testCustomModel,
   upsertCustomModel,
   type CustomModelRow,
@@ -464,6 +465,27 @@ export function SettingsPanel({
       setModelsSnap(snap);
       setMsg(t('settingsModelsSaved'));
       setModelForm((f) => ({ ...f, apiKey: '' }));
+      onModelsRefreshed?.();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setModelBusy(false);
+    }
+  };
+
+  const makeDefaultModel = async (modelWireId: string) => {
+    setModelBusy(true);
+    setMsg(null);
+    try {
+      const snap = await setDefaultModel(modelWireId);
+      setModelsSnap(snap);
+      try {
+        localStorage.setItem('gorkx.modelId', modelWireId);
+      } catch {
+        /* */
+      }
+      setMsg(t('settingsModelsDefaultOk').replace('{id}', modelWireId));
+      onModelsRefreshed?.();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -477,6 +499,7 @@ export function SettingsPanel({
       const snap = await removeCustomModel(id);
       setModelsSnap(snap);
       setMsg(t('settingsModelsRemoved'));
+      onModelsRefreshed?.();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     } finally {
@@ -850,43 +873,68 @@ export function SettingsPanel({
                   </button>
                 </div>
               </div>
+              {modelsSnap?.defaultModel ? (
+                <div className="hint" style={{ marginBottom: 10 }}>
+                  {t('settingsModelsDefaultLine').replace('{id}', modelsSnap.defaultModel)}
+                </div>
+              ) : null}
               {(modelsSnap?.customModels?.length ?? 0) > 0 ? (
                 <div className="settings-card">
-                  {modelsSnap!.customModels.map((m) => (
-                    <div key={m.id} className="settings-row">
-                      <div>
-                        <div className="settings-row-title">{m.name || m.model}</div>
-                        <div className="settings-row-hint mono">
-                          {m.model} · {m.baseUrl}
+                  {modelsSnap!.customModels.map((m) => {
+                    const isDefault =
+                      modelsSnap?.defaultModel === m.model ||
+                      modelsSnap?.defaultModel === m.id;
+                    return (
+                      <div key={m.id} className="settings-row">
+                        <div>
+                          <div className="settings-row-title">
+                            {m.name || m.model}
+                            {isDefault ? (
+                              <span className="muted" style={{ marginLeft: 8, fontWeight: 500 }}>
+                                {t('settingsModelsDefaultBadge')}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="settings-row-hint mono">
+                            {m.model} · {m.baseUrl}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            disabled={modelBusy}
+                            onClick={() => {
+                              setModelBusy(true);
+                              setMsg(t('settingsModelsTesting'));
+                              void testCustomModel(m)
+                                .then((r) => setMsg(r.note))
+                                .catch((e) => setMsg(String(e)))
+                                .finally(() => setModelBusy(false));
+                            }}
+                          >
+                            {t('settingsModelsTest')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            disabled={modelBusy || isDefault}
+                            onClick={() => void makeDefaultModel(m.model)}
+                          >
+                            {t('settingsModelsSetDefault')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            disabled={modelBusy}
+                            onClick={() => void deleteCustomModel(m.id)}
+                          >
+                            {t('settingsModelsRemove')}
+                          </button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          disabled={modelBusy}
-                          onClick={() => {
-                            setModelBusy(true);
-                            setMsg(t('settingsModelsTesting'));
-                            void testCustomModel(m)
-                              .then((r) => setMsg(r.note))
-                              .catch((e) => setMsg(String(e)))
-                              .finally(() => setModelBusy(false));
-                          }}
-                        >
-                          {t('settingsModelsTest')}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          disabled={modelBusy}
-                          onClick={() => void deleteCustomModel(m.id)}
-                        >
-                          {t('settingsModelsRemove')}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="settings-card muted-block">
