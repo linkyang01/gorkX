@@ -452,14 +452,22 @@ export function ReviewPanel({
                 ))}
               </ol>
               {onApplyPlan ? (
-                <button
-                  type="button"
-                  className="btn primary"
-                  style={{ marginTop: 12 }}
-                  onClick={onApplyPlan}
-                >
-                  {t('applyPlan')}
-                </button>
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={planEntries.length === 0}
+                    onClick={onApplyPlan}
+                    title={t('applyPlanHint')}
+                  >
+                    {doneCount > 0
+                      ? t('applyPlanWithCount').replace('{n}', String(doneCount))
+                      : t('applyPlan')}
+                  </button>
+                  <p className="hint" style={{ margin: 0 }}>
+                    {doneCount > 0 ? t('applyPlanHintChecked') : t('applyPlanHintAll')}
+                  </p>
+                </div>
               ) : (
                 <p className="hint" style={{ marginTop: 10 }}>
                   {t('reviewPlanNeedPlanMode')}

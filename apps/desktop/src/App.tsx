@@ -2066,18 +2066,21 @@ function App() {
 
   const createThread = async (opts?: {
     worktree?: boolean;
+    /** Explicit cwd (e.g. open existing worktree path as a new task) */
+    cwdOverride?: string;
     initialPrompt?: string;
     initialAttachments?: ComposerAttachment[];
   }) => {
     const useWorktree = Boolean(opts?.worktree);
     const initialPrompt = (opts?.initialPrompt || '').trim();
     const initialAttachments = opts?.initialAttachments || [];
-    if (useWorktree && !project) {
+    const cwdOverride = (opts?.cwdOverride || '').trim();
+    if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
       return;
     }
-    const scope = projectScopeKey(project);
-    const cwdBase = project || (await homeDir());
+    const scope = projectScopeKey(cwdOverride || project);
+    const cwdBase = cwdOverride || project || (await homeDir());
     const id = tid();
     const rawSeed = initialPrompt
       ? titleFromUserText(initialPrompt) || (project ? t('newThread') : t('inboxChat'))
@@ -2688,40 +2691,98 @@ function App() {
     if (!active?.client || !active.sessionId || active.busy) return;
     const planLines = active.lines.filter((l) => l.role === 'plan');
     const last = planLines[planLines.length - 1];
-    const selected =
-      last?.planEntries?.filter((e) => e.checked).map((e, i) => `${i + 1}. ${e.text}`) ?? [];
-    const planBody =
-      selected.length > 0
-        ? selected.join('\n')
-        : last?.text ?? '';
-    patchThread(active.id, { busy: true, error: null, chatMode: 'agent' });
-    try {
-      await active.client.setMode(active.sessionId, 'default');
+    if (!last) {
       appendLine(active.id, {
         id: nid(),
         role: 'system',
-        text:
-          selected.length > 0
-            ? `plan approved (${selected.length} steps) → agent mode`
-            : 'plan approved → agent mode',
+        text: t('applyPlanNoPlan'),
       });
-      const body = planBody
-        ? `${t('applyPlanPrompt')}\n\n--- plan ---\n${planBody}`
-        : t('applyPlanPrompt');
+      setReviewOpen(true);
+      return;
+    }
+    const checked =
+      last.planEntries?.filter((e) => e.checked).map((e) => e.text) ?? [];
+    const allSteps = last.planEntries?.map((e) => e.text) ?? [];
+    // Prefer checked steps; if none checked, use full plan text / all steps
+    let planBody: string;
+    let stepCount: number;
+    if (checked.length > 0) {
+      planBody = checked.map((text, i) => `${i + 1}. ${text}`).join('\n');
+      stepCount = checked.length;
+    } else if (allSteps.length > 0) {
+      planBody = allSteps.map((text, i) => `${i + 1}. ${text}`).join('\n');
+      stepCount = allSteps.length;
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: t('applyPlanUseAllSteps'),
+      });
+    } else {
+      planBody = (last.text || '').trim();
+      stepCount = planBody ? 1 : 0;
+    }
+    if (!planBody) {
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: t('applyPlanEmpty'),
+      });
+      return;
+    }
+    const prevMode = active.chatMode ?? 'plan';
+    patchThread(active.id, { busy: true, error: null, chatMode: 'agent' });
+    setReviewOpen(true);
+    try {
+      try {
+        await active.client.setMode(active.sessionId, 'default');
+      } catch {
+        try {
+          await active.client.setMode(active.sessionId, 'agent');
+        } catch (e) {
+          // Continue anyway — still send implement prompt
+          appendLine(active.id, {
+            id: nid(),
+            role: 'system',
+            text: `${t('applyPlanModeWarn')}: ${e instanceof Error ? e.message : String(e)}`,
+          });
+        }
+      }
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: t('applyPlanApproved').replace('{n}', String(stepCount)),
+      });
+      const body = `${t('applyPlanPrompt')}\n\n--- plan ---\n${planBody}`;
       appendLine(active.id, { id: nid(), role: 'user', text: body });
       const result = await active.client.prompt(active.sessionId, body);
       if (result?.stopReason && result.stopReason !== 'end_turn') {
         appendLine(active.id, {
           id: nid(),
           role: 'system',
-          text: `stop: ${result.stopReason}`,
+          text: t('applyPlanStop').replace('{reason}', String(result.stopReason)),
         });
       }
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       patchThread(active.id, {
-        error: e instanceof Error ? e.message : String(e),
-        chatMode: 'plan',
+        error: msg,
+        chatMode: prevMode === 'plan' ? 'plan' : 'agent',
       });
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('applyPlanFail')}: ${msg}`,
+      });
+      // Stay useful: offer re-enter plan mode so user can edit steps and retry
+      try {
+        if (active.sessionId && active.client) {
+          await active.client.setMode(active.sessionId, 'plan');
+          patchThread(active.id, { chatMode: 'plan' });
+          setChatMode('plan');
+        }
+      } catch {
+        /* */
+      }
     } finally {
       patchThread(active.id, { busy: false });
     }
@@ -4871,6 +4932,23 @@ function App() {
         onCreate={() => {
           setWorktreePanelOpen(false);
           void createThread({ worktree: true });
+        }}
+        onOpenPath={(path) => {
+          setProject(path);
+          try {
+            localStorage.setItem('gorkx.project', path);
+          } catch {
+            /* */
+          }
+        }}
+        onOpenAsTask={(path) => {
+          setProject(path);
+          try {
+            localStorage.setItem('gorkx.project', path);
+          } catch {
+            /* */
+          }
+          void createThread({ cwdOverride: path });
         }}
       />
 
