@@ -266,9 +266,13 @@ export class AcpClient {
     }
 
     // Notifications
-    if (method === 'session/update') {
+    // Grok Build sends its extended lifecycle updates (including native
+    // subagent events) on x.ai/session/update. Treat it exactly like baseline
+    // ACP session/update rather than dropping it as an unknown notification.
+    if (method === 'session/update' || method === 'x.ai/session/update' || method === '_x.ai/session/update') {
       const params = (msg.params ?? {}) as {
         sessionId?: string;
+        session_id?: string;
         update?: SessionUpdate;
         _meta?: unknown;
       };
@@ -283,7 +287,7 @@ export class AcpClient {
       else if ((update as { _meta?: unknown })._meta) {
         this.onUsageMeta?.(update);
       }
-      this.onSessionUpdate?.(update, params.sessionId);
+      this.onSessionUpdate?.(update, params.sessionId ?? params.session_id);
       return;
     }
 
@@ -780,6 +784,74 @@ export type ParsedToolUpdate = {
   /** Raw English/protocol detail for expand-if-needed */
   rawDetail?: string;
 };
+
+/**
+ * Parse Grok Build's native subagent lifecycle events. These events are
+ * emitted by the engine's task tool; gorkX only renders their state and does
+ * not create a second orchestration loop in the desktop shell.
+ */
+export type ParsedSubagentUpdate = {
+  subagentId: string;
+  label: string;
+  status: string;
+  kind: 'subagent';
+};
+
+export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate | null {
+  const raw = update as Record<string, unknown>;
+  const event = String(update.sessionUpdate ?? '');
+  if (
+    event !== 'subagent_spawned' &&
+    event !== 'subagent_progress' &&
+    event !== 'subagent_finished'
+  ) {
+    return null;
+  }
+  const subagentId = String(raw.subagent_id ?? raw.subagentId ?? raw.child_session_id ?? '');
+  if (!subagentId) return null;
+
+  if (event === 'subagent_spawned') {
+    const type = String(raw.subagent_type ?? raw.subagentType ?? 'general-purpose');
+    const description = String(raw.description ?? '').trim();
+    return {
+      subagentId,
+      label: `子任务 · ${type}${description ? ` · ${description}` : ''}`,
+      status: 'running',
+      kind: 'subagent',
+    };
+  }
+  if (event === 'subagent_progress') {
+    const turns = Number(raw.turn_count ?? raw.turns ?? 0);
+    const tools = Number(raw.tool_call_count ?? raw.tool_calls ?? 0);
+    const usage = Number(raw.context_usage_pct ?? 0);
+    const details = [
+      turns > 0 ? `${turns} turns` : '',
+      tools > 0 ? `${tools} tools` : '',
+      usage > 0 ? `${usage}% context` : '',
+    ].filter(Boolean);
+    return {
+      subagentId,
+      // Keep the spawn description as the row title while progress updates.
+      label: '',
+      status: details.length ? `running · ${details.join(' · ')}` : 'running',
+      kind: 'subagent',
+    };
+  }
+
+  const outcome = String(raw.status ?? 'completed').toLowerCase();
+  const error = typeof raw.error === 'string' ? raw.error.trim() : '';
+  const tools = Number(raw.tool_calls ?? 0);
+  const turns = Number(raw.turns ?? 0);
+  const details = [tools > 0 ? `${tools} tools` : '', turns > 0 ? `${turns} turns` : '']
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    subagentId,
+    label: error ? `子任务失败 · ${error}` : '',
+    status: details ? `${outcome} · ${details}` : outcome,
+    kind: 'subagent',
+  };
+}
 
 /**
  * Build a human-facing tool summary from ACP tool_call / tool_call_update.

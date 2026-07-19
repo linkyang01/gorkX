@@ -14,6 +14,7 @@ import {
   fetchGrokStatus,
   stopAllAgents,
   parsePlanUpdate,
+  parseSubagentUpdate,
   isToolCallIdLike,
   parseToolUpdate,
   permissionResult,
@@ -1454,6 +1455,15 @@ function App() {
   const wireClient = useCallback(
     (threadId: string, client: AcpClient) => {
       client.onSessionUpdate = (update: SessionUpdate) => {
+        const subagent = parseSubagentUpdate(update);
+        if (subagent) {
+          appendOrMerge(threadId, 'tool', subagent.label, `subagent:${subagent.subagentId}`, {
+            toolStatus: subagent.status,
+            toolKind: subagent.kind,
+          });
+          return;
+        }
+
         const plan = parsePlanUpdate(update);
         if (plan) {
           setThreads((prev) =>
