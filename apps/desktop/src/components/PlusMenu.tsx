@@ -37,11 +37,14 @@ interface Props {
 }
 
 function slashAllowed(cmd: string, available?: string[]): boolean {
-  if (!available || available.length === 0) return true;
   const n = cmd.replace(/^\//, '').toLowerCase();
-  // Local/app actions always allowed
-  if (['export', 'worktree'].includes(n)) return true;
-  return available.some((a) => a.toLowerCase() === n);
+  // These are intercepted by gorkX itself and therefore never depend on an
+  // engine-advertised slash command. Every other slash entry is only shown
+  // after the live session explicitly advertises it: no optimistic dead rows.
+  if (['clear', 'new', 'goal', 'worktree'].includes(n)) {
+    return true;
+  }
+  return Boolean(available?.some((a) => a.toLowerCase() === n));
 }
 
 export function PlusMenu({

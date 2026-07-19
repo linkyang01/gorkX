@@ -25,7 +25,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
 | Multi-provider models | Settings → config.toml; connection probe; **set default**; custom models in picker | **Half→improved** — routing still depends on engine |
 | Sidebar | Task title filter across projects / inbox | **Real** |
-| + menu (imagine/goal/fork/…) | Stage or send slash; filter by session available_commands | **Half→improved** |
+| + menu | Local actions always available; engine Slash actions appear only when the live session advertises them | **Real** |
 | Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
 | Settings · Browser | Connect / diagnose Playwright MCP for Chrome; manage the real MCP configuration | **Real** — browser tools depend on Chrome and the kernel MCP runtime |
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
