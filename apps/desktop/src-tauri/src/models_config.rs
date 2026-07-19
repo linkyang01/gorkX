@@ -185,6 +185,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
             cur.has_plaintext_secret = !v.is_empty();
         } else if let Some(v) = parse_str_assign(t, "api_backend") {
             cur.api_backend = v;
+        } else if let Some(v) = parse_str_assign(t, "provider_label") {
+            cur.provider_label = v;
         } else if let Some(v) = parse_str_assign(t, "env_key") {
             cur.api_key = format!("env:{v}");
             if v == key_env_name(cur_id.as_deref().unwrap_or_default()) {
@@ -267,6 +269,12 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
         _ => "chat_completions",
     };
     body.push_str(&format!("api_backend = \"{backend}\"\n"));
+    if !model.provider_label.trim().is_empty() {
+        body.push_str(&format!(
+            "provider_label = \"{}\"\n",
+            escape_toml_str(model.provider_label.trim())
+        ));
+    }
     if !model.api_key.trim().is_empty() && !model.api_key.starts_with("env:") {
         keychain_store(&id, model.api_key.trim())?;
         body.push_str(&format!("env_key = \"{}\"\n", key_env_name(&id)));

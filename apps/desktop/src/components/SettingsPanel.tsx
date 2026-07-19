@@ -176,6 +176,7 @@ export function SettingsPanel({
     baseUrl: 'https://api.openai.com/v1',
     apiKey: '',
     apiBackend: 'chat_completions',
+    providerLabel: '',
   });
   const [modelBusy, setModelBusy] = useState(false);
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
@@ -521,7 +522,7 @@ export function SettingsPanel({
         baseUrl: modelForm.baseUrl.trim(),
         apiKey: modelForm.apiKey.trim(),
         apiBackend: modelForm.apiBackend,
-        providerLabel: '',
+        providerLabel: modelForm.providerLabel.trim(),
       };
       const snap = await upsertCustomModel(row);
       setModelsSnap(snap);
@@ -907,6 +908,10 @@ export function SettingsPanel({
                   />
                 </label>
                 <label className="field">
+                  <span>{t('settingsModelsFieldProvider')}</span>
+                  <input value={modelForm.providerLabel} onChange={(e) => setModelForm((f) => ({ ...f, providerLabel: e.target.value }))} placeholder="OpenAI / Anthropic / Ollama / 公司网关" spellCheck={false} />
+                </label>
+                <label className="field">
                   <span>{t('settingsModelsFieldId')}</span>
                   <input
                     value={modelForm.model}
@@ -969,7 +974,7 @@ export function SettingsPanel({
                         baseUrl: modelForm.baseUrl.trim(),
                         apiKey: modelForm.apiKey,
                         apiBackend: modelForm.apiBackend,
-                        providerLabel: '',
+                        providerLabel: modelForm.providerLabel.trim(),
                       };
                       void testCustomModel(row)
                         .then((r) => setMsg(r.note))
@@ -1008,8 +1013,13 @@ export function SettingsPanel({
                 </div>
               ) : null}
               {(modelsSnap?.customModels?.length ?? 0) > 0 ? (
-                <div className="settings-card">
-                  {modelsSnap!.customModels.map((m) => {
+                <>
+                {Object.entries(modelsSnap!.customModels.reduce<Record<string, CustomModelRow[]>>((groups, model) => {
+                  const provider = model.providerLabel.trim() || (model.apiBackend === 'messages' ? 'Anthropic-compatible' : /ollama|localhost|127\.0\.0\.1/i.test(model.baseUrl) ? 'Local / Ollama' : 'Custom / OpenAI-compatible');
+                  (groups[provider] ||= []).push(model); return groups;
+                }, {})).sort(([a], [b]) => a.localeCompare(b)).map(([provider, providerModels]) => <div className="settings-card" key={provider} style={{ marginBottom: 10 }}>
+                  <div className="settings-row-title" style={{ marginBottom: 6 }}>{provider}</div>
+                  {providerModels.map((m) => {
                     const isDefault =
                       modelsSnap?.defaultModel === m.model ||
                       modelsSnap?.defaultModel === m.id;
@@ -1067,7 +1077,8 @@ export function SettingsPanel({
                       </div>
                     );
                   })}
-                </div>
+                </div>)}
+                </>
               ) : (
                 <div className="settings-card muted-block">
                   <p className="hint">{t('settingsModelsEmpty')}</p>
