@@ -1,7 +1,4 @@
-/* gorkX — Product Design · light only
- * Soft light shell (Codex-like): pale canvas, white content, quiet ink.
- * Composer / chrome icons unchanged.
- */
+/* gorkX product shell. Appearance preferences live in data-theme/data-density. */
 
 :root {
   color-scheme: light;
@@ -85,6 +82,66 @@
   --type-xl: 17px;
   --leading-tight: 1.35;
   --leading-body: 1.55;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-app: #161617;
+  --bg-sidebar: #202022;
+  --bg-main: #1c1c1e;
+  --bg-elevated: #27272a;
+  --bg-hover: rgba(255, 255, 255, 0.07);
+  --bg-active: rgba(255, 255, 255, 0.11);
+  --sb-text: #f4f4f5;
+  --sb-text-2: #d4d4d8;
+  --sb-muted: #a1a1aa;
+  --sb-fill: rgba(255, 255, 255, 0.07);
+  --sb-fill-strong: rgba(255, 255, 255, 0.12);
+  --sb-border: rgba(255, 255, 255, 0.09);
+  --sb-active: rgba(255, 255, 255, 0.14);
+  --sb-active-text: #ffffff;
+  --glass: #202022;
+  --glass-strong: #27272a;
+  --glass-soft: #1c1c1e;
+  --glass-fill: rgba(255, 255, 255, 0.07);
+  --glass-hover: rgba(255, 255, 255, 0.1);
+  --glass-active: rgba(255, 255, 255, 0.14);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-dim: rgba(255, 255, 255, 0.14);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+  --text: #f4f4f5;
+  --text-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --accent: #f4f4f5;
+  --accent-ink: #18181b;
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --user-bg: #343438;
+  --user-fg: #f4f4f5;
+  --assistant-fg: #f4f4f5;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.42);
+  --shadow-float: 0 6px 20px rgba(0, 0, 0, 0.34);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.22), 0 6px 24px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-density="compact"] {
+  --type-xs: 11px;
+  --type-sm: 12px;
+  --type-md: 13px;
+  --type-lg: 14.5px;
+  --type-xl: 16px;
+  --chat-gutter: clamp(20px, 5vw, 72px);
+}
+
+:root[data-density="spacious"] {
+  --type-xs: 12px;
+  --type-sm: 13px;
+  --type-md: 14px;
+  --type-lg: 15.5px;
+  --type-xl: 18px;
+  --chat-gutter: clamp(32px, 8vw, 120px);
 }
 
 * {
@@ -298,8 +355,8 @@ body {
   height: 13px;
   padding: 0 3px;
   border-radius: 99px;
-  background: #1d1d1f;
-  color: #fff;
+  background: var(--text);
+  color: var(--accent-ink);
   font-size: 8px;
   line-height: 13px;
   font-weight: 700;
@@ -368,7 +425,7 @@ body {
   padding: 12px 12px;
   border: 1px solid var(--hairline);
   border-radius: 12px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .onboard-step.ok {
@@ -732,17 +789,17 @@ body {
 
 .btn.primary,
 .btn.primary-sm {
-  background: #111113;
-  color: #ffffff;
-  border-color: #111113;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
   font-weight: 600;
   box-shadow: none;
 }
 
 .btn.primary:hover,
 .btn.primary-sm:hover {
-  background: #2a2a2c;
-  border-color: #2a2a2c;
+  background: var(--text-2);
+  border-color: var(--text-2);
 }
 
 .btn.primary-sm {
@@ -1562,7 +1619,7 @@ button.pill:hover {
   z-index: 80;
   min-width: 210px;
   max-width: 280px;
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.14);
@@ -1767,7 +1824,7 @@ button.pill:hover {
 .settings-shell {
   width: min(960px, 96vw);
   height: min(700px, 92vh);
-  background: #fff;
+  background: var(--bg-main);
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
   display: grid;
@@ -1811,7 +1868,7 @@ button.pill:hover {
   padding: 7px 12px;
   font: inherit;
   font-size: 12px;
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--text);
 }
 
@@ -1918,7 +1975,7 @@ button.pill:hover {
 }
 
 .muted-block {
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .sr-only {
@@ -1997,7 +2054,7 @@ button.pill:hover {
   border: 1px solid var(--hairline);
   border-radius: 10px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .tool-human-top {
@@ -2184,7 +2241,7 @@ button.pill:hover {
   padding: 0 3px;
   border-radius: 99px;
   background: var(--text);
-  color: #fff;
+  color: var(--accent-ink);
   font-size: 9px;
   line-height: 14px;
   font-weight: 700;
@@ -2236,7 +2293,7 @@ button.pill:hover {
   margin-bottom: 10px;
   border: 1px solid var(--hairline);
   border-radius: 10px;
-  background: #fff;
+  background: var(--bg-elevated);
   overflow: hidden;
 }
 
@@ -2325,7 +2382,7 @@ button.pill:hover {
   width: 248px;
   max-width: min(248px, 70vw);
   padding: 12px 14px;
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
@@ -2789,7 +2846,7 @@ button.pill:hover {
 
 .composer-dock {
   padding: 10px var(--chat-gutter) 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #ffffff 40%);
+  background: linear-gradient(180deg, transparent 0%, var(--bg-main) 40%);
   flex-shrink: 0;
   overflow: visible;
   position: relative;
@@ -2802,8 +2859,8 @@ button.pill:hover {
   width: 100%;
   margin: 0 auto;
   position: relative;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.09);
+  background: var(--bg-elevated);
+  border: 1px solid var(--hairline-strong);
   border-radius: var(--radius-composer);
   box-shadow: var(--shadow-composer);
   padding: 12px 14px 10px;
@@ -2945,7 +3002,7 @@ button.pill:hover {
 .att-preview-modal {
   width: min(880px, 94vw);
   max-height: min(86vh, 900px);
-  background: #fff;
+  background: var(--bg-elevated);
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
   display: flex;
@@ -3440,7 +3497,7 @@ button.pill:hover {
   max-height: min(320px, 42vh);
   overflow: auto;
   padding: 6px;
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
@@ -3518,8 +3575,8 @@ button.pill:hover {
   height: 32px;
   border-radius: 50%;
   border: none;
-  background: #111113;
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--accent-ink);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -3531,7 +3588,7 @@ button.pill:hover {
 }
 
 .btn-send:hover:not(:disabled) {
-  background: #2a2a2a;
+  background: var(--text-2);
 }
 
 .btn-send:disabled {
@@ -3542,7 +3599,7 @@ button.pill:hover {
 
 /* Busy → same corner slot becomes Stop (Codex-style) */
 .btn-send.btn-send-stop {
-  background: #111113;
+  background: var(--accent);
   opacity: 1;
   cursor: pointer;
 }
@@ -3555,7 +3612,7 @@ button.pill:hover {
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  background: #fff;
+  background: var(--accent-ink);
   display: block;
 }
 
@@ -3625,10 +3682,10 @@ button.pill:hover {
   bottom: calc(100% + 8px);
   max-height: min(320px, 42vh);
   overflow: auto;
-  background: #fff;
+  background: var(--bg-elevated);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--hairline-strong);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
   z-index: 60;
@@ -4045,7 +4102,7 @@ button.pill:hover {
   border: 1px solid var(--hairline);
   border-radius: 12px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--bg-elevated);
 }
 
 .sched-item.off {
@@ -4189,7 +4246,7 @@ button.pill:hover {
   left: 0;
   bottom: calc(100% + 6px);
   width: min(220px, 88vw);
-  background: #fff;
+  background: var(--bg-elevated);
   border: 1px solid var(--hairline);
   border-radius: 12px;
   box-shadow: var(--shadow-lg, 0 8px 28px rgba(0, 0, 0, 0.12));
@@ -4244,7 +4301,7 @@ button.pill:hover {
   padding: 7px 10px;
   font: inherit;
   font-size: 13px;
-  background: #fff;
+  background: var(--bg-elevated);
   color: var(--text);
 }
 

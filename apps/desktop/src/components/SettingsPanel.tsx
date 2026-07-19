@@ -36,6 +36,13 @@ import {
   type ModelsConfigSnapshot,
 } from '../lib/modelsConfig';
 import { t } from '../lib/i18n';
+import {
+  applyAppearance,
+  loadAppearance,
+  type AppearancePreferences,
+  type DensityPreference,
+  type ThemePreference,
+} from '../lib/appearance';
 
 const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
@@ -156,6 +163,7 @@ export function SettingsPanel({
     apiBackend: 'chat_completions',
   });
   const [modelBusy, setModelBusy] = useState(false);
+  const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
 
   useEffect(() => {
     if (!isOpen) return;
@@ -513,6 +521,15 @@ export function SettingsPanel({
     </div>
   );
 
+  const updateAppearance = <K extends keyof AppearancePreferences>(
+    key: K,
+    value: AppearancePreferences[K],
+  ) => {
+    const next = { ...appearance, [key]: value } as AppearancePreferences;
+    setAppearance(next);
+    applyAppearance(next);
+  };
+
   return (
     <div className="modal-backdrop settings-backdrop" onClick={onClose}>
       <div
@@ -592,7 +609,55 @@ export function SettingsPanel({
           {section === 'appearance' ? (
             <>
               <h2>{t('settingsAppearance')}</h2>
-              <Soon text={t('settingsAppearanceSoon')} />
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsAppearanceHint')}
+              </p>
+              <h3 className="subhead">{t('settingsTheme')}</h3>
+              <div className="settings-card">
+                {(
+                  [
+                    ['system', t('settingsThemeSystem'), t('settingsThemeSystemHint')],
+                    ['light', t('settingsThemeLight'), t('settingsThemeLightHint')],
+                    ['dark', t('settingsThemeDark'), t('settingsThemeDarkHint')],
+                  ] as const
+                ).map(([id, title, hint]) => (
+                  <label key={id} className="settings-row toggle-row">
+                    <div>
+                      <div className="settings-row-title">{title}</div>
+                      <div className="settings-row-hint">{hint}</div>
+                    </div>
+                    <input
+                      type="radio"
+                      name="theme"
+                      checked={appearance.theme === id}
+                      onChange={() => updateAppearance('theme', id as ThemePreference)}
+                    />
+                  </label>
+                ))}
+              </div>
+              <h3 className="subhead">{t('settingsDensity')}</h3>
+              <div className="settings-card">
+                {(
+                  [
+                    ['compact', t('settingsDensityCompact'), t('settingsDensityCompactHint')],
+                    ['comfortable', t('settingsDensityComfortable'), t('settingsDensityComfortableHint')],
+                    ['spacious', t('settingsDensitySpacious'), t('settingsDensitySpaciousHint')],
+                  ] as const
+                ).map(([id, title, hint]) => (
+                  <label key={id} className="settings-row toggle-row">
+                    <div>
+                      <div className="settings-row-title">{title}</div>
+                      <div className="settings-row-hint">{hint}</div>
+                    </div>
+                    <input
+                      type="radio"
+                      name="density"
+                      checked={appearance.density === id}
+                      onChange={() => updateAppearance('density', id as DensityPreference)}
+                    />
+                  </label>
+                ))}
+              </div>
             </>
           ) : null}
 

@@ -26,7 +26,8 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Multi-provider models | Settings → config.toml; connection probe; **set default**; custom models in picker | **Half→improved** — routing still depends on engine |
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu (imagine/goal/fork/…) | Stage or send slash; filter by session available_commands | **Half→improved** |
-| Settings · Appearance / Browser / Computer / Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
+| Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
+| Settings · Browser / Computer / Hooks / Git | Explicit “not available yet” | **Planned** (honest placeholder) |
 
 ## Run
 
