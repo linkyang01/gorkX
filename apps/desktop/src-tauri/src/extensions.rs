@@ -1,5 +1,6 @@
 //! Skills / MCP / Plugins discovery for the gorkX Extensions hub.
-//! Runtime is still the Grok kernel — we surface what ~/.grok and `grok` already manage.
+//! Runtime is still the Grok kernel — all kernel-backed data is surfaced from
+//! gorkX's app-owned `GROK_HOME`, never the user's `~/.grok` by default.
 
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -54,12 +55,6 @@ pub struct ExtensionsSnapshot {
     pub skill_roots: Vec<String>,
     pub config_path: String,
     pub error: Option<String>,
-}
-
-fn home_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"))
 }
 
 fn grok_bin(override_cmd: Option<&str>) -> PathBuf {
@@ -298,7 +293,7 @@ fn upsert_skill(out: &mut Vec<SkillInfo>, seen: &mut BTreeMap<String, usize>, sk
 }
 
 fn discover_skills(project: Option<&str>) -> (Vec<SkillInfo>, Vec<String>) {
-    let home = home_dir();
+    let grok_home = crate::paths::grok_home();
     let mut skills = Vec::new();
     let mut seen = BTreeMap::new();
     let mut roots = Vec::new();
@@ -325,12 +320,9 @@ fn discover_skills(project: Option<&str>) -> (Vec<SkillInfo>, Vec<String>) {
         }
     }
 
-    candidates.push((home.join(".grok/skills"), "user"));
-    candidates.push((home.join(".grok/commands"), "commands"));
-    candidates.push((home.join(".grok/bundled/skills"), "bundled"));
-    candidates.push((home.join(".agents/skills"), "agents"));
-    candidates.push((home.join(".claude/skills"), "claude"));
-    candidates.push((home.join(".cursor/skills"), "cursor"));
+    candidates.push((grok_home.join("skills"), "user"));
+    candidates.push((grok_home.join("commands"), "commands"));
+    candidates.push((grok_home.join("bundled/skills"), "bundled"));
 
     for (dir, scope) in candidates {
         if dir.is_dir() {
@@ -467,8 +459,7 @@ fn parse_plugin_list(val: serde_json::Value) -> Vec<PluginInfo> {
 }
 
 fn collect_snapshot(project: Option<String>, grok_cmd: Option<String>) -> ExtensionsSnapshot {
-    let home = home_dir();
-    let config_path = home.join(".grok/config.toml").display().to_string();
+    let config_path = crate::paths::config_toml_path().display().to_string();
     let bin = grok_bin(grok_cmd.as_deref());
     let (skills, skill_roots) = discover_skills(project.as_deref());
 
@@ -516,14 +507,14 @@ pub async fn extensions_snapshot(
 
 #[tauri::command]
 pub async fn extensions_open_skills_dir() -> Result<String, String> {
-    let dir = home_dir().join(".grok/skills");
+    let dir = crate::paths::grok_home().join("skills");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     open_path(dir.display().to_string())
 }
 
 #[tauri::command]
 pub async fn extensions_open_config() -> Result<String, String> {
-    let path = home_dir().join(".grok/config.toml");
+    let path = crate::paths::config_toml_path();
     if !path.is_file() {
         return Err(format!("missing {}", path.display()));
     }

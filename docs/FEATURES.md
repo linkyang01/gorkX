@@ -14,7 +14,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
 | Scheduled | SQLite jobs; foreground tasks plus opt-in macOS launchd worker | **Real with limits** — background runs every 5 minutes in Grok plan mode only (no silent repository writes), save output locally, and require the installed macOS app |
 | Terminal | PTY dock | **Real** |
-| Extensions | Skills / MCP / plugins via engine CLI | **Real** (depends on engine) |
+| Extensions | Skills / MCP / plugins via engine CLI and App `GROK_HOME` | **Real** (depends on engine; does not read `~/.grok` by default) |
 | Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember / Forget / keyword search / local compact | **Real (v0.4+)** — kernel `/flush`/`/dream` still optional extras |
 | Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** |
 | App update | Settings check + download DMG; launch banner | **Real (v0.4.2)** — drag into Applications to replace |
