@@ -9,7 +9,7 @@ use std::time::Duration;
 
 const OWNER: &str = "linkyang01";
 const REPO: &str = "gorkX";
-const UA: &str = "gorkX-desktop-updater/0.4.2";
+const UA: &str = "gorkX-desktop-updater/0.4.3";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

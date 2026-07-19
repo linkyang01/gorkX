@@ -35,7 +35,7 @@ import {
 } from '../lib/modelsConfig';
 import { t } from '../lib/i18n';
 
-const APP_VERSION = '0.4.2'; // keep in sync with package.json
+const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
 export type SettingsSection =

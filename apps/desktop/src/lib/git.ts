@@ -7,6 +7,8 @@ export interface GitFileEntry {
 
 export interface GitSnapshot {
   ok: boolean;
+  /** false when cwd is not a git repo — files are a workspace listing */
+  isGit?: boolean;
   branch: string;
   dirty: boolean;
   files: GitFileEntry[];

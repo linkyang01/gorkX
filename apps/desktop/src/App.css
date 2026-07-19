@@ -340,6 +340,73 @@ body {
   background: rgba(255, 204, 0, 0.22);
 }
 
+.banner.info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1e3a5f;
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+/* First-run onboarding */
+.onboard-modal {
+  max-width: 440px;
+  width: min(440px, 92vw);
+}
+
+.onboard-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.onboard-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.onboard-step.ok {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.onboard-step-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.onboard-step-main strong {
+  font-size: 13px;
+}
+
+.onboard-step-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.onboard-check {
+  color: #16a34a;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.onboard-foot {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 /* ── Sidebar glass ───────────────────────────────────── */
 
 .sidebar {

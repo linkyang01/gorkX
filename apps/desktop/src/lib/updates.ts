@@ -187,11 +187,11 @@ export async function openUrlSafe(url: string): Promise<void> {
 }
 
 export async function appVersion(): Promise<string> {
-  if (!isTauri()) return '0.4.2';
+  if (!isTauri()) return '0.4.3';
   try {
     return await invoke<string>('app_current_version');
   } catch {
-    return '0.4.2';
+    return '0.4.3';
   }
 }
 

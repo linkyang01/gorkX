@@ -29,8 +29,18 @@ interface Props {
   planModeOn: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
+  /** Session slash names without leading `/` — when non-empty, filter engine slash rows */
+  availableCommandNames?: string[];
   onClose: () => void;
   onAction: (action: PlusAction) => void;
+}
+
+function slashAllowed(cmd: string, available?: string[]): boolean {
+  if (!available || available.length === 0) return true;
+  const n = cmd.replace(/^\//, '').toLowerCase();
+  // Local/app actions always allowed
+  if (['export', 'worktree'].includes(n)) return true;
+  return available.some((a) => a.toLowerCase() === n);
 }
 
 export function PlusMenu({
@@ -39,6 +49,7 @@ export function PlusMenu({
   planModeOn,
   skills,
   hasActiveSession,
+  availableCommandNames,
   onClose,
   onAction,
 }: Props) {
@@ -46,7 +57,7 @@ export function PlusMenu({
 
   const invocable = skills.filter((s) => s.userInvocable).slice(0, 10);
 
-  const rows: Row[] = [
+  const rawRows: Row[] = [
     { kind: 'label', id: 'l-add', title: t('plusCatAdd') },
     {
       kind: 'action',
@@ -244,6 +255,16 @@ export function PlusMenu({
     },
   ];
 
+  // Drop engine slash rows the current session does not advertise
+  const rows: Row[] = rawRows.filter((row) => {
+    if (row.kind !== 'action') return true;
+    const a = row.action;
+    if (a.type === 'stage' || a.type === 'send-now') {
+      return slashAllowed(a.cmd, availableCommandNames);
+    }
+    return true;
+  });
+
   const go = (action: PlusAction) => {
     onAction(action);
     onClose();
@@ -264,6 +285,8 @@ export function PlusMenu({
       sections.push(cur);
     }
   }
+  // Drop empty categories after filtering
+  const sectionsVisible = sections.filter((s) => s.items.length > 0);
 
   return (
     <div
@@ -271,7 +294,7 @@ export function PlusMenu({
       role="menu"
       aria-label={t('plusMenu')}
     >
-      {sections.map((sec, si) => (
+      {sectionsVisible.map((sec, si) => (
         <section key={sec.id} className={`plus-section${si === 0 ? ' first' : ''}`}>
           {sec.title ? (
             <header className="plus-section-head">

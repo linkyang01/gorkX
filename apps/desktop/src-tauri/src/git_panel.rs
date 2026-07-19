@@ -16,6 +16,9 @@ pub struct GitFileEntry {
 #[serde(rename_all = "camelCase")]
 pub struct GitSnapshot {
     pub ok: bool,
+    /// true when cwd is a git work tree; false = plain workspace listing
+    #[serde(default)]
+    pub is_git: bool,
     pub branch: String,
     pub dirty: bool,
     pub files: Vec<GitFileEntry>,
@@ -52,6 +55,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
     if !root.is_dir() {
         return Ok(GitSnapshot {
             ok: false,
+            is_git: false,
             branch: String::new(),
             dirty: false,
             files: vec![],
@@ -60,16 +64,9 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
         });
     }
 
-    // Not a git repo?
+    // Not a git repo → still show a workspace file summary (not an empty dead panel)
     if run_git(root, &["rev-parse", "--is-inside-work-tree"]).is_err() {
-        return Ok(GitSnapshot {
-            ok: false,
-            branch: String::new(),
-            dirty: false,
-            files: vec![],
-            diff: String::new(),
-            error: "不是 Git 仓库".into(),
-        });
+        return Ok(workspace_snapshot(root));
     }
 
     let branch = run_git(root, &["rev-parse", "--abbrev-ref", "HEAD"])
@@ -128,6 +125,7 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
 
     Ok(GitSnapshot {
         ok: true,
+        is_git: true,
         branch,
         dirty: !files.is_empty(),
         files,
@@ -136,12 +134,123 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
     })
 }
 
+/// Non-git project: list recent / top-level files so Review is not an empty wall.
+fn workspace_snapshot(root: &Path) -> GitSnapshot {
+    let skip = [
+        "node_modules",
+        "target",
+        ".git",
+        "dist",
+        "build",
+        ".next",
+        "__pycache__",
+        ".turbo",
+        "vendor",
+        ".cache",
+    ];
+    let mut scored: Vec<(u64, String)> = Vec::new();
+    fn walk(
+        dir: &Path,
+        root: &Path,
+        depth: usize,
+        skip: &[&str],
+        out: &mut Vec<(u64, String)>,
+    ) {
+        if depth > 3 || out.len() > 80 {
+            return;
+        }
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for ent in rd.flatten() {
+            if out.len() > 80 {
+                break;
+            }
+            let name = ent.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') && name != ".env.example" {
+                continue;
+            }
+            if skip.iter().any(|s| *s == name) {
+                continue;
+            }
+            let path = ent.path();
+            if path.is_dir() {
+                walk(&path, root, depth + 1, skip, out);
+            } else if path.is_file() {
+                let rel = path
+                    .strip_prefix(root)
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| name.clone());
+                let mtime = ent
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                out.push((mtime, rel));
+            }
+        }
+    }
+    walk(root, root, 0, &skip, &mut scored);
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.truncate(48);
+    let files: Vec<GitFileEntry> = scored
+        .iter()
+        .map(|(_, p)| GitFileEntry {
+            path: p.clone(),
+            status: "WS".into(),
+        })
+        .collect();
+    let mut diff = String::from("### 工作区文件（非 Git）\n\n");
+    diff.push_str("当前目录不是 Git 仓库。下列为最近修改的文件（最多 48 个），供审阅参考：\n\n");
+    for f in &files {
+        diff.push_str(&format!("· {}\n", f.path));
+    }
+    if files.is_empty() {
+        diff.push_str("（目录下暂无明显文件）\n");
+    }
+    GitSnapshot {
+        ok: true,
+        is_git: false,
+        branch: "workspace".into(),
+        dirty: !files.is_empty(),
+        files,
+        diff,
+        error: String::new(),
+    }
+}
+
 #[tauri::command]
 pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = Path::new(&cwd);
         let rel = path.trim_end_matches('/').to_string();
         let full = root.join(&rel);
+
+        let is_git = run_git(root, &["rev-parse", "--is-inside-work-tree"]).is_ok();
+        if !is_git {
+            if full.is_file() {
+                match std::fs::read_to_string(&full) {
+                    Ok(raw) => {
+                        let mut out = format!("### 工作区文件: {rel}\n\n");
+                        let max = 12_000;
+                        if raw.len() > max {
+                            out.push_str(&raw[..max]);
+                            out.push_str("\n… [truncated]\n");
+                        } else {
+                            out.push_str(&raw);
+                        }
+                        return Ok(out);
+                    }
+                    Err(e) => return Ok(format!("无法读取 {rel}: {e}")),
+                }
+            }
+            if full.is_dir() {
+                return Ok(format!("### 目录: {rel}/\n（非 Git 工作区）\n"));
+            }
+            return Ok(format!("文件不存在: {rel}"));
+        }
 
         // try unstaged then staged
         if let Ok(u) = run_git(root, &["diff", "--", &rel]) {

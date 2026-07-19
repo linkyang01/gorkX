@@ -15,12 +15,15 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Terminal | PTY dock | **Real** |
 | Extensions | Skills / MCP / plugins via engine CLI | **Real** (depends on engine) |
 | Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember writes disk | **Real (v0.4)** — kernel `/flush`/`/dream` still optional extras |
+| Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** |
+| App update | Settings check + download DMG; launch banner | **Real (v0.4.2)** — drag into Applications to replace |
+| Onboarding | First-run checklist: engine · login · project | **Real (v0.4.3)** |
 | Plan mode | setMode + /plan arm + review plan steps | **Half** — engine plan quality varies |
 | Worktree | create / list / remove via engine | **Half** — thin UI |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
-| Review Diff | Git porcelain + file diff | **Half** — empty if not a git repo |
+| Review Diff | Git porcelain + file diff; **non-git workspace file list** | **Half→improved** — no line diffs without git |
 | Multi-provider models | Settings → config.toml models | **Half** — engine must honor config |
-| + menu (imagine/goal/fork/…) | Stage or send slash to engine | **Half** — capability is the engine’s |
+| + menu (imagine/goal/fork/…) | Stage or send slash; filter by session available_commands | **Half→improved** |
 | Settings · Appearance / Browser / Computer / Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
 
 ## Run

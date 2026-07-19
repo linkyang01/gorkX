@@ -31,6 +31,11 @@ import {
   type TextPromptRequest,
 } from './components/TextPromptModal';
 import { MemoryPanel } from './components/MemoryPanel';
+import {
+  OnboardingModal,
+  dismissOnboarding,
+  isOnboardingDismissed,
+} from './components/OnboardingModal';
 
 import { WorktreePanel } from './components/WorktreePanel';
 import { ProcessPanel } from './components/ProcessPanel';
@@ -117,6 +122,11 @@ import {
   uiDisplayName,
 } from './lib/account';
 import type { AccountSummary } from './lib/account';
+import {
+  checkAppUpdate,
+  installAppUpdate,
+  type AppUpdateInfo,
+} from './lib/updates';
 import {
   canAutoTitle,
   estimateContextUsed,
@@ -533,6 +543,8 @@ function App() {
   const [nameOverride, setNameOverride] = useState(() => loadDisplayNameOverride());
   const [nameEditOpen, setNameEditOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [onboardOpen, setOnboardOpen] = useState(false);
+  const [appUpdateBanner, setAppUpdateBanner] = useState<AppUpdateInfo | null>(null);
   /** Opt-in: show Grok kernel history under selected project (not auto-loaded). */
   const [showGrokHistory, setShowGrokHistory] = useState(false);
   const [_grokHistoryLoading, _setGrokHistoryLoading] = useState(false);
@@ -937,6 +949,35 @@ function App() {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [refreshStatus, refreshAccount]);
+
+  // First-run onboarding when engine/login/project incomplete
+  useEffect(() => {
+    if (isOnboardingDismissed()) return;
+    if (!status) return;
+    const kernelOk = Boolean(status.installed);
+    const authOk = Boolean(
+      status.authenticated || account?.authenticated || account?.email,
+    );
+    const projectOk = Boolean(project && project.trim());
+    if (!kernelOk || !authOk || !projectOk) {
+      setOnboardOpen(true);
+    } else {
+      dismissOnboarding();
+      setOnboardOpen(false);
+    }
+  }, [status, account, project]);
+
+  // Quiet app-update check on launch (installed users)
+  useEffect(() => {
+    let cancelled = false;
+    void checkAppUpdate().then((info) => {
+      if (cancelled || info.error) return;
+      if (info.updateAvailable) setAppUpdateBanner(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** Native prompt is unreliable in Tauri — always use in-app modal. */
   const askText = useCallback((req: TextPromptRequest): Promise<string | null> => {
@@ -3093,6 +3134,33 @@ function App() {
         </div>
       ) : null}
 
+      {appUpdateBanner?.updateAvailable ? (
+        <div className="banner info">
+          {t('updateBannerBody')
+            .replace('{latest}', appUpdateBanner.latestVersion)
+            .replace('{cur}', appUpdateBanner.currentVersion)}
+          <button
+            type="button"
+            className="btn btn-sm primary"
+            onClick={() => {
+              void (async () => {
+                const r = await installAppUpdate(appUpdateBanner);
+                if (r.ok) setAppUpdateBanner(null);
+              })();
+            }}
+          >
+            {t('updateBannerAction')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => setAppUpdateBanner(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+
       {/* Codex-style sidebar — fully hidden when collapsed; toggle is in app-chrome */}
       <aside className="sidebar">
         <div className="brand">
@@ -4016,6 +4084,7 @@ function App() {
                         planModeOn={chatMode === 'plan'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
+                        availableCommandNames={[]}
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
                       />
@@ -4416,6 +4485,9 @@ function App() {
                         planModeOn={(active.chatMode ?? chatMode) === 'plan'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
+                        availableCommandNames={(active.commands ?? []).map((c) =>
+                          c.name.replace(/^\//, ''),
+                        )}
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
                       />
@@ -4636,6 +4708,51 @@ function App() {
       </main>
 
       <AttachmentPreview item={previewAtt} onClose={() => setPreviewAtt(null)} />
+
+      <OnboardingModal
+        open={onboardOpen}
+        status={status}
+        account={account}
+        project={project || null}
+        onClose={() => {
+          dismissOnboarding();
+          setOnboardOpen(false);
+        }}
+        onOpenSettings={() => {
+          setKernelOpen(true);
+        }}
+        onLogin={() => {
+          void (async () => {
+            try {
+              const { startLoginFlow } = await import('./lib/account');
+              const result = await startLoginFlow();
+              if (result.account) setAccount(result.account);
+              if (result.ok) setAccountError(null);
+            } catch (e) {
+              setAccountError(e instanceof Error ? e.message : String(e));
+            }
+            refreshStatus();
+            void refreshAccount();
+          })();
+        }}
+        onPickProject={() => {
+          void (async () => {
+            try {
+              const selected = await open({
+                directory: true,
+                multiple: false,
+                title: t('onboardPickProject'),
+              });
+              if (typeof selected === 'string' && selected.trim()) {
+                setProject(selected);
+              }
+            } catch {
+              /* */
+            }
+          })();
+        }}
+        onRefresh={refreshStatus}
+      />
 
       <ReviewPanel
         open={reviewOpen}

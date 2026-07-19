@@ -19,6 +19,7 @@ type Tab = 'diff' | 'plan' | 'tools';
 /** Porcelain-ish status → short Chinese label for the file list. */
 function gitStatusLabel(st: string): string {
   const s = (st || '').trim();
+  if (s === 'WS') return t('gitStatusWorkspace');
   if (!s || s === '??') return t('gitStatusUntracked');
   if (s.includes('A') || s === 'A ') return t('gitStatusAdded');
   if (s.includes('D')) return t('gitStatusDeleted');
@@ -38,6 +39,11 @@ function humanRepoSubtitle(
   const folder = cwd.split('/').filter(Boolean).pop() || cwd;
   if (!snap) return folder;
   if (snap.ok) {
+    if (snap.isGit === false) {
+      return `${folder} · ${t('reviewWorkspace')}${
+        snap.files.length ? ` · ${snap.files.length}` : ''
+      }`;
+    }
     const branch = snap.branch || 'HEAD';
     return snap.dirty
       ? `${folder} · ${branch} · ${t('gitDirty')}`
@@ -153,7 +159,8 @@ export function ReviewPanel({
   const branchLabel = humanRepoSubtitle(loading, snap, cwd);
   const doneCount = planEntries.filter((e) => e.checked).length;
   const toolsSorted = [...tools].reverse();
-  const isGit = Boolean(snap?.ok);
+  const isGit = Boolean(snap?.ok && snap.isGit !== false);
+  const isWorkspace = Boolean(snap?.ok && snap.isGit === false);
 
   return (
     <aside className="review-panel" aria-label={t('reviewTitle')}>
@@ -216,7 +223,40 @@ export function ReviewPanel({
           ) : (
             <>
               <div className="diff-files review-files">
-                {!isGit ? (
+                {isWorkspace ? (
+                  <>
+                    <div className="review-empty" style={{ paddingBottom: 8 }}>
+                      <strong>{t('reviewNotGit')}</strong>
+                      <p className="hint" style={{ marginTop: 6 }}>
+                        {t('reviewWorkspaceHint')}
+                      </p>
+                    </div>
+                    {(snap?.files ?? []).length === 0 ? (
+                      <div className="review-empty">{t('diffClean')}</div>
+                    ) : (
+                      snap!.files.map((f) => {
+                        const { name, dir } = humanFileName(f.path);
+                        return (
+                          <button
+                            key={f.path}
+                            type="button"
+                            className={
+                              selected === f.path ? 'diff-file-btn on' : 'diff-file-btn'
+                            }
+                            onClick={() => setSelected(f.path)}
+                            title={f.path}
+                          >
+                            <span className="diff-st">{gitStatusLabel(f.status)}</span>
+                            <span className="diff-file-text">
+                              <span className="diff-file-name">{name}</span>
+                              {dir ? <span className="diff-file-dir">{dir}</span> : null}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </>
+                ) : !isGit ? (
                   <div className="review-empty">
                     <strong>{t('reviewNotGit')}</strong>
                     <p className="hint" style={{ marginTop: 8 }}>
