@@ -2383,11 +2383,13 @@ function App() {
       let cwd = cwdBase;
       let worktreePath: string | null = null;
 
-      if (modelId && modelId !== session.models?.currentModelId) {
+      let selectedModelId = session.models?.currentModelId || null;
+      if (modelId && modelId !== selectedModelId) {
         try {
           await client.setModel(sessionId, modelId);
+          selectedModelId = modelId;
         } catch {
-          /* keep default */
+          // Keep the engine-reported default; never show an unaccepted model as active.
         }
       }
 
@@ -2435,7 +2437,7 @@ function App() {
         }
       }
 
-      const mid = modelId || session.models?.currentModelId || null;
+      const mid = selectedModelId;
       // Hermes: load durable memory for first prompt injection
       let memInject = '';
       try {
@@ -2584,12 +2586,13 @@ function App() {
       const session = await client.loadSession(sessionId, cwdBase);
       rememberModels(session);
       await new Promise((r) => setTimeout(r, 400));
-      const mid = session.models?.currentModelId ?? modelId ?? null;
-      if (modelId && mid && modelId !== mid) {
+      let mid = session.models?.currentModelId ?? null;
+      if (modelId && modelId !== mid) {
         try {
           await client.setModel(session.sessionId || sessionId, modelId);
+          mid = modelId;
         } catch {
-          /* keep */
+          // Resume with the engine-reported model when the requested one is unavailable.
         }
       }
       if (chatMode === 'plan') {
@@ -2602,7 +2605,7 @@ function App() {
       patchThread(id, {
         client,
         sessionId: session.sessionId || sessionId,
-        modelId: modelId || mid,
+        modelId: mid,
         busy: false,
         title: title || sessionId.slice(0, 8),
         cwd: cwdBase,
@@ -3182,23 +3185,30 @@ function App() {
   };
 
   const changeModel = async (next: string) => {
-    setModelId(next);
-    try {
-      localStorage.setItem('gorkx.modelId', next);
-    } catch {
-      /* */
-    }
+    if (!next) return;
     // Prefer active live session; else any live thread
     const target =
       active?.client && active.sessionId
         ? active
         : threads.find((th) => th.client && th.sessionId) ?? null;
     if (!target?.client || !target.sessionId || !next) {
+      setModelId(next);
+      try {
+        localStorage.setItem('gorkx.modelId', next);
+      } catch {
+        /* */
+      }
       if (active) patchThread(active.id, { modelId: next });
       return;
     }
     try {
       await target.client.setModel(target.sessionId, next);
+      setModelId(next);
+      try {
+        localStorage.setItem('gorkx.modelId', next);
+      } catch {
+        /* */
+      }
       patchThread(target.id, { modelId: next });
       appendLine(target.id, {
         id: nid(),
