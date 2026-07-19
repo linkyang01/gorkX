@@ -232,7 +232,10 @@ export function WorktreePanel({
                         const rid = rowId(w);
                         if (!rid) return;
                         setLoading(true);
-                        void worktreeRemove([rid], grokCmd || undefined, true)
+                        // Do not silently discard a dirty worktree. The engine will
+                        // return its safety error; a future explicit force flow must
+                        // name that destructive choice in the UI.
+                        void worktreeRemove([rid], grokCmd || undefined)
                           .then((s) => {
                             setMsg(s);
                             return refresh();
@@ -240,6 +243,7 @@ export function WorktreePanel({
                           .catch((e) => setMsg(String(e)))
                           .finally(() => setLoading(false));
                       }}
+                      disabled={loading}
                     >
                       {t('worktreeRm')}
                     </button>
