@@ -27,7 +27,9 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu (imagine/goal/fork/…) | Stage or send slash; filter by session available_commands | **Half→improved** |
 | Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
-| Settings · Browser / Computer / Hooks / Git | Explicit “not available yet” | **Planned** (honest placeholder) |
+| Settings · Browser | Connect / diagnose Playwright MCP for Chrome; manage the real MCP configuration | **Real** — browser tools depend on Chrome and the kernel MCP runtime |
+| Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
+| Settings · Computer / Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
 
 ## Run
 

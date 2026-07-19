@@ -43,6 +43,12 @@ import {
   type DensityPreference,
   type ThemePreference,
 } from '../lib/appearance';
+import {
+  enablePlaywrightChromeMcp,
+  fetchExtensionsSnapshot,
+  runMcpDoctor,
+  type ExtensionsSnapshot,
+} from '../lib/extensions';
 
 const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
@@ -95,6 +101,7 @@ interface Props {
   onOpenExtensions?: () => void;
   onOpenShortcuts?: () => void;
   onOpenWorktrees?: () => void;
+  onOpenReview?: () => void;
   onRestoreArchived?: (row: ArchivedTaskRow) => void | Promise<void>;
   initialSection?: SettingsSection;
 }
@@ -136,6 +143,7 @@ export function SettingsPanel({
   onOpenExtensions,
   onOpenShortcuts,
   onOpenWorktrees,
+  onOpenReview,
   onRestoreArchived,
   initialSection,
 }: Props) {
@@ -164,6 +172,8 @@ export function SettingsPanel({
   });
   const [modelBusy, setModelBusy] = useState(false);
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
+  const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
+  const [browserBusy, setBrowserBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -175,7 +185,14 @@ export function SettingsPanel({
     void fetchAccountSummary().then(setAccount);
     void fetchMemoryStatus().then(setMemory);
     void listCustomModels().then(setModelsSnap);
+    void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
   }, [isOpen, initialSection]);
+
+  const refreshBrowser = async () => {
+    const snap = await fetchExtensionsSnapshot(project, grokCmd);
+    setBrowserSnap(snap);
+    return snap;
+  };
 
   useEffect(() => {
     if (accountProp) setAccount(accountProp);
@@ -1012,7 +1029,67 @@ export function SettingsPanel({
           {section === 'browser' ? (
             <>
               <h2>{t('settingsBrowser')}</h2>
-              <Soon text={t('settingsBrowserSoon')} />
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsBrowserHint')}
+              </p>
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">
+                      {browserSnap?.mcp.some((m) => m.name === 'playwright' && m.enabled)
+                        ? t('settingsBrowserConnected')
+                        : t('settingsBrowserNotConnected')}
+                    </div>
+                    <div className="settings-row-hint">
+                      {t('settingsBrowserConnectionHint')}
+                    </div>
+                  </div>
+                </div>
+                <div className="field-row" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={browserBusy}
+                    onClick={() => {
+                      setBrowserBusy(true);
+                      setMsg(t('settingsBrowserConnecting'));
+                      void enablePlaywrightChromeMcp(grokCmd || undefined)
+                        .then((note) => {
+                          setMsg(note);
+                          return refreshBrowser();
+                        })
+                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setBrowserBusy(false));
+                    }}
+                  >
+                    {t('settingsBrowserConnect')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={browserBusy}
+                    onClick={() => {
+                      setBrowserBusy(true);
+                      void runMcpDoctor(grokCmd || undefined)
+                        .then((note) => setMsg(note.slice(0, 2000)))
+                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setBrowserBusy(false));
+                    }}
+                  >
+                    {t('settingsBrowserDiagnose')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      onClose();
+                      onOpenExtensions?.();
+                    }}
+                  >
+                    {t('settingsBrowserManage')}
+                  </button>
+                </div>
+              </div>
             </>
           ) : null}
 
@@ -1052,7 +1129,19 @@ export function SettingsPanel({
           {section === 'git' ? (
             <>
               <h2>{t('settingsGit')}</h2>
-              <Soon text={t('settingsGitHint')} />
+              <div className="settings-card">
+                <p className="hint">{t('settingsGitRealHint')}</p>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => {
+                    onClose();
+                    onOpenReview?.();
+                  }}
+                >
+                  {t('settingsGitOpenReview')}
+                </button>
+              </div>
             </>
           ) : null}
 

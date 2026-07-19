@@ -5416,6 +5416,7 @@ function App() {
         onOpenExtensions={() => setExtOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenWorktrees={() => setWorktreePanelOpen(true)}
+        onOpenReview={() => setReviewOpen(true)}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
       />
 
