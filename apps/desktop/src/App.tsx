@@ -1949,6 +1949,14 @@ function App() {
       case 'attach-folders':
         await attachFiles({ folders: true });
         return;
+      case 'capture-screen':
+        try {
+          const path = await captureScreenRegion();
+          await addAttachmentPaths([path]);
+        } catch (e) {
+          alert(e instanceof Error ? e.message : String(e));
+        }
+        return;
       case 'pick-project':
         setPlusMenuOpen(false);
         setProjectPickerOpen(true);

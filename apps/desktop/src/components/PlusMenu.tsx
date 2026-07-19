@@ -9,6 +9,7 @@ import { t } from '../lib/i18n';
 export type PlusAction =
   | { type: 'attach-files' }
   | { type: 'attach-folders' }
+  | { type: 'capture-screen' }
   | { type: 'pick-project' }
   | { type: 'terminal' }
   | { type: 'review' }
@@ -72,6 +73,13 @@ export function PlusMenu({
       title: t('plusAttachFolder'),
       desc: t('plusAttachFolderHint'),
       action: { type: 'attach-folders' },
+    },
+    {
+      kind: 'action',
+      id: 'screen',
+      title: t('plusCaptureScreen'),
+      desc: t('plusCaptureScreenHint'),
+      action: { type: 'capture-screen' },
     },
     {
       kind: 'action',
