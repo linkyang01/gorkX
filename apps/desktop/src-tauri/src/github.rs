@@ -218,11 +218,11 @@ fn github_repo_from_remote(cwd: &str) -> Result<(String, String), String> {
     if !out.status.success() {
         return Err("This Git repository has no origin remote.".into());
     }
-    let raw = String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .trim_end_matches('/')
-        .trim_end_matches(".git")
-        .to_string();
+    parse_github_remote(&String::from_utf8_lossy(&out.stdout))
+}
+
+fn parse_github_remote(raw: &str) -> Result<(String, String), String> {
+    let raw = raw.trim().trim_end_matches('/').trim_end_matches(".git");
     let path = raw
         .strip_prefix("git@github.com:")
         .or_else(|| raw.strip_prefix("https://github.com/"))
@@ -439,4 +439,28 @@ pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<Github
     }
     comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     Ok(comments)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_github_remote;
+
+    #[test]
+    fn parses_supported_github_remote_forms() {
+        for raw in [
+            "git@github.com:owner/repo.git",
+            "https://github.com/owner/repo.git",
+            "ssh://git@github.com/owner/repo",
+        ] {
+            assert_eq!(
+                parse_github_remote(raw).unwrap(),
+                ("owner".into(), "repo".into())
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_non_github_remote() {
+        assert!(parse_github_remote("https://gitlab.com/owner/repo.git").is_err());
+    }
 }
