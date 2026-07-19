@@ -572,27 +572,33 @@ fn open_path(path: String) -> Result<String, String> {
 #[tauri::command]
 pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, String> {
     let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["mcp", "doctor"]))
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Configure the supported Playwright MCP against the user's visible Chrome.
+/// It deliberately runs through the app-owned Grok binary and GROK_HOME.
+#[tauri::command]
+pub async fn extensions_mcp_add_playwright_chrome(
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
-        let out = Command::new(&bin)
-            .args(["mcp", "doctor"])
-            .output()
-            .map_err(|e| e.to_string())?;
-        let mut s = String::from_utf8_lossy(&out.stdout).to_string();
-        let err = String::from_utf8_lossy(&out.stderr);
-        if !err.trim().is_empty() {
-            if !s.is_empty() {
-                s.push('\n');
-            }
-            s.push_str(&err);
-        }
-        if s.trim().is_empty() {
-            s = if out.status.success() {
-                "mcp doctor: ok".into()
-            } else {
-                format!("mcp doctor failed ({})", out.status)
-            };
-        }
-        Ok(s)
+        run_grok_text(
+            &bin,
+            &[
+                "mcp",
+                "add",
+                "playwright",
+                "--",
+                "npx",
+                "-y",
+                "@playwright/mcp@latest",
+                "--browser",
+                "chrome",
+            ],
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -609,8 +615,11 @@ pub async fn extensions_plugin_install(
     }
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
-        let out = Command::new(&bin)
-            .args(["plugin", "install", &src])
+        let _ = crate::paths::ensure_dirs();
+        let mut cmd = Command::new(&bin);
+        cmd.args(["plugin", "install", &src]);
+        crate::paths::apply_engine_env(&mut cmd);
+        let out = cmd
             .output()
             .map_err(|e| e.to_string())?;
         let mut s = String::from_utf8_lossy(&out.stdout).to_string();
@@ -635,8 +644,11 @@ pub async fn extensions_plugin_install(
 }
 
 fn run_grok_text(bin: &Path, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(bin)
-        .args(args)
+    let _ = crate::paths::ensure_dirs();
+    let mut cmd = Command::new(bin);
+    cmd.args(args);
+    crate::paths::apply_engine_env(&mut cmd);
+    let out = cmd
         .output()
         .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
     let mut s = String::from_utf8_lossy(&out.stdout).to_string();

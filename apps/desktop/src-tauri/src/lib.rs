@@ -106,6 +106,7 @@ pub fn run() {
             extensions::extensions_open_config,
             extensions::extensions_open_path,
             extensions::extensions_mcp_doctor,
+            extensions::extensions_mcp_add_playwright_chrome,
             extensions::extensions_plugin_install,
             extensions::extensions_plugin_set_enabled,
             extensions::extensions_plugin_uninstall,

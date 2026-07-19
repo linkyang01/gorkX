@@ -1,6 +1,5 @@
 /** Extensions hub: Skills / MCP / Plugins — backed by Grok kernel discovery. */
 import { invoke } from '@tauri-apps/api/core';
-import { shellExec } from './terminal';
 
 export interface SkillInfo {
   name: string;
@@ -102,15 +101,9 @@ export async function fetchMarketplace(grokCmd?: string): Promise<{
 
 /** Enable Playwright MCP pointed at Chrome (agent browser control). */
 export async function enablePlaywrightChromeMcp(grokCmd?: string): Promise<string> {
-  const bin = (grokCmd || 'grok').trim() || 'grok';
-  // grok mcp add <name> -- <command> ...
-  const cmd = `${JSON.stringify(bin)} mcp add playwright -- npx -y @playwright/mcp@latest --browser chrome`;
-  const r = await shellExec(cmd);
-  const out = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
-  if (r.exitCode != null && r.exitCode !== 0 && !/already|exists/i.test(out)) {
-    throw new Error(out || `exit ${r.exitCode}`);
-  }
-  return out || 'playwright MCP configured (Chrome)';
+  return invoke<string>('extensions_mcp_add_playwright_chrome', {
+    grokCmd: grokCmd || null,
+  });
 }
 
 export async function removeMcp(name: string, grokCmd?: string): Promise<string> {
