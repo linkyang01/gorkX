@@ -5447,6 +5447,8 @@ function App() {
           return path;
         }}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
+        activeClient={active?.client}
+        activeSessionId={active?.sessionId}
       />
 
       <ExtensionsPanel

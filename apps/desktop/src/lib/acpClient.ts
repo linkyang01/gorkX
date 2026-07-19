@@ -42,6 +42,24 @@ export interface KernelDoctor {
   repairHint: string;
 }
 
+export interface HookInfo {
+  name: string;
+  event: string;
+  handlerType: string;
+  matcher?: string | null;
+  command?: string | null;
+  url?: string | null;
+  timeoutMs: number;
+  sourceDir: string;
+  disabled: boolean;
+}
+
+export interface HooksSnapshot {
+  hooks: HookInfo[];
+  projectTrusted: boolean;
+  loadErrors?: string[];
+}
+
 export type SessionUpdate = {
   sessionUpdate: string;
   content?: { type?: string; text?: string } | string;
@@ -616,6 +634,24 @@ export class AcpClient {
       { sessionId, modelId },
       15_000,
     );
+  }
+
+  /** Grok Build ACP extension. Hooks are discovered and executed by the engine. */
+  async listHooks(sessionId: string): Promise<HooksSnapshot> {
+    const raw = (await this.request('x.ai/hooks/list', { sessionId }, 15_000)) as
+      | HooksSnapshot
+      | { result?: HooksSnapshot };
+    return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
+  }
+
+  async manageHooks(
+    sessionId: string,
+    action: { type: 'reload' | 'trust' | 'untrust' } | { type: 'enable' | 'disable'; hookName: string },
+  ): Promise<HooksSnapshot> {
+    const raw = (await this.request('x.ai/hooks/action', { sessionId, action }, 15_000)) as
+      | HooksSnapshot
+      | { result?: HooksSnapshot };
+    return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
   }
 
   /**

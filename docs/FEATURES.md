@@ -30,12 +30,12 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Settings · Browser | Connect / diagnose Playwright MCP for Chrome; manage the real MCP configuration | **Real** — browser tools depend on Chrome and the kernel MCP runtime |
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
 | Settings · Computer | Explicit macOS screen-region picker → local PNG attached to the composer | **Half** — capture is real; computer-use automation is not shipped |
-| Settings · Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
+| Settings · Hooks | Active-session ACP hook list; project trust / untrust; enable / disable | **Real** — execution and hook discovery remain in Grok Build; requires an active task |
 
 ## Deliberate limits still not shipped
 
 - **Computer automation:** only user-triggered local screen capture exists; no background capture or mouse/keyboard control.
-- **Hooks:** no lifecycle hook runner or editor yet.
+- **Hooks authoring:** gorkX manages hooks the engine discovers; it does not yet create or edit hook files/configuration.
 - **Provider subscriptions:** Grok login is real. OpenAI/Anthropic are API-key or compatible-gateway configurations; a ChatGPT/Claude web subscription is not treated as an API login.
 - **Background schedules:** local scheduled tasks run only while gorkX is open.
 
