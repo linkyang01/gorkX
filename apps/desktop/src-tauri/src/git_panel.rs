@@ -2,7 +2,7 @@
 //! (Grok ACP x.ai/git/* methods are not exposed on current agent stdio.)
 
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Component, Path};
 use std::process::Command;
 
 #[derive(Clone, Debug, Serialize)]
@@ -41,6 +41,27 @@ fn run_git(cwd: &Path, args: &[&str]) -> Result<String, String> {
         });
     }
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+/// Tauri commands accept a project-relative Git path only. Git itself guards
+/// pathspec handling with `--`, but rejecting absolute and parent paths here
+/// also prevents a compromised renderer from selecting files outside the
+/// project for preview, staging, or unstaging.
+fn relative_project_path(path: &str) -> Result<String, String> {
+    let raw = path.trim();
+    if raw.is_empty() {
+        return Err("empty project path".into());
+    }
+    let parsed = Path::new(raw);
+    if parsed.components().any(|part| {
+        matches!(
+            part,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
+        return Err("path must stay inside the project".into());
+    }
+    Ok(raw.to_string())
 }
 
 #[tauri::command]
@@ -225,7 +246,7 @@ fn workspace_snapshot(root: &Path) -> GitSnapshot {
 pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = Path::new(&cwd);
-        let rel = path.trim_end_matches('/').to_string();
+        let rel = relative_project_path(path.trim_end_matches('/'))?;
         let full = root.join(&rel);
 
         let is_git = run_git(root, &["rev-parse", "--is-inside-work-tree"]).is_ok();
@@ -328,7 +349,10 @@ pub async fn git_stage(cwd: String, path: Option<String>) -> Result<(), String> 
     tauri::async_runtime::spawn_blocking(move || {
         let root = Path::new(&cwd);
         match path {
-            Some(p) if !p.is_empty() => run_git(root, &["add", "--", &p]).map(|_| ()),
+            Some(p) if !p.is_empty() => {
+                let p = relative_project_path(&p)?;
+                run_git(root, &["add", "--", &p]).map(|_| ())
+            }
             _ => run_git(root, &["add", "-A"]).map(|_| ()),
         }
     })
@@ -342,6 +366,7 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
         let root = Path::new(&cwd);
         match path {
             Some(p) if !p.is_empty() => {
+                let p = relative_project_path(&p)?;
                 run_git(root, &["restore", "--staged", "--", &p]).map(|_| ())
             }
             _ => run_git(root, &["restore", "--staged", "."]).map(|_| ()),
@@ -349,4 +374,18 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::relative_project_path;
+
+    #[test]
+    fn accepts_only_relative_project_paths() {
+        assert_eq!(relative_project_path("src/main.rs").as_deref(), Ok("src/main.rs"));
+        assert_eq!(relative_project_path("./README.md").as_deref(), Ok("./README.md"));
+        assert!(relative_project_path("../secret").is_err());
+        assert!(relative_project_path("/etc/passwd").is_err());
+        assert!(relative_project_path("").is_err());
+    }
 }
