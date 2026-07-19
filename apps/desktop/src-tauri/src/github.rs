@@ -44,6 +44,18 @@ pub struct GithubCheckRun {
     pub details_url: String,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubComment {
+    pub kind: String,
+    pub author: String,
+    pub body: String,
+    pub path: Option<String>,
+    pub line: Option<i64>,
+    pub url: String,
+    pub created_at: String,
+}
+
 #[cfg(target_os = "macos")]
 fn token_read() -> Option<String> {
     let out = Command::new("security")
@@ -356,4 +368,75 @@ pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCh
                 .to_string(),
         })
         .collect())
+}
+
+#[tauri::command]
+pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<GithubComment>, String> {
+    let token = token_read()
+        .ok_or_else(|| "GitHub is not connected. Add a read-only token first.".to_string())?;
+    let (owner, repo) = github_repo_from_remote(&cwd)?;
+    let get_rows = |url: String| -> Result<Vec<serde_json::Value>, String> {
+        let response = client()?
+            .get(url)
+            .bearer_auth(&token)
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .map_err(|e| format!("GitHub network: {e}"))?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "GitHub HTTP {} while reading comments for PR #{pr_number}",
+                response.status()
+            ));
+        }
+        response.json().map_err(|e| format!("GitHub response: {e}"))
+    };
+    let mut comments = Vec::new();
+    for (kind, rows) in [
+        (
+            "discussion",
+            get_rows(format!(
+                "{API}/repos/{owner}/{repo}/issues/{pr_number}/comments?per_page=100"
+            ))?,
+        ),
+        (
+            "review",
+            get_rows(format!(
+                "{API}/repos/{owner}/{repo}/pulls/{pr_number}/comments?per_page=100"
+            ))?,
+        ),
+    ] {
+        for row in rows {
+            comments.push(GithubComment {
+                kind: kind.into(),
+                author: row
+                    .get("user")
+                    .and_then(|v| v.get("login"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
+                body: row
+                    .get("body")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                path: row.get("path").and_then(|v| v.as_str()).map(str::to_string),
+                line: row
+                    .get("line")
+                    .and_then(|v| v.as_i64())
+                    .or_else(|| row.get("original_line").and_then(|v| v.as_i64())),
+                url: row
+                    .get("html_url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                created_at: row
+                    .get("created_at")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            });
+        }
+    }
+    comments.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+    Ok(comments)
 }

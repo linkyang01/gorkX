@@ -53,10 +53,12 @@ import {
   githubConnectReadonly,
   githubDisconnect,
   githubListPrChecks,
+  githubListPrComments,
   githubListOpenPrs,
   githubStatus as fetchGithubStatus,
   githubTestConnection,
   type GithubCheckRun,
+  type GithubComment,
   type GithubPullRequest,
   type GithubStatus,
 } from '../lib/github';
@@ -200,6 +202,7 @@ export function SettingsPanel({
   const [githubToken, setGithubToken] = useState('');
   const [githubPrs, setGithubPrs] = useState<GithubPullRequest[]>([]);
   const [githubChecks, setGithubChecks] = useState<Record<number, GithubCheckRun[]>>({});
+  const [githubComments, setGithubComments] = useState<Record<number, GithubComment[]>>({});
   const [githubBusy, setGithubBusy] = useState(false);
 
   useEffect(() => {
@@ -277,6 +280,20 @@ export function SettingsPanel({
       const checks = await githubListPrChecks(project, prNumber);
       setGithubChecks((current) => ({ ...current, [prNumber]: checks }));
       setMsg(t('githubChecksLoaded').replace('{n}', String(checks.length)));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  const loadGithubComments = async (prNumber: number) => {
+    if (!project) return;
+    setGithubBusy(true);
+    try {
+      const comments = await githubListPrComments(project, prNumber);
+      setGithubComments((current) => ({ ...current, [prNumber]: comments }));
+      setMsg(t('githubCommentsLoaded').replace('{n}', String(comments.length)));
     } catch (error) {
       setMsg(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1325,6 +1342,7 @@ export function SettingsPanel({
                         <button type="button" className="link-btn" onClick={() => void openUrlSafe(pr.url)}>#{pr.number} {pr.title}</button>
                         <span className="muted"> · {pr.author}{pr.draft ? ` · ${t('githubDraft')}` : ''}</span>
                         <button type="button" className="btn btn-sm" style={{ marginLeft: 8 }} disabled={githubBusy} onClick={() => void loadGithubChecks(pr.number)}>{t('githubLoadChecks')}</button>
+                        <button type="button" className="btn btn-sm" style={{ marginLeft: 8 }} disabled={githubBusy} onClick={() => void loadGithubComments(pr.number)}>{t('githubLoadComments')}</button>
                         {githubChecks[pr.number] ? (
                           <ul className="settings-list" style={{ margin: '6px 0 0 12px' }}>
                             {githubChecks[pr.number].map((check) => (
@@ -1334,6 +1352,17 @@ export function SettingsPanel({
                               </li>
                             ))}
                             {!githubChecks[pr.number].length ? <li className="muted">{t('githubChecksEmpty')}</li> : null}
+                          </ul>
+                        ) : null}
+                        {githubComments[pr.number] ? (
+                          <ul className="settings-list" style={{ margin: '6px 0 0 12px' }}>
+                            {githubComments[pr.number].map((comment, index) => (
+                              <li key={`${comment.url}-${index}`}>
+                                {comment.url ? <button type="button" className="link-btn" onClick={() => void openUrlSafe(comment.url)}>{comment.author}</button> : comment.author}
+                                <span className="muted"> · {comment.kind}{comment.path ? ` · ${comment.path}${comment.line ? `:${comment.line}` : ''}` : ''} · {comment.body.slice(0, 240)}</span>
+                              </li>
+                            ))}
+                            {!githubComments[pr.number].length ? <li className="muted">{t('githubCommentsEmpty')}</li> : null}
                           </ul>
                         ) : null}
                       </li>

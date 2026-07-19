@@ -108,6 +108,7 @@ pub fn run() {
             github::github_disconnect,
             github::github_list_open_prs,
             github::github_list_pr_checks,
+            github::github_list_pr_comments,
             grok_admin::grok_admin_exec,
             workspace::workspace_list_files,
             workspace::read_workspace_file_preview,

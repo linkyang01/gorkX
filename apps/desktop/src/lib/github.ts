@@ -27,6 +27,16 @@ export interface GithubCheckRun {
   detailsUrl: string;
 }
 
+export interface GithubComment {
+  kind: string;
+  author: string;
+  body: string;
+  path: string | null;
+  line: number | null;
+  url: string;
+  createdAt: string;
+}
+
 export const githubStatus = () => invoke<GithubStatus>('github_status');
 export const githubConnectReadonly = (token: string) =>
   invoke<GithubStatus>('github_connect_readonly', { token });
@@ -36,3 +46,5 @@ export const githubListOpenPrs = (cwd: string) =>
   invoke<GithubPullRequest[]>('github_list_open_prs', { cwd });
 export const githubListPrChecks = (cwd: string, prNumber: number) =>
   invoke<GithubCheckRun[]>('github_list_pr_checks', { cwd, prNumber });
+export const githubListPrComments = (cwd: string, prNumber: number) =>
+  invoke<GithubComment[]>('github_list_pr_comments', { cwd, prNumber });
