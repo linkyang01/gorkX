@@ -11,13 +11,10 @@ package="$(sed -n 's/^package = "\([^"]*\)"/\1/p' "$lock")"
 binary="$(sed -n 's/^binary = "\([^"]*\)"/\1/p' "$lock")"
 
 [[ -n "$expected" && -n "$package" && -n "$binary" ]] || { echo "Invalid kernel lock: $lock" >&2; exit 2; }
-[[ -d "$source_dir/.git" ]] || { echo "Missing Grok Build checkout: $source_dir" >&2; exit 2; }
 command -v cargo >/dev/null || { echo "Rust cargo is required to build Grok Build." >&2; exit 2; }
 command -v dotslash >/dev/null || { echo "Grok Build requires dotslash for its pinned protoc; run: cargo install dotslash" >&2; exit 2; }
-actual="$(git -C "$source_dir" rev-parse HEAD)"
-[[ "$actual" == "$expected" ]] || { echo "Kernel checkout is $actual; lock requires $expected" >&2; exit 3; }
-
-git -C "$source_dir" diff --exit-code -- . ':(exclude)target' >/dev/null || { echo "Kernel checkout has uncommitted changes; record them as patches first." >&2; exit 4; }
+"$root/scripts/verify-grok-kernel-source.sh" "$source_dir"
+actual="$expected"
 cargo build --quiet --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
 artifact="$source_dir/target/release/$binary"
 [[ -x "$artifact" ]] || { echo "Expected built binary missing: $artifact" >&2; exit 5; }

@@ -7,3 +7,4 @@ apps/desktop/src-tauri/target/
 apps/desktop/dist/
 .env
 apps/desktop/src-tauri/resources/grok
+vendor/grok-build/

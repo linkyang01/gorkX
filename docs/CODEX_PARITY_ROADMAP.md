@@ -23,7 +23,7 @@
 
 | 域 | 当前 | 到 Codex 工作流的缺口 |
 |---|---|---|
-| 独立内核 | 包内引擎、App `GROK_HOME`、Doctor、包验收已具备 | 缺 fork 固定、补丁队列和上游升级回归 |
+| 独立内核 | 包内引擎、App `GROK_HOME`、Doctor、包验收；上游 commit 锁定、来源校验与源码 ACP 初始化已具备 | 缺受控 fork/mirror、补丁应用流程与完整业务 ACP 回归 |
 | 日常编码 | 任务、流式 ACP、权限、终端、Review、工作树、记忆可用 | Plan/Review 的成熟度仍受内核质量影响 |
 | 多模型 | API/兼容网关、Keychain、分组、连接测试可用 | 缺订阅 OAuth、账号用量与可靠会话中切换验证 |
 | Hooks/MCP | 真实列表、信任与启停；MCP/插件入口可用 | 缺 Hook 创作体验和连接器产品化 |
@@ -52,11 +52,11 @@ Local worker or hosted worker
 
 ### P0 — 内核治理与能力基线（2 周）
 
-**工作**：建立 `grok-build` fork/mirror、锁定 commit、补丁目录、LICENSE/NOTICE、上游同步脚本；为 ACP 初始化、会话、模型、Plan、Hooks、worktree、资源附件建立可重复 smoke suite。
+**工作**：建立受控的 `grok-build` fork/mirror（在其建立前明确使用 xAI 上游）、锁定 commit、补丁目录、LICENSE/NOTICE、上游同步脚本；为 ACP 初始化、会话、模型、Plan、Hooks、worktree、资源附件建立可重复 smoke suite。
 
 **出口**：每个 gorkX 版本都可回答“内核来自哪个 commit、有哪些补丁、升级是否通过回归”；包内二进制在隔离 `GROK_HOME` 通过 ACP 对话测试。
 
-**当前门禁命令**：`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。登录、会话、模型、Plan、Hooks、worktree 与资源附件 smoke 在 P0.2 继续补齐。
+**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建和隔离 ACP `initialize` 握手；它尚未替换当前包内 `0.2.103` 引擎。登录、会话、模型、Plan、Hooks、worktree 与资源附件 smoke 在 P0.2 继续补齐。
 
 ### P1 — 多 Agent 与任务编排（3–4 周）
 
