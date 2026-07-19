@@ -3819,6 +3819,27 @@ button.pill:hover {
   flex-shrink: 0;
 }
 
+.review-file-filter {
+  display: block;
+  padding: 6px 6px 2px;
+}
+
+.review-file-filter input {
+  width: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: var(--type-sm);
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+
+.review-file-filter input:focus {
+  outline: none;
+  border-color: var(--hairline-strong);
+}
+
 .review-diff-actions {
   display: flex;
   gap: 6px;

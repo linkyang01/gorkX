@@ -439,6 +439,8 @@ const dict = {
     reviewNotGitHint:
       'This folder is not a Git repo, so file diffs are unavailable. Tool activity and plans still appear in the other tabs.',
     reviewDiffFile: 'File',
+    reviewFilterFiles: 'Filter files…',
+    reviewCopyPreview: 'Copy preview',
     reviewDiffHunk: 'Changed lines',
     reviewDiffEmpty: 'No text diff for the selected path',
     reviewDiffEmptyHint:
@@ -1174,6 +1176,8 @@ const dict = {
     reviewNotGitHint:
       '当前目录还不是 Git 仓库，无法显示文件差异。代理的工具记录与计划请看另外两个页签。',
     reviewDiffFile: '文件',
+    reviewFilterFiles: '筛选文件…',
+    reviewCopyPreview: '复制预览',
     reviewDiffHunk: '变更位置',
     reviewDiffEmpty: '所选路径暂无文本差异',
     reviewDiffEmptyHint:

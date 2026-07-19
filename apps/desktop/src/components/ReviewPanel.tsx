@@ -84,6 +84,7 @@ export function ReviewPanel({
   const [selected, setSelected] = useState<string | null>(null);
   const [fileDiff, setFileDiff] = useState<string>('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [fileQuery, setFileQuery] = useState('');
 
   const refresh = () => {
     if (!cwd) {
@@ -94,7 +95,9 @@ export function ReviewPanel({
     void fetchGitSnapshot(cwd)
       .then((s) => {
         setSnap(s);
-        if (s.files.length && !selected) setSelected(s.files[0].path);
+        setSelected((current) =>
+          s.files.some((f) => f.path === current) ? current : s.files[0]?.path || null,
+        );
       })
       .finally(() => setLoading(false));
   };
@@ -174,6 +177,9 @@ export function ReviewPanel({
   const toolsSorted = [...tools].reverse();
   const isGit = Boolean(snap?.ok && snap.isGit !== false);
   const isWorkspace = Boolean(snap?.ok && snap.isGit === false);
+  const visibleFiles = (snap?.files ?? []).filter((f) =>
+    f.path.toLocaleLowerCase().includes(fileQuery.trim().toLocaleLowerCase()),
+  );
 
   return (
     <aside className="review-panel" aria-label={t('reviewTitle')}>
@@ -236,6 +242,17 @@ export function ReviewPanel({
           ) : (
             <>
               <div className="diff-files review-files">
+                {snap?.files.length ? (
+                  <label className="review-file-filter">
+                    <span className="sr-only">{t('reviewFilterFiles')}</span>
+                    <input
+                      value={fileQuery}
+                      onChange={(e) => setFileQuery(e.target.value)}
+                      placeholder={t('reviewFilterFiles')}
+                      spellCheck={false}
+                    />
+                  </label>
+                ) : null}
                 {isWorkspace ? (
                   <>
                     <div className="review-empty" style={{ paddingBottom: 8 }}>
@@ -244,10 +261,10 @@ export function ReviewPanel({
                         {t('reviewWorkspaceHint')}
                       </p>
                     </div>
-                    {(snap?.files ?? []).length === 0 ? (
+                    {visibleFiles.length === 0 ? (
                       <div className="review-empty">{t('diffClean')}</div>
                     ) : (
-                      snap!.files.map((f) => {
+                      visibleFiles.map((f) => {
                         const { name, dir } = humanFileName(f.path);
                         return (
                           <button
@@ -276,7 +293,7 @@ export function ReviewPanel({
                       {t('reviewNotGitHint')}
                     </p>
                   </div>
-                ) : (snap?.files ?? []).length === 0 ? (
+                ) : visibleFiles.length === 0 ? (
                   <div className="review-empty">
                     {t('diffClean')}
                     <div className="hint" style={{ marginTop: 8 }}>
@@ -284,7 +301,7 @@ export function ReviewPanel({
                     </div>
                   </div>
                 ) : (
-                  snap!.files.map((f) => {
+                  visibleFiles.map((f) => {
                     const { name, dir } = humanFileName(f.path);
                     return (
                       <button
@@ -353,7 +370,7 @@ export function ReviewPanel({
                 <button
                   type="button"
                   className="btn btn-sm"
-                  title={t('reviewCopyDiff')}
+                  title={isWorkspace ? t('reviewCopyPreview') : t('reviewCopyDiff')}
                   disabled={!diffSrc.trim()}
                   onClick={() => {
                     void navigator.clipboard
@@ -362,7 +379,7 @@ export function ReviewPanel({
                       .catch((e) => setMsg(String(e)));
                   }}
                 >
-                  {t('reviewCopyDiff')}
+                  {isWorkspace ? t('reviewCopyPreview') : t('reviewCopyDiff')}
                 </button>
                 <button
                   type="button"
