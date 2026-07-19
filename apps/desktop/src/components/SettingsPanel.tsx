@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { runKernelDoctor, type AcpClient, type GrokStatus, type HookInfo, type HooksSnapshot, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
+import { runKernelDoctor, type GrokStatus, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
 import type { AccountSummary } from '../lib/account';
 import { fetchAccountSummary, fetchSubscriptionModels, logoutAccount, startLoginFlow } from '../lib/account';
 import {
@@ -117,8 +117,6 @@ interface Props {
   onOpenReview?: () => void;
   onCaptureDesktop?: () => Promise<string>;
   onRestoreArchived?: (row: ArchivedTaskRow) => void | Promise<void>;
-  activeClient?: AcpClient | null;
-  activeSessionId?: string | null;
   initialSection?: SettingsSection;
 }
 
@@ -162,8 +160,6 @@ export function SettingsPanel({
   onOpenReview,
   onCaptureDesktop,
   onRestoreArchived,
-  activeClient,
-  activeSessionId,
   initialSection,
 }: Props) {
   const [section, setSection] = useState<SettingsSection>(initialSection || 'general');
@@ -196,8 +192,6 @@ export function SettingsPanel({
   const [browserBusy, setBrowserBusy] = useState(false);
   const [kernelDoctor, setKernelDoctor] = useState<KernelDoctor | null>(null);
   const [doctorBusy, setDoctorBusy] = useState(false);
-  const [hooks, setHooks] = useState<HooksSnapshot | null>(null);
-  const [hooksBusy, setHooksBusy] = useState(false);
   const [github, setGithub] = useState<GithubStatus | null>(null);
   const [githubToken, setGithubToken] = useState('');
   const [githubPrs, setGithubPrs] = useState<GithubPullRequest[]>([]);
@@ -299,21 +293,6 @@ export function SettingsPanel({
     } finally {
       setGithubBusy(false);
     }
-  };
-
-  const loadHooks = async () => {
-    if (!activeClient || !activeSessionId) return;
-    setHooksBusy(true);
-    try { setHooks(await activeClient.listHooks(activeSessionId)); }
-    catch (error) { setMsg(error instanceof Error ? error.message : String(error)); }
-    finally { setHooksBusy(false); }
-  };
-  const manageHook = async (action: Parameters<AcpClient['manageHooks']>[1]) => {
-    if (!activeClient || !activeSessionId) return;
-    setHooksBusy(true);
-    try { setHooks(await activeClient.manageHooks(activeSessionId, action)); }
-    catch (error) { setMsg(error instanceof Error ? error.message : String(error)); }
-    finally { setHooksBusy(false); }
   };
 
   useEffect(() => {
@@ -1258,18 +1237,7 @@ export function SettingsPanel({
           {section === 'hooks' ? (
             <>
               <h2>{t('settingsHooks')}</h2>
-              {!activeClient || !activeSessionId ? <Soon text={t('settingsHooksNeedTask')} /> : <>
-                <p className="hint">{t('settingsHooksRealHint')}</p>
-                <div className="field-row"><button type="button" className="btn primary" disabled={hooksBusy} onClick={() => void loadHooks()}>{hooksBusy ? t('settingsHooksLoading') : t('settingsHooksLoad')}</button>
-                  {hooks ? <button type="button" className="btn" disabled={hooksBusy} onClick={() => void manageHook({ type: hooks.projectTrusted ? 'untrust' : 'trust' })}>{hooks.projectTrusted ? t('settingsHooksUntrust') : t('settingsHooksTrust')}</button> : null}
-                </div>
-                {hooks ? <div className="settings-card" style={{ marginTop: 12 }}>
-                  <div className="settings-row-hint">{hooks.projectTrusted ? t('settingsHooksTrusted') : t('settingsHooksUntrusted')}</div>
-                  {hooks.loadErrors?.map((e) => <div key={e} className="settings-row-hint">{e}</div>)}
-                  {hooks.hooks.map((hook: HookInfo) => <div key={hook.name} className="settings-row"><div><div className="settings-row-title">{hook.name}</div><div className="settings-row-hint">{hook.event} · {hook.handlerType} · {hook.sourceDir}</div></div><button type="button" className="btn btn-sm" disabled={hooksBusy} onClick={() => void manageHook({ type: hook.disabled ? 'enable' : 'disable', hookName: hook.name })}>{hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}</button></div>)}
-                  {!hooks.hooks.length ? <div className="settings-row-hint">{t('settingsHooksEmpty')}</div> : null}
-                </div> : null}
-              </>}
+              <Soon text={t('settingsHooksUnavailable')} />
             </>
           ) : null}
 

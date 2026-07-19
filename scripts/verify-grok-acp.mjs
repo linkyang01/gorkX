@@ -118,15 +118,27 @@ try {
     await request('session/set_mode', { sessionId, modeId: 'plan' });
     console.log('PASS: ACP session/set_mode(plan)');
 
-    const hooks = await request('x.ai/hooks/list', { sessionId });
-    if (!hooks || !Array.isArray(hooks.hooks)) {
-      throw new Error(`x.ai/hooks/list returned invalid payload: ${JSON.stringify(hooks)}`);
+    try {
+      const hooks = await request('x.ai/hooks/list', { sessionId });
+      if (!hooks || !Array.isArray(hooks.hooks)) {
+        throw new Error(`x.ai/hooks/list returned invalid payload: ${JSON.stringify(hooks)}`);
+      }
+      console.log('PASS: ACP x.ai/hooks/list');
+    } catch (error) {
+      // Hooks are an optional Grok Build extension. A missing method is a
+      // capability gap to report, not evidence that session/Plan regression
+      // failed; other advertised ACP extensions still need their own gate.
+      if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
+        console.log('SKIP: ACP x.ai/hooks/list (kernel does not expose Hooks API)');
+      } else {
+        throw error;
+      }
     }
-    console.log('PASS: ACP x.ai/hooks/list');
 
-    const worktrees = await request('_x.ai/git/worktree/list', {});
+    const worktreeRaw = await request('_x.ai/git/worktree/list', {});
+    const worktrees = Array.isArray(worktreeRaw?.result) ? worktreeRaw.result : worktreeRaw;
     if (!Array.isArray(worktrees)) {
-      throw new Error(`_x.ai/git/worktree/list returned invalid payload: ${JSON.stringify(worktrees)}`);
+      throw new Error(`_x.ai/git/worktree/list returned invalid payload: ${JSON.stringify(worktreeRaw)}`);
     }
     console.log('PASS: ACP _x.ai/git/worktree/list');
   }

@@ -603,6 +603,8 @@ const dict = {
     settingsComputerCapturing: 'Waiting for a screen area…',
     settingsComputerCaptured: 'Added to the composer: {path}',
     settingsHooks: 'Hooks',
+    settingsHooksUnavailable:
+      'The currently verified Grok Build kernel does not expose an ACP Hooks API. Manage project instructions in AGENTS.md; this panel will return only when the kernel supports a real hook lifecycle.',
     settingsHooksHint:
       'Project rules and hooks will be manageable here. For now, edit AGENTS.md in your project.',
     settingsHooksNeedTask: 'Open a live task first. Hooks belong to its engine session and project.',
@@ -1386,6 +1388,8 @@ const dict = {
     settingsComputerCapturing: '等待选择屏幕区域…',
     settingsComputerCaptured: '已加入输入框：{path}',
     settingsHooks: '钩子',
+    settingsHooksUnavailable:
+      '当前已验证的 Grok Build 内核没有提供 ACP Hooks API。请在项目的 AGENTS.md 管理项目指令；只有内核提供真实钩子生命周期后，本页才会恢复可操作入口。',
     settingsHooksHint: '项目规则与钩子将在此管理。目前可编辑项目中的 AGENTS.md。',
     settingsHooksNeedTask: '请先打开一个正在运行的任务。钩子属于其引擎会话和项目。',
     settingsHooksRealHint: '这些钩子由 Grok Build 为当前项目加载和执行。',
