@@ -27,6 +27,10 @@ export interface ThreadMeta {
   /** optional project path when loaded from sqlite */
   project?: string;
   archived?: boolean;
+  /** Persisted /goal text */
+  sessionGoalText?: string | null;
+  sessionGoalStatus?: string | null;
+  sessionGoalMessage?: string | null;
 }
 
 export interface ChatLineSnap {
@@ -101,6 +105,9 @@ function rowToMeta(r: {
   chatMode: string;
   updatedAt: number;
   archived?: boolean;
+  sessionGoalText?: string | null;
+  sessionGoalStatus?: string | null;
+  sessionGoalMessage?: string | null;
 }): ThreadMeta {
   return {
     id: r.id,
@@ -114,6 +121,9 @@ function rowToMeta(r: {
     chatMode: r.chatMode === 'plan' ? 'plan' : 'agent',
     updatedAt: r.updatedAt,
     archived: Boolean(r.archived),
+    sessionGoalText: r.sessionGoalText ?? null,
+    sessionGoalStatus: r.sessionGoalStatus ?? null,
+    sessionGoalMessage: r.sessionGoalMessage ?? null,
   };
 }
 
@@ -135,6 +145,9 @@ export async function loadThreadMetas(project: string): Promise<ThreadMeta[]> {
           chatMode: string;
           updatedAt: number;
           archived?: boolean;
+          sessionGoalText?: string | null;
+          sessionGoalStatus?: string | null;
+          sessionGoalMessage?: string | null;
         }>
       >('store_list_threads', { project: scope });
       return rows.map(rowToMeta);
@@ -160,6 +173,9 @@ export async function upsertThreadMeta(project: string, meta: ThreadMeta): Promi
     chatMode: meta.chatMode,
     updatedAt: Date.now(),
     archived: Boolean(meta.archived),
+    sessionGoalText: meta.sessionGoalText ?? null,
+    sessionGoalStatus: meta.sessionGoalStatus ?? null,
+    sessionGoalMessage: meta.sessionGoalMessage ?? null,
   };
   if (isTauri()) {
     try {

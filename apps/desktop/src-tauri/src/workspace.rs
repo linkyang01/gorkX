@@ -104,3 +104,55 @@ pub async fn workspace_list_files(cwd: String, query: Option<String>, limit: Opt
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// Read-only preview of a workspace file (first N lines) for non-git review.
+#[tauri::command]
+pub fn read_workspace_file_preview(
+    cwd: String,
+    path: String,
+    max_lines: Option<u32>,
+) -> Result<String, String> {
+    let root = PathBuf::from(cwd.trim());
+    if !root.is_dir() {
+        return Err("not a directory".into());
+    }
+    let rel = path.trim().trim_start_matches("./");
+    let full = if Path::new(rel).is_absolute() {
+        PathBuf::from(rel)
+    } else {
+        root.join(rel)
+    };
+    let full = full
+        .canonicalize()
+        .map_err(|e| format!("resolve path: {e}"))?;
+    let root_c = root
+        .canonicalize()
+        .map_err(|e| format!("resolve cwd: {e}"))?;
+    if !full.starts_with(&root_c) {
+        return Err("path outside workspace".into());
+    }
+    if !full.is_file() {
+        return Err("not a file".into());
+    }
+    // Skip huge / binary files
+    let meta = fs::metadata(&full).map_err(|e| e.to_string())?;
+    if meta.len() > 1_500_000 {
+        return Ok(format!("(file too large to preview: {} bytes)", meta.len()));
+    }
+    let raw = fs::read(&full).map_err(|e| e.to_string())?;
+    if raw.iter().take(800).any(|&b| b == 0) {
+        return Ok("(binary file — no text preview)".into());
+    }
+    let text = String::from_utf8_lossy(&raw);
+    let lim = max_lines.unwrap_or(120).min(400) as usize;
+    let mut out = String::new();
+    for (i, line) in text.lines().enumerate() {
+        if i >= lim {
+            out.push_str(&format!("\n… ({} more lines truncated)", text.lines().count().saturating_sub(lim)));
+            break;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    Ok(out)
+}

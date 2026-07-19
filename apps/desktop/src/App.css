@@ -1125,10 +1125,80 @@ button.pill:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.goal-banner-status {
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.goal-banner-msg {
+  font-size: 11.5px;
+  max-width: 28%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-banner-progress {
+  font-size: 11.5px;
+  flex-shrink: 0;
+}
+
+.goal-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.goal-status-paused {
+  background: rgba(120, 120, 128, 0.1);
+  border-bottom-color: rgba(120, 120, 128, 0.2);
+}
+
+.goal-status-complete {
+  background: rgba(52, 199, 89, 0.1);
+  border-bottom-color: rgba(52, 199, 89, 0.22);
+}
+
+.goal-status-blocked {
+  background: rgba(255, 149, 0, 0.12);
+  border-bottom-color: rgba(255, 149, 0, 0.25);
 }
 
 .plan-banner {
   background: rgba(175, 82, 222, 0.1);
+}
+
+.wt-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 4px;
+  margin-right: 4px;
+  border-radius: 4px;
+  background: rgba(50, 120, 255, 0.12);
+  color: var(--accent, #2f6fed);
+  vertical-align: middle;
+}
+
+.review-file-preview {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 100%;
+  overflow: auto;
 }
 
 /* Empty / welcome — Codex-like: center content, composer dock below */

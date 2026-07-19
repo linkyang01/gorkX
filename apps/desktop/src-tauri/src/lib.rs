@@ -98,6 +98,7 @@ pub fn run() {
             git_panel::git_stage,
             git_panel::git_unstage,
             workspace::workspace_list_files,
+            workspace::read_workspace_file_preview,
             extensions::extensions_snapshot,
             extensions::extensions_open_skills_dir,
             extensions::extensions_open_config,

@@ -109,10 +109,23 @@ export function ReviewPanel({
       setFileDiff('');
       return;
     }
+    const isWs = Boolean(snap?.ok && snap.isGit === false);
+    if (isWs) {
+      // Non-git: read-only file preview (first lines), not a fake diff
+      void invoke<string>('read_workspace_file_preview', { cwd, path: selected, maxLines: 120 })
+        .then((text) => setFileDiff(text || ''))
+        .catch(() => {
+          // Fallback: try absolute path join via git_file_diff errors as plain text
+          void invoke<string>('git_file_diff', { cwd, path: selected })
+            .then(setFileDiff)
+            .catch((e) => setFileDiff(String(e)));
+        });
+      return;
+    }
     void invoke<string>('git_file_diff', { cwd, path: selected })
       .then(setFileDiff)
       .catch((e) => setFileDiff(String(e)));
-  }, [open, cwd, selected, snap?.diff]);
+  }, [open, cwd, selected, snap?.diff, snap?.ok, snap?.isGit]);
 
   const diffSrc = selected ? fileDiff : snap?.diff || '';
   const colored = useMemo(() => {
@@ -291,66 +304,108 @@ export function ReviewPanel({
                   })
                 )}
               </div>
-              {isGit ? (
-                <div className="review-diff-actions">
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    title={t('gitStage')}
-                    disabled={!selected || !cwd}
-                    onClick={() =>
-                      void invoke('git_stage', { cwd, path: selected })
-                        .then(() => {
-                          const { name } = humanFileName(selected || '');
-                          setMsg(t('reviewStagedHint').replace('{path}', name || selected || ''));
-                          refresh();
-                        })
-                        .catch((e) => setMsg(String(e)))
-                    }
-                  >
-                    {t('gitStage')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    title={t('gitUnstage')}
-                    disabled={!selected || !cwd}
-                    onClick={() =>
-                      void invoke('git_unstage', { cwd, path: selected })
-                        .then(() => {
-                          const { name } = humanFileName(selected || '');
-                          setMsg(
-                            t('reviewUnstagedHint').replace('{path}', name || selected || ''),
-                          );
-                          refresh();
-                        })
-                        .catch((e) => setMsg(String(e)))
-                    }
-                  >
-                    {t('gitUnstage')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    title={t('openFolder')}
-                    disabled={!cwd}
-                    onClick={() => void revealInFinder(cwd).catch(() => {})}
-                  >
-                    {t('openFolder')}
-                  </button>
-                </div>
-              ) : cwd ? (
-                <div className="review-diff-actions">
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    title={t('openFolder')}
-                    onClick={() => void revealInFinder(cwd).catch(() => {})}
-                  >
-                    {t('openFolder')}
-                  </button>
-                </div>
-              ) : null}
+              <div className="review-diff-actions">
+                {isGit ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t('gitStage')}
+                      disabled={!selected || !cwd}
+                      onClick={() =>
+                        void invoke('git_stage', { cwd, path: selected })
+                          .then(() => {
+                            const { name } = humanFileName(selected || '');
+                            setMsg(
+                              t('reviewStagedHint').replace('{path}', name || selected || ''),
+                            );
+                            refresh();
+                          })
+                          .catch((e) => setMsg(String(e)))
+                      }
+                    >
+                      {t('gitStage')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t('gitUnstage')}
+                      disabled={!selected || !cwd}
+                      onClick={() =>
+                        void invoke('git_unstage', { cwd, path: selected })
+                          .then(() => {
+                            const { name } = humanFileName(selected || '');
+                            setMsg(
+                              t('reviewUnstagedHint').replace(
+                                '{path}',
+                                name || selected || '',
+                              ),
+                            );
+                            refresh();
+                          })
+                          .catch((e) => setMsg(String(e)))
+                      }
+                    >
+                      {t('gitUnstage')}
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('reviewCopyDiff')}
+                  disabled={!diffSrc.trim()}
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(diffSrc)
+                      .then(() => setMsg(t('copied')))
+                      .catch((e) => setMsg(String(e)));
+                  }}
+                >
+                  {t('reviewCopyDiff')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('reviewCopyPath')}
+                  disabled={!selected}
+                  onClick={() => {
+                    if (!selected) return;
+                    void navigator.clipboard
+                      .writeText(selected)
+                      .then(() => setMsg(t('copied')))
+                      .catch((e) => setMsg(String(e)));
+                  }}
+                >
+                  {t('reviewCopyPath')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('reviewRevealFile')}
+                  disabled={!cwd || !selected}
+                  onClick={() => {
+                    if (!selected || !cwd) return;
+                    const abs = selected.startsWith('/')
+                      ? selected
+                      : `${cwd.replace(/\/+$/, '')}/${selected.replace(/^\.\//, '')}`;
+                    void revealInFinder(abs).catch(() =>
+                      void revealInFinder(cwd).catch(() => {}),
+                    );
+                  }}
+                >
+                  {t('reviewRevealFile')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('openFolder')}
+                  disabled={!cwd}
+                  onClick={() => void revealInFinder(cwd).catch(() => {})}
+                >
+                  {t('openFolder')}
+                </button>
+              </div>
               <div
                 className={`diff-body colored-diff${
                   !loading && diffSrc.trim() ? ' has-diff' : ' is-empty'
@@ -358,7 +413,16 @@ export function ReviewPanel({
               >
                 {loading ? (
                   <div className="diff-empty-hint">{t('reviewLoading')}</div>
-                ) : !isGit ? (
+                ) : isWorkspace && selected ? (
+                  diffSrc.trim() ? (
+                    <pre className="review-file-preview">{diffSrc}</pre>
+                  ) : (
+                    <div className="diff-empty-hint">
+                      <strong>{t('reviewFilePreview')}</strong>
+                      <p>{t('reviewFilePreviewEmpty')}</p>
+                    </div>
+                  )
+                ) : !isGit && !isWorkspace ? (
                   <div className="diff-empty-hint">
                     <strong>{t('reviewDiffTitle')}</strong>
                     <p>{t('reviewNotGitHint')}</p>

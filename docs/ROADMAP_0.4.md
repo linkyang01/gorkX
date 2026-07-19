@@ -14,12 +14,13 @@
 
 | 项 | 后续 |
 |----|------|
-| Plan mode | 执行/重试与状态清理已加；引擎 plan 质量仍依赖内核 |
-| Worktree | 用作项目 / 新任务 / Finder / 返回主仓已加 |
+| Plan mode | 执行/重试/空计划提示已加；引擎 plan 质量仍依赖内核 |
+| Worktree | 用作项目 / 新任务 / Finder / 返回主仓 / 侧栏 WT 标记 |
 | Voice | 原生 STT 或 Whisper 后备 |
-| Review 非 Git | 工作区文件变更摘要 |
-| + 菜单 slash | 与引擎 available_commands 对齐，隐藏无效项 |
-| 多模型 | 连接测试 + 设默认 + 选择器合并自定义；引擎路由仍依赖 config |
+| Review | 复制 diff/路径、显示文件、非 git 预览 |
+| Goal | 壳侧完整：持久化 + 控制台 + plan/工具进度 |
+| + 菜单 slash | 首页过滤用 builtins 缓存；会话内对齐 available_commands |
+| 多模型 | 连接测试 + 默认 + 选择器 + setModel 粘性；路由仍依赖 config |
 | 侧栏任务筛选 | 已加标题过滤 |
 
 ## 规划（设置 Soon，不假装可用）

@@ -62,6 +62,8 @@ export function humanToolTitle(raw: string, kind?: string): string {
   if (/mcp/i.test(s)) return firstLine(s, 'MCP 调用');
   if (/image|screenshot|imagine|video/i.test(s)) return firstLine(s, '媒体处理');
   if (/memory|remember|flush|dream/i.test(s)) return firstLine(s, '记忆操作');
+  if (/update_goal|goal_update/i.test(s) || lower.includes('update_goal'))
+    return firstLine(s, '更新目标');
 
   if (noise) {
     if (k && KIND_ACTION[k]) return KIND_ACTION[k];

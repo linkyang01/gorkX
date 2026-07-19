@@ -58,6 +58,18 @@ import {
 import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
 import { listCustomModels } from './lib/modelsConfig';
 import {
+  applyGoalPatch,
+  goalFromMetaFields,
+  goalStatusLabel,
+  goalToMetaFields,
+  isGoalToolName,
+  makeGoal,
+  parseGoalCommand,
+  parseUpdateGoalPayload,
+  recoverGoalFromLines,
+  type SessionGoal,
+} from './lib/sessionGoal';
+import {
   IconExport,
   IconFork,
   IconForward,
@@ -193,8 +205,8 @@ interface Thread {
   memoryInjected?: boolean;
   /** user turns completed — for auto-learn */
   userTurnCount?: number;
-  /** Active /goal text for this task (UI banner; agent still owns execution) */
-  sessionGoal?: string | null;
+  /** Active /goal for this task (banner + persist; agent owns execution) */
+  sessionGoal?: SessionGoal | null;
 }
 
 interface RecentSession {
@@ -419,22 +431,29 @@ function threadListLabel(th: Thread, siblings: Thread[]): string {
 }
 
 function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
+  const chatLines =
+    lines && lines.length > 0
+      ? lines
+      : [
+          {
+            id: nid(),
+            role: 'system' as const,
+            text: t('restoredHint'),
+          },
+        ];
+  const fromMeta = goalFromMetaFields(
+    m.sessionGoalText,
+    m.sessionGoalStatus,
+    m.sessionGoalMessage,
+  );
+  const fromLines = !fromMeta ? recoverGoalFromLines(chatLines) : null;
   return {
     id: m.id,
     title: cleanStoredTitle(m.title || '', m.sessionId?.slice(0, 8) || 'session'),
     sessionId: m.sessionId,
     modelId: m.modelId,
     client: null,
-    lines:
-      lines && lines.length > 0
-        ? lines
-        : [
-            {
-              id: nid(),
-              role: 'system',
-              text: t('restoredHint'),
-            },
-          ],
+    lines: chatLines,
     busy: false,
     error: null,
     chatMode: m.chatMode === 'plan' ? 'plan' : 'agent',
@@ -444,6 +463,7 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     archived: Boolean(m.archived),
     effort: m.effort || 'high',
     updatedAt: m.updatedAt || Date.now(),
+    sessionGoal: fromMeta || fromLines,
   };
 }
 
@@ -1310,6 +1330,7 @@ function App() {
 
   const persistThread = useCallback((th: Thread) => {
     if (!th.sessionId) return;
+    const g = goalToMetaFields(th.sessionGoal);
     const meta: ThreadMeta = {
       id: th.id,
       title: th.title,
@@ -1322,6 +1343,9 @@ function App() {
       updatedAt: Date.now(),
       archived: Boolean(th.archived),
       project: th.projectKey,
+      sessionGoalText: g.sessionGoalText,
+      sessionGoalStatus: g.sessionGoalStatus,
+      sessionGoalMessage: g.sessionGoalMessage,
     };
     void upsertThreadMeta(th.projectKey || NO_PROJECT_KEY, meta);
   }, []);
@@ -1486,6 +1510,32 @@ function App() {
               toolStatus: tool.status,
               toolKind: tool.kind,
             });
+            // Shell-side goal progress from update_goal tool (no ACP goal event)
+            const anyU = update as Record<string, unknown>;
+            const meta =
+              anyU._meta && typeof anyU._meta === 'object'
+                ? (anyU._meta as Record<string, unknown>)
+                : {};
+            const xai =
+              meta['x.ai/tool'] && typeof meta['x.ai/tool'] === 'object'
+                ? (meta['x.ai/tool'] as Record<string, unknown>)
+                : {};
+            const toolName = String(xai.name ?? anyU.toolName ?? tool.label ?? '');
+            if (isGoalToolName(toolName) || isGoalToolName(tool.label)) {
+              const patch =
+                parseUpdateGoalPayload(anyU.rawInput) ||
+                parseUpdateGoalPayload(xai.input) ||
+                parseUpdateGoalPayload(anyU.content);
+              if (patch) {
+                setThreads((prev) =>
+                  prev.map((th) => {
+                    if (th.id !== threadId) return th;
+                    const next = applyGoalPatch(th.sessionGoal, patch);
+                    return next ? { ...th, sessionGoal: next } : th;
+                  }),
+                );
+              }
+            }
           }
         }
       };
@@ -2403,9 +2453,9 @@ function App() {
       if (initialPrompt) {
         const userVisible =
           initialPrompt.replace(/\n\n\[Attached files[\s\S]*$/i, '').trim() || initialPrompt;
-        const goalArg = userVisible.match(/^\/goal\s+([\s\S]+)$/i)?.[1]?.trim();
-        if (goalArg) {
-          patchThread(id, { sessionGoal: goalArg });
+        const goalParsed = parseGoalCommand(userVisible);
+        if (goalParsed?.text && !goalParsed.sub) {
+          patchThread(id, { sessionGoal: makeGoal(goalParsed.text) });
         }
         appendLine(id, {
           id: nid(),
@@ -2714,9 +2764,28 @@ function App() {
         })();
         return;
       }
-      // Capture goal text for the task banner; still send /goal to the agent below.
-      if (name === 'goal' && arg) {
-        patchThread(agent.id, { sessionGoal: arg });
+      // Capture goal for banner + persist; still send full /goal line to the agent.
+      if (name === 'goal') {
+        const parsed = parseGoalCommand(text);
+        if (parsed?.sub === 'clear') {
+          patchThread(agent.id, { sessionGoal: null });
+        } else if (parsed?.sub === 'pause' && agent.sessionGoal) {
+          patchThread(agent.id, {
+            sessionGoal: { ...agent.sessionGoal, status: 'paused', updatedAt: Date.now() },
+          });
+        } else if (parsed?.sub === 'resume' && agent.sessionGoal) {
+          patchThread(agent.id, {
+            sessionGoal: { ...agent.sessionGoal, status: 'active', updatedAt: Date.now() },
+          });
+        } else if (parsed?.text && !parsed.sub) {
+          patchThread(agent.id, { sessionGoal: makeGoal(parsed.text) });
+        } else if (!arg) {
+          appendLine(agent.id, {
+            id: nid(),
+            role: 'system',
+            text: t('goalNeedText'),
+          });
+        }
       }
     }
 
@@ -2905,6 +2974,48 @@ function App() {
     };
   }, []);
 
+  /** Send /goal subcommand; optimistic local status when applicable. */
+  const runGoalCommand = async (
+    sub: 'status' | 'pause' | 'resume' | 'clear',
+  ) => {
+    if (!active) return;
+    const g = active.sessionGoal;
+    if (sub === 'clear') {
+      if (!confirm(t('goalClearConfirm'))) return;
+      patchThread(active.id, { sessionGoal: null });
+    } else if (sub === 'pause' && g) {
+      patchThread(active.id, {
+        sessionGoal: { ...g, status: 'paused', updatedAt: Date.now() },
+      });
+    } else if (sub === 'resume' && g) {
+      patchThread(active.id, {
+        sessionGoal: { ...g, status: 'active', updatedAt: Date.now() },
+      });
+    }
+    const line = `/goal ${sub}`;
+    if (!active.client || !active.sessionId) {
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: t('goalNoSession'),
+      });
+      return;
+    }
+    appendLine(active.id, { id: nid(), role: 'user', text: line });
+    patchThread(active.id, { busy: true, error: null });
+    try {
+      await active.client.prompt(active.sessionId, line);
+    } catch (e) {
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('goalCmdFail')}: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      patchThread(active.id, { busy: false });
+    }
+  };
+
   /** Plan gate: leave plan mode → agent mode, then prompt to implement selected steps. */
   const applyPlan = async () => {
     if (!active?.client || !active.sessionId || active.busy) return;
@@ -2916,6 +3027,10 @@ function App() {
         role: 'system',
         text: t('applyPlanNoPlan'),
       });
+      // Keep plan mode so user can ask the agent to produce a plan
+      if (active.chatMode !== 'plan') {
+        void changeChatMode('plan');
+      }
       setReviewOpen(true);
       return;
     }
@@ -3054,17 +3169,30 @@ function App() {
 
   const changeModel = async (next: string) => {
     setModelId(next);
-    if (!active?.client || !active.sessionId || !next) return;
     try {
-      await active.client.setModel(active.sessionId, next);
-      patchThread(active.id, { modelId: next });
-      appendLine(active.id, {
+      localStorage.setItem('gorkx.modelId', next);
+    } catch {
+      /* */
+    }
+    // Prefer active live session; else any live thread
+    const target =
+      active?.client && active.sessionId
+        ? active
+        : threads.find((th) => th.client && th.sessionId) ?? null;
+    if (!target?.client || !target.sessionId || !next) {
+      if (active) patchThread(active.id, { modelId: next });
+      return;
+    }
+    try {
+      await target.client.setModel(target.sessionId, next);
+      patchThread(target.id, { modelId: next });
+      appendLine(target.id, {
         id: nid(),
         role: 'system',
         text: `model → ${next}`,
       });
     } catch (e) {
-      appendLine(active.id, {
+      appendLine(target.id, {
         id: nid(),
         role: 'system',
         text: `set model failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -3788,6 +3916,11 @@ function App() {
                               {th.busy ? (
                                 <span className="thread-busy-dot" aria-hidden />
                               ) : null}
+                              {th.worktreePath ? (
+                                <span className="wt-badge" title={th.worktreePath}>
+                                  WT
+                                </span>
+                              ) : null}
                               {threadListLabel(th, live)}
                             </span>
                           </button>
@@ -3808,7 +3941,7 @@ function App() {
                             title={t('archiveThread')}
                             onClick={(e) => {
                               e.stopPropagation();
-                              void archiveThread(th.id);
+                              if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
                             }}
                           >
                             <IconArchive size={14} />
@@ -3953,7 +4086,7 @@ function App() {
                     title={t('archiveThread')}
                     onClick={(e) => {
                       e.stopPropagation();
-                      void archiveThread(th.id);
+                      if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
                     }}
                   >
                     <IconArchive size={14} />
@@ -4420,7 +4553,24 @@ function App() {
                         planModeOn={chatMode === 'plan'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
-                        availableCommandNames={[]}
+                        availableCommandNames={
+                          // Prefer last live session's commands; else builtins cache
+                          threads.find((th) => th.commands?.length)?.commands?.map((c) =>
+                            c.name.replace(/^\//, ''),
+                          ) ?? [
+                            'plan',
+                            'goal',
+                            'compact',
+                            'diff',
+                            'review',
+                            'memory',
+                            'fork',
+                            'worktree',
+                            'imagine',
+                            'flush',
+                            'dream',
+                          ]
+                        }
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
                       />
@@ -4494,13 +4644,11 @@ function App() {
                       ) : null}
                     </div>
                     {(() => {
-                      const limit = modelCtx?.contextWindow || 500_000;
-                      const bar = formatContextBar(0, limit);
                       return (
                         <div className="ctx-ring-wrap">
                           <ContextRing
                             pct={0}
-                            title={t('contextClickHint')}
+                            title={t('contextHomeNa')}
                             onClick={() => {
                               setCtxPopOpen((v) => !v);
                               setModelPopOpen(false);
@@ -4511,13 +4659,10 @@ function App() {
                             <div className="ctx-popover align-right" role="dialog">
                               <div className="ctx-pop-title">{t('contextWindow')}</div>
                               <div className="ctx-pop-row">
-                                <span>{bar.label}</span>
-                                <strong>0%</strong>
+                                <span>{t('contextHomeNa')}</span>
+                                <strong>—</strong>
                               </div>
-                              <div className="ctx-pop-bar">
-                                <span style={{ width: '0%' }} />
-                              </div>
-                              <div className="ctx-pop-detail muted">{t('autoCompactHint')}</div>
+                              <div className="ctx-pop-detail muted">{t('contextHomeNaHint')}</div>
                             </div>
                           ) : null}
                         </div>
@@ -4646,27 +4791,127 @@ function App() {
                 </>
               ) : null}
             </header>
-            {/* Goal banner: set when user sends /goal …; clear anytime */}
+            {/* Goal console: persist + /goal subcommands + plan-based progress */}
             {active.sessionGoal ? (
-              <div className="goal-banner goal-banner-active">
-                <strong>{t('goalBanner')}</strong>
-                <span className="goal-banner-text" title={active.sessionGoal}>
-                  {active.sessionGoal}
+              <div
+                className={`goal-banner goal-banner-active goal-status-${active.sessionGoal.status}${
+                  active.busy ? ' goal-busy' : ''
+                }`}
+              >
+                <strong>
+                  {t('goalBanner')}
+                  {active.busy ? (
+                    <span className="thread-busy-dot" style={{ marginLeft: 6 }} aria-hidden />
+                  ) : null}
+                </strong>
+                <span className="goal-banner-status">
+                  {goalStatusLabel(active.sessionGoal.status, {
+                    active: t('goalStatusActive'),
+                    paused: t('goalStatusPaused'),
+                    complete: t('goalStatusComplete'),
+                    blocked: t('goalStatusBlocked'),
+                  })}
                 </span>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  style={{ marginLeft: 'auto' }}
-                  title={t('goalClearHint')}
-                  onClick={() => patchThread(active.id, { sessionGoal: null })}
-                >
-                  {t('goalClear')}
-                </button>
+                <span className="goal-banner-text" title={active.sessionGoal.text}>
+                  {active.sessionGoal.text}
+                </span>
+                {active.sessionGoal.message ? (
+                  <span className="goal-banner-msg muted" title={active.sessionGoal.message}>
+                    {active.sessionGoal.message}
+                  </span>
+                ) : null}
+                {active.sessionGoal.blockedReason ? (
+                  <span className="goal-banner-msg" title={active.sessionGoal.blockedReason}>
+                    {active.sessionGoal.blockedReason}
+                  </span>
+                ) : null}
+                {activePlanEntries.length > 0 ? (
+                  <span className="goal-banner-progress">
+                    {t('reviewPlanProgress')
+                      .replace(
+                        '{done}',
+                        String(
+                          activePlanEntries.filter(
+                            (e) =>
+                              e.checked ||
+                              /done|complete|finish/i.test(e.status || ''),
+                          ).length,
+                        ),
+                      )
+                      .replace('{total}', String(activePlanEntries.length))}
+                  </span>
+                ) : (
+                  <span className="goal-banner-progress muted" title={t('goalNoProgressHint')}>
+                    {t('goalNoProgressShort')}
+                  </span>
+                )}
+                <div className="goal-banner-actions">
+                  {active.sessionGoal.status !== 'complete' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={active.busy}
+                        title={t('goalStatusHint')}
+                        onClick={() => void runGoalCommand('status')}
+                      >
+                        {t('goalStatusBtn')}
+                      </button>
+                      {active.sessionGoal.status === 'paused' ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={active.busy}
+                          onClick={() => void runGoalCommand('resume')}
+                        >
+                          {t('goalResume')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={active.busy}
+                          onClick={() => void runGoalCommand('pause')}
+                        >
+                          {t('goalPause')}
+                        </button>
+                      )}
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={active.busy && active.sessionGoal.status !== 'complete'}
+                    title={t('goalClearHint')}
+                    onClick={() => {
+                      if (active.sessionGoal?.status === 'complete') {
+                        patchThread(active.id, { sessionGoal: null });
+                      } else {
+                        void runGoalCommand('clear');
+                      }
+                    }}
+                  >
+                    {active.sessionGoal.status === 'complete'
+                      ? t('goalDismiss')
+                      : t('goalClear')}
+                  </button>
+                </div>
               </div>
             ) : capabilityArm && /^\/goal\b/i.test(capabilityArm.prefix) ? (
               <div className="goal-banner">
                 <strong>{t('goalStaging')}</strong>
                 <span>{t('goalStagingHint')}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={() => {
+                    setCapabilityArm(null);
+                    setDraft('');
+                  }}
+                >
+                  {t('capabilityClear')}
+                </button>
               </div>
             ) : null}
             {/* 仅在有计划步骤时显示进度条；模式切换在底部「规划/执行」 */}
