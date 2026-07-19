@@ -19,6 +19,9 @@ export interface ScheduledJob {
   weekdaysOnly: boolean;
   enabled: boolean;
   lastRunAt: number | null;
+  /** Consecutive failed dispatches; reset only after a successful dispatch. */
+  failureCount: number;
+  lastError: string | null;
   nextRunAt: number;
   createdAt: number;
 }
@@ -107,6 +110,12 @@ export function computeNextRun(job: Pick<
     }
   }
   return d.getTime();
+}
+
+/** Bounded exponential retry: 5m, 10m, 20m … capped at 6h. */
+export function computeRetryRun(failureCount: number, fromMs = Date.now()): number {
+  const minutes = Math.min(360, 5 * 2 ** Math.max(0, failureCount - 1));
+  return fromMs + minutes * 60_000;
 }
 
 export function formatNextRun(ts: number): string {

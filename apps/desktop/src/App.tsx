@@ -54,6 +54,7 @@ import { ScheduledPanel } from './components/ScheduledPanel';
 import {
   type ScheduledJob,
   computeNextRun,
+  computeRetryRun,
   loadPersistentJobs,
   savePersistentJobs,
 } from './lib/scheduled';
@@ -696,7 +697,7 @@ function App() {
         worktree?: boolean;
         initialPrompt?: string;
         initialAttachments?: ComposerAttachment[];
-      }) => Promise<void>)
+      }) => Promise<{ ok: boolean; error?: string }>)
     | null
   >(null);
   const reconnectRef = useRef<((id: string) => Promise<AcpClient | null>) | null>(null);
@@ -1280,7 +1281,13 @@ function App() {
             // cannot duplicate the same scheduled prompt.
             changed = true;
             due.push(j);
-            return { ...j, lastRunAt: now, nextRunAt: computeNextRun(j, now) };
+            return {
+              ...j,
+              lastRunAt: now,
+              failureCount: 0,
+              lastError: null,
+              nextRunAt: computeNextRun(j, now),
+            };
           });
           if (changed) await savePersistentJobs(nextJobs);
           for (const job of due) {
@@ -1294,9 +1301,40 @@ function App() {
                 localStorage.removeItem('gorkx.project');
               }
               await new Promise((r) => setTimeout(r, 200));
-              await createThreadRef.current?.({ initialPrompt: job.prompt });
+              const result = await createThreadRef.current?.({ initialPrompt: job.prompt });
+              if (result?.ok) continue;
+              // Re-read so a user edit or a different due job cannot be
+              // overwritten by this failure record.
+              const current = await loadPersistentJobs();
+              const failureCount = (current.find((item) => item.id === job.id)?.failureCount ?? 0) + 1;
+              const error = (result?.error || '调度执行器未就绪').slice(0, 500);
+              await savePersistentJobs(
+                current.map((item) =>
+                  item.id === job.id
+                    ? {
+                        ...item,
+                        failureCount,
+                        lastError: error,
+                        nextRunAt: computeRetryRun(failureCount, Date.now()),
+                      }
+                    : item,
+                ),
+              );
             } catch {
-              /* one failed agent run does not corrupt schedule state */
+              const current = await loadPersistentJobs();
+              const failureCount = (current.find((item) => item.id === job.id)?.failureCount ?? 0) + 1;
+              await savePersistentJobs(
+                current.map((item) =>
+                  item.id === job.id
+                    ? {
+                        ...item,
+                        failureCount,
+                        lastError: '调度过程发生未预期错误',
+                        nextRunAt: computeRetryRun(failureCount, Date.now()),
+                      }
+                    : item,
+                ),
+              );
             }
           }
         } finally {
@@ -1323,7 +1361,10 @@ function App() {
       localStorage.removeItem('gorkx.project');
     }
     await new Promise((r) => setTimeout(r, 150));
-    await createThreadRef.current?.({ initialPrompt: job.prompt });
+    return (await createThreadRef.current?.({ initialPrompt: job.prompt })) ?? {
+      ok: false,
+      error: '调度执行器未就绪',
+    };
   };
 
   useEffect(() => {
@@ -2416,7 +2457,7 @@ function App() {
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
-      return;
+      return { ok: false, error: t('worktreeNeedProject') };
     }
     const scope = projectScopeKey(cwdOverride || project);
     const cwdBase = cwdOverride || project || (await homeDir());
@@ -2578,9 +2619,11 @@ function App() {
             userTurnCount: 1,
           });
         } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
           patchThread(id, {
-            error: e instanceof Error ? e.message : String(e),
+            error,
           });
+          return { ok: false, error };
         } finally {
           patchThread(id, { busy: false });
           // Auto-learn: persist session dump after first turn
@@ -2591,11 +2634,14 @@ function App() {
           );
         }
       }
+      return { ok: true };
     } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
       patchThread(id, {
         busy: false,
-        error: e instanceof Error ? e.message : String(e),
+        error,
       });
+      return { ok: false, error };
     }
   };
 
@@ -5659,7 +5705,7 @@ function App() {
         )}
         aliases={projectAliases}
         currentProject={project || undefined}
-        onRunJob={(job) => void runScheduledJob(job)}
+        onRunJob={runScheduledJob}
       />
 
       <MemoryPanel

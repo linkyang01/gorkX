@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   type ScheduledJob,
   computeNextRun,
+  computeRetryRun,
   formatNextRun,
   loadPersistentJobs,
   nid,
@@ -22,7 +23,7 @@ interface Props {
   aliases?: Record<string, string>;
   currentProject?: string;
   /** Called when a job should run: parent creates a task and sends the prompt */
-  onRunJob: (job: ScheduledJob) => void | Promise<void>;
+  onRunJob: (job: ScheduledJob) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function ScheduledPanel({
@@ -60,12 +61,17 @@ export function ScheduledPanel({
     void savePersistentJobs(next);
   };
 
-  const addJob = (partial: Omit<ScheduledJob, 'id' | 'createdAt' | 'nextRunAt' | 'lastRunAt'>) => {
+  const addJob = (partial: Omit<
+    ScheduledJob,
+    'id' | 'createdAt' | 'nextRunAt' | 'lastRunAt' | 'failureCount' | 'lastError'
+  >) => {
     const job: ScheduledJob = {
       ...partial,
       id: nid(),
       createdAt: Date.now(),
       lastRunAt: null,
+      failureCount: 0,
+      lastError: null,
       nextRunAt: computeNextRun(partial),
     };
     persist([job, ...jobs]);
@@ -108,14 +114,19 @@ export function ScheduledPanel({
   };
 
   const runNow = async (job: ScheduledJob) => {
-    await onRunJob(job);
+    const result = await onRunJob(job);
+    const now = Date.now();
     persist(
       jobs.map((j) =>
         j.id === job.id
           ? {
               ...j,
-              lastRunAt: Date.now(),
-              nextRunAt: computeNextRun(j, Date.now()),
+              lastRunAt: now,
+              failureCount: result.ok ? 0 : (j.failureCount ?? 0) + 1,
+              lastError: result.ok ? null : (result.error || '无法启动 Agent').slice(0, 500),
+              nextRunAt: result.ok
+                ? computeNextRun(j, now)
+                : computeRetryRun((j.failureCount ?? 0) + 1, now),
             }
           : j,
       ),
@@ -306,6 +317,11 @@ export function ScheduledPanel({
                       ? ` · ${t('schedLast')}: ${formatNextRun(j.lastRunAt)}`
                       : ''}
                   </div>
+                  {j.failureCount > 0 ? (
+                    <div className="sched-item-meta" style={{ color: 'var(--danger, #c33)' }}>
+                      最近调度失败 {j.failureCount} 次{j.lastError ? `：${j.lastError.slice(0, 120)}` : ''}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="sched-item-actions">
                   <button type="button" className="btn btn-sm" onClick={() => void runNow(j)}>
