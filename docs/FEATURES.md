@@ -9,7 +9,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Layout | Codex three-pane + collapsible sidebar | **Real** |
 | Layout | Review / Terminal / Process | **Real** |
 | Kernel | ACP stdio, App `GROK_HOME`, bundled engine path | **Real** |
-| Chat | Stream, tools, permissions, attachments, / @ keyboard nav | **Real** |
+| Chat | Stream, tools, permissions, ACP resource-link attachments, / @ keyboard nav | **Real** |
 | Goal | Stage `/goal`, persist banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
 | Scheduled | Local jobs; fires while app open | **Real** (app must be running) |

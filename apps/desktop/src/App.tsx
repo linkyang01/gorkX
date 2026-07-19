@@ -103,6 +103,7 @@ import {
 } from './lib/grokAdmin';
 import {
   attachmentsPromptBlock,
+  attachmentResourceLinks,
   buildAttachment,
   createNamedProject,
   projectsRoot,
@@ -2468,7 +2469,11 @@ function App() {
           ? `${memInject}\n\n---\n\n用户请求：\n${initialPrompt}`
           : initialPrompt;
         try {
-          const result = await client.prompt(sessionId, enginePrompt);
+          const result = await client.prompt(
+            sessionId,
+            enginePrompt,
+            attachmentResourceLinks(initialAttachments),
+          );
           if (result?.stopReason && result.stopReason !== 'end_turn') {
             appendLine(id, {
               id: nid(),
@@ -2838,7 +2843,7 @@ function App() {
       }
     }
     try {
-      const result = await client.prompt(sessionId, engineBody);
+      const result = await client.prompt(sessionId, engineBody, attachmentResourceLinks(atts));
       if (result?.stopReason && result.stopReason !== 'end_turn') {
         appendLine(agent.id, {
           id: nid(),

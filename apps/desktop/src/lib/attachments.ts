@@ -15,6 +15,25 @@ export interface ComposerAttachment {
   size?: number;
 }
 
+/** ACP resource-link payload. Image blocks are optional in ACP; resource links are baseline. */
+export function attachmentResourceLinks(items: ComposerAttachment[]) {
+  return items.map((item) => ({
+    name: item.name,
+    path: item.path,
+    size: item.size,
+    mimeType:
+      item.kind === 'image'
+        ? extOf(item.path) === 'png'
+          ? 'image/png'
+          : 'image/jpeg'
+        : item.kind === 'pdf'
+          ? 'application/pdf'
+          : item.kind === 'text'
+            ? 'text/plain'
+            : undefined,
+  }));
+}
+
 const IMAGE_EXT = new Set([
   'png',
   'jpg',

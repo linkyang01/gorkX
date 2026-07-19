@@ -86,6 +86,14 @@ export interface SessionInfo {
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
+/** ACP baseline prompt attachment: every agent supports resource links. */
+export interface PromptResourceLink {
+  name: string;
+  path: string;
+  mimeType?: string;
+  size?: number;
+}
+
 type Pending = {
   resolve: (v: unknown) => void;
   reject: (e: Error) => void;
@@ -534,10 +542,28 @@ export class AcpClient {
     }
   }
 
-  async prompt(sessionId: string, text: string): Promise<PromptResult> {
+  async prompt(
+    sessionId: string,
+    text: string,
+    resources: PromptResourceLink[] = [],
+  ): Promise<PromptResult> {
+    const prompt: unknown[] = [{ type: 'text', text }];
+    for (const resource of resources) {
+      const path = resource.path.trim();
+      if (!path) continue;
+      // file:///... URI with every path segment escaped; resource_link is ACP baseline.
+      const uri = `file://${path.split('/').map(encodeURIComponent).join('/')}`;
+      prompt.push({
+        type: 'resource_link',
+        name: resource.name || path.split('/').pop() || 'attachment',
+        uri,
+        ...(resource.mimeType ? { mimeType: resource.mimeType } : {}),
+        ...(typeof resource.size === 'number' ? { size: resource.size } : {}),
+      });
+    }
     const result = (await this.request('session/prompt', {
       sessionId,
-      prompt: [{ type: 'text', text }],
+      prompt,
     })) as PromptResult;
     if (result) this.onUsageMeta?.(result);
     return result;
