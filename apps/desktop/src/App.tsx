@@ -5103,6 +5103,44 @@ function App() {
                   });
                 });
               }}
+              onInspectSubagent={(subagentId) => {
+                const client = active.client;
+                if (!client) return;
+                void client.getSubagent(subagentId).then((snapshot) => {
+                  if (!snapshot) {
+                    appendLine(active.id, {
+                      id: nid(),
+                      role: 'system',
+                      text: `子任务 ${subagentId} 的内核快照已不可用。`,
+                    });
+                    return;
+                  }
+                  const output = typeof snapshot.output === 'string' ? snapshot.output.trim() : '';
+                  const failure = typeof snapshot.failureError === 'string'
+                    ? snapshot.failureError
+                    : typeof snapshot.failure_error === 'string'
+                      ? snapshot.failure_error
+                      : '';
+                  const cancelled = typeof snapshot.cancelReason === 'string'
+                    ? snapshot.cancelReason
+                    : typeof snapshot.cancel_reason === 'string'
+                      ? snapshot.cancel_reason
+                      : '';
+                  const status = String(snapshot.status ?? 'unknown');
+                  const detail = output || failure || cancelled || '内核未返回文本输出。';
+                  appendLine(active.id, {
+                    id: nid(),
+                    role: 'system',
+                    text: `子任务结果 (${status})\n${detail}`,
+                  });
+                }).catch((error) => {
+                  appendLine(active.id, {
+                    id: nid(),
+                    role: 'system',
+                    text: `读取子任务结果失败：${error instanceof Error ? error.message : String(error)}`,
+                  });
+                });
+              }}
             />
             {!processOpen ? <ToolTimeline tools={activeTools} /> : null}
             <MessageList

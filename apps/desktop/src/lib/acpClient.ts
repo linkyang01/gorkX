@@ -780,6 +780,15 @@ export class AcpClient {
     return raw.result?.subagents ?? raw.subagents ?? [];
   }
 
+  /** Fetch an engine-owned snapshot; completed output is returned only on demand. */
+  async getSubagent(subagentId: string): Promise<Record<string, unknown> | null> {
+    const raw = (await this.request('x.ai/subagent/get', { subagentId, block: false }, 15_000)) as {
+      result?: { snapshot?: Record<string, unknown> | null };
+      snapshot?: Record<string, unknown> | null;
+    };
+    return raw.result?.snapshot ?? raw.snapshot ?? null;
+  }
+
   async stop() {
     this.unlistenLine?.();
     this.unlistenExit?.();

@@ -11,10 +11,11 @@ interface Props {
   lines: ChatLine[];
   busy?: boolean;
   onCancelSubagent?: (subagentId: string) => void;
+  onInspectSubagent?: (subagentId: string) => void;
 }
 
 /** Agent process stream (thinking + tools + system). Closed by default — open when you care. */
-export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent }: Props) {
+export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onInspectSubagent }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const processLines = lines.filter(
     (l) => l.role === 'thought' || l.role === 'tool' || l.role === 'system',
@@ -80,6 +81,9 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent }: P
               const canCancel = Boolean(
                 subagentId && /^running\b/i.test(line.toolStatus || ''),
               );
+              const canInspect = Boolean(
+                subagentId && !/^(running|initializing|cancelling)\b/i.test(line.toolStatus || ''),
+              );
               return (
                 <div key={line.id} className={`process-item tool${failed ? ' fail' : ''}`}>
                   <div className="process-item-label">
@@ -104,6 +108,16 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent }: P
                         onClick={() => onCancelSubagent(subagentId!)}
                       >
                         停止子任务
+                      </button>
+                    ) : null}
+                    {canInspect && onInspectSubagent ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => onInspectSubagent(subagentId!)}
+                      >
+                        查看子任务结果
                       </button>
                     ) : null}
                   </div>
