@@ -12,6 +12,19 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@xterm")) return "terminal-runtime";
+          if (id.includes("@tauri-apps")) return "tauri-runtime";
+          if (id.includes("react") || id.includes("scheduler")) return "react-runtime";
+          return "vendor";
+        },
+      },
+    },
+  },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

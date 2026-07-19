@@ -6,7 +6,8 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 import {
   AcpClient,
   extractUpdateText,
@@ -142,6 +143,8 @@ import {
   loadDisplayNameOverride,
   saveDisplayNameOverride,
   uiDisplayName,
+  startLoginFlow,
+  logoutAccount,
 } from './lib/account';
 import type { AccountSummary } from './lib/account';
 import {
@@ -2262,7 +2265,6 @@ function App() {
     });
     if (nextName == null || !nextName.trim()) return;
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
       const newPath = await invoke<string>('rename_project_folder', {
         oldPath,
         newName: nextName.trim(),
@@ -4320,7 +4322,6 @@ function App() {
                           setAccountMenuOpen(false);
                           void (async () => {
                             try {
-                              const { startLoginFlow } = await import('./lib/account');
                               const result = await startLoginFlow();
                               if (result.account) setAccount(result.account);
                               if (result.ok) setAccountError(null);
@@ -4353,7 +4354,6 @@ function App() {
                         setAccountMenuOpen(false);
                         void (async () => {
                           try {
-                            const { logoutAccount } = await import('./lib/account');
                             await logoutAccount();
                           } catch {
                             /* */
@@ -4376,7 +4376,6 @@ function App() {
                       setAccountMenuOpen(false);
                       void (async () => {
                         try {
-                          const { startLoginFlow } = await import('./lib/account');
                           const result = await startLoginFlow();
                           if (result.account) setAccount(result.account);
                           if (result.ok) setAccountError(null);
@@ -4766,7 +4765,6 @@ function App() {
                     onClick={() => {
                       void (async () => {
                         try {
-                          const { save } = await import('@tauri-apps/plugin-dialog');
                           const path = await save({
                             defaultPath: `gorkx-${active.sessionId!.slice(0, 8)}.md`,
                             filters: [{ name: 'Markdown', extensions: ['md'] }],
@@ -5361,7 +5359,6 @@ function App() {
         onLogin={() => {
           void (async () => {
             try {
-              const { startLoginFlow } = await import('./lib/account');
               const result = await startLoginFlow();
               if (result.account) setAccount(result.account);
               if (result.ok) setAccountError(null);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { runKernelDoctor, type AcpClient, type GrokStatus, type HookInfo, type HooksSnapshot, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
 import type { AccountSummary } from '../lib/account';
-import { fetchAccountSummary, fetchSubscriptionModels } from '../lib/account';
+import { fetchAccountSummary, fetchSubscriptionModels, logoutAccount, startLoginFlow } from '../lib/account';
 import {
   clearChatCache,
   loadThreadMetas,
@@ -369,7 +369,6 @@ export function SettingsPanel({
     setLoginBusy(true);
     setMsg(t('subLoginHint'));
     try {
-      const { startLoginFlow } = await import('../lib/account');
       const result = await startLoginFlow({
         onTick: (m) => setMsg(m),
       });
@@ -389,7 +388,6 @@ export function SettingsPanel({
 
   const doLogout = async () => {
     try {
-      const { logoutAccount } = await import('../lib/account');
       await logoutAccount();
       setMsg(t('logout'));
       setAccount(null);
