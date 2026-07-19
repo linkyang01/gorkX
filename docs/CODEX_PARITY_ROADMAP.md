@@ -58,6 +58,8 @@ Local worker or hosted worker
 
 **当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建和隔离 ACP `initialize` 握手；它尚未替换当前包内 `0.2.103` 引擎。传入显式、独立的 `GROKX_ACP_TEST_HOME`、`GROKX_ACP_TEST_CWD` 并加 `--authenticated` 后，回归会额外验证认证、会话新建/恢复、Plan 模式、Hooks 列表与 worktree 列表；脚本会拒绝标准用户 `GROK_HOME`。资源附件、Hooks 改写和 worktree 创建仍需受控测试仓库中的人工真链路验收。
 
+运行时不执行 `grok update`：它不能更新本仓库的 source lock，也会绕过构建与 ACP 回归门禁。设置页只报告包内内核版本；升级必须走上面的源码同步、构建和验证流程。
+
 ### P1 — 多 Agent 与任务编排（3–4 周）
 
 **工作**：任务树、委派契约、最多 N 个并行子 Agent、取消/重试/汇总、每个子 Agent 独立 worktree/权限/日志；父任务只聚合结果。

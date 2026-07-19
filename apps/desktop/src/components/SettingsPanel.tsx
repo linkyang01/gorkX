@@ -20,7 +20,6 @@ import {
   GROK_KERNEL_GITHUB,
   installAppUpdate,
   openUrlSafe,
-  runKernelUpdate,
   type AppUpdateInfo,
   type KernelUpdateInfo,
 } from '../lib/updates';
@@ -417,25 +416,14 @@ export function SettingsPanel({
       const info = await checkKernelUpdate(status?.grokPath || grokCmd);
       setKernelUp(info);
       setMsg(
-        info.updateAvailable
+        info.channel === 'source-locked'
+          ? t('kernelSourceLocked')
+          : info.updateAvailable
           ? t('updateAvailable')
               .replace('{cur}', info.currentVersion)
               .replace('{latest}', info.latestVersion)
           : t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion),
       );
-    } finally {
-      setUpBusy(false);
-    }
-  };
-
-  const applyKernel = async () => {
-    setUpBusy(true);
-    setMsg(t('updateInstalling'));
-    try {
-      const r = await runKernelUpdate(status?.grokPath || grokCmd);
-      setMsg(r.ok ? t('updateDone') : r.log.slice(0, 400));
-      onRefresh();
-      await checkKernel();
     } finally {
       setUpBusy(false);
     }
@@ -1385,7 +1373,9 @@ export function SettingsPanel({
                     </div>
                     {kernelUp ? (
                       <div className="settings-row-hint">
-                        {kernelUp.updateAvailable
+                        {kernelUp.channel === 'source-locked'
+                          ? t('kernelSourceLocked')
+                          : kernelUp.updateAvailable
                           ? `${kernelUp.currentVersion} → ${kernelUp.latestVersion}`
                           : t('updateLatest').replace(
                               '{v}',
@@ -1403,14 +1393,6 @@ export function SettingsPanel({
                     onClick={() => void checkKernel()}
                   >
                     {t('checkUpdate')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn primary"
-                    disabled={upBusy || !kernelUp?.updateAvailable}
-                    onClick={() => void applyKernel()}
-                  >
-                    {t('updateNow')}
                   </button>
                   <button
                     type="button"

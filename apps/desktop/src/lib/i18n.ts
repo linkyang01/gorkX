@@ -461,6 +461,7 @@ const dict = {
     updateInstalling: 'Updating…',
     updateAvailable: 'Update available: {cur} → {latest}',
     updateLatest: 'Already latest ({v})',
+    kernelSourceLocked: 'Source-locked kernel — runtime updates are disabled',
     updateFail: 'Update check failed',
     updateDone: 'Update finished — recheck kernel',
     kernelUpdateTitle: 'Grok Build updates',
@@ -628,7 +629,8 @@ const dict = {
     settingsIndepStatus:
       'Using a development engine path. For a normal install, the engine ships with the app.',
     updateKernelTitle: 'Engine',
-    updateKernelHint: 'Check for and install engine updates.',
+    updateKernelHint:
+      'The bundled Grok Build kernel is source-locked. This page reports its version; upgrades require a source sync, rebuild, and ACP regression.',
     updateAppTitle: 'App',
     updateAppHint:
       'Check for a new gorkX. “Update now” downloads the DMG and opens it — drag into Applications to replace, then relaunch.',
@@ -1218,6 +1220,7 @@ const dict = {
     updateInstalling: '更新中…',
     updateAvailable: '有新版本：{cur} → {latest}',
     updateLatest: '已是最新（{v}）',
+    kernelSourceLocked: '内核由源码锁定保护，运行时更新已禁用',
     updateFail: '检查更新失败',
     updateDone: '更新完成 — 请重新检测引擎',
     kernelUpdateTitle: '引擎更新',
@@ -1374,7 +1377,8 @@ const dict = {
     settingsRestore: '恢复',
     settingsIndepStatus: '当前使用的是开发环境引擎路径。正式安装时引擎随应用提供。',
     updateKernelTitle: '引擎',
-    updateKernelHint: '检查并安装引擎更新。',
+    updateKernelHint:
+      '包内 Grok Build 内核受源码锁定保护。此处只报告版本；升级必须同步源码、重新构建并通过 ACP 回归。',
     updateAppTitle: '应用',
     updateAppHint:
       '检查 gorkX 新版本。「立即更新应用」会下载 DMG 并自动打开，拖入「应用程序」替换后重新打开即可。',

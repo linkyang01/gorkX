@@ -1,7 +1,6 @@
 /** Update checks: Grok kernel (CLI) + gorkX app (GitHub releases + DMG install). */
 
 import { invoke } from '@tauri-apps/api/core';
-import { shellExec } from './terminal';
 
 export const GORKX_GITHUB = {
   owner: 'linkyang01',
@@ -54,37 +53,20 @@ function isTauri(): boolean {
 }
 
 export async function checkKernelUpdate(grokBin?: string): Promise<KernelUpdateInfo> {
-  const bin = (grokBin || 'grok').trim() || 'grok';
   try {
-    const r = await shellExec(`${JSON.stringify(bin)} update --check --json`);
-    const out = `${r.stdout || ''}\n${r.stderr || ''}`.trim();
-    const jsonLine = out
-      .split('\n')
-      .map((l) => l.trim())
-      .find((l) => l.startsWith('{'));
-    if (jsonLine) {
-      const j = JSON.parse(jsonLine) as {
-        currentVersion?: string;
-        latestVersion?: string;
-        updateAvailable?: boolean;
-        channel?: string;
-        error?: string | null;
-      };
-      return {
-        currentVersion: j.currentVersion || '—',
-        latestVersion: j.latestVersion || '—',
-        updateAvailable: Boolean(j.updateAvailable),
-        channel: j.channel,
-        error: j.error,
-        raw: out,
-      };
-    }
+    const r = await invoke<{ stdout: string; stderr: string; exitCode: number | null }>(
+      'grok_admin_exec',
+      { args: ['--version'], grokCmd: grokBin || null, cwd: null },
+    );
+    const out = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
+    const version = r.exitCode === 0 && out ? out.split('\n')[0].trim() : '—';
     return {
-      currentVersion: '—',
-      latestVersion: '—',
+      currentVersion: version,
+      latestVersion: version,
       updateAvailable: false,
-      error: out || 'no json from grok update --check',
-      raw: out,
+      channel: 'source-locked',
+      error: r.exitCode === 0 ? null : out || 'cannot read app kernel version',
+      raw: 'Kernel upgrades are performed only through the locked source build and ACP regression gate.',
     };
   } catch (e) {
     return {
@@ -93,17 +75,6 @@ export async function checkKernelUpdate(grokBin?: string): Promise<KernelUpdateI
       updateAvailable: false,
       error: e instanceof Error ? e.message : String(e),
     };
-  }
-}
-
-export async function runKernelUpdate(grokBin?: string): Promise<{ ok: boolean; log: string }> {
-  const bin = (grokBin || 'grok').trim() || 'grok';
-  try {
-    const r = await shellExec(`${JSON.stringify(bin)} update`);
-    const log = `${r.stdout || ''}\n${r.stderr || ''}`.trim();
-    return { ok: (r.exitCode ?? 1) === 0, log };
-  } catch (e) {
-    return { ok: false, log: e instanceof Error ? e.message : String(e) };
   }
 }
 
