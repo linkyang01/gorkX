@@ -1090,7 +1090,7 @@ button.pill:hover {
   font-size: 11px;
 }
 
-/* Goal banner */
+/* Goal / plan banner */
 .goal-banner {
   display: flex;
   align-items: center;
@@ -1102,11 +1102,33 @@ button.pill:hover {
   color: var(--text-2);
   flex-shrink: 0;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 .goal-banner strong {
   color: var(--plan);
   font-weight: 650;
+  flex-shrink: 0;
+}
+
+.goal-banner-active {
+  background: rgba(50, 120, 255, 0.08);
+  border-bottom-color: rgba(50, 120, 255, 0.18);
+}
+
+.goal-banner-active strong {
+  color: var(--accent, #2f6fed);
+}
+
+.goal-banner-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-banner {
+  background: rgba(175, 82, 222, 0.1);
 }
 
 /* Empty / welcome — Codex-like: center content, composer dock below */

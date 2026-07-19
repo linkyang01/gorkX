@@ -193,6 +193,8 @@ interface Thread {
   memoryInjected?: boolean;
   /** user turns completed — for auto-learn */
   userTurnCount?: number;
+  /** Active /goal text for this task (UI banner; agent still owns execution) */
+  sessionGoal?: string | null;
 }
 
 interface RecentSession {
@@ -849,6 +851,33 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [scopeKey, active?.id, active?.sessionId, active?.lines, active?.projectKey]);
 
+  const focusComposer = useCallback(() => {
+    window.setTimeout(() => {
+      const el = document.querySelector(
+        '.composer textarea',
+      ) as HTMLTextAreaElement | null;
+      el?.focus();
+    }, 0);
+  }, []);
+
+  /** Cycle tasks in the current project scope (sidebar order: newest first). */
+  const cycleThread = useCallback(
+    (dir: 1 | -1) => {
+      const scope = project ? projectScopeKey(project) : NO_PROJECT_KEY;
+      const list = threadsForScope(threadsRef.current, scope);
+      if (list.length === 0) return;
+      const cur = activeId;
+      let idx = list.findIndex((th) => th.id === cur);
+      if (idx < 0) {
+        // No active task → open first (newest) or last depending on direction
+        idx = dir > 0 ? -1 : 0;
+      }
+      const next = list[(idx + dir + list.length) % list.length];
+      if (next) selectThread(next.id);
+    },
+    [activeId, project, selectThread],
+  );
+
   // Global shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -857,31 +886,55 @@ function App() {
       if (meta && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         void createThreadRef.current?.();
+        return;
       }
-      if (meta && (e.key === 'd' || e.key === 'D')) {
+      if (meta && (e.key === 'd' || e.key === 'D') && !e.shiftKey) {
         e.preventDefault();
         setReviewOpen((v) => !v);
+        return;
       }
       if (meta && (e.key === 'j' || e.key === 'J') && e.shiftKey) {
         e.preventDefault();
         setTerminalOpen((v) => !v);
+        return;
       }
-      if (meta && (e.key === 'k' || e.key === 'K')) {
+      if (meta && (e.key === 'k' || e.key === 'K') && !e.shiftKey) {
         e.preventDefault();
         setKernelOpen(true);
+        return;
       }
       if (meta && (e.key === 'e' || e.key === 'E') && e.shiftKey) {
         e.preventDefault();
         setExtOpen(true);
+        return;
       }
       if (meta && e.key === '/') {
         e.preventDefault();
         setShortcutsOpen((v) => !v);
+        return;
+      }
+      // Focus composer (⌘L) — works from anywhere
+      if (meta && (e.key === 'l' || e.key === 'L') && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        focusComposer();
+        return;
+      }
+      // Previous / next task in current project (⌥⌘↑ / ⌥⌘↓)
+      if (meta && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        cycleThread(e.key === 'ArrowUp' ? -1 : 1);
+        return;
+      }
+      // Also: ⌥⌘[ / ⌥⌘]
+      if (meta && e.altKey && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+        cycleThread(e.key === '[' ? -1 : 1);
+        return;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [project]);
+  }, [project, cycleThread, focusComposer]);
 
   const activeTools: ToolEvent[] = useMemo(() => {
     if (!active) return [];
@@ -1946,6 +1999,9 @@ function App() {
               role="option"
               aria-selected={i === hi}
               className={i === hi ? 'slash-item on' : 'slash-item'}
+              ref={(el) => {
+                if (i === hi && el) el.scrollIntoView({ block: 'nearest' });
+              }}
               onMouseEnter={() => setSlashIndex(i)}
               onClick={() => applySlashPick(c.name)}
             >
@@ -2347,6 +2403,10 @@ function App() {
       if (initialPrompt) {
         const userVisible =
           initialPrompt.replace(/\n\n\[Attached files[\s\S]*$/i, '').trim() || initialPrompt;
+        const goalArg = userVisible.match(/^\/goal\s+([\s\S]+)$/i)?.[1]?.trim();
+        if (goalArg) {
+          patchThread(id, { sessionGoal: goalArg });
+        }
         appendLine(id, {
           id: nid(),
           role: 'user',
@@ -2653,6 +2713,10 @@ function App() {
           }
         })();
         return;
+      }
+      // Capture goal text for the task banner; still send /goal to the agent below.
+      if (name === 'goal' && arg) {
+        patchThread(agent.id, { sessionGoal: arg });
       }
     }
 
@@ -4582,9 +4646,32 @@ function App() {
                 </>
               ) : null}
             </header>
+            {/* Goal banner: set when user sends /goal …; clear anytime */}
+            {active.sessionGoal ? (
+              <div className="goal-banner goal-banner-active">
+                <strong>{t('goalBanner')}</strong>
+                <span className="goal-banner-text" title={active.sessionGoal}>
+                  {active.sessionGoal}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginLeft: 'auto' }}
+                  title={t('goalClearHint')}
+                  onClick={() => patchThread(active.id, { sessionGoal: null })}
+                >
+                  {t('goalClear')}
+                </button>
+              </div>
+            ) : capabilityArm && /^\/goal\b/i.test(capabilityArm.prefix) ? (
+              <div className="goal-banner">
+                <strong>{t('goalStaging')}</strong>
+                <span>{t('goalStagingHint')}</span>
+              </div>
+            ) : null}
             {/* 仅在有计划步骤时显示进度条；模式切换在底部「规划/执行」 */}
             {activePlanEntries.length > 0 ? (
-              <div className="goal-banner">
+              <div className="goal-banner plan-banner">
                 <strong>{t('modePlan')}</strong>
                 <span>
                   {t('reviewPlanProgress')
@@ -4674,6 +4761,9 @@ function App() {
                             role="option"
                             aria-selected={i === hi}
                             className={i === hi ? 'slash-item on' : 'slash-item'}
+                            ref={(el) => {
+                              if (i === hi && el) el.scrollIntoView({ block: 'nearest' });
+                            }}
                             onMouseEnter={() => setAtIndex(i)}
                             onClick={() => insertAtFile(h.path)}
                           >
