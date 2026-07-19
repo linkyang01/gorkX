@@ -116,3 +116,34 @@ export async function deleteMemoryFile(path: string): Promise<MemoryStatus | nul
   if (!isTauri()) return null;
   return invoke<MemoryStatus>('memory_delete_file', { path });
 }
+
+export interface MemorySearchHit {
+  path: string;
+  name: string;
+  scope: string;
+  lineNo: number;
+  preview: string;
+}
+
+export async function searchMemory(
+  query: string,
+  project?: string,
+  limit = 40,
+): Promise<MemorySearchHit[]> {
+  if (!isTauri()) return [];
+  try {
+    return await invoke<MemorySearchHit[]>('memory_search', {
+      query,
+      project: project || null,
+      limit,
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** Local dedupe of repeated bullets / blank lines in core memory files. */
+export async function compactMemory(project?: string): Promise<MemoryStatus | null> {
+  if (!isTauri()) return null;
+  return invoke<MemoryStatus>('memory_compact', { project: project || null });
+}

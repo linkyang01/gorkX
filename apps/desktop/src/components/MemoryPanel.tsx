@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   appendMemoryNote,
+  compactMemory,
   deleteMemoryFile,
   fetchMemoryStatus,
   forgetMemory,
   openMemoryDir,
   readMemoryFile,
+  searchMemory,
   setMemoryAutoLearn,
   setMemoryEnabled,
+  type MemorySearchHit,
   type MemoryStatus,
 } from '../lib/memory';
 import { memoryClear } from '../lib/grokAdmin';
@@ -33,6 +36,8 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
   const [rememberOpen, setRememberOpen] = useState(false);
   const [forgetDraft, setForgetDraft] = useState('');
   const [forgetOpen, setForgetOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchHits, setSearchHits] = useState<MemorySearchHit[] | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -174,6 +179,27 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
           </button>
           <button
             type="button"
+            className="btn btn-sm"
+            title={t('memoryCompactHint')}
+            disabled={busy}
+            onClick={() => {
+              if (!confirm(t('memoryCompactConfirm'))) return;
+              setBusy(true);
+              setErr(null);
+              void compactMemory(project)
+                .then((s) => {
+                  setSt(s);
+                  setMsg(t('memoryCompactOk'));
+                  if (sel) void openFile(sel);
+                })
+                .catch((e) => setErr(String(e)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {t('memoryCompact')}
+          </button>
+          <button
+            type="button"
             className="btn btn-sm primary-sm"
             onClick={() => {
               setRememberOpen((v) => !v);
@@ -192,6 +218,83 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
           >
             {t('memoryForget')}
           </button>
+        </div>
+        <div className="field" style={{ marginBottom: 12 }}>
+          <label>{t('memorySearch')}</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="search"
+              value={searchDraft}
+              onChange={(e) => {
+                setSearchDraft(e.target.value);
+                if (e.target.value.trim().length < 2) setSearchHits(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchDraft.trim().length >= 2) {
+                  setBusy(true);
+                  setErr(null);
+                  void searchMemory(searchDraft.trim(), project)
+                    .then((hits) => setSearchHits(hits))
+                    .catch((e) => setErr(String(e)))
+                    .finally(() => setBusy(false));
+                }
+              }}
+              placeholder={t('memorySearchPlaceholder')}
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={busy || searchDraft.trim().length < 2}
+              onClick={() => {
+                setBusy(true);
+                setErr(null);
+                void searchMemory(searchDraft.trim(), project)
+                  .then((hits) => setSearchHits(hits))
+                  .catch((e) => setErr(String(e)))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {t('memorySearch')}
+            </button>
+          </div>
+          {searchHits ? (
+            <div style={{ marginTop: 8 }}>
+              <div className="hint" style={{ marginBottom: 6 }}>
+                {searchHits.length === 0
+                  ? t('memorySearchEmpty')
+                  : t('memorySearchHits').replace('{n}', String(searchHits.length))}
+              </div>
+              {searchHits.length > 0 ? (
+                <div
+                  style={{
+                    maxHeight: 140,
+                    overflow: 'auto',
+                    border: '1px solid var(--hairline)',
+                    borderRadius: 8,
+                    padding: 4,
+                  }}
+                >
+                  {searchHits.map((h) => (
+                    <button
+                      key={`${h.path}:${h.lineNo}`}
+                      type="button"
+                      className={sel === h.path ? 'slash-item on' : 'slash-item'}
+                      style={{ width: '100%', textAlign: 'left' }}
+                      onClick={() => void openFile(h.path)}
+                    >
+                      <span className="mono">
+                        {h.name}:{h.lineNo}
+                      </span>
+                      <span className="muted">
+                        {h.scope} · {h.preview}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {msg ? <div className="hint" style={{ marginBottom: 8 }}>{msg}</div> : null}
         {st ? (

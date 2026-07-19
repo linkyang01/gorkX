@@ -50,3 +50,15 @@ export async function setDefaultModel(modelId: string): Promise<ModelsConfigSnap
 export async function openModelsConfig(): Promise<string> {
   return invoke<string>('models_open_config');
 }
+
+export interface ModelTestResult {
+  ok: boolean;
+  status: number;
+  latencyMs: number;
+  note: string;
+}
+
+/** Probe endpoint with a tiny request (does not save config). */
+export async function testCustomModel(model: CustomModelRow): Promise<ModelTestResult> {
+  return invoke<ModelTestResult>('models_test_connection', { model });
+}

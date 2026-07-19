@@ -19,7 +19,7 @@
 | Voice | 原生 STT 或 Whisper 后备 |
 | Review 非 Git | 工作区文件变更摘要 |
 | + 菜单 slash | 与引擎 available_commands 对齐，隐藏无效项 |
-| 多模型 | 连接测试与默认路由 |
+| 多模型 | 连接测试已加；默认路由 / 引擎侧仍依赖 config |
 
 ## 规划（设置 Soon，不假装可用）
 

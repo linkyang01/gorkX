@@ -29,6 +29,7 @@ import {
   listCustomModels,
   openModelsConfig,
   removeCustomModel,
+  testCustomModel,
   upsertCustomModel,
   type CustomModelRow,
   type ModelsConfigSnapshot,
@@ -815,6 +816,30 @@ export function SettingsPanel({
                   <button
                     type="button"
                     className="btn"
+                    disabled={modelBusy || !modelForm.model.trim() || !modelForm.baseUrl.trim()}
+                    onClick={() => {
+                      setModelBusy(true);
+                      setMsg(t('settingsModelsTesting'));
+                      const row: CustomModelRow = {
+                        id: modelForm.model.trim().replace(/[^a-zA-Z0-9_-]/g, '-'),
+                        model: modelForm.model.trim(),
+                        name: modelForm.name.trim() || modelForm.model.trim(),
+                        baseUrl: modelForm.baseUrl.trim(),
+                        apiKey: modelForm.apiKey,
+                        apiBackend: modelForm.apiBackend,
+                        providerLabel: '',
+                      };
+                      void testCustomModel(row)
+                        .then((r) => setMsg(r.note))
+                        .catch((e) => setMsg(String(e)))
+                        .finally(() => setModelBusy(false));
+                    }}
+                  >
+                    {t('settingsModelsTest')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
                     onClick={() =>
                       void openModelsConfig()
                         .then((p) => setMsg(p))
@@ -835,14 +860,31 @@ export function SettingsPanel({
                           {m.model} · {m.baseUrl}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        disabled={modelBusy}
-                        onClick={() => void deleteCustomModel(m.id)}
-                      >
-                        {t('settingsModelsRemove')}
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={modelBusy}
+                          onClick={() => {
+                            setModelBusy(true);
+                            setMsg(t('settingsModelsTesting'));
+                            void testCustomModel(m)
+                              .then((r) => setMsg(r.note))
+                              .catch((e) => setMsg(String(e)))
+                              .finally(() => setModelBusy(false));
+                          }}
+                        >
+                          {t('settingsModelsTest')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={modelBusy}
+                          onClick={() => void deleteCustomModel(m.id)}
+                        >
+                          {t('settingsModelsRemove')}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

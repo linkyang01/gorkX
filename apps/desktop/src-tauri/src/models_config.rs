@@ -298,6 +298,143 @@ pub fn models_open_config() -> Result<String, String> {
     Ok(path.display().to_string())
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelTestResult {
+    pub ok: bool,
+    pub status: u16,
+    pub latency_ms: u64,
+    pub note: String,
+}
+
+/// Probe a custom OpenAI/Anthropic-compatible endpoint (does not change config).
+#[tauri::command]
+pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, String> {
+    let base = model.base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("base_url required".into());
+    }
+    let mid = model.model.trim();
+    if mid.is_empty() {
+        return Err("model id required".into());
+    }
+    let key = model.api_key.trim();
+    let key = if let Some(envn) = key.strip_prefix("env:") {
+        std::env::var(envn.trim()).unwrap_or_default()
+    } else {
+        key.to_string()
+    };
+    let backend = match model.api_backend.trim() {
+        "responses" | "messages" => model.api_backend.trim(),
+        _ => "chat_completions",
+    };
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(25))
+        .user_agent("gorkX-model-test/0.4.3")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let started = std::time::Instant::now();
+    let (url, body, auth_header) = match backend {
+        "messages" => {
+            // Anthropic Messages API
+            let url = if base.ends_with("/v1") {
+                format!("{base}/messages")
+            } else {
+                format!("{base}/v1/messages")
+            };
+            let body = serde_json::json!({
+                "model": mid,
+                "max_tokens": 8,
+                "messages": [{"role":"user","content":"ping"}]
+            });
+            (url, body, ("x-api-key", "anthropic-version"))
+        }
+        "responses" => {
+            let url = if base.contains("/responses") {
+                base.to_string()
+            } else if base.ends_with("/v1") {
+                format!("{base}/responses")
+            } else {
+                format!("{base}/v1/responses")
+            };
+            let body = serde_json::json!({
+                "model": mid,
+                "input": "ping",
+                "max_output_tokens": 8
+            });
+            (url, body, ("authorization", ""))
+        }
+        _ => {
+            let url = if base.ends_with("/chat/completions") {
+                base.to_string()
+            } else if base.ends_with("/v1") {
+                format!("{base}/chat/completions")
+            } else {
+                format!("{base}/chat/completions")
+            };
+            // Prefer /v1/chat/completions when base looks like host root
+            let url = if url.ends_with("/chat/completions") && !base.contains("/v1") && !base.ends_with("/chat/completions") {
+                format!("{base}/v1/chat/completions")
+            } else {
+                url
+            };
+            let body = serde_json::json!({
+                "model": mid,
+                "messages": [{"role":"user","content":"ping"}],
+                "max_tokens": 4
+            });
+            (url, body, ("authorization", ""))
+        }
+    };
+
+    let mut req = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json")
+        .json(&body);
+    if !key.is_empty() {
+        if auth_header.0 == "x-api-key" {
+            req = req
+                .header("x-api-key", &key)
+                .header("anthropic-version", "2023-06-01");
+        } else {
+            req = req.header("Authorization", format!("Bearer {key}"));
+        }
+    }
+    let resp = match req.send() {
+        Ok(r) => r,
+        Err(e) => {
+            return Ok(ModelTestResult {
+                ok: false,
+                status: 0,
+                latency_ms: started.elapsed().as_millis() as u64,
+                note: format!("网络错误: {e}"),
+            });
+        }
+    };
+    let status = resp.status().as_u16();
+    let latency_ms = started.elapsed().as_millis() as u64;
+    let text = resp.text().unwrap_or_default();
+    let ok = (200..300).contains(&status);
+    let snippet: String = text.chars().take(160).collect();
+    let note = if ok {
+        format!("连接成功 · HTTP {status} · {latency_ms} ms")
+    } else if status == 401 || status == 403 {
+        format!("鉴权失败 HTTP {status} — 检查 API Key · {snippet}")
+    } else if status == 404 {
+        format!("路径不存在 HTTP 404 — 检查 base_url 是否含 /v1 · {snippet}")
+    } else {
+        format!("HTTP {status} · {snippet}")
+    };
+    Ok(ModelTestResult {
+        ok,
+        status,
+        latency_ms,
+        note,
+    })
+}
+
 /// Merge keys from `body` into section; keep other keys in section when possible (replace whole section for simplicity).
 fn upsert_toml_section(raw: &str, section_header: &str, body: &str) -> String {
     let lines: Vec<&str> = raw.lines().collect();

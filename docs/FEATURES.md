@@ -14,7 +14,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Scheduled | Local jobs; fires while app open | **Real** (app must be running) |
 | Terminal | PTY dock | **Real** |
 | Extensions | Skills / MCP / plugins via engine CLI | **Real** (depends on engine) |
-| Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember writes disk | **Real (v0.4)** — kernel `/flush`/`/dream` still optional extras |
+| Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember / Forget / keyword search / local compact | **Real (v0.4+)** — kernel `/flush`/`/dream` still optional extras |
 | Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** |
 | App update | Settings check + download DMG; launch banner | **Real (v0.4.2)** — drag into Applications to replace |
 | Onboarding | First-run checklist: engine · login · project | **Real (v0.4.3)** |
@@ -22,7 +22,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Worktree | create / list / use as project / new task / remove | **Half→improved** |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; **non-git workspace file list** | **Half→improved** — no line diffs without git |
-| Multi-provider models | Settings → config.toml models | **Half** — engine must honor config |
+| Multi-provider models | Settings → config.toml; **connection probe** (OpenAI / Anthropic style) | **Half→improved** — routing still depends on engine |
 | + menu (imagine/goal/fork/…) | Stage or send slash; filter by session available_commands | **Half→improved** |
 | Settings · Appearance / Browser / Computer / Hooks | Explicit “not available yet” | **Planned** (honest placeholder) |
 

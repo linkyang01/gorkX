@@ -917,3 +917,142 @@ pub fn memory_delete_file(path: String) -> Result<MemoryStatus, String> {
     }
     memory_status(None)
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemorySearchHit {
+    pub path: String,
+    pub name: String,
+    pub scope: String,
+    pub line_no: u32,
+    pub preview: String,
+}
+
+/// Keyword search across USER / AGENT / project MEMORY / session dumps.
+#[tauri::command]
+pub fn memory_search(
+    query: String,
+    project: Option<String>,
+    limit: Option<u32>,
+) -> Result<Vec<MemorySearchHit>, String> {
+    let q = query.trim().to_lowercase();
+    if q.chars().count() < 2 {
+        return Err("search query too short".into());
+    }
+    let _ = ensure_memory_layout(project.as_deref())?;
+    let root = memory_root();
+    let mut paths: Vec<(PathBuf, String)> = Vec::new();
+    paths.push((root.join("USER.md"), "user".into()));
+    paths.push((root.join("AGENT.md"), "agent".into()));
+    if let Some(proj) = project.as_ref().filter(|p| !p.trim().is_empty()) {
+        let slug = project_slug(proj);
+        paths.push((
+            root.join("workspaces").join(slug).join("MEMORY.md"),
+            "project".into(),
+        ));
+    }
+    let sess = root.join("sessions");
+    if let Ok(rd) = std::fs::read_dir(&sess) {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if p.extension().and_then(|e| e.to_str()) == Some("md") {
+                paths.push((p, "session".into()));
+            }
+        }
+    }
+    let max = limit.unwrap_or(40).min(100) as usize;
+    let mut hits = Vec::new();
+    for (path, scope) in paths {
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("MEMORY.md")
+            .to_string();
+        for (i, line) in raw.lines().enumerate() {
+            if line.to_lowercase().contains(&q) {
+                let preview: String = line.trim().chars().take(200).collect();
+                if preview.is_empty() {
+                    continue;
+                }
+                hits.push(MemorySearchHit {
+                    path: path.display().to_string(),
+                    name: name.clone(),
+                    scope: scope.clone(),
+                    line_no: (i + 1) as u32,
+                    preview,
+                });
+                if hits.len() >= max {
+                    return Ok(hits);
+                }
+            }
+        }
+    }
+    Ok(hits)
+}
+
+/// Deduplicate blank-heavy / repeated bullet lines in core memory files (local compact).
+#[tauri::command]
+pub fn memory_compact(project: Option<String>) -> Result<MemoryStatus, String> {
+    let _ = ensure_memory_layout(project.as_deref())?;
+    let root = memory_root();
+    let mut paths = vec![root.join("USER.md"), root.join("AGENT.md")];
+    if let Some(proj) = project.as_ref().filter(|p| !p.trim().is_empty()) {
+        let slug = project_slug(proj);
+        paths.push(root.join("workspaces").join(slug).join("MEMORY.md"));
+    }
+    for path in paths {
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let compacted = compact_markdown_lines(&raw);
+        if compacted != raw {
+            let _ = std::fs::write(&path, compacted);
+        }
+    }
+    memory_status(project)
+}
+
+fn compact_markdown_lines(raw: &str) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen_bullets: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut blank_run = 0u32;
+    for line in raw.lines() {
+        let t = line.trim();
+        // Collapse 3+ blank lines → 1
+        if t.is_empty() {
+            blank_run += 1;
+            if blank_run <= 1 {
+                out.push(String::new());
+            }
+            continue;
+        }
+        blank_run = 0;
+        // Dedup identical bullet / list lines (case-insensitive)
+        let is_bullet = t.starts_with('-')
+            || t.starts_with('*')
+            || t.starts_with('•')
+            || (t.len() > 2 && t.as_bytes()[0].is_ascii_digit() && t.contains('.'));
+        if is_bullet {
+            let key = t.to_lowercase();
+            if seen_bullets.contains(&key) {
+                continue;
+            }
+            seen_bullets.insert(key);
+        }
+        out.push(line.to_string());
+    }
+    let mut body = out.join("\n");
+    if !body.ends_with('\n') {
+        body.push('\n');
+    }
+    body
+}

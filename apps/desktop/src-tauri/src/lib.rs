@@ -155,11 +155,14 @@ pub fn run() {
             memory::memory_record_session,
             memory::memory_forget,
             memory::memory_delete_file,
+            memory::memory_search,
+            memory::memory_compact,
             models_config::models_list_custom,
             models_config::models_upsert_custom,
             models_config::models_remove_custom,
             models_config::models_set_default,
             models_config::models_open_config,
+            models_config::models_test_connection,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
