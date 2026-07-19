@@ -54,8 +54,8 @@ import { ScheduledPanel } from './components/ScheduledPanel';
 import {
   type ScheduledJob,
   computeNextRun,
-  loadJobs,
-  saveJobs,
+  loadPersistentJobs,
+  savePersistentJobs,
 } from './lib/scheduled';
 import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
 import { listCustomModels } from './lib/modelsConfig';
@@ -1264,38 +1264,45 @@ function App() {
 
   /** Fire due scheduled jobs while the app is open (Codex「已安排」). */
   useEffect(() => {
+    let ticking = false;
     const tick = () => {
-      const jobs = loadJobs();
-      const now = Date.now();
-      let changed = false;
-      const nextJobs = jobs.map((j) => {
-        if (!j.enabled || j.nextRunAt > now) return j;
-        // Fire
-        changed = true;
-        void (async () => {
-          try {
-            if (j.projectPath) {
-              setProject(j.projectPath);
-              setRecentProjects(pushRecentProject(j.projectPath));
-              localStorage.setItem('gorkx.project', j.projectPath);
-            } else {
-              setProject('');
-              localStorage.removeItem('gorkx.project');
+      if (ticking) return;
+      ticking = true;
+      void (async () => {
+        try {
+          const jobs = await loadPersistentJobs();
+          const now = Date.now();
+          let changed = false;
+          const due: ScheduledJob[] = [];
+          const nextJobs = jobs.map((j) => {
+            if (!j.enabled || j.nextRunAt > now) return j;
+            // Persist the next slot before starting an agent so an App reload
+            // cannot duplicate the same scheduled prompt.
+            changed = true;
+            due.push(j);
+            return { ...j, lastRunAt: now, nextRunAt: computeNextRun(j, now) };
+          });
+          if (changed) await savePersistentJobs(nextJobs);
+          for (const job of due) {
+            try {
+              if (job.projectPath) {
+                setProject(job.projectPath);
+                setRecentProjects(pushRecentProject(job.projectPath));
+                localStorage.setItem('gorkx.project', job.projectPath);
+              } else {
+                setProject('');
+                localStorage.removeItem('gorkx.project');
+              }
+              await new Promise((r) => setTimeout(r, 200));
+              await createThreadRef.current?.({ initialPrompt: job.prompt });
+            } catch {
+              /* one failed agent run does not corrupt schedule state */
             }
-            // small delay so project state applies
-            await new Promise((r) => setTimeout(r, 200));
-            await createThreadRef.current?.({ initialPrompt: j.prompt });
-          } catch {
-            /* ignore single fire failure */
           }
-        })();
-        return {
-          ...j,
-          lastRunAt: now,
-          nextRunAt: computeNextRun(j, now),
-        };
-      });
-      if (changed) saveJobs(nextJobs);
+        } finally {
+          ticking = false;
+        }
+      })();
     };
     const id = window.setInterval(tick, 30_000);
     // also check once shortly after launch

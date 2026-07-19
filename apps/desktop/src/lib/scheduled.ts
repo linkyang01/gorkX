@@ -1,4 +1,5 @@
 /** App-local scheduled tasks (Codex「已安排」). Run while gorkX is open. */
+import { invoke } from '@tauri-apps/api/core';
 
 export type ScheduleKind = 'interval' | 'daily';
 
@@ -23,6 +24,7 @@ export interface ScheduledJob {
 }
 
 const LS_KEY = 'gorkx.scheduledJobs.v1';
+const STORE_KEY = 'scheduled_jobs_v1';
 
 export function loadJobs(): ScheduledJob[] {
   try {
@@ -41,6 +43,42 @@ export function saveJobs(jobs: ScheduledJob[]): void {
     localStorage.setItem(LS_KEY, JSON.stringify(jobs));
   } catch {
     /* */
+  }
+}
+
+/**
+ * Durable App SQLite storage, with a one-time localStorage import for older
+ * installs and browser/dev fallback. The worker layer may later consume this
+ * same store without depending on WebView state.
+ */
+export async function loadPersistentJobs(): Promise<ScheduledJob[]> {
+  try {
+    const raw = await invoke<string | null>('store_kv_get', { key: STORE_KEY });
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (job): job is ScheduledJob =>
+            Boolean(job) && typeof job === 'object' && typeof (job as ScheduledJob).id === 'string',
+        );
+      }
+    }
+    const legacy = loadJobs();
+    if (legacy.length) await savePersistentJobs(legacy);
+    return legacy;
+  } catch {
+    return loadJobs();
+  }
+}
+
+export async function savePersistentJobs(jobs: ScheduledJob[]): Promise<void> {
+  // Keep this mirror for non-Tauri development and backward-compatible reads.
+  saveJobs(jobs);
+  try {
+    await invoke('store_kv_set', { key: STORE_KEY, value: JSON.stringify(jobs) });
+  } catch {
+    // WebView storage remains the fallback; do not make a scheduled task UI
+    // appear broken solely because the native bridge is not running in dev.
   }
 }
 

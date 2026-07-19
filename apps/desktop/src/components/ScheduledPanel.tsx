@@ -6,9 +6,9 @@ import {
   type ScheduledJob,
   computeNextRun,
   formatNextRun,
-  loadJobs,
+  loadPersistentJobs,
   nid,
-  saveJobs,
+  savePersistentJobs,
   SUGGESTIONS,
 } from '../lib/scheduled';
 import { projectDisplayName } from '../lib/projects';
@@ -33,7 +33,7 @@ export function ScheduledPanel({
   currentProject,
   onRunJob,
 }: Props) {
-  const [jobs, setJobs] = useState<ScheduledJob[]>(() => loadJobs());
+  const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -45,7 +45,8 @@ export function ScheduledPanel({
   const [weekdaysOnly, setWeekdaysOnly] = useState(true);
 
   useEffect(() => {
-    if (open) setJobs(loadJobs());
+    if (!open) return;
+    void loadPersistentJobs().then(setJobs);
   }, [open]);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export function ScheduledPanel({
 
   const persist = (next: ScheduledJob[]) => {
     setJobs(next);
-    saveJobs(next);
+    void savePersistentJobs(next);
   };
 
   const addJob = (partial: Omit<ScheduledJob, 'id' | 'createdAt' | 'nextRunAt' | 'lastRunAt'>) => {
