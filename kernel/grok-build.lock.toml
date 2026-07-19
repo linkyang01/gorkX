@@ -1,0 +1,18 @@
+# Source-of-truth for the next reproducible gorkX kernel build.
+# Update only through the documented upstream-sync process and ACP regression gate.
+[upstream]
+repository = "https://github.com/xai-org/grok-build.git"
+commit = "7cfcb20d2b50b0d18801a6c0af2e401c0e060894"
+observed_at = "2026-07-19"
+
+[build]
+package = "xai-grok-pager-bin"
+binary = "xai-grok-pager"
+target = "release"
+
+[current_bundle]
+# The currently shipped local bundle predates this source lock. It remains
+# explicitly identified until the locked source is rebuilt and ACP-verified.
+version = "grok 0.2.103"
+revision_prefix = "89c3d36fb6f1"
+source_revision_verified = false
