@@ -179,7 +179,19 @@ pub fn run_due_jobs() -> Result<SchedulerRunSummary, String> {
     let conn = Connection::open(db).map_err(|e| format!("sqlite open: {e}"))?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
-    let now = now_ms();
+    process_due_jobs(&conn, now_ms(), run_read_only_job)
+}
+
+/// Transactional queue transition, factored from the process launcher so it
+/// can be exercised without a Grok account or a live app data directory.
+fn process_due_jobs<F>(
+    conn: &Connection,
+    now: i64,
+    mut runner: F,
+) -> Result<SchedulerRunSummary, String>
+where
+    F: FnMut(&ScheduledJob) -> Result<String, String>,
+{
     let mut jobs = read_jobs(&conn)?;
     let mut summary = SchedulerRunSummary {
         due: 0,
@@ -202,7 +214,7 @@ pub fn run_due_jobs() -> Result<SchedulerRunSummary, String> {
         save_jobs(&conn, &jobs)?;
 
         let claimed = jobs[index].clone();
-        let result = run_read_only_job(&claimed);
+        let result = runner(&claimed);
         let (ok, output) = match result {
             Ok(out) => (true, out),
             Err(err) => (false, err),
@@ -213,7 +225,7 @@ pub fn run_due_jobs() -> Result<SchedulerRunSummary, String> {
             summary.failed += 1;
             jobs[index].failure_count += 1;
             jobs[index].last_error = Some(output.chars().take(500).collect());
-            jobs[index].next_run_at = retry_at(jobs[index].failure_count, now_ms());
+            jobs[index].next_run_at = retry_at(jobs[index].failure_count, now);
         }
         append_run(
             &conn,
@@ -372,6 +384,10 @@ pub fn scheduler_disable() -> Result<SchedulerStatus, String> {
 #[tauri::command]
 pub fn scheduler_list_runs() -> Result<Vec<SchedulerRun>, String> {
     let conn = Connection::open(store::db_path()?).map_err(|e| format!("sqlite open: {e}"))?;
+    scheduler_list_runs_from(&conn)
+}
+
+fn scheduler_list_runs_from(conn: &Connection) -> Result<Vec<SchedulerRun>, String> {
     let raw: Option<String> = conn
         .query_row(
             "SELECT value FROM kv WHERE key = ?1",
@@ -392,4 +408,66 @@ fn xml_escape(value: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&apos;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(id: &str, next_run_at: i64) -> ScheduledJob {
+        ScheduledJob {
+            id: id.into(),
+            title: format!("job {id}"),
+            prompt: "inspect only".into(),
+            project_path: String::new(),
+            kind: "interval".into(),
+            interval_minutes: 15,
+            daily_hour: 9,
+            daily_minute: 0,
+            weekdays_only: false,
+            enabled: true,
+            last_run_at: None,
+            failure_count: 0,
+            last_error: None,
+            next_run_at,
+        }
+    }
+
+    fn memory_conn(jobs: &[ScheduledJob]) -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+            [],
+        )
+        .unwrap();
+        save_jobs(&conn, jobs).unwrap();
+        conn
+    }
+
+    #[test]
+    fn due_job_is_claimed_persisted_and_recorded() {
+        let now = 1_000_000_i64;
+        let conn = memory_conn(&[job("a", now)]);
+        let summary = process_due_jobs(&conn, now, |_| Ok("structured result".into())).unwrap();
+        assert_eq!((summary.due, summary.succeeded, summary.failed), (1, 1, 0));
+        let updated = read_jobs(&conn).unwrap();
+        assert_eq!(updated[0].last_run_at, Some(now));
+        assert_eq!(updated[0].next_run_at, now + 15 * 60_000);
+        let runs = scheduler_list_runs_from(&conn).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert!(runs[0].ok);
+        assert_eq!(runs[0].output, "structured result");
+    }
+
+    #[test]
+    fn failed_job_uses_persisted_backoff() {
+        let now = 1_000_000_i64;
+        let conn = memory_conn(&[job("b", now)]);
+        let summary = process_due_jobs(&conn, now, |_| Err("engine unavailable".into())).unwrap();
+        assert_eq!((summary.due, summary.succeeded, summary.failed), (1, 0, 1));
+        let updated = read_jobs(&conn).unwrap();
+        assert_eq!(updated[0].failure_count, 1);
+        assert_eq!(updated[0].next_run_at, retry_at(1, now));
+        assert_eq!(updated[0].last_error.as_deref(), Some("engine unavailable"));
+    }
 }
