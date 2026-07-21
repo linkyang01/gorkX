@@ -111,7 +111,7 @@ Local worker or hosted worker
 
 - 默认最小权限；网络、外部写入、Computer 均逐次或规则化审批。
 - API Key 只进入 Keychain/环境，不进入聊天、日志、SQLite 或 config 明文。
-- 主线程首屏 JS 保持小于 500 KB gzip 前单 chunk；大面板按需加载。
+- 主线程首屏 JS 保持小于 500 KB gzip 前单 chunk；大面板按需加载。构建后用 `scripts/verify-desktop-web-build.sh` 门禁验证。
 - 任意升级先在隔离临时 home 和公开测试仓库验证。
 - 每个“真实”声明必须有命令、测试或可见操作证据。
 
