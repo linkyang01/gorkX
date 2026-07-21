@@ -1924,6 +1924,24 @@ button.pill:hover {
   font-weight: 650;
 }
 
+/* Settings actions share one control rhythm. The global button scale also
+ * serves dense sidebars and review controls, so normalize only this surface. */
+.settings-main .btn {
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.settings-main .btn.btn-sm,
+.settings-main .btn.primary-sm {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .settings-card {
   border: 1px solid var(--hairline);
   border-radius: 12px;
