@@ -2,6 +2,7 @@
 // Protocol gate for a Grok Build binary. By default it intentionally requires
 // no login and never touches the user's GROK_HOME or project directory.
 // Pass --authenticated only with an explicit disposable GROK_HOME/CWD pair.
+// --worktree additionally creates a worktree only in that disposable Git CWD.
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -9,12 +10,17 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
-if (options.some((option) => option !== '--authenticated')) {
-  console.error(`unknown option: ${options.find((option) => option !== '--authenticated')}`);
+const worktreeSmoke = options.includes('--worktree');
+if (worktreeSmoke && !authenticated) {
+  console.error('--worktree requires --authenticated with an explicit disposable Git CWD');
+  process.exit(2);
+}
+if (options.some((option) => option !== '--authenticated' && option !== '--worktree')) {
+  console.error(`unknown option: ${options.find((option) => option !== '--authenticated' && option !== '--worktree')}`);
   process.exit(2);
 }
 
@@ -86,6 +92,11 @@ function request(method, params, timeoutMs = 8_000) {
   });
 }
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function unwrapResult(value) {
+  return value && typeof value === 'object' && 'result' in value ? value.result : value;
+}
+
 try {
   await request('initialize', {
     protocolVersion: 1,
@@ -141,6 +152,31 @@ try {
       throw new Error(`_x.ai/git/worktree/list returned invalid payload: ${JSON.stringify(worktreeRaw)}`);
     }
     console.log('PASS: ACP _x.ai/git/worktree/list');
+
+    if (worktreeSmoke) {
+      const createdRaw = await request('_x.ai/git/worktree/create', {
+        sessionId,
+        sourcePath: cwd,
+        name: `gorkx-acp-smoke-${Date.now().toString(36)}`,
+      }, 60_000);
+      const created = unwrapResult(createdRaw) || {};
+      let worktreePath = typeof created.worktreePath === 'string' ? created.worktreePath : '';
+      // Grok Build may return "creating" first; the authoritative list is
+      // polled rather than treating an accepted request as a finished clone.
+      for (let attempt = 0; !worktreePath && attempt < 12; attempt += 1) {
+        await delay(1_000);
+        const listed = unwrapResult(await request('_x.ai/git/worktree/list', {}, 15_000));
+        if (Array.isArray(listed)) {
+          const hit = listed.find((entry) => entry && typeof entry === 'object' &&
+            (entry.sessionId === sessionId || entry.sourcePath === cwd || entry.sourceGitRoot === cwd));
+          if (hit && typeof hit.worktreePath === 'string') worktreePath = hit.worktreePath;
+        }
+      }
+      if (!worktreePath) {
+        throw new Error(`worktree create did not produce a path: ${JSON.stringify(createdRaw)}`);
+      }
+      console.log(`PASS: ACP _x.ai/git/worktree/create (${worktreePath})`);
+    }
   }
 } catch (error) {
   console.error(`FAIL: ACP smoke: ${error instanceof Error ? error.message : String(error)}\n${stderr}`);
