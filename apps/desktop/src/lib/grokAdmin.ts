@@ -60,7 +60,7 @@ export async function sessionsList(grokCmd?: string, limit = 40) {
 }
 
 export async function sessionsSearch(query: string, grokCmd?: string, limit = 40) {
-  const result = await admin(['sessions', 'search', '-n', String(limit), query.trim()], grokCmd);
+  const result = await admin(['sessions', 'search', '-n', String(limit), '--', query.trim()], grokCmd);
   const raw = output(result);
   if (result.exitCode != null && result.exitCode !== 0 && !raw.includes('SESSION')) {
     throw new Error(raw || `sessions search exit ${result.exitCode}`);
