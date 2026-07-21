@@ -139,6 +139,7 @@ import { SidebarNav } from './components/SidebarNav';
 import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
 import { PermissionPrompt } from './components/PermissionPrompt';
+import { AppBanners } from './components/AppBanners';
 import {
   fetchAccountSummary,
   fetchModelContext,
@@ -3511,45 +3512,20 @@ function App() {
         </div>
       </div>
 
-      {/* Engine missing only — login lives in the bottom-left account menu */}
-      {status && !status.installed ? (
-        <div className="banner warn">
-          {t('statusMissing') + ' — ' + (status.detail || '')}
-          <button type="button" className="btn btn-sm" onClick={() => setKernelOpen(true)}>
-            {t('settings')}
-          </button>
-          <button type="button" className="btn btn-sm" onClick={refreshStatus}>
-            {t('kernelRefresh')}
-          </button>
-        </div>
-      ) : null}
-
-      {appUpdateBanner?.updateAvailable ? (
-        <div className="banner info">
-          {t('updateBannerBody')
-            .replace('{latest}', appUpdateBanner.latestVersion)
-            .replace('{cur}', appUpdateBanner.currentVersion)}
-          <button
-            type="button"
-            className="btn btn-sm primary"
-            onClick={() => {
-              void (async () => {
-                const r = await installAppUpdate(appUpdateBanner);
-                if (r.ok) setAppUpdateBanner(null);
-              })();
-            }}
-          >
-            {t('updateBannerAction')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => setAppUpdateBanner(null)}
-          >
-            ×
-          </button>
-        </div>
-      ) : null}
+      <AppBanners
+        status={status}
+        update={appUpdateBanner}
+        onOpenSettings={() => setKernelOpen(true)}
+        onRefreshEngine={refreshStatus}
+        onInstallUpdate={() => {
+          void (async () => {
+            if (!appUpdateBanner) return;
+            const result = await installAppUpdate(appUpdateBanner);
+            if (result.ok) setAppUpdateBanner(null);
+          })();
+        }}
+        onDismissUpdate={() => setAppUpdateBanner(null)}
+      />
 
       {/* Codex-style sidebar — fully hidden when collapsed; toggle is in app-chrome */}
       <aside className="sidebar">
