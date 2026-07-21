@@ -42,6 +42,7 @@ pub struct ChatLineRow {
     pub role: String,
     pub text: String,
     pub tool_key: Option<String>,
+    pub parent_subagent_id: Option<String>,
     pub tool_status: Option<String>,
     pub tool_kind: Option<String>,
 }
@@ -87,6 +88,7 @@ impl AppStore {
               role TEXT NOT NULL,
               text TEXT NOT NULL,
               tool_key TEXT,
+              parent_subagent_id TEXT,
               tool_status TEXT,
               tool_kind TEXT,
               PRIMARY KEY (project, thread_id, seq)
@@ -116,6 +118,10 @@ impl AppStore {
         );
         let _ = conn.execute(
             "ALTER TABLE thread_meta ADD COLUMN session_goal_message TEXT",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE chat_lines ADD COLUMN parent_subagent_id TEXT",
             [],
         );
         Ok(Self {
@@ -1003,8 +1009,8 @@ pub fn store_save_chat(
             .prepare(
                 r#"
                 INSERT INTO chat_lines (
-                  thread_id, project, seq, id, role, text, tool_key, tool_status, tool_kind
-                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)
+                  thread_id, project, seq, id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind
+                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
                 "#,
             )
             .map_err(|e| e.to_string())?;
@@ -1017,6 +1023,7 @@ pub fn store_save_chat(
                 line.role,
                 line.text,
                 line.tool_key,
+                line.parent_subagent_id,
                 line.tool_status,
                 line.tool_kind,
             ])
@@ -1037,7 +1044,7 @@ pub fn store_load_chat(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, role, text, tool_key, tool_status, tool_kind
+            SELECT id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind
             FROM chat_lines
             WHERE project = ?1 AND thread_id = ?2
             ORDER BY seq ASC
@@ -1051,8 +1058,9 @@ pub fn store_load_chat(
                 role: r.get(1)?,
                 text: r.get(2)?,
                 tool_key: r.get(3)?,
-                tool_status: r.get(4)?,
-                tool_kind: r.get(5)?,
+                parent_subagent_id: r.get(4)?,
+                tool_status: r.get(5)?,
+                tool_kind: r.get(6)?,
             })
         })
         .map_err(|e| e.to_string())?

@@ -694,6 +694,7 @@ function App() {
           role: l.role,
           text: l.text,
           toolKey: l.toolKey,
+          parentSubagentId: l.parentSubagentId,
           toolStatus: l.toolStatus,
           toolKind: l.toolKind,
         })),
@@ -1262,7 +1263,7 @@ function App() {
       role: ChatLine['role'],
       chunk: string,
       toolKey?: string,
-      meta?: { toolStatus?: string; toolKind?: string },
+      meta?: { toolStatus?: string; toolKind?: string; parentSubagentId?: string },
     ) => {
       if (!chunk && !toolKey) return;
       setThreads((prev) =>
@@ -1298,6 +1299,7 @@ function App() {
                 text: nextText,
                 toolStatus: meta?.toolStatus ?? prev.toolStatus,
                 toolKind: meta?.toolKind ?? prev.toolKind,
+                parentSubagentId: meta?.parentSubagentId ?? prev.parentSubagentId,
               };
               return { ...th, lines };
             }
@@ -1306,6 +1308,7 @@ function App() {
               role,
               text: chunk || meta?.toolKind || '工具调用',
               toolKey,
+              parentSubagentId: meta?.parentSubagentId,
               toolStatus: meta?.toolStatus,
               toolKind: meta?.toolKind,
             });
@@ -1332,6 +1335,7 @@ function App() {
           appendOrMerge(threadId, 'tool', subagent.label, `subagent:${subagent.subagentId}`, {
             toolStatus: subagent.status,
             toolKind: subagent.kind,
+            parentSubagentId: subagent.parentSubagentId,
           });
           return;
         }

@@ -862,6 +862,8 @@ export type ParsedToolUpdate = {
  */
 export type ParsedSubagentUpdate = {
   subagentId: string;
+  /** Present only when the kernel reports a nested child task. */
+  parentSubagentId?: string;
   label: string;
   status: string;
   kind: 'subagent';
@@ -879,12 +881,17 @@ export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate
   }
   const subagentId = String(raw.subagent_id ?? raw.subagentId ?? raw.child_session_id ?? '');
   if (!subagentId) return null;
+  const parent = String(raw.parent_subagent_id ?? raw.parentSubagentId ?? raw.parent_id ?? '');
+  // Keep the protocol field only when it points at another task. A self-link
+  // would make a renderer recurse forever and is never useful to the user.
+  const parentSubagentId = parent && parent !== subagentId ? parent : undefined;
 
   if (event === 'subagent_spawned') {
     const type = String(raw.subagent_type ?? raw.subagentType ?? 'general-purpose');
     const description = String(raw.description ?? '').trim();
     return {
       subagentId,
+      parentSubagentId,
       label: `子任务 · ${type}${description ? ` · ${description}` : ''}`,
       status: 'running',
       kind: 'subagent',
@@ -901,6 +908,7 @@ export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate
     ].filter(Boolean);
     return {
       subagentId,
+      parentSubagentId,
       // Keep the spawn description as the row title while progress updates.
       label: '',
       status: details.length ? `running · ${details.join(' · ')}` : 'running',
@@ -917,6 +925,7 @@ export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate
     .join(' · ');
   return {
     subagentId,
+    parentSubagentId,
     label: error ? `子任务失败 · ${error}` : '',
     status: details ? `${outcome} · ${details}` : outcome,
     kind: 'subagent',

@@ -4,6 +4,7 @@ import { sanitizeText, summarizeError, toolKindLabel } from '../lib/chatFormat';
 import { humanToolTitle } from '../lib/toolHuman';
 import { IconClose, IconThought, IconTool, IconSystem, IconWarning, IconRefresh } from './UiIcons';
 import { t } from '../lib/i18n';
+import { SubagentTree } from './SubagentTree';
 
 interface Props {
   open: boolean;
@@ -52,6 +53,7 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
         </button>
       </div>
       <div className="process-body">
+        <SubagentTree lines={processLines} />
         {processLines.length === 0 ? (
           <div className="hint">{t('processEmpty')}</div>
         ) : (

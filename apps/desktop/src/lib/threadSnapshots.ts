@@ -5,6 +5,7 @@ export type StoredChatLine = {
   role: string;
   text: string;
   toolKey?: string | null;
+  parentSubagentId?: string | null;
   toolStatus?: string | null;
   toolKind?: string | null;
 };
@@ -18,6 +19,7 @@ export function snapToLines(snaps: StoredChatLine[]): ChatLine[] {
       : 'system') as ChatLine['role'],
     text: s.text,
     toolKey: s.toolKey ?? undefined,
+    parentSubagentId: s.parentSubagentId ?? undefined,
     toolStatus: s.toolStatus ?? undefined,
     toolKind: s.toolKind ?? undefined,
   }));

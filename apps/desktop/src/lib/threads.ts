@@ -38,6 +38,7 @@ export interface ChatLineSnap {
   role: string;
   text: string;
   toolKey?: string | null;
+  parentSubagentId?: string | null;
   toolStatus?: string | null;
   toolKind?: string | null;
 }
@@ -260,6 +261,7 @@ export async function saveChatSnapshot(
         role: l.role,
         text: l.text,
         toolKey: l.toolKey ?? null,
+        parentSubagentId: l.parentSubagentId ?? null,
         toolStatus: l.toolStatus ?? null,
         toolKind: l.toolKind ?? null,
       })),

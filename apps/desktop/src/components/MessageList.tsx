@@ -19,6 +19,8 @@ export interface ChatLine {
   role: 'user' | 'assistant' | 'thought' | 'tool' | 'system' | 'plan';
   text: string;
   toolKey?: string;
+  /** Native parent task id when Grok Build reports nested subagent work. */
+  parentSubagentId?: string;
   planEntries?: PlanEntry[];
   toolStatus?: string;
   toolKind?: string;

@@ -605,6 +605,12 @@ const dict = {
     settingsComputerCapturing: 'Waiting for a screen area…',
     settingsComputerCaptured: 'Added to the composer: {path}',
     settingsHooks: 'Hooks',
+    subagentTreeTitle: 'Subtasks',
+    subagentTreeHint: 'Only tasks reported by the Grok Build kernel are shown. Older kernels may not provide nesting.',
+    subagentTreeRunning: 'running',
+    subagentTreeComplete: 'complete',
+    subagentTreeFailed: 'failed',
+    subagentTreeCancelled: 'cancelled',
     settingsHooksUnavailable:
       'The currently verified Grok Build kernel does not expose an ACP Hooks API. Manage project instructions in AGENTS.md; this panel will return only when the kernel supports a real hook lifecycle.',
     settingsHooksHint:
@@ -1392,6 +1398,12 @@ const dict = {
     settingsComputerCapturing: '等待选择屏幕区域…',
     settingsComputerCaptured: '已加入输入框：{path}',
     settingsHooks: '钩子',
+    subagentTreeTitle: '子任务',
+    subagentTreeHint: '这里只显示 Grok Build 内核实际报告的子任务；旧内核可能不提供层级关系。',
+    subagentTreeRunning: '进行中',
+    subagentTreeComplete: '已完成',
+    subagentTreeFailed: '失败',
+    subagentTreeCancelled: '已取消',
     settingsHooksUnavailable:
       '当前已验证的 Grok Build 内核没有提供 ACP Hooks API。请在项目的 AGENTS.md 管理项目指令；只有内核提供真实钩子生命周期后，本页才会恢复可操作入口。',
     settingsHooksHint: '项目规则与钩子将在此管理。目前可编辑项目中的 AGENTS.md。',
