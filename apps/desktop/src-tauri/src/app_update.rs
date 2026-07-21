@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 const OWNER: &str = "linkyang01";
 const REPO: &str = "gorkX";
 const UA: &str = "gorkX-desktop-updater/0.4.3";
+static NEXT_DOWNLOAD_TEMP_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -319,6 +321,24 @@ fn downloads_dir() -> PathBuf {
         .unwrap_or_else(|| std::env::temp_dir())
 }
 
+/// Do not replace a previously complete DMG until the new response is fully
+/// written and synced. A failed download must not leave a half-written file
+/// that looks installable in Downloads.
+fn write_download_atomically(dest: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    let id = NEXT_DOWNLOAD_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+    let temp = dest.with_extension(format!("download-{id}"));
+    let result = (|| {
+        let mut file = File::create(&temp).map_err(|e| format!("写入失败: {e}"))?;
+        file.write_all(bytes).map_err(|e| format!("写入失败: {e}"))?;
+        file.sync_all().map_err(|e| format!("写入失败: {e}"))?;
+        std::fs::rename(&temp, dest).map_err(|e| format!("写入失败: {e}"))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result
+}
+
 /// Download the latest (or given) DMG into Downloads and open it for the user to install.
 #[tauri::command]
 pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> Result<AppUpdateInstallResult, String> {
@@ -393,10 +413,7 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
             note: format!("安装包过小或地址错误（{safe_name}）"),
         });
     }
-    {
-        let mut f = File::create(&dest).map_err(|e| format!("写入失败: {e}"))?;
-        f.write_all(&bytes).map_err(|e| format!("写入失败: {e}"))?;
-    }
+    write_download_atomically(&dest, &bytes)?;
 
     // Open DMG so user can drag into Applications
     #[cfg(target_os = "macos")]
@@ -447,5 +464,18 @@ mod tests {
         ] {
             assert!(validate_release_dmg(url, name).is_err(), "{url}");
         }
+    }
+
+    #[test]
+    fn download_write_replaces_only_after_complete_temp_write() {
+        let suffix = NEXT_DOWNLOAD_TEMP_ID.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("gorkx-update-test-{suffix}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("gorkX.dmg");
+        std::fs::write(&dest, b"previous complete image").unwrap();
+        write_download_atomically(&dest, b"new complete image").unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"new complete image");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
