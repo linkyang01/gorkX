@@ -1,8 +1,10 @@
 import {
   useCallback,
   useEffect,
+  lazy,
   useMemo,
   useRef,
+  Suspense,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
@@ -26,31 +28,25 @@ import {
   type ReasoningEffort,
   type SessionUpdate,
 } from './lib/acpClient';
-import { SettingsPanel, type ArchivedTaskRow } from './components/SettingsPanel';
+import type { ArchivedTaskRow } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
-import { ExtensionsPanel } from './components/ExtensionsPanel';
 import { MessageList, type ChatLine } from './components/MessageList';
 import { AttachmentStrip } from './components/AttachmentStrip';
 import { AttachmentPreview } from './components/AttachmentPreview';
-import { ReviewPanel } from './components/ReviewPanel';
-import { TerminalDock } from './components/TerminalDock';
 import {
   TextPromptModal,
   type TextPromptRequest,
 } from './components/TextPromptModal';
-import { MemoryPanel } from './components/MemoryPanel';
 import {
   OnboardingModal,
   dismissOnboarding,
   isOnboardingDismissed,
 } from './components/OnboardingModal';
 
-import { WorktreePanel } from './components/WorktreePanel';
 import { ProcessPanel } from './components/ProcessPanel';
 import { PlusMenu, type PlusAction } from './components/PlusMenu';
 import { ProjectPicker, type ProjectPickerAction } from './components/ProjectPicker';
-import { ScheduledPanel } from './components/ScheduledPanel';
 import {
   type ScheduledJob,
   computeNextRun,
@@ -185,6 +181,35 @@ import {
   VoiceInputSession,
 } from './lib/voiceInput';
 import './App.css';
+
+// Panels below are opened deliberately, not needed to render a task or the
+// first-run screen. Keep their real implementations intact but load them only
+// when the user asks for the corresponding Codex-style workspace surface.
+const SettingsPanel = lazy(() =>
+  import('./components/SettingsPanel').then(({ SettingsPanel }) => ({ default: SettingsPanel })),
+);
+const ExtensionsPanel = lazy(() =>
+  import('./components/ExtensionsPanel').then(({ ExtensionsPanel }) => ({ default: ExtensionsPanel })),
+);
+const ReviewPanel = lazy(() =>
+  import('./components/ReviewPanel').then(({ ReviewPanel }) => ({ default: ReviewPanel })),
+);
+const TerminalDock = lazy(() =>
+  import('./components/TerminalDock').then(({ TerminalDock }) => ({ default: TerminalDock })),
+);
+const MemoryPanel = lazy(() =>
+  import('./components/MemoryPanel').then(({ MemoryPanel }) => ({ default: MemoryPanel })),
+);
+const WorktreePanel = lazy(() =>
+  import('./components/WorktreePanel').then(({ WorktreePanel }) => ({ default: WorktreePanel })),
+);
+const ScheduledPanel = lazy(() =>
+  import('./components/ScheduledPanel').then(({ ScheduledPanel }) => ({ default: ScheduledPanel })),
+);
+
+function DeferredPanelFallback() {
+  return <div className="app-panel-loading" role="status">{t('reviewLoading')}</div>;
+}
 
 export type ChatMode = 'agent' | 'plan';
 
@@ -5265,7 +5290,7 @@ function App() {
         onRefresh={refreshStatus}
       />
 
-      <ReviewPanel
+      {reviewOpen ? <Suspense fallback={<DeferredPanelFallback />}><ReviewPanel
         open={reviewOpen}
         cwd={active?.cwd || project}
         tools={activeTools}
@@ -5284,17 +5309,17 @@ function App() {
           const line = active?.lines.find((l) => l.planEntries && l.planEntries.length > 0);
           if (line) toggleAllPlanEntries(line.id, checked);
         }}
-      />
+      /></Suspense> : null}
 
-      <TerminalDock
+      {terminalOpen ? <Suspense fallback={<DeferredPanelFallback />}><TerminalDock
         open={terminalOpen}
         cwd={active?.cwd || project}
         onClose={() => setTerminalOpen(false)}
-      />
+      /></Suspense> : null}
 
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <SettingsPanel
+      {kernelOpen ? <Suspense fallback={<DeferredPanelFallback />}><SettingsPanel
         open={kernelOpen}
         onClose={() => setKernelOpen(false)}
         grokCmd={grokCmd}
@@ -5321,9 +5346,9 @@ function App() {
           return path;
         }}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
-      />
+      /></Suspense> : null}
 
-      <ExtensionsPanel
+      {extOpen ? <Suspense fallback={<DeferredPanelFallback />}><ExtensionsPanel
         open={extOpen}
         onClose={() => {
           setExtOpen(false);
@@ -5332,7 +5357,7 @@ function App() {
         project={project}
         grokCmd={grokCmd}
         onRunSkill={runSkill}
-      />
+      /></Suspense> : null}
 
       <TextPromptModal
         request={textPrompt}
@@ -5346,7 +5371,7 @@ function App() {
         }}
       />
 
-      <ScheduledPanel
+      {scheduledOpen ? <Suspense fallback={<DeferredPanelFallback />}><ScheduledPanel
         open={scheduledOpen}
         onClose={() => setScheduledOpen(false)}
         projects={[...pinnedProjects, ...recentProjects].filter(
@@ -5355,9 +5380,9 @@ function App() {
         aliases={projectAliases}
         currentProject={project || undefined}
         onRunJob={runScheduledJob}
-      />
+      /></Suspense> : null}
 
-      <MemoryPanel
+      {memoryOpen ? <Suspense fallback={<DeferredPanelFallback />}><MemoryPanel
         open={memoryOpen}
         onClose={() => setMemoryOpen(false)}
         project={project || undefined}
@@ -5383,9 +5408,9 @@ function App() {
             }
           })();
         }}
-      />
+      /></Suspense> : null}
 
-      <WorktreePanel
+      {worktreePanelOpen ? <Suspense fallback={<DeferredPanelFallback />}><WorktreePanel
         open={worktreePanelOpen}
         onClose={() => setWorktreePanelOpen(false)}
         grokCmd={grokCmd}
@@ -5436,7 +5461,7 @@ function App() {
           }
           setWorktreeMainProject(null);
         }}
-      />
+      /></Suspense> : null}
 
       {permReq ? (
         <PermissionPrompt request={permReq} onAnswer={(optionId) => void answerPermission(optionId)} />
