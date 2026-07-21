@@ -2,6 +2,9 @@
 // Action-level browser gate. It never uses a saved browser profile and requires
 // an explicit public origin, so CI/local users choose the only site it visits.
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const originIndex = args.indexOf('--origin');
@@ -16,6 +19,7 @@ let stderr = '';
 let buffer = '';
 let nextId = 1;
 const pending = new Map();
+const outputDir = await mkdtemp(join(tmpdir(), 'gorkx-playwright-mcp-'));
 
 function safeStderr(raw) {
   return raw
@@ -55,6 +59,8 @@ try {
       'chrome',
       '--isolated',
       '--block-service-workers',
+      '--output-dir',
+      outputDir,
       '--allowed-origins',
       origin,
     ],
@@ -99,4 +105,5 @@ try {
   process.exitCode = 1;
 } finally {
   child?.kill();
+  await rm(outputDir, { recursive: true, force: true });
 }
