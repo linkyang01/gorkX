@@ -48,6 +48,15 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 cd apps/desktop && npm install && npm run tauri dev
 ```
 
+## Isolated browser action gate
+
+This sends no model prompt, but opens the explicit public origin in an
+in-memory Playwright Chrome context. Use only an origin you intend to visit:
+
+```bash
+node scripts/verify-playwright-mcp.mjs --origin https://example.com
+```
+
 ## macOS bundle gate
 
 After a local app-only build (not a release), validate its embedded engine without
