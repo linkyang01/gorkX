@@ -99,6 +99,7 @@ export function ReviewPanel({
   const [remotePrs, setRemotePrs] = useState<GithubPullRequest[]>([]);
   const [remoteChecks, setRemoteChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [remoteComments, setRemoteComments] = useState<Record<number, GithubComment[]>>({});
+  const [remoteLoadedCwd, setRemoteLoadedCwd] = useState<string | null>(null);
 
   const refresh = () => {
     if (!cwd) {
@@ -123,10 +124,14 @@ export function ReviewPanel({
     setRemoteBusy(true);
     setRemoteError(null);
     void githubListOpenPrs(cwd)
-      .then(setRemotePrs)
+      .then((prs) => {
+        setRemotePrs(prs);
+        setRemoteLoadedCwd(cwd);
+      })
       .catch((error) => {
         setRemotePrs([]);
         setRemoteError(error instanceof Error ? error.message : String(error));
+        setRemoteLoadedCwd(cwd);
       })
       .finally(() => setRemoteBusy(false));
   };
@@ -157,6 +162,16 @@ export function ReviewPanel({
     if (open && cwd) refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cwd]);
+
+  // PR data is scoped to the repository's origin. Never show a previous
+  // project's anonymous/API error or review data after the user changes cwd.
+  useEffect(() => {
+    setRemoteError(null);
+    setRemotePrs([]);
+    setRemoteChecks({});
+    setRemoteComments({});
+    setRemoteLoadedCwd(null);
+  }, [cwd]);
 
   useEffect(() => {
     if (!open || !cwd || !selected) {
@@ -279,7 +294,7 @@ export function ReviewPanel({
             className={tab === id ? 'ext-tab on' : 'ext-tab'}
             onClick={() => {
               setTab(id);
-              if (id === 'remote' && cwd && !remoteBusy && remotePrs.length === 0 && !remoteError) {
+              if (id === 'remote' && cwd && !remoteBusy && remoteLoadedCwd !== cwd) {
                 refreshRemote();
               }
             }}
@@ -695,7 +710,7 @@ export function ReviewPanel({
               <p className="hint">{t('reviewRemoteTokenHint')}</p>
             </div>
           ) : null}
-          {!remoteBusy && cwd && !remoteError && remotePrs.length === 0 ? (
+          {!remoteBusy && cwd && !remoteError && remoteLoadedCwd === cwd && remotePrs.length === 0 ? (
             <div className="review-empty">{t('reviewRemoteEmpty')}</div>
           ) : null}
           {remotePrs.length ? (
