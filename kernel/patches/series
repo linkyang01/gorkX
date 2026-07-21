@@ -1,4 +1,4 @@
 # One reviewed patch filename per line, applied in order by
 # scripts/build-grok-kernel.sh. Lines beginning with # are comments.
 #
-# The current locked kernel deliberately has no local patches.
+0001-web-search-explicit-f32-literals.patch

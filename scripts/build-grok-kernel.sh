@@ -45,8 +45,14 @@ if [[ ${#patches[@]} -gt 0 ]]; then
   source_dir="$patch_worktree"
   echo "Applied ${#patches[@]} recorded kernel patch(es) in temporary worktree"
 fi
-cargo build --quiet --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
-artifact="$source_dir/target/release/$binary"
+# Keep compiler and build-script diagnostics visible: a source lock is not a
+# verified runtime until this exact build has produced its binary and notices.
+cargo build --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
+# CI and local verification may isolate Cargo output with CARGO_TARGET_DIR.
+# Resolve the artifact from that directory instead of assuming a source-local
+# `target/`, while retaining the normal Cargo default when it is unset.
+target_dir="${CARGO_TARGET_DIR:-$source_dir/target}"
+artifact="$target_dir/release/$binary"
 [[ -x "$artifact" ]] || { echo "Expected built binary missing: $artifact" >&2; exit 5; }
 [[ -f "$source_dir/LICENSE" ]] || { echo "Missing upstream LICENSE: $source_dir/LICENSE" >&2; exit 6; }
 [[ -f "$source_dir/THIRD-PARTY-NOTICES" ]] || { echo "Missing upstream third-party notices: $source_dir/THIRD-PARTY-NOTICES" >&2; exit 6; }

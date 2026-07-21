@@ -5,12 +5,15 @@ Markdown note covering: upstream commit, reason, affected ACP behavior, risk,
 and regression command. Add the patch filename once to `series`; build order is
 the line order in that file. Do not patch a bundled binary in place.
 
-No gorkX patches are applied at the current source lock. When `series` is
-non-empty, `scripts/verify-grok-kernel-patches.sh` first checks every patch
-against the clean locked checkout. `scripts/build-grok-kernel.sh` then creates
-a temporary detached Git worktree, applies exactly that reviewed series there,
-and builds only from it. The source checkout remains clean; unrecorded edits
-cannot become a release kernel.
+The current source lock applies `0001-web-search-explicit-f32-literals.patch`
+to remove four upstream future-incompatible type-inference warnings without
+changing tool behavior. When `series` is non-empty,
+`scripts/verify-grok-kernel-patches.sh` first checks every patch against the
+clean locked checkout. `scripts/build-grok-kernel.sh` then creates a temporary
+detached Git worktree, applies exactly that reviewed series there, and builds
+only from it. The source checkout remains clean; unrecorded edits cannot become
+a release kernel. The build script honors `CARGO_TARGET_DIR`, so CI and local
+verification can isolate artifacts without changing the source checkout.
 
 ## Build prerequisites
 
