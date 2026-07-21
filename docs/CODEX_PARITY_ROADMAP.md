@@ -12,6 +12,7 @@
 - 本地项目、任务、终端、审阅、权限、记忆、工作树、扩展均可实际操作。
 - Agent 推理、工具调用、Plan、Hooks、MCP 由 Grok Build 执行；桌面端不重写第二套 agent loop。
 - 每项 UI 都有真实内核/本地/服务端链路；没有链路则明确说明限制。
+- **第三方连接器以易用性为先**：普通用户主路径必须是“点击连接 → 官方网页/系统授权 → 回到 gorkX”，并在授权前说明数据范围与最小权限；手动 Token、URL、命令行或配置文件只能作为高级兼容入口，不能伪装成默认接入体验。
 
 ### 不把它当作 v1 承诺
 
@@ -74,9 +75,17 @@ Local worker or hosted worker
 
 ### P3 — GitHub 与工程协作（3–4 周）
 
-**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR、其 head commit 的 check-runs，以及讨论/逐行审阅评论；不读取 `gh` 凭据，不做远端写操作。OAuth/App 和远端写入仍未实现。
+**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR、其 head commit 的 check-runs，以及讨论/逐行审阅评论；不读取 `gh` 凭据，不做远端写操作。
 
-**出口**：在测试仓库中可读取 PR、定位失败 CI、生成建议并由用户确认后提交评论/PR；所有远端写操作有审计记录。
+**P3.1 — 一键网页授权（已排期）**：把 Token 输入降为“高级/兼容方式”，主路径改为“连接 GitHub”→ 系统浏览器授权 → 回到 gorkX 完成连接。目标采用 **GitHub App 的最小只读权限**（Metadata、Pull requests、Checks、Issues）和仓库选择，而不是把用户的 PAT 交给 Agent。实现前置条件与安全边界：
+
+1. 开发方注册公开的 GitHub App，明确仅申请只读权限；用户在 GitHub 中自行选择安装账号/组织和仓库。
+2. 纯桌面包不得包含 GitHub App private key、OAuth client secret 或长期服务凭据。无服务端时只提供 GitHub 官方 Device Flow 作为兼容回退；它会打开 GitHub 网页并显示一次性验证码。
+3. 完整“点击即浏览器授权、自动回到 App”的体验需要受控的授权回调/令牌交换服务；该服务只保存 App 凭据，不保存用户项目内容，并以短期/可刷新的用户令牌工作。桌面端只把用户令牌存入 macOS Keychain。
+4. UI 在授权前展示开发方、仓库范围和只读权限；连接后展示 GitHub 身份、授权仓库范围、最后验证时间，并支持从 gorkX 删除本地凭据与跳转 GitHub 撤销授权。
+5. 在 GitHub App 注册、隐私说明、回调服务和真实测试组织准备好之前，不能把“OAuth 连接”显示成可用，也不能把 Client ID/Secret 用占位值写入发行包。
+
+**出口**：在测试仓库中，用户可通过浏览器授权并仅选择一个仓库；gorkX 可读取 PR、定位失败 CI 和评论；断开会清除 Keychain 本地令牌。授权后仍无远端写入。后续创建评论/PR 必须单独获得用户逐次确认并留下审计记录。
 
 ### P4 — Browser 与 Computer（4 周）
 
@@ -86,9 +95,9 @@ Local worker or hosted worker
 
 ### P5 — 连接器与多 Provider（持续）
 
-**工作**：优先 GitHub、Slack/Notion/Drive 等用户授权连接器；多 Provider 账号标签、API Key/企业网关、会话级路由、可得额度展示。
+**工作**：优先 GitHub、Slack/Notion/Drive 等用户授权连接器；默认以官方 OAuth / App / Device Flow 引导完成浏览器授权，回到 gorkX 后显示连接状态、最小权限、可访问范围、断开入口和最后验证时间。手动 API Key、PAT、企业网关 URL 保留为高级兼容路径，并明确说明它们不会自动从浏览器订阅或其它 CLI 凭据导入；多 Provider 账号标签、会话级路由、可得额度展示。
 
-**出口**：每个连接器有授权、最小权限、断开、状态和真实读写证据；没有官方 OAuth 的订阅明确只支持 API/网关路径。
+**出口**：每个连接器有一键授权、最小权限、断开、状态和真实读写证据；没有官方 OAuth 的平台明确只支持 API/网关路径，并提供用户可理解的高级配置引导，而不是要求用户猜测 Token 或命令行参数。
 
 ### P6 — 稳定性、发布与 1.0（4 周）
 
@@ -103,7 +112,7 @@ Local worker or hosted worker
 | 内核 | ACP smoke、包内版本、隔离 home | 无系统 grok 的干净机对话与重开 |
 | 多 Agent | 任务状态机/取消/汇总测试 | 真实 repo 并行探索+实现+测试 |
 | 后台任务 | 重启恢复、退避、幂等测试 | App 退出后按承诺继续/恢复 |
-| GitHub | mock + 测试仓库 API | PR/CI/评论真实授权流程 |
+| GitHub | Device Flow / 回调状态与 Keychain 存取测试、mock + 测试仓库 API | 用户网页授权、单仓库只读 PR/CI/评论、断开与 GitHub 撤销授权流程 |
 | Browser/Computer | 动作许可与日志测试 | 可见操作、停止、TCC 拒绝场景 |
 | Provider | 本地 mock 三协议回归 | 用户提供的实际 endpoint 成功推理 |
 

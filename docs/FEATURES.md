@@ -4,6 +4,8 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 
 **Rule:** no fake product surfaces. Real = works end-to-end. Half = wired to engine/local with limits. Planned = not shipped.
 
+**Connector UX rule:** ordinary users connect third-party platforms through a clear browser/system authorization flow and return to gorkX. Manual tokens, URLs, CLIs and config files are advanced fallbacks only; a platform without a real authorization chain is shown as unavailable/Soon, never as connected.
+
 | Area | Feature | Status |
 |------|---------|--------|
 | Layout | Codex three-pane + collapsible sidebar | **Real** |
@@ -26,7 +28,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Worktree | create / list / use / new task / Finder / **back to main repo** | **Half→improved** |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
-| GitHub | Review → Remote reads the current origin's open PRs; checks and discussion/review comments load on demand. A user-provided fine-grained token stays in macOS Keychain. | **Half** — a public origin is attempted anonymously first, but GitHub may rate-limit or block that path and gorkX then asks for a read-only token; PAT-backed REST reads are the stable supported path. OAuth/App, PR creation and all remote writes are not shipped |
+| GitHub | Review → Remote reads the current origin's open PRs; checks and discussion/review comments load on demand. A user-provided fine-grained token stays in macOS Keychain. | **Half** — a public origin is attempted anonymously first, but GitHub may rate-limit or block that path and gorkX then asks for a read-only token; PAT-backed REST reads are the stable supported path. GitHub App one-click browser authorization is planned in P3.1; PR creation and all remote writes are not shipped |
 | Custom API / compatible models | Settings → App `config.toml`; OpenAI Chat/Responses, Anthropic Messages or local gateway probe; task/session selection and default; provider labels/groups; macOS Keychain | **Real** — the released bundled engine was isolated-tested to advertise and accept a configured `[model.*]` through ACP `session/set_model`; the connection probe is one small provider request and never displays endpoint response bodies |
 | Multiple provider subscriptions | Account aggregation, OAuth and quota across ChatGPT/Claude/Grok web subscriptions | **Soon** — Grok login is real; OpenAI/Anthropic currently require a user API key or compatible gateway, and web subscriptions are never presented as API logins |
 | Sidebar | Task title filter across projects / inbox | **Real** |
