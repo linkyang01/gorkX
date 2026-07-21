@@ -179,6 +179,7 @@ import {
   type SkillInfo,
 } from './lib/extensions';
 import { t } from './lib/i18n';
+import { effortShortLabel, formatPeriodEnd, modelShortLabel } from './lib/threadLabels';
 import {
   isVoiceInputSupported,
   VoiceInputSession,
@@ -240,44 +241,6 @@ const tid = () => {
   }
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 };
-
-/** Compact local datetime for menu secondary line only. */
-function formatPeriodEnd(raw: string): string {
-  const s = raw.trim();
-  if (!s) return '';
-  try {
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) {
-      const y = d.getFullYear();
-      const m = d.getMonth() + 1;
-      const day = d.getDate();
-      const hh = String(d.getHours()).padStart(2, '0');
-      const mm = String(d.getMinutes()).padStart(2, '0');
-      return `${y}-${m}-${day} ${hh}:${mm}`;
-    }
-  } catch {
-    /* */
-  }
-  return s.slice(0, 16).replace('T', ' ');
-}
-
-
-function effortShortLabel(e: ReasoningEffort): string {
-  if (e === 'low') return t('effortLow');
-  if (e === 'medium') return t('effortMedium');
-  return t('effortHigh');
-}
-
-function modelShortLabel(modelId: string, models: ModelInfo[]): string {
-  const hit = models.find((m) => m.modelId === modelId);
-  const name = (hit?.name || modelId || 'model').trim();
-  // Compact: drop common vendor prefixes for toolbar width
-  return name
-    .replace(/^Grok\s+/i, '')
-    .replace(/^gpt-?/i, '')
-    .replace(/^Claude\s+/i, '')
-    .slice(0, 22) || name.slice(0, 22);
-}
 
 function cleanStoredTitle(raw: string, fallback: string): string {
   const stripped = titleFromUserText(raw);
