@@ -805,6 +805,17 @@ const dict = {
     openPlugins: 'Manage extensions',
     reviewPlanTab: 'Plan',
     reviewToolsTab: 'Tools',
+    reviewRemoteTab: 'Remote',
+    reviewRemoteTitle: 'GitHub review (read-only)',
+    reviewRemoteHint:
+      'Reads open pull requests for the current origin. Checks and comments load only when you request them; gorkX never writes to GitHub here.',
+    reviewRemoteRefresh: 'Load open PRs',
+    reviewRemoteLoading: 'Loading…',
+    reviewRemoteUnavailable: 'GitHub review is unavailable',
+    reviewRemoteTokenHint:
+      'For private repositories or anonymous rate limits, add a fine-grained read-only token in Settings → Git.',
+    reviewRemoteEmpty: 'No open pull requests.',
+    reviewRemoteOpen: 'open',
     reviewPlanExplainTitle: 'Execution plan',
     reviewPlanExplain:
       'Step-by-step plan proposed by the agent. Select steps to keep, clear steps to skip, then choose Execute plan to implement the approved set.',
@@ -1593,6 +1604,17 @@ const dict = {
     openPlugins: '管理扩展',
     reviewPlanTab: '计划',
     reviewToolsTab: '工具',
+    reviewRemoteTab: '远端',
+    reviewRemoteTitle: 'GitHub 审阅（只读）',
+    reviewRemoteHint:
+      '读取当前 origin 的开放 PR；检查和评论只会在你点击后加载。这里不会向 GitHub 写入任何内容。',
+    reviewRemoteRefresh: '读取开放 PR',
+    reviewRemoteLoading: '读取中…',
+    reviewRemoteUnavailable: '暂时无法读取 GitHub 审阅信息',
+    reviewRemoteTokenHint:
+      '私有仓库或匿名请求受限时，请到「设置 → Git」添加细粒度只读 Token。',
+    reviewRemoteEmpty: '没有开放的 PR。',
+    reviewRemoteOpen: '开放',
     reviewPlanExplainTitle: '执行计划',
     reviewPlanExplain:
       '代理提出的分步执行方案。勾选需保留的步骤，取消不执行的步骤，确认后点击「执行计划」按批准范围实现。',

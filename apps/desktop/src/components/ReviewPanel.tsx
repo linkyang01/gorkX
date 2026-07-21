@@ -3,6 +3,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { fetchGitSnapshot, type GitSnapshot } from '../lib/git';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
+import {
+  githubListOpenPrs,
+  githubListPrChecks,
+  githubListPrComments,
+  type GithubCheckRun,
+  type GithubComment,
+  type GithubPullRequest,
+} from '../lib/github';
+import { openUrlSafe } from '../lib/updates';
 import type { ToolEvent } from './ToolTimeline';
 import type { PlanEntry } from '../lib/acpClient';
 import {
@@ -14,7 +23,7 @@ import {
 } from '../lib/toolHuman';
 import { IconClose, IconRefresh } from './UiIcons';
 
-type Tab = 'diff' | 'plan' | 'tools';
+type Tab = 'diff' | 'plan' | 'tools' | 'remote';
 
 /** Porcelain-ish status → short Chinese label for the file list. */
 function gitStatusLabel(st: string): string {
@@ -85,6 +94,11 @@ export function ReviewPanel({
   const [fileDiff, setFileDiff] = useState<string>('');
   const [msg, setMsg] = useState<string | null>(null);
   const [fileQuery, setFileQuery] = useState('');
+  const [remoteBusy, setRemoteBusy] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [remotePrs, setRemotePrs] = useState<GithubPullRequest[]>([]);
+  const [remoteChecks, setRemoteChecks] = useState<Record<number, GithubCheckRun[]>>({});
+  const [remoteComments, setRemoteComments] = useState<Record<number, GithubComment[]>>({});
 
   const refresh = () => {
     if (!cwd) {
@@ -100,6 +114,43 @@ export function ReviewPanel({
         );
       })
       .finally(() => setLoading(false));
+  };
+
+  /** Explicit user action only: GitHub reads may use the saved read-only token
+   * or the anonymous public API path. No token or remote write is exposed here. */
+  const refreshRemote = () => {
+    if (!cwd) return;
+    setRemoteBusy(true);
+    setRemoteError(null);
+    void githubListOpenPrs(cwd)
+      .then(setRemotePrs)
+      .catch((error) => {
+        setRemotePrs([]);
+        setRemoteError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => setRemoteBusy(false));
+  };
+
+  const loadRemoteChecks = (prNumber: number) => {
+    if (!cwd) return;
+    setRemoteBusy(true);
+    setRemoteError(null);
+    void githubListPrChecks(cwd, prNumber)
+      .then((checks) => setRemoteChecks((current) => ({ ...current, [prNumber]: checks })))
+      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setRemoteBusy(false));
+  };
+
+  const loadRemoteComments = (prNumber: number) => {
+    if (!cwd) return;
+    setRemoteBusy(true);
+    setRemoteError(null);
+    void githubListPrComments(cwd, prNumber)
+      .then((comments) =>
+        setRemoteComments((current) => ({ ...current, [prNumber]: comments })),
+      )
+      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setRemoteBusy(false));
   };
 
   useEffect(() => {
@@ -219,13 +270,19 @@ export function ReviewPanel({
             ['diff', t('diffTitle'), snap?.files.length ?? 0],
             ['plan', t('reviewPlanTab'), planEntries.length],
             ['tools', t('reviewToolsTab'), tools.length],
+            ['remote', t('reviewRemoteTab'), remotePrs.length],
           ] as const
         ).map(([id, label, n]) => (
           <button
             key={id}
             type="button"
             className={tab === id ? 'ext-tab on' : 'ext-tab'}
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              if (id === 'remote' && cwd && !remoteBusy && remotePrs.length === 0 && !remoteError) {
+                refreshRemote();
+              }
+            }}
           >
             {label}
             <span className="ext-count">{n}</span>
@@ -611,6 +668,124 @@ export function ReviewPanel({
           >
             {t('copyTools')}
           </button>
+        </div>
+      ) : null}
+
+      {tab === 'remote' ? (
+        <div className="review-body pad">
+          <div className="review-explain">
+            <strong>{t('reviewRemoteTitle')}</strong>
+            <p>{t('reviewRemoteHint')}</p>
+          </div>
+          <div className="review-plan-actions">
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={!cwd || remoteBusy}
+              onClick={refreshRemote}
+            >
+              {remoteBusy ? t('reviewRemoteLoading') : t('reviewRemoteRefresh')}
+            </button>
+          </div>
+          {!cwd ? <div className="review-empty">{t('reviewNeedProject')}</div> : null}
+          {remoteError ? (
+            <div className="review-empty" style={{ textAlign: 'left' }}>
+              <strong>{t('reviewRemoteUnavailable')}</strong>
+              <p className="hint">{remoteError}</p>
+              <p className="hint">{t('reviewRemoteTokenHint')}</p>
+            </div>
+          ) : null}
+          {!remoteBusy && cwd && !remoteError && remotePrs.length === 0 ? (
+            <div className="review-empty">{t('reviewRemoteEmpty')}</div>
+          ) : null}
+          {remotePrs.length ? (
+            <ul className="tool-human-list">
+              {remotePrs.map((pr) => (
+                <li key={pr.number} className="tool-human-item tone-idle">
+                  <div className="tool-human-top">
+                    <button
+                      type="button"
+                      className="link-btn tool-human-title"
+                      onClick={() => void openUrlSafe(pr.url)}
+                    >
+                      #{pr.number} {pr.title}
+                    </button>
+                    <span className="tool-human-badge idle">
+                      {pr.draft ? t('githubDraft') : t('reviewRemoteOpen')}
+                    </span>
+                  </div>
+                  <div className="hint">{pr.author} · {pr.updatedAt || '—'}</div>
+                  <div className="review-plan-actions" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={remoteBusy}
+                      onClick={() => loadRemoteChecks(pr.number)}
+                    >
+                      {t('githubLoadChecks')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={remoteBusy}
+                      onClick={() => loadRemoteComments(pr.number)}
+                    >
+                      {t('githubLoadComments')}
+                    </button>
+                  </div>
+                  {remoteChecks[pr.number] ? (
+                    <ul className="settings-list" style={{ marginTop: 8 }}>
+                      {remoteChecks[pr.number].map((check) => (
+                        <li key={`${check.name}-${check.url}`}>
+                          {check.url || check.detailsUrl ? (
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => void openUrlSafe(check.detailsUrl || check.url)}
+                            >
+                              {check.name}
+                            </button>
+                          ) : check.name}
+                          <span className="muted"> · {check.conclusion || check.status}</span>
+                        </li>
+                      ))}
+                      {!remoteChecks[pr.number].length ? (
+                        <li className="muted">{t('githubChecksEmpty')}</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
+                  {remoteComments[pr.number] ? (
+                    <ul className="settings-list" style={{ marginTop: 8 }}>
+                      {remoteComments[pr.number].map((comment, index) => (
+                        <li key={`${comment.url}-${index}`}>
+                          {comment.url ? (
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => void openUrlSafe(comment.url)}
+                            >
+                              {comment.author}
+                            </button>
+                          ) : comment.author}
+                          <span className="muted">
+                            {' '}
+                            · {comment.kind}
+                            {comment.path
+                              ? ` · ${comment.path}${comment.line ? `:${comment.line}` : ''}`
+                              : ''}
+                            {comment.body ? ` · ${comment.body.slice(0, 320)}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                      {!remoteComments[pr.number].length ? (
+                        <li className="muted">{t('githubCommentsEmpty')}</li>
+                      ) : null}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
     </aside>
