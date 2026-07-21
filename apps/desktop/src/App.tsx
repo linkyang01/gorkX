@@ -136,6 +136,7 @@ import {
 import { ContextRing } from './components/ContextRing';
 import { MicIcon, PermShieldIcon } from './components/ComposerIcons';
 import { SidebarNav } from './components/SidebarNav';
+import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
 import {
   fetchAccountSummary,
@@ -178,6 +179,7 @@ import {
 } from './lib/extensions';
 import { t } from './lib/i18n';
 import { effortShortLabel, formatPeriodEnd, modelShortLabel } from './lib/threadLabels';
+import { formatThreadClock, threadListLabel } from './lib/threadList';
 import { snapToLines } from './lib/threadSnapshots';
 import {
   isVoiceInputSupported,
@@ -257,22 +259,6 @@ function threadsForScope(list: Thread[], scope: string): Thread[] {
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
-/** Short clock for same-title disambiguation, e.g. 14:32 or 7/19 14:32 */
-function formatThreadClock(ms?: number): string {
-  if (!ms) return '';
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return '';
-  const now = new Date();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  if (sameDay) return `${hh}:${mm}`;
-  return `${d.getMonth() + 1}/${d.getDate()} ${hh}:${mm}`;
-}
-
 /**
  * Pick a title that doesn't collide with other threads in the same project.
  * "foo" → "foo" → "foo · 14:32" → "foo · 14:32 · 2"
@@ -296,25 +282,6 @@ function uniquifyThreadTitle(
     if (!taken.has(cand.toLowerCase())) return cand;
   }
   return `${root} · ${tid().slice(-6)}`;
-}
-
-/** Sidebar label: if several share the same title, show time so each row is distinct. */
-function threadListLabel(th: Thread, siblings: Thread[]): string {
-  const title = (th.title || '').trim() || t('newThread');
-  const same = siblings.filter(
-    (x) => (x.title || '').trim().toLowerCase() === title.toLowerCase(),
-  );
-  if (same.length <= 1) return title;
-  const clock = formatThreadClock(th.updatedAt);
-  // Title may already include a clock from uniquifyThreadTitle
-  if (clock && !title.includes(clock)) return `${title} · ${clock}`;
-  if (same.length > 1) {
-    // stable order by id so labels don't jump
-    const ordered = [...same].sort((a, b) => (a.id < b.id ? -1 : 1));
-    const idx = ordered.findIndex((x) => x.id === th.id) + 1;
-    if (idx > 0 && !/·\s*\d+$/.test(title)) return `${title} · ${idx}`;
-  }
-  return title;
 }
 
 function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
@@ -3715,7 +3682,7 @@ function App() {
               const selected = p === project;
               const pinned = pinnedProjects.includes(p);
               const liveAll = threadsForScope(threads, projectScopeKey(p));
-              const live = liveAll.filter((th) => matchTitle(threadListLabel(th, liveAll)));
+              const live = liveAll.filter((th) => matchTitle(threadListLabel(th, liveAll, t('newThread'))));
               const remoteAll =
                 selected && showGrokHistory
                   ? (projectSessions[p] || []).filter(
@@ -3864,71 +3831,23 @@ function App() {
                   </div>
                   <div className="proj-threads">
                       {live.map((th) => (
-                        <div
+                        <ThreadListRow
                           key={th.id}
-                          className={
-                            th.id === activeId ? 'thread on project-row' : 'thread project-row'
-                          }
-                        >
-                          <button
-                            type="button"
-                            className="thread-main"
-                            title={
-                              th.updatedAt
-                                ? `${th.title}\n${formatThreadClock(th.updatedAt)}`
-                                : th.title
-                            }
-                            onClick={() => {
-                              if (!selected) setProject(p);
-                              selectThread(th.id);
-                            }}
-                          >
-                            <span className="thread-title">
-                              {th.busy ? (
-                                <span className="thread-busy-dot" aria-hidden />
-                              ) : null}
-                              {th.worktreePath ? (
-                                <span className="wt-badge" title={th.worktreePath}>
-                                  WT
-                                </span>
-                              ) : null}
-                              {threadListLabel(th, live)}
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="thread-x"
-                            title={t('renameThread')}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void renameThread(th.id);
-                            }}
-                          >
-                            <IconRename size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="thread-x"
-                            title={t('archiveThread')}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
-                            }}
-                          >
-                            <IconArchive size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="thread-x"
-                            title={t('deleteThread')}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
-                            }}
-                          >
-                            <IconClose size={14} />
-                          </button>
-                        </div>
+                          thread={th}
+                          siblings={live}
+                          activeId={activeId}
+                          onSelect={() => {
+                            if (!selected) setProject(p);
+                            selectThread(th.id);
+                          }}
+                          onRename={() => void renameThread(th.id)}
+                          onArchive={() => {
+                            if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
+                          }}
+                          onDelete={() => {
+                            if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
+                          }}
+                        />
                       ))}
                       {live.length === 0 && remote.length === 0 ? (
                         <div className="hint">
@@ -4013,74 +3932,33 @@ function App() {
               const q = taskFilter.trim().toLowerCase();
               const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
               const inbox = inboxAll.filter(
-                (th) => !q || threadListLabel(th, inboxAll).toLowerCase().includes(q),
+                (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
               );
               return inbox.map((th) => (
-                <div
+                <ThreadListRow
                   key={th.id}
-                  className={th.id === activeId ? 'thread on project-row' : 'thread project-row'}
-                >
-                  <button
-                    type="button"
-                    className="thread-main"
-                    title={
-                      th.updatedAt
-                        ? `${th.title}\n${formatThreadClock(th.updatedAt)}`
-                        : th.title
-                    }
-                    onClick={() => {
-                      setProject('');
-                      selectThread(th.id);
-                    }}
-                  >
-                    <span className="thread-title">
-                      {th.busy ? (
-                        <span className="thread-busy-dot" aria-hidden />
-                      ) : null}
-                      {threadListLabel(th, inboxAll)}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="thread-x"
-                    title={t('renameThread')}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void renameThread(th.id);
-                    }}
-                  >
-                    <IconRename size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="thread-x"
-                    title={t('archiveThread')}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
-                    }}
-                  >
-                    <IconArchive size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="thread-x"
-                    title={t('deleteThread')}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
-                    }}
-                  >
-                    <IconClose size={14} />
-                  </button>
-                </div>
+                  thread={th}
+                  siblings={inboxAll}
+                  activeId={activeId}
+                  onSelect={() => {
+                    setProject('');
+                    selectThread(th.id);
+                  }}
+                  onRename={() => void renameThread(th.id)}
+                  onArchive={() => {
+                    if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
+                  }}
+                  onDelete={() => {
+                    if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
+                  }}
+                />
               ));
             })()}
             {(() => {
               const q = taskFilter.trim().toLowerCase();
               const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
               const count = inboxAll.filter(
-                (th) => !q || threadListLabel(th, inboxAll).toLowerCase().includes(q),
+                (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
               ).length;
               if (count > 0) return null;
               return (
