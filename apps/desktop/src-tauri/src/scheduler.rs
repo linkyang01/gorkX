@@ -7,7 +7,7 @@
 
 use crate::{paths, store};
 use chrono::{Datelike, Duration, Local, Timelike, Weekday};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
@@ -114,6 +114,7 @@ fn uid() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
 fn read_jobs(conn: &Connection) -> Result<Vec<ScheduledJob>, String> {
     let raw: Option<String> = conn
         .query_row(
@@ -129,9 +130,31 @@ fn read_jobs(conn: &Connection) -> Result<Vec<ScheduledJob>, String> {
     }
 }
 
+fn read_jobs_tx(tx: &Transaction<'_>) -> Result<Vec<ScheduledJob>, String> {
+    let raw: Option<String> = tx
+        .query_row(
+            "SELECT value FROM kv WHERE key = ?1",
+            params![JOBS_KEY],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    match raw {
+        Some(v) => serde_json::from_str(&v).map_err(|e| format!("scheduled jobs decode: {e}")),
+        None => Ok(Vec::new()),
+    }
+}
+
+#[cfg(test)]
 fn save_jobs(conn: &Connection, jobs: &[ScheduledJob]) -> Result<(), String> {
     let value = serde_json::to_string(jobs).map_err(|e| e.to_string())?;
     conn.execute("INSERT INTO kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![JOBS_KEY, value]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn save_jobs_tx(tx: &Transaction<'_>, jobs: &[ScheduledJob]) -> Result<(), String> {
+    let value = serde_json::to_string(jobs).map_err(|e| e.to_string())?;
+    tx.execute("INSERT INTO kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![JOBS_KEY, value]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -160,8 +183,8 @@ fn next_at(job: &ScheduledJob, now: i64) -> i64 {
     candidate.timestamp_millis()
 }
 
-fn append_run(conn: &Connection, run: SchedulerRun) -> Result<(), String> {
-    let mut runs: Vec<SchedulerRun> = conn
+fn append_run_tx(tx: &Transaction<'_>, run: SchedulerRun) -> Result<(), String> {
+    let mut runs: Vec<SchedulerRun> = tx
         .query_row(
             "SELECT value FROM kv WHERE key = ?1",
             params![RUNS_KEY],
@@ -174,7 +197,7 @@ fn append_run(conn: &Connection, run: SchedulerRun) -> Result<(), String> {
     runs.insert(0, run);
     runs.truncate(80);
     let value = serde_json::to_string(&runs).map_err(|e| e.to_string())?;
-    conn.execute("INSERT INTO kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![RUNS_KEY, value]).map_err(|e| e.to_string())?;
+    tx.execute("INSERT INTO kv(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![RUNS_KEY, value]).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -182,34 +205,53 @@ fn append_run(conn: &Connection, run: SchedulerRun) -> Result<(), String> {
 /// process or an explicit diagnostic action; it never opens a window.
 pub fn run_due_jobs() -> Result<SchedulerRunSummary, String> {
     let db = store::db_path()?;
-    let conn = Connection::open(db).map_err(|e| format!("sqlite open: {e}"))?;
+    let mut conn = Connection::open(db).map_err(|e| format!("sqlite open: {e}"))?;
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| e.to_string())?;
-    process_due_jobs(&conn, now_ms(), run_read_only_job)
+    process_due_jobs(&mut conn, now_ms(), run_read_only_job)
 }
 
 /// Transactional queue transition, factored from the process launcher so it
 /// can be exercised without a Grok account or a live app data directory.
 fn process_due_jobs<F>(
-    conn: &Connection,
+    conn: &mut Connection,
     now: i64,
     mut runner: F,
 ) -> Result<SchedulerRunSummary, String>
 where
     F: FnMut(&ScheduledJob) -> Result<String, String>,
 {
-    let mut jobs = read_jobs(&conn)?;
     let mut summary = SchedulerRunSummary {
         due: 0,
         succeeded: 0,
         failed: 0,
     };
-    // A process can die after persisting its claim but before it receives a
-    // result from the engine. Reclaim only after a generous lease and retain a
-    // local failure record so the user can distinguish a retry from a normal
-    // run. The retry backoff is intentional: background jobs never turn a
-    // restart into an immediate burst of model calls.
-    let mut recovered = false;
+    summary.failed += recover_expired_claims(conn, now)?;
+    while let Some(claimed) = claim_next_due_job(conn, now)? {
+        summary.due += 1;
+        let result = runner(&claimed);
+        let (ok, output) = match result {
+            Ok(out) => (true, out),
+            Err(err) => (false, err),
+        };
+        if ok {
+            summary.succeeded += 1;
+        } else {
+            summary.failed += 1;
+        }
+        finalize_claim(conn, &claimed, now, ok, &output)?;
+    }
+    Ok(summary)
+}
+
+/// Mark expired leases as failed under the same exclusive transaction used for
+/// claims. This prevents one worker from resurrecting another worker's claim.
+fn recover_expired_claims(conn: &mut Connection, now: i64) -> Result<usize, String> {
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("scheduler claim lock: {e}"))?;
+    let mut jobs = read_jobs_tx(&tx)?;
+    let mut recovered = 0;
     for job in &mut jobs {
         let expired = job
             .claimed_at
@@ -220,67 +262,85 @@ where
             let output = "Previous background run did not report completion before its lease expired.".to_string();
             job.last_error = Some(output.clone());
             job.next_run_at = retry_at(job.failure_count, now);
-            append_run(
-                &conn,
-                SchedulerRun {
-                    job_id: job.id.clone(),
-                    title: job.title.clone(),
-                    started_at: now,
-                    ok: false,
-                    output,
-                },
-            )?;
-            summary.failed += 1;
-            recovered = true;
-        }
-    }
-    if recovered {
-        save_jobs(&conn, &jobs)?;
-    }
-    let due_indices: Vec<usize> = jobs
-        .iter()
-        .enumerate()
-        .filter_map(|(index, job)| (job.enabled && job.next_run_at <= now).then_some(index))
-        .collect();
-    for index in due_indices {
-        summary.due += 1;
-        // Claim before spawning: a second launchd invocation cannot duplicate it.
-        let job = &mut jobs[index];
-        job.last_run_at = Some(now);
-        job.next_run_at = next_at(job, now);
-        job.failure_count = 0;
-        job.last_error = None;
-        job.claimed_at = Some(now);
-        save_jobs(&conn, &jobs)?;
-
-        let claimed = jobs[index].clone();
-        let result = runner(&claimed);
-        let (ok, output) = match result {
-            Ok(out) => (true, out),
-            Err(err) => (false, err),
-        };
-        if ok {
-            summary.succeeded += 1;
-        } else {
-            summary.failed += 1;
-            jobs[index].failure_count += 1;
-            jobs[index].last_error = Some(output.chars().take(500).collect());
-            jobs[index].next_run_at = retry_at(jobs[index].failure_count, now);
-        }
-        jobs[index].claimed_at = None;
-        append_run(
-            &conn,
-            SchedulerRun {
-                job_id: claimed.id,
-                title: claimed.title,
+            append_run_tx(&tx, SchedulerRun {
+                job_id: job.id.clone(),
+                title: job.title.clone(),
                 started_at: now,
-                ok,
-                output: output.chars().take(8_000).collect(),
-            },
-        )?;
-        save_jobs(&conn, &jobs)?;
+                ok: false,
+                output,
+            })?;
+            recovered += 1;
+        }
     }
-    Ok(summary)
+    if recovered > 0 {
+        save_jobs_tx(&tx, &jobs)?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(recovered)
+}
+
+/// Atomically select and persist one due job before its engine process starts.
+/// A second worker blocks on this transaction and then observes the lease.
+fn claim_next_due_job(conn: &mut Connection, now: i64) -> Result<Option<ScheduledJob>, String> {
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("scheduler claim lock: {e}"))?;
+    let mut jobs = read_jobs_tx(&tx)?;
+    let claimed = jobs
+        .iter_mut()
+        .find(|job| job.enabled && job.claimed_at.is_none() && job.next_run_at <= now)
+        .map(|job| {
+            job.last_run_at = Some(now);
+            job.next_run_at = next_at(job, now);
+            job.failure_count = 0;
+            job.last_error = None;
+            job.claimed_at = Some(now);
+            job.clone()
+        });
+    if claimed.is_some() {
+        save_jobs_tx(&tx, &jobs)?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(claimed)
+}
+
+/// Persist the result against a fresh scheduler snapshot. If the job was
+/// changed or removed while Grok was working, retain that user change and only
+/// write the historical run record.
+fn finalize_claim(
+    conn: &mut Connection,
+    claimed: &ScheduledJob,
+    now: i64,
+    ok: bool,
+    output: &str,
+) -> Result<(), String> {
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| format!("scheduler completion lock: {e}"))?;
+    let mut jobs = read_jobs_tx(&tx)?;
+    let mut changed = false;
+    if let Some(job) = jobs.iter_mut().find(|job| job.id == claimed.id) {
+        if job.claimed_at == claimed.claimed_at {
+            job.claimed_at = None;
+            if !ok {
+                job.failure_count = job.failure_count.saturating_add(1);
+                job.last_error = Some(output.chars().take(500).collect());
+                job.next_run_at = retry_at(job.failure_count, now);
+            }
+            changed = true;
+        }
+    }
+    if changed {
+        save_jobs_tx(&tx, &jobs)?;
+    }
+    append_run_tx(&tx, SchedulerRun {
+        job_id: claimed.id.clone(),
+        title: claimed.title.clone(),
+        started_at: now,
+        ok,
+        output: output.chars().take(8_000).collect(),
+    })?;
+    tx.commit().map_err(|e| e.to_string())
 }
 
 fn run_read_only_job(job: &ScheduledJob) -> Result<String, String> {
@@ -486,11 +546,29 @@ mod tests {
         conn
     }
 
+    fn file_conn_pair(jobs: &[ScheduledJob]) -> (Connection, Connection, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "gorkx-scheduler-{}-{}.sqlite",
+            std::process::id(),
+            now_ms()
+        ));
+        let first = Connection::open(&path).unwrap();
+        first
+            .execute(
+                "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+                [],
+            )
+            .unwrap();
+        save_jobs(&first, jobs).unwrap();
+        let second = Connection::open(&path).unwrap();
+        (first, second, path)
+    }
+
     #[test]
     fn due_job_is_claimed_persisted_and_recorded() {
         let now = 1_000_000_i64;
-        let conn = memory_conn(&[job("a", now)]);
-        let summary = process_due_jobs(&conn, now, |_| Ok("structured result".into())).unwrap();
+        let mut conn = memory_conn(&[job("a", now)]);
+        let summary = process_due_jobs(&mut conn, now, |_| Ok("structured result".into())).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (1, 1, 0));
         let updated = read_jobs(&conn).unwrap();
         assert_eq!(updated[0].last_run_at, Some(now));
@@ -504,8 +582,8 @@ mod tests {
     #[test]
     fn failed_job_uses_persisted_backoff() {
         let now = 1_000_000_i64;
-        let conn = memory_conn(&[job("b", now)]);
-        let summary = process_due_jobs(&conn, now, |_| Err("engine unavailable".into())).unwrap();
+        let mut conn = memory_conn(&[job("b", now)]);
+        let summary = process_due_jobs(&mut conn, now, |_| Err("engine unavailable".into())).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (1, 0, 1));
         let updated = read_jobs(&conn).unwrap();
         assert_eq!(updated[0].failure_count, 1);
@@ -518,9 +596,32 @@ mod tests {
         let now = 1_000_000_i64;
         let mut pending = job("a", now + 60_000);
         pending.claimed_at = Some(now - 5 * 60_000);
-        let conn = memory_conn(&[pending]);
-        let summary = process_due_jobs(&conn, now, |_| panic!("live job was reclaimed")).unwrap();
+        let mut conn = memory_conn(&[pending]);
+        let summary = process_due_jobs(&mut conn, now, |_| panic!("live job was reclaimed")).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 0));
+    }
+
+    #[test]
+    fn atomic_claim_hides_a_due_job_from_the_next_worker() {
+        let now = 1_000_000_i64;
+        let mut conn = memory_conn(&[job("a", now)]);
+        let first = claim_next_due_job(&mut conn, now).unwrap();
+        let second = claim_next_due_job(&mut conn, now).unwrap();
+        assert_eq!(first.as_ref().map(|job| job.id.as_str()), Some("a"));
+        assert!(second.is_none());
+    }
+
+    #[test]
+    fn independent_sqlite_workers_do_not_claim_the_same_job() {
+        let now = 1_000_000_i64;
+        let (mut first, mut second, path) = file_conn_pair(&[job("a", now)]);
+        let claim_one = claim_next_due_job(&mut first, now).unwrap();
+        let claim_two = claim_next_due_job(&mut second, now).unwrap();
+        assert!(claim_one.is_some());
+        assert!(claim_two.is_none());
+        drop(first);
+        drop(second);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]
@@ -528,8 +629,8 @@ mod tests {
         let now = 1_000_000_i64;
         let mut pending = job("a", now + 60_000);
         pending.claimed_at = Some(now - CLAIM_LEASE_MS);
-        let conn = memory_conn(&[pending]);
-        let summary = process_due_jobs(&conn, now, |_| panic!("expired job should back off first")).unwrap();
+        let mut conn = memory_conn(&[pending]);
+        let summary = process_due_jobs(&mut conn, now, |_| panic!("expired job should back off first")).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 1));
         let updated = read_jobs(&conn).unwrap();
         assert_eq!(updated[0].claimed_at, None);
