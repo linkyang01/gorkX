@@ -51,6 +51,21 @@ let buffer = '';
 let nextId = 1;
 const pending = new Map();
 child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+// The engine's tracing is not an API contract. In particular, an auth refresh
+// failure can include credential-derived debug fields. Keep ACP smoke failure
+// output useful without allowing it to leak into CI logs or a developer shell.
+function safeEngineStderr(raw) {
+  return raw
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .split(/\r?\n/)
+    .map((line) =>
+      /token|api[_-]?key|secret|password|authorization|rt_prefix/i.test(line)
+        ? '[engine diagnostic redacted: credential-related detail omitted]'
+        : line,
+    )
+    .join('\n');
+}
 child.stdout.on('data', (chunk) => {
   buffer += chunk;
   while (true) {
@@ -179,7 +194,9 @@ try {
     }
   }
 } catch (error) {
-  console.error(`FAIL: ACP smoke: ${error instanceof Error ? error.message : String(error)}\n${stderr}`);
+  console.error(
+    `FAIL: ACP smoke: ${error instanceof Error ? error.message : String(error)}\n${safeEngineStderr(stderr)}`,
+  );
   process.exitCode = 1;
 } finally {
   clearTimeout(timeout);
