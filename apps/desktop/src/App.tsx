@@ -140,6 +140,7 @@ import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
 import { PermissionPrompt } from './components/PermissionPrompt';
 import { AppBanners } from './components/AppBanners';
+import { SlashMenu } from './components/SlashMenu';
 import {
   fetchAccountSummary,
   fetchModelContext,
@@ -1985,41 +1986,6 @@ function App() {
           (c.description || '').toLowerCase().includes(q),
       )
       .slice(0, 28);
-  };
-
-  const renderSlashMenu = () => {
-    if (!slashOpen) return null;
-    const merged = slashMenuItems(draft);
-    const hi = merged.length ? Math.min(slashIndex, merged.length - 1) : 0;
-    return (
-      <div className="slash-menu" role="listbox" aria-label={t('slashHint')}>
-        <div className="hint">{t('slashHintNav')}</div>
-        {merged.length === 0 ? (
-          <div className="hint">{t('slashEmpty')}</div>
-        ) : (
-          merged.map((c, i) => (
-            <button
-              key={`${c.source}:${c.name}`}
-              type="button"
-              role="option"
-              aria-selected={i === hi}
-              className={i === hi ? 'slash-item on' : 'slash-item'}
-              ref={(el) => {
-                if (i === hi && el) el.scrollIntoView({ block: 'nearest' });
-              }}
-              onMouseEnter={() => setSlashIndex(i)}
-              onClick={() => applySlashPick(c.name)}
-            >
-              <span className="mono">
-                /{c.name}
-                <span className="muted"> · {sourceLabel(c.source)}</span>
-              </span>
-              {c.description ? <span className="muted">{c.description}</span> : null}
-            </button>
-          ))
-        )}
-      </div>
-    );
   };
 
   /**
@@ -4319,7 +4285,14 @@ function App() {
                     </button>
                   </div>
                 ) : null}
-                {renderSlashMenu()}
+              <SlashMenu
+                open={slashOpen}
+                items={slashMenuItems(draft)}
+                activeIndex={slashIndex}
+                sourceLabel={sourceLabel}
+                onActiveIndex={setSlashIndex}
+                onPick={applySlashPick}
+              />
                 <textarea
                   value={draft}
                   onChange={(e) => {
@@ -4903,7 +4876,14 @@ function App() {
                   />
                 ) : null}
                 {dragOver ? <div className="composer-drop-hint">{t('dropFilesHint')}</div> : null}
-                {renderSlashMenu()}
+                <SlashMenu
+                  open={slashOpen}
+                  items={slashMenuItems(draft)}
+                  activeIndex={slashIndex}
+                  sourceLabel={sourceLabel}
+                  onActiveIndex={setSlashIndex}
+                  onPick={applySlashPick}
+                />
                 {atOpen ? (
                   <div className="slash-menu" role="listbox" aria-label={t('atFilesHint')}>
                     <div className="hint">
