@@ -28,7 +28,7 @@
 | 多模型 | API/兼容网关、Keychain、分组、连接测试可用 | 缺订阅 OAuth、账号用量与可靠会话中切换验证 |
 | Hooks/MCP | MCP/插件入口与 Playwright MCP 配置、诊断可用；**Hooks 未开放**（锁定内核 ACP 返回 `Method not found`） | 等内核提供真实 Hook 生命周期后再做列表、信任、启停与创作体验；连接器仍待产品化 |
 | Browser/Computer | Playwright MCP 已在 App `GROK_HOME` 实测启动、握手并发现工具；用户可主动截图附到消息 | 浏览器任务内的目标页/动作日志/域名许可、浏览器截图流与受控桌面自动化；需有效 Grok 登录才可验证 Agent 实际调用 |
-| 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；内核原生子 Agent 的启动/进度/完成事件可见，运行中子任务可走 ACP 真实取消，结束后可按需读取内核快照，并在会话重连后恢复 | 缺用户可控的委派契约、显式 resume、隔离策略与退出后 worker |
+| 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；子 Agent 事件/取消/快照已有 UI 适配 | 当前锁定内核不暴露 `x.ai/subagent/list_running`，因此**不宣称重连恢复运行中子任务**；仍缺用户可控委派契约、显式 resume、隔离策略与退出后 worker |
 | 远程工程协作 | 本地 Git Review | 缺 GitHub PR、CI、评论线程与授权连接器 |
 
 ## 3. 目标架构

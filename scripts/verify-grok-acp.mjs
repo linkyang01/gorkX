@@ -196,6 +196,25 @@ try {
     }
     console.log('PASS: ACP _x.ai/git/worktree/list');
 
+    try {
+      const raw = await request('x.ai/subagent/list_running', { sessionId });
+      const subagents = Array.isArray(raw?.result?.subagents)
+        ? raw.result.subagents
+        : Array.isArray(raw?.subagents)
+          ? raw.subagents
+          : null;
+      if (!subagents) {
+        throw new Error(`x.ai/subagent/list_running returned invalid payload: ${JSON.stringify(raw)}`);
+      }
+      console.log('PASS: ACP x.ai/subagent/list_running');
+    } catch (error) {
+      if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
+        console.log('SKIP: ACP x.ai/subagent/list_running (kernel does not expose subagent recovery API)');
+      } else {
+        throw error;
+      }
+    }
+
     if (worktreeSmoke) {
       const createdRaw = await request('_x.ai/git/worktree/create', {
         sessionId,
