@@ -64,6 +64,23 @@ fn relative_project_path(path: &str) -> Result<String, String> {
     Ok(raw.to_string())
 }
 
+/// Resolve an existing preview target and prove it remains below the chosen
+/// project. `Path::join` alone is insufficient here: a harmless-looking
+/// project-relative symlink may point to a file outside the project.
+fn existing_project_child(root: &Path, rel: &str) -> Result<std::path::PathBuf, String> {
+    let root = root
+        .canonicalize()
+        .map_err(|e| format!("cannot resolve project root: {e}"))?;
+    let full = root.join(rel);
+    let resolved = full
+        .canonicalize()
+        .map_err(|e| format!("cannot resolve project file: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("path resolves outside the project".into());
+    }
+    Ok(resolved)
+}
+
 #[tauri::command]
 pub async fn git_snapshot(cwd: String) -> Result<GitSnapshot, String> {
     tauri::async_runtime::spawn_blocking(move || git_snapshot_blocking(cwd))
@@ -188,6 +205,11 @@ fn workspace_snapshot(root: &Path) -> GitSnapshot {
                 break;
             }
             let name = ent.file_name().to_string_lossy().into_owned();
+            // Do not turn Review into a way to recursively enumerate files
+            // outside the chosen workspace through a symlink.
+            if ent.file_type().map(|ty| ty.is_symlink()).unwrap_or(true) {
+                continue;
+            }
             if name.starts_with('.') && name != ".env.example" {
                 continue;
             }
@@ -251,6 +273,16 @@ pub async fn git_file_diff(cwd: String, path: String) -> Result<String, String> 
 
         let is_git = run_git(root, &["rev-parse", "--is-inside-work-tree"]).is_ok();
         if !is_git {
+            if !root.is_dir() {
+                return Err("project is not a directory".into());
+            }
+            // Preserve the existing "missing file" response, but any existing
+            // file or directory must prove it is contained after resolution.
+            let full = if full.exists() {
+                existing_project_child(root, &rel)?
+            } else {
+                full
+            };
             if full.is_file() {
                 match std::fs::read_to_string(&full) {
                     Ok(raw) => {
@@ -378,7 +410,9 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
-    use super::relative_project_path;
+    use super::{existing_project_child, relative_project_path, workspace_snapshot};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn accepts_only_relative_project_paths() {
@@ -387,5 +421,28 @@ mod tests {
         assert!(relative_project_path("../secret").is_err());
         assert!(relative_project_path("/etc/passwd").is_err());
         assert!(relative_project_path("").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_git_preview_rejects_symlink_outside_project() {
+        use std::os::unix::fs::symlink;
+
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-git-panel-{suffix}"));
+        let project = base.join("project");
+        let outside = base.join("outside.txt");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(&outside, "private").unwrap();
+        symlink(&outside, project.join("outside-link")).unwrap();
+
+        assert!(existing_project_child(&project, "outside-link").is_err());
+        let snapshot = workspace_snapshot(&project);
+        assert!(!snapshot.files.iter().any(|f| f.path == "outside-link"));
+
+        fs::remove_dir_all(base).unwrap();
     }
 }
