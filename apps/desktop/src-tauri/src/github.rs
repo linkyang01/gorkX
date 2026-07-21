@@ -240,7 +240,20 @@ fn parse_github_remote(raw: &str) -> Result<(String, String), String> {
     if parts.next().is_some() {
         return Err("GitHub remote has an unexpected path.".into());
     }
+    if !github_repo_segment(owner) || !github_repo_segment(repo) {
+        return Err("GitHub remote has an invalid owner or repository name.".into());
+    }
     Ok((owner.to_string(), repo.to_string()))
+}
+
+/// GitHub repository URL path segments never need URL escapes, credentials, or
+/// query strings. Validate before interpolating them into REST endpoint paths.
+fn github_repo_segment(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
 #[tauri::command]
@@ -462,5 +475,17 @@ mod tests {
     #[test]
     fn rejects_non_github_remote() {
         assert!(parse_github_remote("https://gitlab.com/owner/repo.git").is_err());
+    }
+
+    #[test]
+    fn rejects_non_repository_path_segments() {
+        for raw in [
+            "https://github.com/owner/repo?query=1",
+            "https://github.com/owner/repo%2Fother",
+            "https://github.com/owner/repo#fragment",
+            "git@github.com:owner/repo name.git",
+        ] {
+            assert!(parse_github_remote(raw).is_err(), "accepted {raw}");
+        }
     }
 }
