@@ -190,6 +190,9 @@ export function SettingsPanel({
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
+  const [browserAllowedOrigins, setBrowserAllowedOrigins] = useState(() => {
+    try { return localStorage.getItem('gorkx.browserAllowedOrigins') || ''; } catch { return ''; }
+  });
   const [kernelDoctor, setKernelDoctor] = useState<KernelDoctor | null>(null);
   const [doctorBusy, setDoctorBusy] = useState(false);
   const [github, setGithub] = useState<GithubStatus | null>(null);
@@ -890,6 +893,21 @@ export function SettingsPanel({
                     ) : null}
                   </div>
                 </div>
+                <label className="field-label" htmlFor="browser-allowed-origins" style={{ marginTop: 12 }}>
+                  {t('settingsBrowserAllowedOrigins')}
+                </label>
+                <input
+                  id="browser-allowed-origins"
+                  value={browserAllowedOrigins}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setBrowserAllowedOrigins(next);
+                    try { localStorage.setItem('gorkx.browserAllowedOrigins', next); } catch { /* */ }
+                  }}
+                  placeholder={t('settingsBrowserAllowedOriginsPlaceholder')}
+                  spellCheck={false}
+                />
+                <p className="settings-row-hint">{t('settingsBrowserAllowedOriginsHint')}</p>
                 <div className="field-row" style={{ marginTop: 10 }}>
                   <button
                     type="button"
@@ -1164,7 +1182,7 @@ export function SettingsPanel({
                     onClick={() => {
                       setBrowserBusy(true);
                       setMsg(t('settingsBrowserConnecting'));
-                      void enablePlaywrightChromeMcp(grokCmd || undefined)
+                      void enablePlaywrightChromeMcp(grokCmd || undefined, browserAllowedOrigins)
                         .then((note) => {
                           setMsg(note);
                           return refreshBrowser();

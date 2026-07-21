@@ -12,6 +12,51 @@ use std::process::Command;
 /// unbounded `@latest` download. Existing user MCP entries remain untouched.
 const PLAYWRIGHT_MCP_PACKAGE: &str = "@playwright/mcp@0.0.78";
 
+fn normalize_allowed_origins(raw: Option<String>) -> Result<Option<String>, String> {
+    let Some(raw) = raw else { return Ok(None) };
+    let mut origins = Vec::new();
+    for origin in raw.split(';').map(str::trim).filter(|value| !value.is_empty()) {
+        // MCP treats this as an allow list, so accept origins only—not paths,
+        // credentials, wildcards, or a shell-shaped free-form argument.
+        let rest = origin
+            .strip_prefix("https://")
+            .or_else(|| origin.strip_prefix("http://"))
+            .ok_or_else(|| "allowed origins must start with http:// or https://".to_string())?;
+        if rest.is_empty()
+            || rest.contains(['/', '?', '#', '@', '*'])
+            || rest.chars().any(char::is_whitespace)
+        {
+            return Err("allowed origins must be plain http(s) origins without paths or wildcards".into());
+        }
+        origins.push(origin.to_string());
+    }
+    if origins.is_empty() {
+        return Ok(None);
+    }
+    let normalized = origins.join(";");
+    if normalized.len() > 2048 {
+        return Err("allowed origins is too long".into());
+    }
+    Ok(Some(normalized))
+}
+
+fn playwright_mcp_args(allowed_origins: Option<String>) -> Result<Vec<String>, String> {
+    let allowed_origins = normalize_allowed_origins(allowed_origins)?;
+    let mut args = vec![
+        "mcp".into(), "add".into(), "playwright".into(), "--".into(),
+        "npx".into(), "-y".into(), PLAYWRIGHT_MCP_PACKAGE.into(),
+        "--browser".into(), "chrome".into(),
+        // A browser task starts with no persisted profile and cannot leave a
+        // service worker running after the MCP process exits.
+        "--isolated".into(), "--block-service-workers".into(),
+    ];
+    if let Some(origins) = allowed_origins {
+        args.push("--allowed-origins".into());
+        args.push(origins);
+    }
+    Ok(args)
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillInfo {
@@ -638,7 +683,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{redact_mcp_doctor_output, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{playwright_mcp_args, redact_mcp_doctor_output, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -674,6 +719,17 @@ mod tests {
         assert_eq!(PLAYWRIGHT_MCP_PACKAGE, "@playwright/mcp@0.0.78");
         assert!(!PLAYWRIGHT_MCP_PACKAGE.contains("latest"));
     }
+
+    #[test]
+    fn playwright_mcp_uses_isolated_profile_and_checked_allowlist() {
+        let args = playwright_mcp_args(Some("https://example.com;https://docs.example.com".into())).unwrap();
+        assert!(args.iter().any(|arg| arg == "--isolated"));
+        assert!(args.iter().any(|arg| arg == "--block-service-workers"));
+        assert!(args.iter().any(|arg| arg == "--allowed-origins"));
+        assert!(args.iter().any(|arg| arg == "https://example.com;https://docs.example.com"));
+        assert!(playwright_mcp_args(Some("https://example.com/path".into())).is_err());
+        assert!(playwright_mcp_args(Some("*".into())).is_err());
+    }
 }
 
 /// Configure the supported Playwright MCP against the user's visible Chrome.
@@ -681,23 +737,13 @@ mod tests {
 #[tauri::command]
 pub async fn extensions_mcp_add_playwright_chrome(
     grok_cmd: Option<String>,
+    allowed_origins: Option<String>,
 ) -> Result<String, String> {
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
-        run_grok_text(
-            &bin,
-            &[
-                "mcp",
-                "add",
-                "playwright",
-                "--",
-                "npx",
-                "-y",
-                PLAYWRIGHT_MCP_PACKAGE,
-                "--browser",
-                "chrome",
-            ],
-        )
+        let args = playwright_mcp_args(allowed_origins)?;
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        run_grok_text(&bin, &refs)
     })
     .await
     .map_err(|e| e.to_string())?

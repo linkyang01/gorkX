@@ -99,10 +99,14 @@ export async function fetchMarketplace(grokCmd?: string): Promise<{
   return invoke('extensions_marketplace', { grokCmd: grokCmd || null });
 }
 
-/** Enable Playwright MCP pointed at Chrome (agent browser control). */
-export async function enablePlaywrightChromeMcp(grokCmd?: string): Promise<string> {
+/** Enable an isolated Playwright MCP pointed at Chrome (agent browser control). */
+export async function enablePlaywrightChromeMcp(
+  grokCmd?: string,
+  allowedOrigins?: string,
+): Promise<string> {
   return invoke<string>('extensions_mcp_add_playwright_chrome', {
     grokCmd: grokCmd || null,
+    allowedOrigins: allowedOrigins?.trim() || null,
   });
 }
 
