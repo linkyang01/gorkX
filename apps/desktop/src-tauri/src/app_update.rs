@@ -247,8 +247,19 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
                         (Some(n), Some(u), None)
                     }
                 });
-            let update_available =
-                !latest.is_empty() && !cur.is_empty() && compare_semver(&latest, &cur) > 0;
+            let version_cmp = if latest.is_empty() || cur.is_empty() {
+                0
+            } else {
+                compare_semver(&latest, &cur)
+            };
+            let update_available = version_cmp > 0;
+            let note = if update_available {
+                "有新版本可下载安装包".into()
+            } else if version_cmp < 0 {
+                format!("当前开发版本 v{cur} 高于已发布版本 v{latest}，无需更新")
+            } else {
+                "已是最新版本".into()
+            };
             Ok(AppUpdateCheck {
                 current_version: cur,
                 latest_version: if latest.is_empty() {
@@ -265,11 +276,7 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
                 dmg_bytes,
                 arch,
                 error: None,
-                note: if update_available {
-                    "有新版本可下载安装包".into()
-                } else {
-                    "已是最新版本".into()
-                },
+                note,
             })
         }
         Err(api_err) => {
@@ -277,8 +284,21 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
             match fetch_latest_tag_via_redirect(&client) {
                 Ok(latest) => {
                     let (n, u) = dmg_url_for_tag(&latest);
-                    let update_available =
-                        !latest.is_empty() && !cur.is_empty() && compare_semver(&latest, &cur) > 0;
+                    let version_cmp = if latest.is_empty() || cur.is_empty() {
+                        0
+                    } else {
+                        compare_semver(&latest, &cur)
+                    };
+                    let update_available = version_cmp > 0;
+                    let note = if update_available {
+                        "有新版本可下载（经发布页解析）".into()
+                    } else if version_cmp < 0 {
+                        format!(
+                            "当前开发版本 v{cur} 高于已发布版本 v{latest}，无需更新（经发布页解析）"
+                        )
+                    } else {
+                        "已是最新版本（经发布页解析）".into()
+                    };
                     Ok(AppUpdateCheck {
                         current_version: cur,
                         latest_version: latest.clone(),
@@ -291,11 +311,7 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
                         dmg_bytes: None,
                         arch,
                         error: Some(format!("API 不可用，已用发布页解析（{api_err}）")),
-                        note: if update_available {
-                            "有新版本可下载（经发布页解析）".into()
-                        } else {
-                            "已是最新版本（经发布页解析）".into()
-                        },
+                        note,
                     })
                 }
                 Err(redir_err) => Ok(AppUpdateCheck {
@@ -443,6 +459,13 @@ pub fn app_current_version() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn semver_comparison_distinguishes_ahead_release_and_local_build() {
+        assert!(compare_semver("0.4.4", "0.4.3") > 0);
+        assert_eq!(compare_semver("0.4.3", "0.4.3"), 0);
+        assert!(compare_semver("0.4.2", "0.4.3") < 0);
+    }
 
     #[test]
     fn release_dmg_validator_accepts_our_release_asset() {

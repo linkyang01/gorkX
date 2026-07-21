@@ -52,6 +52,24 @@ function isTauri(): boolean {
   );
 }
 
+/** Whether a GitHub release is strictly newer than the app that is running. */
+export function isVersionNewer(candidate: string, current: string): boolean {
+  const parse = (version: string) =>
+    version
+      .trim()
+      .replace(/^v/i, '')
+      .split(/[.+-]/)
+      .map((part) => Number.parseInt(part, 10) || 0);
+  const candidateParts = parse(candidate);
+  const currentParts = parse(current);
+  const length = Math.max(candidateParts.length, currentParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (candidateParts[index] || 0) - (currentParts[index] || 0);
+    if (diff !== 0) return diff > 0;
+  }
+  return false;
+}
+
 export async function checkKernelUpdate(grokBin?: string): Promise<KernelUpdateInfo> {
   try {
     const r = await invoke<{ stdout: string; stderr: string; exitCode: number | null }>(

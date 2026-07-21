@@ -18,6 +18,7 @@ import {
   formatBytes,
   GORKX_GITHUB,
   GROK_KERNEL_GITHUB,
+  isVersionNewer,
   installAppUpdate,
   openUrlSafe,
   type AppUpdateInfo,
@@ -512,7 +513,9 @@ export function SettingsPanel({
             .replace('{latest}', info.latestVersion) + (size ? ` · ${size}` : ''),
         );
       } else {
-        setMsg(t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion));
+        setMsg(
+          info.note || t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion),
+        );
       }
     } finally {
       setUpBusy(false);
@@ -1553,7 +1556,9 @@ export function SettingsPanel({
                   <div>
                     <div className="settings-row-title">
                       gorkX v{APP_VERSION}
-                      {appUp?.latestVersion && appUp.latestVersion !== '—'
+                      {appUp?.latestVersion &&
+                      appUp.latestVersion !== '—' &&
+                      isVersionNewer(appUp.latestVersion, APP_VERSION)
                         ? ` · latest ${appUp.latestVersion}`
                         : ''}
                     </div>
