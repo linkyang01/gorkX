@@ -140,6 +140,38 @@ fn client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Public GitHub repository metadata is intentionally available without an
+/// account. A user-provided PAT is added only when present, so private repos
+/// and higher rate limits continue to work without treating a token as a
+/// prerequisite for every read-only Review action.
+fn github_get(
+    client: &reqwest::blocking::Client,
+    url: String,
+    token: Option<&str>,
+) -> reqwest::blocking::RequestBuilder {
+    let request = client
+        .get(url)
+        .header("Accept", "application/vnd.github+json");
+    if let Some(token) = token {
+        request.bearer_auth(token)
+    } else {
+        request
+    }
+}
+
+fn github_read_error(
+    status: reqwest::StatusCode,
+    context: &str,
+    token_present: bool,
+) -> String {
+    if !token_present && matches!(status.as_u16(), 401 | 403) {
+        return format!(
+            "GitHub HTTP {status} while {context}. Anonymous public reads may be rate-limited or blocked; add a read-only token to continue."
+        );
+    }
+    format!("GitHub HTTP {status} while {context}")
+}
+
 fn whoami(token: &str) -> Result<String, String> {
     let response = client()?
         .get(format!("{API}/user"))
@@ -163,7 +195,7 @@ fn whoami(token: &str) -> Result<String, String> {
 pub fn github_status() -> GithubStatus {
     match token_read() {
         Some(_) => GithubStatus { configured: true, connected: false, login: None, error: None, note: "A GitHub token is stored in macOS Keychain. Test it before reading repository data.".into() },
-        None => GithubStatus { configured: false, connected: false, login: None, error: None, note: "No GitHub token configured. gorkX has no access to GitHub until you add a read-only token.".into() },
+        None => GithubStatus { configured: false, connected: false, login: None, error: None, note: "No GitHub token configured. Public repository reads are available anonymously; private repositories require a read-only token.".into() },
     }
 }
 
@@ -258,21 +290,24 @@ fn github_repo_segment(value: &str) -> bool {
 
 #[tauri::command]
 pub fn github_list_open_prs(cwd: String) -> Result<Vec<GithubPullRequest>, String> {
-    let token = token_read()
-        .ok_or_else(|| "GitHub is not connected. Add a read-only token first.".to_string())?;
-    let (owner, repo) = github_repo_from_remote(&cwd)?;
-    let response = client()?
-        .get(format!(
-            "{API}/repos/{owner}/{repo}/pulls?state=open&per_page=30"
-        ))
-        .bearer_auth(&token)
-        .header("Accept", "application/vnd.github+json")
+    list_open_prs(&cwd, token_read().as_deref())
+}
+
+fn list_open_prs(cwd: &str, token: Option<&str>) -> Result<Vec<GithubPullRequest>, String> {
+    let (owner, repo) = github_repo_from_remote(cwd)?;
+    let http = client()?;
+    let response = github_get(
+        &http,
+        format!("{API}/repos/{owner}/{repo}/pulls?state=open&per_page=100"),
+        token,
+    )
         .send()
         .map_err(|e| format!("GitHub network: {e}"))?;
     if !response.status().is_success() {
-        return Err(format!(
-            "GitHub HTTP {} while reading {owner}/{repo} pull requests",
-            response.status()
+        return Err(github_read_error(
+            response.status(),
+            &format!("reading {owner}/{repo} pull requests"),
+            token.is_some(),
         ));
     }
     let rows: Vec<serde_json::Value> = response
@@ -313,19 +348,21 @@ pub fn github_list_open_prs(cwd: String) -> Result<Vec<GithubPullRequest>, Strin
 
 #[tauri::command]
 pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCheckRun>, String> {
-    let token = token_read()
-        .ok_or_else(|| "GitHub is not connected. Add a read-only token first.".to_string())?;
+    let token = token_read();
     let (owner, repo) = github_repo_from_remote(&cwd)?;
-    let pull = client()?
-        .get(format!("{API}/repos/{owner}/{repo}/pulls/{pr_number}"))
-        .bearer_auth(&token)
-        .header("Accept", "application/vnd.github+json")
+    let http = client()?;
+    let pull = github_get(
+        &http,
+        format!("{API}/repos/{owner}/{repo}/pulls/{pr_number}"),
+        token.as_deref(),
+    )
         .send()
         .map_err(|e| format!("GitHub network: {e}"))?;
     if !pull.status().is_success() {
-        return Err(format!(
-            "GitHub HTTP {} while reading PR #{pr_number}",
-            pull.status()
+        return Err(github_read_error(
+            pull.status(),
+            &format!("reading PR #{pr_number}"),
+            token.is_some(),
         ));
     }
     let pull: serde_json::Value = pull.json().map_err(|e| format!("GitHub response: {e}"))?;
@@ -334,18 +371,18 @@ pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCh
         .and_then(|v| v.get("sha"))
         .and_then(|v| v.as_str())
         .ok_or_else(|| "GitHub PR response has no head commit.".to_string())?;
-    let checks = client()?
-        .get(format!(
-            "{API}/repos/{owner}/{repo}/commits/{sha}/check-runs"
-        ))
-        .bearer_auth(&token)
-        .header("Accept", "application/vnd.github+json")
+    let checks = github_get(
+        &http,
+        format!("{API}/repos/{owner}/{repo}/commits/{sha}/check-runs?per_page=100"),
+        token.as_deref(),
+    )
         .send()
         .map_err(|e| format!("GitHub network: {e}"))?;
     if !checks.status().is_success() {
-        return Err(format!(
-            "GitHub HTTP {} while reading checks for PR #{pr_number}",
-            checks.status()
+        return Err(github_read_error(
+            checks.status(),
+            &format!("reading checks for PR #{pr_number}"),
+            token.is_some(),
         ));
     }
     let body: serde_json::Value = checks.json().map_err(|e| format!("GitHub response: {e}"))?;
@@ -385,20 +422,18 @@ pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCh
 
 #[tauri::command]
 pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<GithubComment>, String> {
-    let token = token_read()
-        .ok_or_else(|| "GitHub is not connected. Add a read-only token first.".to_string())?;
+    let token = token_read();
     let (owner, repo) = github_repo_from_remote(&cwd)?;
+    let http = client()?;
     let get_rows = |url: String| -> Result<Vec<serde_json::Value>, String> {
-        let response = client()?
-            .get(url)
-            .bearer_auth(&token)
-            .header("Accept", "application/vnd.github+json")
+        let response = github_get(&http, url, token.as_deref())
             .send()
             .map_err(|e| format!("GitHub network: {e}"))?;
         if !response.status().is_success() {
-            return Err(format!(
-                "GitHub HTTP {} while reading comments for PR #{pr_number}",
-                response.status()
+            return Err(github_read_error(
+                response.status(),
+                &format!("reading comments for PR #{pr_number}"),
+                token.is_some(),
             ));
         }
         response.json().map_err(|e| format!("GitHub response: {e}"))
@@ -456,7 +491,7 @@ pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<Github
 
 #[cfg(test)]
 mod tests {
-    use super::parse_github_remote;
+    use super::{github_read_error, parse_github_remote};
 
     #[test]
     fn parses_supported_github_remote_forms() {
@@ -488,4 +523,16 @@ mod tests {
             assert!(parse_github_remote(raw).is_err(), "accepted {raw}");
         }
     }
+
+    #[test]
+    fn anonymous_rate_limit_explains_the_pat_recovery_path() {
+        let message = github_read_error(
+            reqwest::StatusCode::FORBIDDEN,
+            "reading owner/repo pull requests",
+            false,
+        );
+        assert!(message.contains("rate-limited"));
+        assert!(message.contains("read-only token"));
+    }
+
 }
