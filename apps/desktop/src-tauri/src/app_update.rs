@@ -173,6 +173,46 @@ fn dmg_url_for_tag(tag: &str) -> (String, String) {
     (name, url)
 }
 
+/// Only accept a DMG that GitHub serves from this application's release assets.
+///
+/// `app_update_install` is a Tauri command and its arguments are ultimately
+/// controlled by the WebView, so they must not be treated as a trusted download
+/// location merely because `app_update_check` produced them earlier.
+fn validate_release_dmg(url: &str, name: &str) -> Result<(), String> {
+    let parsed = reqwest::Url::parse(url.trim()).map_err(|_| "安装包地址无效".to_string())?;
+    if parsed.scheme() != "https"
+        || parsed.host_str() != Some("github.com")
+        || parsed.port().is_some()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err("安装包必须来自 gorkX 的 GitHub HTTPS Release".into());
+    }
+
+    let segments: Vec<_> = parsed.path_segments().into_iter().flatten().collect();
+    if segments.len() != 6
+        || segments[0] != OWNER
+        || segments[1] != REPO
+        || segments[2] != "releases"
+        || segments[3] != "download"
+        || segments[4].is_empty()
+    {
+        return Err("安装包不是 gorkX Release 资源".into());
+    }
+    let asset = segments[5];
+    if asset != name
+        || !asset.to_ascii_lowercase().ends_with(".dmg")
+        || !asset
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Err("安装包文件名无效".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateCheck, String> {
     let cur = strip_v(
@@ -313,6 +353,8 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
         }
     };
 
+    validate_release_dmg(&url, &name)?;
+
     let dest_dir = downloads_dir();
     std::fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
     let safe_name: String = name
@@ -343,15 +385,13 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
         .bytes()
         .map_err(|e| format!("读取下载内容失败: {e}"))?;
     if bytes.len() < 1_000_000 {
-        // DMG should be tens of MB; tiny body is likely an error page
-        let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(200)]);
-        if preview.contains("Not Found") || preview.contains("<!DOCTYPE") {
-            return Ok(AppUpdateInstallResult {
-                ok: false,
-                path: None,
-                note: format!("安装包不存在或地址错误（{safe_name}）"),
-            });
-        }
+        // A gorkX DMG is tens of MB. Never save a tiny error page or arbitrary
+        // response as a file the OS will subsequently open.
+        return Ok(AppUpdateInstallResult {
+            ok: false,
+            path: None,
+            note: format!("安装包过小或地址错误（{safe_name}）"),
+        });
     }
     {
         let mut f = File::create(&dest).map_err(|e| format!("写入失败: {e}"))?;
@@ -381,4 +421,31 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
 #[tauri::command]
 pub fn app_current_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_dmg_validator_accepts_our_release_asset() {
+        assert!(validate_release_dmg(
+            "https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX_0.4.3_aarch64.dmg",
+            "gorkX_0.4.3_aarch64.dmg",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn release_dmg_validator_rejects_untrusted_or_mismatched_assets() {
+        for (url, name) in [
+            ("https://example.com/gorkX.dmg", "gorkX.dmg"),
+            ("http://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg", "gorkX.dmg"),
+            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg?token=x", "gorkX.dmg"),
+            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.zip", "gorkX.zip"),
+            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg", "other.dmg"),
+        ] {
+            assert!(validate_release_dmg(url, name).is_err(), "{url}");
+        }
+    }
 }
