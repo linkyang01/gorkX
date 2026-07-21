@@ -26,7 +26,8 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
 | GitHub | User-provided fine-grained token in macOS Keychain; verify account and read current origin's open PRs, check-runs, discussion and review comments | **Half** — real REST reads only after the user connects; OAuth/App, PR creation and all remote writes are not shipped |
-| Multi-provider models | Settings → config.toml; connection probe; **set default**; provider/account labels and grouped custom models; macOS Keychain for new API keys | **Half→improved** — routing still depends on engine; legacy plaintext keys are visibly migratable |
+| Custom API / compatible models | Settings → App `config.toml`; OpenAI Chat/Responses, Anthropic Messages or local gateway probe; task/session selection and default; provider labels/groups; macOS Keychain | **Real** — the released bundled engine was isolated-tested to advertise and accept a configured `[model.*]` through ACP `session/set_model`; the connection probe is one small provider request and never displays endpoint response bodies |
+| Multiple provider subscriptions | Account aggregation, OAuth and quota across ChatGPT/Claude/Grok web subscriptions | **Soon** — Grok login is real; OpenAI/Anthropic currently require a user API key or compatible gateway, and web subscriptions are never presented as API logins |
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu | Local actions always available; engine Slash actions appear only when the live session advertises them | **Real** |
 | Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
@@ -57,6 +58,19 @@ in-memory Playwright Chrome context. Use only an origin you intend to visit:
 
 ```bash
 node scripts/verify-playwright-mcp.mjs --origin https://example.com
+```
+
+## Isolated custom-model ACP gate
+
+This verifies that the bundled engine parses a disposable `[model.*]` entry,
+advertises it to ACP and accepts `session/set_model`. It sends no model prompt,
+but needs a copied cached Grok login in a disposable home:
+
+```bash
+GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-home \
+GORKX_ACP_TEST_CWD=/private/tmp/gorkx-acp-project \
+node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok \
+  --authenticated --custom-model
 ```
 
 ## macOS bundle gate

@@ -1064,6 +1064,9 @@ export function SettingsPanel({
                     {t('settingsModelsEditToml')}
                   </button>
                 </div>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>
+                  {t('settingsModelsTestHint')}
+                </p>
               </div>
               {modelsSnap?.defaultModel ? (
                 <div className="hint" style={{ marginBottom: 10 }}>

@@ -4,6 +4,8 @@
 // Pass --authenticated only with an explicit disposable GROK_HOME/CWD pair.
 // --worktree additionally creates a worktree only in that disposable Git CWD.
 // --resource sends one minimal model request with a temporary local attachment.
+// --custom-model verifies a disposable [model.*] override can be selected;
+// it never sends a prompt to that provider.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -12,18 +14,19 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
 const worktreeSmoke = options.includes('--worktree');
 const resourceSmoke = options.includes('--resource');
-if ((worktreeSmoke || resourceSmoke) && !authenticated) {
-  console.error('--worktree and --resource require --authenticated with an explicit disposable CWD');
+const customModelSmoke = options.includes('--custom-model');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke) && !authenticated) {
+  console.error('--worktree, --resource and --custom-model require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
-if (options.some((option) => !['--authenticated', '--worktree', '--resource'].includes(option))) {
-  console.error(`unknown option: ${options.find((option) => !['--authenticated', '--worktree', '--resource'].includes(option))}`);
+if (options.some((option) => !['--authenticated', '--worktree', '--resource', '--custom-model'].includes(option))) {
+  console.error(`unknown option: ${options.find((option) => !['--authenticated', '--worktree', '--resource', '--custom-model'].includes(option))}`);
   process.exit(2);
 }
 
@@ -44,6 +47,13 @@ if (authenticated) {
     console.error('refusing to run authenticated smoke against a standard user GROK_HOME; use a disposable test home');
     process.exit(2);
   }
+}
+const customModelId = 'gorkx-acp-custom-smoke';
+if (customModelSmoke) {
+  // The explicit test home is disposable by contract.  This proves the
+  // released kernel accepts gorkX's persisted schema and advertises the model
+  // through ACP, without sending a billable inference request to the endpoint.
+  await writeFile(join(home, 'config.toml'), `[model.${customModelId}]\nmodel = "${customModelId}"\nname = "gorkX ACP custom-model smoke"\nbase_url = "http://127.0.0.1:9/v1"\nenv_key = "GORKX_MODEL_${customModelId.replaceAll('-', '_').toUpperCase()}"\napi_backend = "chat_completions"\n\n[models]\ndefault = "${customModelId}"\n`, 'utf8');
 }
 const child = spawn(bin, ['agent', 'stdio'], {
   env: { ...process.env, GROK_HOME: home },
@@ -139,6 +149,14 @@ try {
       throw new Error(`session/new returned no sessionId: ${JSON.stringify(created)}`);
     }
     console.log('PASS: ACP session/new');
+
+    if (customModelSmoke) {
+      if (!JSON.stringify(created).includes(customModelId)) {
+        throw new Error('session/new did not advertise the configured custom model');
+      }
+      await request('session/set_model', { sessionId, modelId: customModelId });
+      console.log(`PASS: ACP session/set_model(${customModelId})`);
+    }
 
     const loaded = await request('session/load', { sessionId, cwd, mcpServers: [] });
     const loadedId = loaded?.sessionId ?? loaded?._meta?.sessionId;

@@ -51,8 +51,22 @@ fn keychain_read(id: &str) -> Option<String> {
     let value = String::from_utf8(out.stdout).ok()?.trim().to_string();
     (!value.is_empty()).then_some(value)
 }
+#[cfg(target_os = "macos")]
+fn keychain_delete(id: &str) -> Result<(), String> {
+    // Avoid reporting an absent item as an error: removal should be idempotent
+    // when a model used an external env var or was imported without a secret.
+    if keychain_read(id).is_none() {
+        return Ok(());
+    }
+    let status = std::process::Command::new("security")
+        .args(["delete-generic-password", "-s", KEYCHAIN_SERVICE, "-a", &keychain_account(id)])
+        .status().map_err(|e| format!("macOS Keychain unavailable: {e}"))?;
+    if status.success() { Ok(()) } else { Err("Could not remove the API key from macOS Keychain.".into()) }
+}
 #[cfg(not(target_os = "macos"))]
 fn keychain_read(_id: &str) -> Option<String> { None }
+#[cfg(not(target_os = "macos"))]
+fn keychain_delete(_id: &str) -> Result<(), String> { Ok(()) }
 
 fn default_backend() -> String {
     "chat_completions".into()
@@ -227,6 +241,19 @@ fn escape_toml_str(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Only allow endpoints that reqwest can safely send to without embedding a
+/// credential in the URL. Local HTTP is intentionally allowed for Ollama.
+fn validate_base_url(raw: &str) -> Result<(), String> {
+    let url = reqwest::Url::parse(raw.trim()).map_err(|_| "base_url must be a valid http(s) URL".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+        return Err("base_url must be a valid http(s) URL".into());
+    }
+    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return Err("base_url must not contain credentials, a query, or a fragment".into());
+    }
+    Ok(())
+}
+
 /// Upsert one [model.<id>] block and optional default.
 #[tauri::command]
 pub fn models_list_custom() -> Result<ModelsConfigSnapshot, String> {
@@ -244,6 +271,7 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
     if model.base_url.trim().is_empty() {
         return Err("base_url required".into());
     }
+    validate_base_url(model.base_url.trim())?;
     if model.model.trim().is_empty() {
         return Err("model id required".into());
     }
@@ -346,6 +374,8 @@ pub fn models_remove_custom(id: String) -> Result<ModelsConfigSnapshot, String> 
     let section = format!("[model.{id}]");
     let new_raw = remove_toml_section(&raw, &section);
     fs::write(&path, new_raw).map_err(|e| e.to_string())?;
+    // A deleted model must not leave a recoverable credential behind.
+    keychain_delete(&id)?;
     list_custom_models()
 }
 
@@ -398,6 +428,7 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     if base.is_empty() {
         return Err("base_url required".into());
     }
+    validate_base_url(base)?;
     let mid = model.model.trim();
     if mid.is_empty() {
         return Err("model id required".into());
@@ -504,17 +535,19 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     };
     let status = resp.status().as_u16();
     let latency_ms = started.elapsed().as_millis() as u64;
-    let text = resp.text().unwrap_or_default();
+    // Never put an endpoint-controlled response body in UI state. Error bodies
+    // frequently echo request metadata and can contain credentials on broken
+    // compatible gateways.
+    let _ = resp.bytes();
     let ok = (200..300).contains(&status);
-    let snippet: String = text.chars().take(160).collect();
     let note = if ok {
         format!("连接成功 · HTTP {status} · {latency_ms} ms")
     } else if status == 401 || status == 403 {
-        format!("鉴权失败 HTTP {status} — 检查 API Key · {snippet}")
+        format!("鉴权失败 HTTP {status} — 检查 API Key")
     } else if status == 404 {
-        format!("路径不存在 HTTP 404 — 检查 base_url 是否含 /v1 · {snippet}")
+        "路径不存在 HTTP 404 — 检查 base_url 是否含 /v1".into()
     } else {
-        format!("HTTP {status} · {snippet}")
+        format!("HTTP {status}（响应详情已隐藏）")
     };
     Ok(ModelTestResult {
         ok,
@@ -601,4 +634,22 @@ fn remove_toml_section(raw: &str, section_header: &str) -> String {
 #[allow(dead_code)]
 pub fn config_path() -> PathBuf {
     config_toml_path()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_base_url;
+
+    #[test]
+    fn accepts_https_and_local_http_model_endpoints() {
+        assert!(validate_base_url("https://api.example.com/v1").is_ok());
+        assert!(validate_base_url("http://127.0.0.1:11434/v1").is_ok());
+    }
+
+    #[test]
+    fn rejects_credential_bearing_or_non_http_model_endpoints() {
+        assert!(validate_base_url("https://token@example.com/v1").is_err());
+        assert!(validate_base_url("https://api.example.com/v1?api_key=nope").is_err());
+        assert!(validate_base_url("file:///tmp/model").is_err());
+    }
 }
