@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "verify:web-bundle": "npm run build && ../../scripts/verify-desktop-web-build.sh",
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:app": "tauri dev",
