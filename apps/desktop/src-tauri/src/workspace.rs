@@ -42,6 +42,12 @@ fn walk(dir: &Path, root: &Path, out: &mut Vec<FileHit>, limit: usize) {
         }
         let path = ent.path();
         let name = ent.file_name().to_string_lossy().to_string();
+        // `Path::is_dir` and `is_file` follow symlinks. File discovery feeds
+        // the @ attachment picker, so never turn a project-local symlink into
+        // an index of files outside the chosen workspace.
+        if ent.file_type().map(|ty| ty.is_symlink()).unwrap_or(true) {
+            continue;
+        }
         if path.is_dir() {
             if should_skip(&name) {
                 continue;
@@ -155,4 +161,37 @@ pub fn read_workspace_file_preview(
         out.push('\n');
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{walk, FileHit};
+    use std::fs;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(unix)]
+    #[test]
+    fn discovery_skips_symlinks_that_leave_the_workspace() {
+        use std::os::unix::fs::symlink;
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-workspace-{nonce}"));
+        let project = base.join("project");
+        let outside = base.join("outside");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(project.join("inside.txt"), "ok").unwrap();
+        fs::write(outside.join("private.txt"), "private").unwrap();
+        symlink(&outside, project.join("outside-link")).unwrap();
+
+        let mut hits: Vec<FileHit> = Vec::new();
+        walk(Path::new(&project), Path::new(&project), &mut hits, 80);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].path, "inside.txt");
+        fs::remove_dir_all(base).unwrap();
+    }
 }
