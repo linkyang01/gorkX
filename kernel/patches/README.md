@@ -2,13 +2,15 @@
 
 Each kernel patch must be one numbered `.patch` file with a short companion
 Markdown note covering: upstream commit, reason, affected ACP behavior, risk,
-and regression command. Do not patch a bundled binary in place.
+and regression command. Add the patch filename once to `series`; build order is
+the line order in that file. Do not patch a bundled binary in place.
 
-No gorkX patches are applied at the current source lock. A patch queue is not
-silently applied by the build script: when the first patch is needed, add its
-reviewed application/verification rule here and extend the source verifier
-before changing the lock. This prevents an unrecorded dirty checkout from
-becoming a release kernel.
+No gorkX patches are applied at the current source lock. When `series` is
+non-empty, `scripts/verify-grok-kernel-patches.sh` first checks every patch
+against the clean locked checkout. `scripts/build-grok-kernel.sh` then creates
+a temporary detached Git worktree, applies exactly that reviewed series there,
+and builds only from it. The source checkout remains clean; unrecorded edits
+cannot become a release kernel.
 
 ## Build prerequisites
 
