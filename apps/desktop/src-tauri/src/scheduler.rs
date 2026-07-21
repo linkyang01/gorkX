@@ -16,6 +16,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const JOBS_KEY: &str = "scheduled_jobs_v1";
 const RUNS_KEY: &str = "scheduled_job_runs_v1";
 const LABEL: &str = "app.gorkx.scheduler";
+// A foreground Grok plan can take several minutes. Do not reclaim a live job
+// on the next 5-minute launchd tick, but do make a crashed worker visible and
+// retryable instead of silently treating its pre-spawn claim as a success.
+const CLAIM_LEASE_MS: i64 = 30 * 60_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +41,8 @@ struct ScheduledJob {
     failure_count: i64,
     #[serde(default)]
     last_error: Option<String>,
+    #[serde(default)]
+    claimed_at: Option<i64>,
     next_run_at: i64,
 }
 
@@ -198,6 +204,39 @@ where
         succeeded: 0,
         failed: 0,
     };
+    // A process can die after persisting its claim but before it receives a
+    // result from the engine. Reclaim only after a generous lease and retain a
+    // local failure record so the user can distinguish a retry from a normal
+    // run. The retry backoff is intentional: background jobs never turn a
+    // restart into an immediate burst of model calls.
+    let mut recovered = false;
+    for job in &mut jobs {
+        let expired = job
+            .claimed_at
+            .is_some_and(|claimed| now.saturating_sub(claimed) >= CLAIM_LEASE_MS);
+        if job.enabled && expired {
+            job.claimed_at = None;
+            job.failure_count = job.failure_count.saturating_add(1);
+            let output = "Previous background run did not report completion before its lease expired.".to_string();
+            job.last_error = Some(output.clone());
+            job.next_run_at = retry_at(job.failure_count, now);
+            append_run(
+                &conn,
+                SchedulerRun {
+                    job_id: job.id.clone(),
+                    title: job.title.clone(),
+                    started_at: now,
+                    ok: false,
+                    output,
+                },
+            )?;
+            summary.failed += 1;
+            recovered = true;
+        }
+    }
+    if recovered {
+        save_jobs(&conn, &jobs)?;
+    }
     let due_indices: Vec<usize> = jobs
         .iter()
         .enumerate()
@@ -211,6 +250,7 @@ where
         job.next_run_at = next_at(job, now);
         job.failure_count = 0;
         job.last_error = None;
+        job.claimed_at = Some(now);
         save_jobs(&conn, &jobs)?;
 
         let claimed = jobs[index].clone();
@@ -227,6 +267,7 @@ where
             jobs[index].last_error = Some(output.chars().take(500).collect());
             jobs[index].next_run_at = retry_at(jobs[index].failure_count, now);
         }
+        jobs[index].claimed_at = None;
         append_run(
             &conn,
             SchedulerRun {
@@ -429,6 +470,7 @@ mod tests {
             last_run_at: None,
             failure_count: 0,
             last_error: None,
+            claimed_at: None,
             next_run_at,
         }
     }
@@ -469,5 +511,33 @@ mod tests {
         assert_eq!(updated[0].failure_count, 1);
         assert_eq!(updated[0].next_run_at, retry_at(1, now));
         assert_eq!(updated[0].last_error.as_deref(), Some("engine unavailable"));
+    }
+
+    #[test]
+    fn live_claim_is_not_run_twice_before_lease_expires() {
+        let now = 1_000_000_i64;
+        let mut pending = job("a", now + 60_000);
+        pending.claimed_at = Some(now - 5 * 60_000);
+        let conn = memory_conn(&[pending]);
+        let summary = process_due_jobs(&conn, now, |_| panic!("live job was reclaimed")).unwrap();
+        assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 0));
+    }
+
+    #[test]
+    fn expired_claim_is_recorded_and_backed_off() {
+        let now = 1_000_000_i64;
+        let mut pending = job("a", now + 60_000);
+        pending.claimed_at = Some(now - CLAIM_LEASE_MS);
+        let conn = memory_conn(&[pending]);
+        let summary = process_due_jobs(&conn, now, |_| panic!("expired job should back off first")).unwrap();
+        assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 1));
+        let updated = read_jobs(&conn).unwrap();
+        assert_eq!(updated[0].claimed_at, None);
+        assert_eq!(updated[0].failure_count, 1);
+        assert_eq!(updated[0].next_run_at, retry_at(1, now));
+        let runs = scheduler_list_runs_from(&conn).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert!(!runs[0].ok);
+        assert!(runs[0].output.contains("lease expired"));
     }
 }
