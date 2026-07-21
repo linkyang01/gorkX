@@ -586,7 +586,11 @@ fn redact_mcp_doctor_output(raw: String) -> String {
 pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, String> {
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
-        run_grok_text(&bin, &["mcp", "doctor"]).map(redact_mcp_doctor_output)
+        // Both stdout and an error body can include server configuration. Never
+        // surface either one to the WebView before applying the same redaction.
+        run_grok_text(&bin, &["mcp", "doctor"])
+            .map(redact_mcp_doctor_output)
+            .map_err(redact_mcp_doctor_output)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -605,6 +609,17 @@ mod tests {
         assert!(safe.contains("authorization: <redacted>"));
         assert!(!safe.contains("abc123"));
         assert!(!safe.contains("xyz"));
+    }
+
+    #[test]
+    fn doctor_error_redacts_sensitive_values() {
+        let raw = "MCP doctor failed\nTOKEN: leaked-value\npassword=also-leaked";
+        let safe = redact_mcp_doctor_output(raw.into());
+        assert!(safe.contains("MCP doctor failed"));
+        assert!(safe.contains("TOKEN: <redacted>"));
+        assert!(safe.contains("password=<redacted>"));
+        assert!(!safe.contains("leaked-value"));
+        assert!(!safe.contains("also-leaked"));
     }
 }
 
