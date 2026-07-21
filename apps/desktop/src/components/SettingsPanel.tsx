@@ -893,21 +893,6 @@ export function SettingsPanel({
                     ) : null}
                   </div>
                 </div>
-                <label className="field-label" htmlFor="browser-allowed-origins" style={{ marginTop: 12 }}>
-                  {t('settingsBrowserAllowedOrigins')}
-                </label>
-                <input
-                  id="browser-allowed-origins"
-                  value={browserAllowedOrigins}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setBrowserAllowedOrigins(next);
-                    try { localStorage.setItem('gorkx.browserAllowedOrigins', next); } catch { /* */ }
-                  }}
-                  placeholder={t('settingsBrowserAllowedOriginsPlaceholder')}
-                  spellCheck={false}
-                />
-                <p className="settings-row-hint">{t('settingsBrowserAllowedOriginsHint')}</p>
                 <div className="field-row" style={{ marginTop: 10 }}>
                   <button
                     type="button"
@@ -1177,6 +1162,21 @@ export function SettingsPanel({
                     </div>
                   </div>
                 </div>
+                <label className="field-label" htmlFor="browser-allowed-origins" style={{ marginTop: 12 }}>
+                  {t('settingsBrowserAllowedOrigins')}
+                </label>
+                <input
+                  id="browser-allowed-origins"
+                  value={browserAllowedOrigins}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setBrowserAllowedOrigins(next);
+                    try { localStorage.setItem('gorkx.browserAllowedOrigins', next); } catch { /* */ }
+                  }}
+                  placeholder={t('settingsBrowserAllowedOriginsPlaceholder')}
+                  spellCheck={false}
+                />
+                <p className="settings-row-hint">{t('settingsBrowserAllowedOriginsHint')}</p>
                 <div className="field-row" style={{ marginTop: 10 }}>
                   <button
                     type="button"
