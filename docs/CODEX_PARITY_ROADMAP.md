@@ -56,7 +56,7 @@ Local worker or hosted worker
 
 **出口**：每个 gorkX 版本都可回答“内核来自哪个 commit、有哪些补丁、升级是否通过回归”；包内二进制在隔离 `GROK_HOME` 通过 ACP 对话测试。
 
-**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建、隔离 ACP `initialize`，以及使用独立认证副本的认证/会话新建与恢复/Plan/worktree-list 回归；它尚未替换当前包内 `0.2.103` 引擎。认证回归加 `--worktree` 时会只在显式的临时 Git CWD 创建隔离 Worktree，并轮询内核列表确认路径真实出现。每次受控内核构建都会同时生成上游 `LICENSE` 与完整 `THIRD-PARTY-NOTICES`，macOS bundle 验收会拒绝缺少它们的包。认证回归要求显式、独立的 `GORKX_ACP_TEST_HOME`、`GORKX_ACP_TEST_CWD` 和 `--authenticated`，脚本会拒绝标准用户 `GROK_HOME`。该内核当前不暴露 ACP Hooks API，门禁会清楚记录为 `SKIP`，不会把它计入 Hooks 能力通过。资源附件与 Hooks 改写仍需受控测试仓库中的人工真链路验收。
+**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。锁定提交 `7cfcb20…` 已完成源码构建、隔离 ACP `initialize`，以及使用独立认证副本的认证/会话新建与恢复/Plan/worktree-list 回归；它尚未替换当前包内 `0.2.103` 引擎。认证回归加 `--worktree` 时会只在显式的临时 Git CWD 创建隔离 Worktree，并轮询内核列表确认路径真实出现；加 `--resource` 时会发送一条最小模型请求，用临时文本文件验证标准 `resource_link`，因此默认不执行且只允许在显式的可丢弃 CWD 中运行。每次受控内核构建都会同时生成上游 `LICENSE` 与完整 `THIRD-PARTY-NOTICES`，macOS bundle 验收会拒绝缺少它们的包。认证回归要求显式、独立的 `GORKX_ACP_TEST_HOME`、`GORKX_ACP_TEST_CWD` 和 `--authenticated`，脚本会拒绝标准用户 `GROK_HOME`。该内核当前不暴露 ACP Hooks API，门禁会清楚记录为 `SKIP`，不会把它计入 Hooks 能力通过。Hooks 改写仍需受控测试仓库中的人工真链路验收。
 
 运行时不执行 `grok update`：它不能更新本仓库的 source lock，也会绕过构建与 ACP 回归门禁。设置页只报告包内内核版本；升级必须走上面的源码同步、构建和验证流程。
 

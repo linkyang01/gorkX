@@ -3,24 +3,27 @@
 // no login and never touches the user's GROK_HOME or project directory.
 // Pass --authenticated only with an explicit disposable GROK_HOME/CWD pair.
 // --worktree additionally creates a worktree only in that disposable Git CWD.
-import { mkdtemp, rm } from 'node:fs/promises';
+// --resource sends one minimal model request with a temporary local attachment.
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
 const worktreeSmoke = options.includes('--worktree');
-if (worktreeSmoke && !authenticated) {
-  console.error('--worktree requires --authenticated with an explicit disposable Git CWD');
+const resourceSmoke = options.includes('--resource');
+if ((worktreeSmoke || resourceSmoke) && !authenticated) {
+  console.error('--worktree and --resource require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
-if (options.some((option) => option !== '--authenticated' && option !== '--worktree')) {
-  console.error(`unknown option: ${options.find((option) => option !== '--authenticated' && option !== '--worktree')}`);
+if (options.some((option) => !['--authenticated', '--worktree', '--resource'].includes(option))) {
+  console.error(`unknown option: ${options.find((option) => !['--authenticated', '--worktree', '--resource'].includes(option))}`);
   process.exit(2);
 }
 
@@ -50,6 +53,7 @@ let stderr = '';
 let buffer = '';
 let nextId = 1;
 const pending = new Map();
+let resourceFixture = '';
 child.stderr.on('data', (chunk) => { stderr += chunk; });
 
 // The engine's tracing is not an API contract. In particular, an auth refresh
@@ -88,7 +92,9 @@ child.stdout.on('data', (chunk) => {
   }
 });
 
-const timeout = setTimeout(() => child.kill('SIGKILL'), 20_000);
+// Resource smoke deliberately permits a full model turn; all other protocol
+// gates retain the short fail-fast process ceiling.
+const timeout = setTimeout(() => child.kill('SIGKILL'), resourceSmoke ? 150_000 : 20_000);
 function request(method, params, timeoutMs = 8_000) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
@@ -143,6 +149,28 @@ try {
 
     await request('session/set_mode', { sessionId, modeId: 'plan' });
     console.log('PASS: ACP session/set_mode(plan)');
+
+    if (resourceSmoke) {
+      // Deliberately opt-in: this makes a real model request. The caller must
+      // supply a disposable CWD, and the fixture is deleted in finally.
+      resourceFixture = join(cwd, `.gorkx-resource-smoke-${Date.now().toString(36)}.txt`);
+      await writeFile(resourceFixture, 'gorkX ACP resource-link smoke fixture\n', 'utf8');
+      const size = (await stat(resourceFixture)).size;
+      await request('session/prompt', {
+        sessionId,
+        prompt: [
+          { type: 'text', text: 'Read the attached local text resource. Reply with exactly: RESOURCE_LINK_OK' },
+          {
+            type: 'resource_link',
+            name: 'gorkx-resource-smoke.txt',
+            uri: pathToFileURL(resourceFixture).href,
+            mimeType: 'text/plain',
+            size,
+          },
+        ],
+      }, 120_000);
+      console.log('PASS: ACP session/prompt resource_link');
+    }
 
     try {
       const hooks = await request('x.ai/hooks/list', { sessionId });
@@ -201,5 +229,6 @@ try {
 } finally {
   clearTimeout(timeout);
   child.kill();
+  if (resourceFixture) await rm(resourceFixture, { force: true });
   if (isolatedHome) await rm(home, { recursive: true, force: true });
 }
