@@ -8,6 +8,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// New browser connections use an audited package version rather than an
+/// unbounded `@latest` download. Existing user MCP entries remain untouched.
+const PLAYWRIGHT_MCP_PACKAGE: &str = "@playwright/mcp@0.0.78";
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillInfo {
@@ -634,7 +638,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::redact_mcp_doctor_output;
+    use super::{redact_mcp_doctor_output, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -664,6 +668,12 @@ mod tests {
         let safe = redact_mcp_doctor_output(raw.into());
         assert_eq!(safe, "2026-07-21 playwright: healthy\nserver ready");
     }
+
+    #[test]
+    fn playwright_mcp_connection_is_version_pinned() {
+        assert_eq!(PLAYWRIGHT_MCP_PACKAGE, "@playwright/mcp@0.0.78");
+        assert!(!PLAYWRIGHT_MCP_PACKAGE.contains("latest"));
+    }
 }
 
 /// Configure the supported Playwright MCP against the user's visible Chrome.
@@ -683,7 +693,7 @@ pub async fn extensions_mcp_add_playwright_chrome(
                 "--",
                 "npx",
                 "-y",
-                "@playwright/mcp@latest",
+                PLAYWRIGHT_MCP_PACKAGE,
                 "--browser",
                 "chrome",
             ],

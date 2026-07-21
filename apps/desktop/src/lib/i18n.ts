@@ -584,7 +584,7 @@ const dict = {
     settingsBrowser: 'Browser',
     settingsBrowserSoon: 'Browser control is not available yet. It will appear here when ready.',
     settingsBrowserHint:
-      'Connects the Playwright MCP to Chrome so the agent can use browser tools in a task. It does not add a fake in-app browser.',
+      'Connects a version-pinned Playwright MCP to Chrome so the agent can use browser tools in a task. It does not add a fake in-app browser.',
     settingsBrowserConfigured: 'Chrome browser tools configured',
     settingsBrowserNotConfigured: 'Chrome browser tools are not configured',
     settingsBrowserConnectionHint: 'This only confirms MCP configuration. Run Diagnose to verify the MCP runtime and Chrome availability.',
@@ -1369,7 +1369,7 @@ const dict = {
     settingsBrowser: '浏览器',
     settingsBrowserSoon: '浏览器操控尚未开放，就绪后会显示在这里。',
     settingsBrowserHint:
-      '将 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；不会伪造一个应用内浏览器。',
+      '将固定版本的 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；不会伪造一个应用内浏览器。',
     settingsBrowserConfigured: 'Chrome 浏览器工具已配置',
     settingsBrowserNotConfigured: 'Chrome 浏览器工具尚未配置',
     settingsBrowserConnectionHint: '这里只确认 MCP 配置存在；请运行「诊断」验证 MCP 运行时与 Chrome 是否可用。',

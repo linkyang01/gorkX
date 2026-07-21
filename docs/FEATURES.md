@@ -29,7 +29,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Sidebar | Task title filter across projects / inbox | **Real** |
 | + menu | Local actions always available; engine Slash actions appear only when the live session advertises them | **Real** |
 | Settings · Appearance | System / light / dark theme plus compact / comfortable / spacious density; instant local persistence | **Real** |
-| Settings · Browser | Connect / diagnose Playwright MCP for Chrome; manage the real MCP configuration | **Real** — browser tools depend on Chrome and the kernel MCP runtime |
+| Settings · Browser | Connect / diagnose a version-pinned Playwright MCP for Chrome; manage the real MCP configuration | **Real** — new connections use `@playwright/mcp@0.0.78`; browser tools depend on Chrome and the kernel MCP runtime |
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
 | Settings · Computer | Explicit macOS screen-region picker → local PNG attached to the composer | **Half** — capture is real; computer-use automation is not shipped |
 | Settings · Hooks | Project instructions via `AGENTS.md` | **Soon** — locked Grok Build currently returns `Method not found` for the ACP Hooks API, so gorkX does not present inactive controls as usable |
