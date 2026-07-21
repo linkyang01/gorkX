@@ -84,9 +84,6 @@ import {
 } from './components/ChromeIcons';
 import {
   IconPlus,
-  IconPlugins,
-  IconScheduled,
-  IconMemory,
   IconFolder,
   IconFolderPinned,
   IconMore,
@@ -138,6 +135,7 @@ import {
 } from './lib/threads';
 import { ContextRing } from './components/ContextRing';
 import { MicIcon, PermShieldIcon } from './components/ComposerIcons';
+import { SidebarNav } from './components/SidebarNav';
 import { AccountAvatar } from './components/AccountAvatar';
 import {
   fetchAccountSummary,
@@ -3601,64 +3599,22 @@ function App() {
           </div>
         </div>
 
-        <nav className="nav-stack" aria-label="main">
-          <button
-            type="button"
-            className="nav-item primary"
-            title={t('newSessionHint')}
-            aria-label={t('newSession')}
-            onClick={() => {
-              // Home empty state (pick project / starter / type) — do not auto-create under project
-              selectThread(null);
-              setDraft('');
-              setComposerAtts([]);
-              setSlashOpen(false);
-              setCapabilityArm(null);
-              setPlusMenuOpen(false);
-            }}
-          >
-            <span className="nav-ico">
-              <IconPlus />
-            </span>
-            <span className="nav-label">{t('newSession')}</span>
-          </button>
-          <button
-            type="button"
-            className={extOpen ? 'nav-item on' : 'nav-item'}
-            title={t('navPlugins')}
-            aria-label={t('navPlugins')}
-            onClick={() => setExtOpen(true)}
-          >
-            <span className="nav-ico">
-              <IconPlugins />
-            </span>
-            <span className="nav-label">{t('navPlugins')}</span>
-          </button>
-          <button
-            type="button"
-            className={scheduledOpen ? 'nav-item on' : 'nav-item'}
-            title={t('navScheduled')}
-            aria-label={t('navScheduled')}
-            onClick={() => setScheduledOpen(true)}
-          >
-            <span className="nav-ico">
-              <IconScheduled />
-            </span>
-            <span className="nav-label">{t('navScheduled')}</span>
-          </button>
-          <button
-            type="button"
-            className={memoryOpen ? 'nav-item on' : 'nav-item'}
-            title={t('navMemoryHint')}
-            aria-label={t('memoryManageNav')}
-            onClick={() => setMemoryOpen(true)}
-          >
-            <span className="nav-ico">
-              <IconMemory />
-            </span>
-            <span className="nav-label">{t('memoryManageNav')}</span>
-          </button>
-        </nav>
+        <SidebarNav
+          extensionsOpen={extOpen}
+          scheduledOpen={scheduledOpen}
+          memoryOpen={memoryOpen}
+          onNewTask={() => {
+            selectThread(null);
+            setDraft('');
+            setComposerAtts([]);
+            setSlashOpen(false);
+            setCapabilityArm(null);
+            setPlusMenuOpen(false);
+          }}
+          onOpenExtensions={() => setExtOpen(true)}
+          onOpenScheduled={() => setScheduledOpen(true)}
+          onOpenMemory={() => setMemoryOpen(true)}
+        />
 
         {/* Lists hidden when collapsed — must expand to pick projects */}
         <div className="sidebar-lists">
