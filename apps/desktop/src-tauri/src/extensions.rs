@@ -560,8 +560,44 @@ fn open_path(path: String) -> Result<String, String> {
 }
 
 /// Toggle MCP server enabled flag via `grok mcp` when possible; else edit config is left to user.
+fn strip_terminal_escapes(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\u{1b}' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next() {
+            // CSI: ESC [ followed by parameter/intermediate bytes, ending in a final byte.
+            Some('[') => {
+                while let Some(next) = chars.next() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            // OSC: ESC ] ending in BEL or ST (ESC \\).
+            Some(']') => {
+                while let Some(next) = chars.next() {
+                    if next == '\u{7}' {
+                        break;
+                    }
+                    if next == '\u{1b}' && chars.next() == Some('\\') {
+                        break;
+                    }
+                }
+            }
+            // A non-CSI escape is an unprintable terminal control sequence too.
+            Some(_) | None => {}
+        }
+    }
+    out
+}
+
 fn redact_mcp_doctor_output(raw: String) -> String {
-    raw.lines()
+    strip_terminal_escapes(&raw)
+        .lines()
         .map(|line| {
             let lower = line.to_ascii_lowercase();
             let sensitive = ["token", "api_key", "apikey", "secret", "password", "authorization"]
@@ -620,6 +656,13 @@ mod tests {
         assert!(safe.contains("password=<redacted>"));
         assert!(!safe.contains("leaked-value"));
         assert!(!safe.contains("also-leaked"));
+    }
+
+    #[test]
+    fn doctor_output_strips_terminal_escapes() {
+        let raw = "\u{1b}[2m2026-07-21\u{1b}[0m playwright: healthy\n\u{1b}]title\u{7}server ready";
+        let safe = redact_mcp_doctor_output(raw.into());
+        assert_eq!(safe, "2026-07-21 playwright: healthy\nserver ready");
     }
 }
 
