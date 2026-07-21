@@ -560,12 +560,52 @@ fn open_path(path: String) -> Result<String, String> {
 }
 
 /// Toggle MCP server enabled flag via `grok mcp` when possible; else edit config is left to user.
+fn redact_mcp_doctor_output(raw: String) -> String {
+    raw.lines()
+        .map(|line| {
+            let lower = line.to_ascii_lowercase();
+            let sensitive = ["token", "api_key", "apikey", "secret", "password", "authorization"]
+                .iter()
+                .any(|needle| lower.contains(needle));
+            if !sensitive {
+                return line.to_string();
+            }
+            if let Some((key, _)) = line.split_once('=') {
+                return format!("{key}=<redacted>");
+            }
+            if let Some((key, _)) = line.split_once(':') {
+                return format!("{key}: <redacted>");
+            }
+            "<redacted sensitive MCP diagnostic>".into()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[tauri::command]
 pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, String> {
     let bin = grok_bin(grok_cmd.as_deref());
-    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["mcp", "doctor"]))
+    tauri::async_runtime::spawn_blocking(move || {
+        run_grok_text(&bin, &["mcp", "doctor"]).map(redact_mcp_doctor_output)
+    })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_mcp_doctor_output;
+
+    #[test]
+    fn doctor_output_redacts_sensitive_values() {
+        let raw = "playwright: healthy\nAPI_KEY=abc123\nauthorization: Bearer xyz\nserver ready";
+        let safe = redact_mcp_doctor_output(raw.into());
+        assert!(safe.contains("playwright: healthy"));
+        assert!(safe.contains("API_KEY=<redacted>"));
+        assert!(safe.contains("authorization: <redacted>"));
+        assert!(!safe.contains("abc123"));
+        assert!(!safe.contains("xyz"));
+    }
 }
 
 /// Configure the supported Playwright MCP against the user's visible Chrome.
