@@ -180,6 +180,7 @@ import {
 } from './lib/extensions';
 import { t } from './lib/i18n';
 import { effortShortLabel, formatPeriodEnd, modelShortLabel } from './lib/threadLabels';
+import { snapToLines } from './lib/threadSnapshots';
 import {
   isVoiceInputSupported,
   VoiceInputSession,
@@ -353,28 +354,6 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     updatedAt: m.updatedAt || Date.now(),
     sessionGoal: fromMeta || fromLines,
   };
-}
-
-function snapToLines(
-  snaps: Array<{
-    id: string;
-    role: string;
-    text: string;
-    toolKey?: string | null;
-    toolStatus?: string | null;
-    toolKind?: string | null;
-  }>,
-): ChatLine[] {
-  return snaps.map((s) => ({
-    id: s.id,
-    role: (['user', 'assistant', 'thought', 'tool', 'system', 'plan'].includes(s.role)
-      ? s.role
-      : 'system') as ChatLine['role'],
-    text: s.text,
-    toolKey: s.toolKey ?? undefined,
-    toolStatus: s.toolStatus ?? undefined,
-    toolKind: s.toolKind ?? undefined,
-  }));
 }
 
 function App() {
