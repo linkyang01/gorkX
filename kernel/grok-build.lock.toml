@@ -13,8 +13,9 @@ binary = "xai-grok-pager"
 target = "release"
 
 [current_bundle]
-# The currently shipped local bundle predates this source lock. It remains
-# explicitly identified until the locked source is rebuilt and ACP-verified.
-version = "grok 0.2.103"
-revision_prefix = "89c3d36fb6f1"
-source_revision_verified = false
+# A local app-only bundle was rebuilt from this lock and passed the bundle and
+# ACP initialize gates. This records the expected runtime for the next
+# controlled release; it does not imply that a GitHub release was published.
+version = "grok 0.2.105"
+revision_prefix = "7cfcb20d2b50"
+source_revision_verified = true
