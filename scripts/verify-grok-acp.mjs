@@ -140,7 +140,9 @@ try {
     console.log('SKIP: authenticated session/extensions gate (pass --authenticated with isolated test paths)');
     process.exitCode = 0;
   } else {
-    await request('authenticate', { methodId: 'cached_token' });
+    // OIDC refresh can legitimately exceed the generic short ACP request
+    // timeout on a cold network connection; match the desktop client's gate.
+    await request('authenticate', { methodId: 'cached_token' }, 30_000);
     console.log('PASS: ACP authenticate(cached_token)');
 
     const created = await request('session/new', { cwd, mcpServers: [] });

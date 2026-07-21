@@ -20,7 +20,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Compact | `/compact` pass-through and context status | 🟡 engine decides compaction availability |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar file save and `/export` clipboard route via restricted CLI bridge | ✅ |
-| Fork | Toolbar sends `/fork` to the active engine session | 🟡 gorkX does not yet prove and index a separate visible child task |
+| Fork | Toolbar sends `/fork` to the active engine session | 🟡 current locked `grok agent stdio` does not expose `x.ai/session/fork`, so gorkX cannot yet prove and index a separate visible child task |
 | Rewind | `/rewind` is passed to the engine | 🟡 no independent desktop rewind history is maintained |
 | Goal | Persistent goal console wired to `/goal`, plan and `update_goal` updates | ✅ shell; loop quality is engine-side |
 
