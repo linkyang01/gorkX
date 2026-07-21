@@ -144,7 +144,26 @@ export async function installAppUpdate(info?: AppUpdateInfo | null): Promise<App
   }
 }
 
-export async function openUrlSafe(url: string): Promise<void> {
+/**
+ * Only hand ordinary web links to the OS opener. Callers include GitHub REST
+ * fields and release metadata, so a name like `openUrlSafe` must not silently
+ * accept custom schemes such as `file:`, `javascript:`, or app deep links.
+ */
+export function safeExternalUrl(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error('Invalid external URL');
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || !url.hostname) {
+    throw new Error('Only HTTP(S) external URLs are allowed');
+  }
+  return url.href;
+}
+
+export async function openUrlSafe(raw: string): Promise<void> {
+  const url = safeExternalUrl(raw);
   if (isTauri()) {
     try {
       const { openUrl } = await import('@tauri-apps/plugin-opener');
