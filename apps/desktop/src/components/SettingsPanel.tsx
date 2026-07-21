@@ -667,7 +667,13 @@ export function SettingsPanel({
                   key={n.id}
                   type="button"
                   className={section === n.id ? 'settings-nav-item on' : 'settings-nav-item'}
-                  onClick={() => setSection(n.id)}
+                  onClick={() => {
+                    // Action feedback belongs to the panel that triggered it.
+                    // Do not leave a stale MCP/CLI transcript below another
+                    // setting such as Updates.
+                    setMsg(null);
+                    setSection(n.id);
+                  }}
                 >
                   {n.label}
                 </button>
@@ -1186,8 +1192,8 @@ export function SettingsPanel({
                       setBrowserBusy(true);
                       setMsg(t('settingsBrowserConnecting'));
                       void enablePlaywrightChromeMcp(grokCmd || undefined, browserAllowedOrigins)
-                        .then((note) => {
-                          setMsg(note);
+                        .then(() => {
+                          setMsg(t('settingsBrowserConnected'));
                           return refreshBrowser();
                         })
                         .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
