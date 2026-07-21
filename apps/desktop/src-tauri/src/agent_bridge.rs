@@ -60,6 +60,24 @@ fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
     paths::resolve_grok_bin(override_cmd)
 }
 
+/// Engine stderr is not an ACP protocol channel. Treat it as untrusted diagnostic
+/// text: upstream tracing can include credential-derived fields (for example a
+/// refresh-token prefix). A generic message is more useful than leaking a value
+/// into the WebView, persisted task activity, or crash reports.
+fn sanitize_engine_diagnostic(raw: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    let sensitive = [
+        "token", "api_key", "apikey", "secret", "password", "authorization", "rt_prefix",
+    ]
+    .iter()
+    .any(|needle| lower.contains(needle));
+    if sensitive {
+        "[engine diagnostic redacted: credential-related detail omitted]".into()
+    } else {
+        raw.replace('\u{1b}', "")
+    }
+}
+
 /// Map gorkX permission modes → grok agent CLI flags.
 /// Codex-inspired trio:
 /// - `default`  → ask (interactive ACP permissions)
@@ -176,6 +194,7 @@ pub async fn agent_start(
         tauri::async_runtime::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
+                let line = sanitize_engine_diagnostic(&line);
                 let _ = app.emit(
                     "gorkx://agent-line",
                     serde_json::json!({ "agentId": id_err, "line": line, "stream": "stderr" }),
@@ -456,7 +475,7 @@ cargo build -p xai-grok-pager-bin --release\n\
         Ok(out) if out.status.success() => {
             let version = String::from_utf8_lossy(&out.stdout).trim().to_string();
             let version = if version.is_empty() {
-                String::from_utf8_lossy(&out.stderr).trim().to_string()
+                sanitize_engine_diagnostic(String::from_utf8_lossy(&out.stderr).trim())
             } else {
                 version
             };
@@ -474,7 +493,7 @@ cargo build -p xai-grok-pager-bin --release\n\
             ))
         }
         Ok(out) => {
-            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let err = sanitize_engine_diagnostic(String::from_utf8_lossy(&out.stderr).trim());
             Ok(base(
                 false,
                 String::new(),
@@ -497,4 +516,23 @@ fn dunce_canonicalize(path: &Path) -> String {
     path.canonicalize()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_engine_diagnostic;
+
+    #[test]
+    fn engine_stderr_never_exposes_credential_derived_fields() {
+        let safe = sanitize_engine_diagnostic(
+            "auth refresh failed rt_prefix=\"value-that-must-not-escape\" token expired",
+        );
+        assert_eq!(safe, "[engine diagnostic redacted: credential-related detail omitted]");
+        assert!(!safe.contains("value-that-must-not-escape"));
+    }
+
+    #[test]
+    fn engine_stderr_keeps_non_sensitive_diagnostics() {
+        assert_eq!(sanitize_engine_diagnostic("connection refused"), "connection refused");
+    }
 }
