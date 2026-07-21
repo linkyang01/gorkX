@@ -583,7 +583,6 @@ const dict = {
     settingsModelsDefaultOk: 'Default model set to {id}',
     settingsIndepReady: 'Ready: app-managed engine and data folder.',
     settingsBrowser: 'Browser',
-    settingsBrowserSoon: 'Browser control is not available yet. It will appear here when ready.',
     settingsBrowserHint:
       'Connects a version-pinned Playwright MCP to Chrome so the agent can use browser tools in a task. It does not add a fake in-app browser.',
     settingsBrowserConfigured: 'Chrome browser tools configured',
@@ -597,7 +596,6 @@ const dict = {
     settingsBrowserDiagnose: 'Diagnose connection',
     settingsBrowserManage: 'Manage MCP',
     settingsComputer: 'Computer control',
-    settingsComputerSoon: 'Desktop computer control is not available yet.',
     settingsComputerHint:
       'Screen capture is explicit and local: gorkX opens the macOS picker, then adds your chosen image to the next message.',
     settingsComputerCaptureTitle: 'Capture part of the screen',
@@ -1372,7 +1370,6 @@ const dict = {
     settingsModelsDefaultOk: '已将默认模型设为 {id}',
     settingsIndepReady: '已就绪：引擎与数据由本应用管理。',
     settingsBrowser: '浏览器',
-    settingsBrowserSoon: '浏览器操控尚未开放，就绪后会显示在这里。',
     settingsBrowserHint:
       '将固定版本的 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；不会伪造一个应用内浏览器。',
     settingsBrowserConfigured: 'Chrome 浏览器工具已配置',
@@ -1386,7 +1383,6 @@ const dict = {
     settingsBrowserDiagnose: '诊断连接',
     settingsBrowserManage: '管理 MCP',
     settingsComputer: '电脑操控',
-    settingsComputerSoon: '桌面操控尚未开放。',
     settingsComputerHint:
       '截图完全由你主动触发且只存本机：gorkX 打开 macOS 选区，随后将所选图片加入下一条消息。',
     settingsComputerCaptureTitle: '截取屏幕区域',
