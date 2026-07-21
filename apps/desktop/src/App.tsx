@@ -138,6 +138,7 @@ import { MicIcon, PermShieldIcon } from './components/ComposerIcons';
 import { SidebarNav } from './components/SidebarNav';
 import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
+import { PermissionPrompt } from './components/PermissionPrompt';
 import {
   fetchAccountSummary,
   fetchModelContext,
@@ -166,10 +167,6 @@ import {
   type UsageSnapshot,
 } from './lib/usage';
 import { notifyPermission, revealInFinder } from './lib/host';
-import {
-  humanPermissionOptionLabel,
-  summarizePermissionTool,
-} from './lib/toolHuman';
 import {
   fetchExtensionsSnapshot,
   listWorkspaceFiles,
@@ -5482,66 +5479,7 @@ function App() {
       />
 
       {permReq ? (
-        <div className="modal-backdrop">
-          <div className="modal perm-modal">
-            <h2>{t('permissionTitle')}</h2>
-            <p className="perm-explain">{t('permissionExplain')}</p>
-            {(() => {
-              const sum = summarizePermissionTool(permReq.toolCall ?? permReq.raw);
-              return (
-                <div className="perm-summary">
-                  <div className="perm-kind">{sum.kindLabel}</div>
-                  <div className="perm-title">{sum.title}</div>
-                  {sum.description ? (
-                    <p className="perm-desc">{sum.description}</p>
-                  ) : null}
-                  {sum.command ? (
-                    <div className="perm-cmd-block">
-                      <div className="perm-cmd-label">{t('permissionCommand')}</div>
-                      <pre className="perm-cmd">{sum.command}</pre>
-                    </div>
-                  ) : null}
-                  <details className="perm-raw">
-                    <summary>{t('permissionShowRaw')}</summary>
-                    <pre>
-                      {JSON.stringify(permReq.toolCall ?? permReq.raw, null, 2)}
-                    </pre>
-                  </details>
-                </div>
-              );
-            })()}
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn primary"
-                onClick={() => void answerPermission('allow')}
-              >
-                {t('allow')}
-              </button>
-              <button type="button" className="btn" onClick={() => void answerPermission('reject')}>
-                {t('reject')}
-              </button>
-              {(permReq.options ?? [])
-                .filter((opt) => {
-                  // Avoid duplicating Allow/Reject with English engine labels
-                  const id = opt.optionId.toLowerCase();
-                  if (/allow-once|allow_once|^allow$|reject-once|reject_once|^reject$/.test(id))
-                    return false;
-                  return true;
-                })
-                .map((opt) => (
-                  <button
-                    key={opt.optionId}
-                    type="button"
-                    className="btn"
-                    onClick={() => void answerPermission(opt.optionId)}
-                  >
-                    {humanPermissionOptionLabel(opt.name, opt.optionId)}
-                  </button>
-                ))}
-            </div>
-          </div>
-        </div>
+        <PermissionPrompt request={permReq} onAnswer={(optionId) => void answerPermission(optionId)} />
       ) : null}
     </div>
   );
