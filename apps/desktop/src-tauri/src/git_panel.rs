@@ -43,6 +43,35 @@ fn run_git(cwd: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Decode Git porcelain v1 with NUL delimiters. Unlike line-oriented
+/// porcelain, this keeps spaces, quotes and rename/copy source paths from
+/// becoming a fake UI path. For rename/copy records Git emits the destination
+/// and source as two NUL-delimited fields; Review operates on the destination.
+fn parse_status_entries(raw: &str) -> Vec<GitFileEntry> {
+    let fields: Vec<&str> = raw.split('\0').collect();
+    let mut files = Vec::new();
+    let mut index = 0;
+    while index < fields.len() {
+        let record = fields[index];
+        index += 1;
+        if record.len() < 4 {
+            continue;
+        }
+        let status = record[..2].trim().to_string();
+        let path = record[3..].to_string();
+        if path.is_empty() {
+            continue;
+        }
+        // A rename/copy has one additional NUL-delimited source path which is
+        // deliberately not a separately selectable file in the Review UI.
+        if status.contains('R') || status.contains('C') {
+            index += 1;
+        }
+        files.push(GitFileEntry { path, status });
+    }
+    files
+}
+
 /// Tauri commands accept a project-relative Git path only. Git itself guards
 /// pathspec handling with `--`, but rejecting absolute and parent paths here
 /// also prevents a compromised renderer from selecting files outside the
@@ -112,18 +141,8 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
         .trim()
         .to_string();
 
-    let status_raw = run_git(root, &["status", "--porcelain"]).unwrap_or_default();
-    let mut files = Vec::new();
-    for line in status_raw.lines() {
-        if line.len() < 4 {
-            continue;
-        }
-        let st = line[..2].trim().to_string();
-        let path = line[3..].trim().to_string();
-        if !path.is_empty() {
-            files.push(GitFileEntry { path, status: st });
-        }
-    }
+    let status_raw = run_git(root, &["status", "--porcelain=v1", "-z"]).unwrap_or_default();
+    let files = parse_status_entries(&status_raw);
 
     // staged + unstaged unified
     let mut diff = String::new();
@@ -420,7 +439,7 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
-    use super::{existing_project_child, git_file_diff, relative_project_path, workspace_snapshot};
+    use super::{existing_project_child, git_file_diff, parse_status_entries, relative_project_path, workspace_snapshot};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -431,6 +450,20 @@ mod tests {
         assert!(relative_project_path("../secret").is_err());
         assert!(relative_project_path("/etc/passwd").is_err());
         assert!(relative_project_path("").is_err());
+    }
+
+    #[test]
+    fn porcelain_parser_keeps_rename_destination_and_literal_paths() {
+        let rows = parse_status_entries(
+            " M file with spaces.txt\0R  new name.rs\0old name.rs\0?? quote\"name.txt\0",
+        );
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].path, "file with spaces.txt");
+        assert_eq!(rows[0].status, "M");
+        assert_eq!(rows[1].path, "new name.rs");
+        assert_eq!(rows[1].status, "R");
+        assert_eq!(rows[2].path, "quote\"name.txt");
+        assert_eq!(rows[2].status, "??");
     }
 
     #[cfg(unix)]
