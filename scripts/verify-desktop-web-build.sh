@@ -31,3 +31,34 @@ if (( bytes > max_bytes )); then
 fi
 
 echo "PASS: initial JS gzip ${bytes}/${max_bytes} bytes: $(basename "$entry")"
+
+# These panels are deliberately opened by the user. Keep their implementation
+# out of index.html's eager module-preload graph; a regression here erodes the
+# initial task surface without being caught by the gzip ceiling alone.
+lazy_panels=(
+  SettingsPanel
+  ExtensionsPanel
+  ReviewPanel
+  TerminalDock
+  MemoryPanel
+  WorktreePanel
+  ScheduledPanel
+)
+for panel in "${lazy_panels[@]}"; do
+  matches=("$assets"/"$panel"-*.js)
+  [[ -e "${matches[0]}" ]] || {
+    echo "FAIL: expected lazy panel chunk for ${panel}" >&2
+    exit 5
+  }
+  if grep -q "${panel}-" "$root/apps/desktop/dist/index.html"; then
+    echo "FAIL: lazy panel ${panel} is eagerly preloaded by index.html" >&2
+    exit 6
+  fi
+done
+
+if grep -q 'terminal-runtime-' "$root/apps/desktop/dist/index.html"; then
+  echo "FAIL: terminal runtime is eagerly preloaded by index.html" >&2
+  exit 7
+fi
+
+echo "PASS: workspace panels and terminal runtime remain on-demand"
