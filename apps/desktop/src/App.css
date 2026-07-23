@@ -5088,6 +5088,37 @@ button.pill:hover {
   flex-wrap: wrap;
 }
 
+.model-preset-list {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+
+.model-preset {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--glass-soft);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.model-preset:hover,
+.model-preset.selected {
+  border-color: var(--glass-border-dim);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.model-preset-guide {
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
 .kernel-meta {
   font-size: 12px;
   color: var(--muted);

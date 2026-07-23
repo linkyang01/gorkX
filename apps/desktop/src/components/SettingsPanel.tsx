@@ -134,6 +134,15 @@ type NavItem = {
   keywords?: string;
 };
 
+type ModelPreset = 'openai' | 'anthropic' | 'ollama' | 'custom';
+
+const modelPresetValues: Record<ModelPreset, Pick<CustomModelRow, 'baseUrl' | 'apiBackend' | 'providerLabel'>> = {
+  openai: { baseUrl: 'https://api.openai.com/v1', apiBackend: 'responses', providerLabel: 'OpenAI API' },
+  anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiBackend: 'messages', providerLabel: 'Anthropic API' },
+  ollama: { baseUrl: 'http://127.0.0.1:11434/v1', apiBackend: 'chat_completions', providerLabel: 'Local / Ollama' },
+  custom: { baseUrl: '', apiBackend: 'chat_completions', providerLabel: '' },
+};
+
 type NavGroup = {
   title: string;
   items: NavItem[];
@@ -198,6 +207,7 @@ export function SettingsPanel({
     providerLabel: '',
   });
   const [modelBusy, setModelBusy] = useState(false);
+  const [modelPreset, setModelPreset] = useState<ModelPreset>('openai');
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
@@ -614,6 +624,18 @@ export function SettingsPanel({
     }
   };
 
+  const chooseModelPreset = (preset: ModelPreset) => {
+    setModelPreset(preset);
+    const values = modelPresetValues[preset];
+    setModelForm((current) => ({
+      ...current,
+      baseUrl: values.baseUrl,
+      apiBackend: values.apiBackend,
+      providerLabel: values.providerLabel,
+      apiKey: preset === 'ollama' ? '' : current.apiKey,
+    }));
+  };
+
   const makeDefaultModel = async (modelWireId: string) => {
     setModelBusy(true);
     setMsg(null);
@@ -1017,6 +1039,43 @@ export function SettingsPanel({
               </div>
               <h3 className="subhead">{t('settingsModelsCustom')}</h3>
               <div className="settings-card">
+                <div className="settings-row-title">{t('settingsModelsQuickSetup')}</div>
+                <p className="settings-row-hint" style={{ marginBottom: 10 }}>{t('settingsModelsQuickSetupHint')}</p>
+                <div className="model-preset-list" role="radiogroup" aria-label={t('settingsModelsQuickSetup')}>
+                  {(
+                    [
+                      ['openai', t('settingsModelsPresetOpenAI')],
+                      ['anthropic', t('settingsModelsPresetAnthropic')],
+                      ['ollama', t('settingsModelsPresetOllama')],
+                      ['custom', t('settingsModelsPresetCustom')],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`model-preset${modelPreset === id ? ' selected' : ''}`}
+                      aria-pressed={modelPreset === id}
+                      onClick={() => chooseModelPreset(id)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {modelPreset === 'openai' ? (
+                  <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://platform.openai.com/api-keys')}>
+                    {t('settingsModelsOpenAIKeys')}
+                  </button>
+                ) : null}
+                {modelPreset === 'anthropic' ? (
+                  <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://platform.claude.com/settings/keys')}>
+                    {t('settingsModelsAnthropicKeys')}
+                  </button>
+                ) : null}
+                {modelPreset === 'ollama' ? (
+                  <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://ollama.com/download')}>
+                    {t('settingsModelsOllamaDownload')}
+                  </button>
+                ) : null}
                 <label className="field">
                   <span>{t('settingsModelsFieldName')}</span>
                   <input
