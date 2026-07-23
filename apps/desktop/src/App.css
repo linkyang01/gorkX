@@ -2982,6 +2982,22 @@ button.pill:hover {
 .md-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .md-chart-legend i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
 
+.md-diagram {
+  margin: 0.9em 0 1.05em;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  overflow-x: auto;
+}
+.md-diagram figcaption { margin: 0 0 6px 4px; font-size: 0.9em; font-weight: 650; color: var(--text); }
+.md-diagram svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.md-diagram-edge { fill: none; stroke: var(--hairline-strong); stroke-width: 1.5; }
+.md-diagram-arrow { fill: var(--hairline-strong); }
+.md-diagram-edge-label { fill: var(--text-3); font-size: 11px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.md-diagram-node { fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); stroke: color-mix(in srgb, var(--accent) 46%, var(--hairline)); stroke-width: 1; }
+.md-diagram-node-label { fill: var(--text); font-size: 12px; font-weight: 600; }
+
 .response-choices {
   margin: 0.9em 0 0.15em;
   padding: 12px;
