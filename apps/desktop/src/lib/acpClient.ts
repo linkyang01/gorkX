@@ -92,6 +92,11 @@ export interface RewindResult {
   error?: string | null;
 }
 
+/** A `/btw` answer is deliberately outside the main conversation turn. */
+export interface BtwResult {
+  answer: string;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -861,6 +866,32 @@ export class AcpClient {
     const result = ('result' in raw && raw.result ? raw.result : raw) as ForkSessionResult;
     if (!result?.newSessionId) throw new Error('Kernel did not return a forked session ID');
     return result;
+  }
+
+  /**
+   * Ask the kernel's native non-blocking side-question endpoint. This does
+   * not enqueue a normal `session/prompt`, so an active task keeps running
+   * and the returned answer does not become part of the main turn.
+   */
+  async askBtw(sessionId: string, question: string): Promise<BtwResult> {
+    const params = { sessionId, question };
+    let raw: unknown;
+    try {
+      raw = await this.request('x.ai/btw', params, 120_000);
+    } catch (error) {
+      // Some stdio builds retain underscored compatibility routes. Only try
+      // it after an explicit method error, never after an answer/model error.
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('_x.ai/btw', params, 120_000);
+    }
+    const value = raw && typeof raw === 'object' && 'result' in raw && (raw as { result?: unknown }).result
+      ? (raw as { result: unknown }).result
+      : raw;
+    const answer = value && typeof value === 'object' && typeof (value as { answer?: unknown }).answer === 'string'
+      ? (value as { answer: string }).answer
+      : '';
+    if (!answer) throw new Error('Kernel returned an empty /btw answer');
+    return { answer };
   }
 
   /** List the kernel's durable checkpoints. No conversation or files are changed. */

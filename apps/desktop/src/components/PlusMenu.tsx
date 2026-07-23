@@ -18,6 +18,7 @@ export type PlusAction =
   | { type: 'plan-toggle'; on: boolean }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
+  | { type: 'ask-btw' }
   | { type: 'stage'; cmd: string; label: string }
   | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -223,6 +224,13 @@ export function PlusMenu({
     },
     {
       kind: 'action',
+      id: 'btw',
+      title: t('btwTitle'),
+      desc: t('btwHint'),
+      action: { type: 'ask-btw' },
+    },
+    {
+      kind: 'action',
       id: 'export',
       title: t('plusExport'),
       desc: t('slashDescExport'),
@@ -275,6 +283,7 @@ export function PlusMenu({
     if (a.type === 'stage' || a.type === 'send-now') {
       return slashAllowed(a.cmd, availableCommandNames);
     }
+    if (a.type === 'ask-btw') return slashAllowed('/btw', availableCommandNames);
     return true;
   });
 

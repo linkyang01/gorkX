@@ -16,6 +16,8 @@
 // it never starts or cancels a real subagent.
 // --hooks-controls reloads the current isolated project's discovered hooks;
 // it never creates, enables or executes a hook.
+// --btw sends one native side question. It is a billable model acceptance gate
+// and must return the exact isolated response, never a queued main prompt.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -24,7 +26,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -36,15 +38,16 @@ const runtimeControlsSmoke = options.includes('--runtime-controls');
 const rewindExecuteSmoke = options.includes('--rewind-execute');
 const subagentControlsSmoke = options.includes('--subagent-controls');
 const hooksControlsSmoke = options.includes('--hooks-controls');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls and --hooks-controls require --authenticated with an explicit disposable CWD');
+const btwSmoke = options.includes('--btw');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls and --btw require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -124,7 +127,7 @@ child.stdout.on('data', (chunk) => {
 
 // Resource smoke deliberately permits a full model turn; all other protocol
 // gates retain the short fail-fast process ceiling.
-const timeout = setTimeout(() => child.kill('SIGKILL'), resourceSmoke ? 150_000 : 20_000);
+const timeout = setTimeout(() => child.kill('SIGKILL'), resourceSmoke || btwSmoke ? 150_000 : 20_000);
 function request(method, params, timeoutMs = 8_000) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
@@ -191,6 +194,20 @@ try {
 
     await request('session/set_mode', { sessionId, modeId: 'plan' });
     console.log('PASS: ACP session/set_mode(plan)');
+
+    if (btwSmoke) {
+      // `/btw` is deliberately a separate side turn. Do not accept an empty
+      // acknowledgement: the desktop can render it only after the kernel
+      // returns the answer field from the extension response.
+      const result = unwrapResult(await request('x.ai/btw', {
+        sessionId,
+        question: 'Reply with exactly: GORKX_BTW_OK',
+      }, 120_000));
+      if (result?.answer !== 'GORKX_BTW_OK') {
+        throw new Error(`x.ai/btw returned unexpected side answer: ${JSON.stringify(result)}`);
+      }
+      console.log('PASS: ACP x.ai/btw (isolated side answer)');
+    }
 
     if (sessionControlsSmoke) {
       // Forking copies only kernel-owned session data into the explicitly

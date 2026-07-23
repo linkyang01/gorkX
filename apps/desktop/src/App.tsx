@@ -152,6 +152,7 @@ import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
 import { FolderTrustPrompt } from './components/FolderTrustPrompt';
 import { RewindDialog } from './components/RewindDialog';
+import { BtwCard, type BtwCardState } from './components/BtwCard';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -368,6 +369,7 @@ function App() {
   const [projectAliases, setProjectAliases] = useState(() => loadProjectAliases());
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
+  const [btwCard, setBtwCard] = useState<BtwCardState | null>(null);
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -588,6 +590,9 @@ function App() {
     if (th.projectKey !== projectScopeKey(project) || th.archived) return null;
     return th;
   }, [threads, activeId, project]);
+  const activeBtwAvailable = Boolean(
+    active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
+  );
   threadsRef.current = threads;
 
   useEffect(() => {
@@ -2062,6 +2067,32 @@ function App() {
     }
   };
 
+  const dispatchBtw = (agent: Thread, question: string) => {
+    if (!agent.client || !agent.sessionId) return;
+    const card: BtwCardState = { threadId: agent.id, question, status: 'loading' };
+    setBtwCard(card);
+    void agent.client.askBtw(agent.sessionId, question).then(
+      (result) => setBtwCard((current) => current === card
+        ? { ...card, status: 'done', answer: result.answer }
+        : current),
+      (error) => setBtwCard((current) => current === card
+        ? { ...card, status: 'error', error: error instanceof Error ? error.message : String(error) }
+        : current),
+    );
+  };
+
+  const openBtwQuestion = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!agent?.client || !agent.sessionId) return;
+    const question = await askText({
+      title: t('btwTitle'),
+      message: t('btwHint'),
+      placeholder: t('btwQuestionPlaceholder'),
+      okLabel: t('btwAsk'),
+    });
+    if (question) dispatchBtw(agent, question);
+  };
+
   const handlePlusAction = async (action: PlusAction) => {
     switch (action.type) {
       case 'attach-files':
@@ -2105,6 +2136,10 @@ function App() {
       case 'rewind-session':
         setPlusMenuOpen(false);
         await openRewindDialog();
+        return;
+      case 'ask-btw':
+        setPlusMenuOpen(false);
+        await openBtwQuestion();
         return;
       case 'stage':
         stageCapability(action.cmd, action.label);
@@ -2872,7 +2907,10 @@ function App() {
       // sessionId present but reconnect failed
       return;
     }
-    if (live.busy) return;
+    // `/btw` has its own ACP method and deliberately bypasses the main prompt
+    // queue, so it remains available while an ordinary turn is running.
+    const sideQuestion = /^\/btw(?:\s|$)/i.test(text);
+    if (live.busy && !sideQuestion) return;
 
     // Use the live agent (may have been reconnected above)
     const agent = live;
@@ -2906,6 +2944,20 @@ function App() {
       const [cmd, ...rest] = text.slice(1).split(/\s+/);
       const arg = rest.join(' ').trim();
       const name = (cmd || '').toLowerCase();
+      if (name === 'btw') {
+        if (!arg) {
+          appendLine(agent.id, { id: nid(), role: 'system', text: t('btwNeedQuestion') });
+          return;
+        }
+        // Side questions are text-only in the current Grok Build ACP schema.
+        // Keep any staged attachments untouched for the user's next main turn.
+        setDraft('');
+        setSlashOpen(false);
+        setAtOpen(false);
+        setCapabilityArm(null);
+        dispatchBtw(agent, arg);
+        return;
+      }
       if (name === 'compact') {
         setDraft('');
         setSlashOpen(false);
@@ -4611,6 +4663,16 @@ function App() {
                 />
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {activeBtwAvailable ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('btwHint')}
+                        onClick={() => void openBtwQuestion()}
+                      >
+                        {t('btwStart')}
+                      </button>
+                    ) : null}
                     <div className="plus-wrap">
                       <button
                         type="button"
@@ -5116,6 +5178,9 @@ function App() {
                 ) : null
               }
             />
+            {btwCard?.threadId === active.id ? (
+              <BtwCard state={btwCard} onDismiss={() => setBtwCard(null)} />
+            ) : null}
             <div className="composer-dock">
               <div
                 className={`composer${dragOver ? ' drag-over' : ''}`}
