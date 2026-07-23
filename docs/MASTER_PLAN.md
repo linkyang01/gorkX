@@ -118,12 +118,12 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Cancel turn | Stop | ✅ | — |
 | Slash + skills | Full pass-through + autocomplete from `available_commands` | 🟡 | A |
 | Attachments / images | Drag-drop + preview | 🟡 | A |
-| Export `/export`, `grok export` | Export Markdown | ❌ | B |
+| Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
 | Rewind `/rewind` | Rewind UI | 🟡 路由与安全范围已接线；真实两轮会话执行待余额恢复后验收 | C |
 | Context `/context` | Breakdown popover | 🟡 | B |
-| Goal `/goal` | Goal banner | ❌ | C |
-| `/loop` | Scheduler panel | ❌ | C |
+| Goal `/goal` | Persisted goal banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
+| `/loop` | Scheduler panel | 🟡 本地计划任务真实可用；不是内核原生 `/loop` 控制面 | C |
 | `/btw` | Aside send | ❌ | C |
 | `/imagine*` | Optional entry | ❌ | later |
 
@@ -132,7 +132,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
 | `--worktree` / create | Create worktree task | 🟡 | B |
-| `grok worktree list|rm|gc` | Manage panel under project menu | ❌ | B |
+| `grok worktree list|rm|gc` | Manage panel under project menu | ✅ | B |
 | Diffs / stage | Review Diff tab | 🟡 | B |
 | Plan + tools human labels | Review tabs | 🟡 | B |
 
@@ -149,13 +149,13 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
-| Enable memory (`config` / env / flag) | Settings toggle | ❌ | B |
-| `/remember` | “Remember this” | ❌ | B |
-| `/flush` | Write memory now | ❌ | B |
-| `/dream` | Consolidate | ❌ | B |
-| `/memory` browse | Memory panel: global + project files, search | ❌ | B |
-| `grok memory clear` | Clear project memory (confirm) | ❌ | B |
-| Auto inject on new session | Kernel when enabled | ❌ | B |
+| Enable memory (`config` / env / flag) | Settings toggle | ✅ App-managed Hermes memory | B |
+| `/remember` | “Remember this” | ✅ | B |
+| `/flush` | Write memory now | 🟡 App records durable session memory; kernel-native `/flush` is optional | B |
+| `/dream` | Consolidate | 🟡 Local compact is available; kernel-native `/dream` is optional | B |
+| `/memory` browse | Memory panel: global + project files, search | ✅ | B |
+| `grok memory clear` | Clear project memory (confirm) | ✅ | B |
+| Auto inject on new session | Kernel when enabled | ✅ App-managed first-prompt injection | B |
 
 ### 5.5 Account & system
 
@@ -164,10 +164,10 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | `login` / `logout` | Account menu | 🟡 | A |
 | Quota / billing | Account chip + menu (auto-refresh) | 🟡 | A |
 | `grok update` | Kernel update UI | 🟡 | I |
-| `grok inspect` | Diagnostics page | ❌ | C |
+| `grok inspect` | Project-menu structured inspection | ✅ | C |
 | Sandbox profiles | Settings | ❌ | C |
-| AGENTS.md | Project open/edit hint | ❌ | C |
-| Bundle kernel path | Sidecar + fallback | ❌ | I |
+| AGENTS.md | Project-root read/create/edit | ✅ | C |
+| Bundle kernel path | Sidecar + App-owned fallback | ✅ | I |
 | App auto-update | GitHub Releases | 🟡 | I |
 
 ### 5.6 Environment (after L1 solid)

@@ -108,7 +108,6 @@ import {
 import {
   exportSessionClipboard,
   exportSessionMarkdown,
-  inspectProject,
 } from './lib/grokAdmin';
 import {
   attachmentsPromptBlock,
@@ -219,6 +218,9 @@ const WorktreePanel = lazy(() =>
 );
 const ScheduledPanel = lazy(() =>
   import('./components/ScheduledPanel').then(({ ScheduledPanel }) => ({ default: ScheduledPanel })),
+);
+const ProjectInspectPanel = lazy(() =>
+  import('./components/ProjectInspectPanel').then(({ ProjectInspectPanel }) => ({ default: ProjectInspectPanel })),
 );
 
 function DeferredPanelFallback() {
@@ -365,6 +367,7 @@ function App() {
   const [pinnedProjects, setPinnedProjects] = useState<string[]>(() => loadPinnedProjects());
   const [projectAliases, setProjectAliases] = useState(() => loadProjectAliases());
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
+  const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -4006,15 +4009,7 @@ function App() {
                           className="pop-menu-item"
                           onClick={() => {
                             setProjectMenuPath(null);
-                            void inspectProject(p, grokCmd || undefined)
-                              .then((raw) => {
-                                try {
-                                  alert(JSON.stringify(JSON.parse(raw), null, 2).slice(0, 3500));
-                                } catch {
-                                  alert(raw.slice(0, 3500));
-                                }
-                              })
-                              .catch((e) => alert(String(e)));
+                            setProjectInspectPath(p);
                           }}
                         >
                           <IconSearch size={14} /> {t('inspectProject')}
@@ -5699,6 +5694,13 @@ function App() {
           }
           setWorktreeMainProject(null);
         }}
+      /></Suspense> : null}
+
+      {projectInspectPath ? <Suspense fallback={<DeferredPanelFallback />}><ProjectInspectPanel
+        open
+        project={projectInspectPath}
+        grokCmd={grokCmd}
+        onClose={() => setProjectInspectPath(null)}
       /></Suspense> : null}
 
       {permReq ? (

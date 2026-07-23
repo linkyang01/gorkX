@@ -5414,6 +5414,17 @@ button.pill:hover {
   color: var(--danger);
 }
 
+.project-inspect-result {
+  max-height: min(52dvh, 480px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--glass-soft);
+  font-family: var(--mono);
+  line-height: 1.5;
+}
+
 /* Shortcuts */
 .shortcuts-table {
   width: 100%;
