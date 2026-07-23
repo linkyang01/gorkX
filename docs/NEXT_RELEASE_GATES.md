@@ -3,6 +3,8 @@
 > 状态：执行中。本文定义「可以发下一版」的最低真实门槛；它不是把
 > gorkX 宣布为“已完全对齐 Codex”。完整路线与 1.0 门槛仍以
 > `INDEPENDENT_APP_PLAN.md` 和 `CODEX_PARITY_ROADMAP.md` 为准。
+> 已完成的可复跑本地证据记录在 `VALIDATION_EVIDENCE.md`；它不能替代
+> 本文要求的干净机器与真实账号人工闭环。
 
 ## 版本定位
 
