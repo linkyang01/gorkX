@@ -212,6 +212,7 @@ function DeferredPanelFallback() {
 }
 
 export type ChatMode = 'agent' | 'plan';
+type ResponsePresentation = 'auto' | 'visual' | 'choices';
 
 interface Thread {
   id: string;
@@ -410,6 +411,15 @@ function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  /** A transparent, user-controlled request for the next answer's shape. */
+  const [responsePresentation, setResponsePresentation] = useState<ResponsePresentation>(() => {
+    try {
+      const value = localStorage.getItem('gorkx.responsePresentation');
+      return value === 'visual' || value === 'choices' ? value : 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
   /** Capability armed in composer (user completes request in chat). */
   const [capabilityArm, setCapabilityArm] = useState<{
     prefix: string;
@@ -2567,11 +2577,42 @@ function App() {
     }
   };
 
-  const send = async () => {
-    const text = draft.trim();
-    const atts = composerAtts;
+  const responsePresentationLabel =
+    responsePresentation === 'visual'
+      ? t('responseFormatVisual')
+      : responsePresentation === 'choices'
+        ? t('responseFormatChoices')
+        : t('responseFormatAuto');
+
+  const cycleResponsePresentation = () => {
+    setResponsePresentation((previous) => {
+      const next: ResponsePresentation = previous === 'auto'
+        ? 'visual'
+        : previous === 'visual'
+          ? 'choices'
+          : 'auto';
+      try {
+        localStorage.setItem('gorkx.responsePresentation', next);
+      } catch {
+        /* local preference only */
+      }
+      return next;
+    });
+  };
+
+  const send = async (submittedText?: string) => {
+    const choiceSubmission = typeof submittedText === 'string';
+    const text = (submittedText ?? draft).trim();
+    // A decision-card click must never unexpectedly attach files the user had
+    // staged for a different draft. Keep that draft untouched for later.
+    const atts = choiceSubmission ? [] : composerAtts;
     if (!text && atts.length === 0) return;
-    const promptBody = `${text}${attachmentsPromptBlock(atts)}`.trim();
+    const presentationInstruction = responsePresentation === 'visual'
+      ? `\n\n${t('responseFormatVisualInstruction')}`
+      : responsePresentation === 'choices'
+        ? `\n\n${t('responseFormatChoicesInstruction')}`
+        : '';
+    const promptBody = `${text}${attachmentsPromptBlock(atts)}${presentationInstruction}`.trim();
 
     // Restored snapshot has sessionId but no live agent — reconnect in place (do NOT create a 2nd row)
     if (active?.sessionId && !active.client) {
@@ -2588,8 +2629,10 @@ function App() {
     if (!live?.client || !live.sessionId) {
       if (live?.busy) return;
       if (!active || !active.sessionId) {
-        setDraft('');
-        setComposerAtts([]);
+        if (!choiceSubmission) {
+          setDraft('');
+          setComposerAtts([]);
+        }
         setSlashOpen(false);
         setAtOpen(false);
         await createThread({ initialPrompt: promptBody, initialAttachments: atts });
@@ -2753,8 +2796,10 @@ function App() {
       }
     }
 
-    setDraft('');
-    setComposerAtts([]);
+    if (!choiceSubmission) {
+      setDraft('');
+      setComposerAtts([]);
+    }
     setSlashOpen(false);
     setAtOpen(false);
     setCapabilityArm(null);
@@ -4408,6 +4453,14 @@ function App() {
                     ) : null}
                   </div>
                   <div className="composer-toolbar-right">
+                    <button
+                      type="button"
+                      className="composer-ctl response-presentation-ctl"
+                      title={t('responseFormatCycleHint').replace('{format}', responsePresentationLabel)}
+                      onClick={cycleResponsePresentation}
+                    >
+                      <span className="composer-ctl-main">{t('responseFormatLabel')}: {responsePresentationLabel}</span>
+                    </button>
                     <div className="composer-model-wrap">
                       <button
                         type="button"
@@ -4872,6 +4925,8 @@ function App() {
               onToggleAllPlan={toggleAllPlanEntries}
               onOpenAttachment={setPreviewAtt}
               showProcessInChat={false}
+              choiceDisabled={active.busy}
+              onSelectChoice={(value) => void send(value)}
             />
             <div className="composer-dock">
               <div
@@ -5099,6 +5154,15 @@ function App() {
                     ) : null}
                   </div>
                   <div className="composer-toolbar-right">
+                    <button
+                      type="button"
+                      className="composer-ctl response-presentation-ctl"
+                      title={t('responseFormatCycleHint').replace('{format}', responsePresentationLabel)}
+                      disabled={active.busy}
+                      onClick={cycleResponsePresentation}
+                    >
+                      <span className="composer-ctl-main">{t('responseFormatLabel')}: {responsePresentationLabel}</span>
+                    </button>
                     <div className="composer-model-wrap">
                       <button
                         type="button"

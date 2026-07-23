@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { MarkdownView } from './MarkdownView';
+import { extractResponseChoices, ResponseChoices } from './ResponseChoices';
 import { PlanCard } from './PlanCard';
 import { AttachmentStrip } from './AttachmentStrip';
 import type { PlanEntry } from '../lib/acpClient';
@@ -35,6 +36,9 @@ interface Props {
   onOpenAttachment?: (a: ComposerAttachment) => void;
   /** When false, hide thought/tool/system in main chat (use Process panel instead). */
   showProcessInChat?: boolean;
+  /** Explicit user click on a model-provided quick-reply option. */
+  onSelectChoice?: (value: string) => void;
+  choiceDisabled?: boolean;
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -103,11 +107,15 @@ function LineView({
   onTogglePlanEntry,
   onToggleAllPlan,
   onOpenAttachment,
+  onSelectChoice,
+  choiceDisabled,
 }: {
   line: ChatLine;
   onTogglePlanEntry: (lineId: string, entryId: string) => void;
   onToggleAllPlan: (lineId: string, checked: boolean) => void;
   onOpenAttachment?: (a: ComposerAttachment) => void;
+  onSelectChoice?: (value: string) => void;
+  choiceDisabled?: boolean;
 }) {
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
     return (
@@ -141,10 +149,12 @@ function LineView({
   if (line.role === 'system') return <SystemRow text={line.text} />;
   const body = sanitizeText(line.text);
   if (!body) return null;
+  const response = extractResponseChoices(body);
   return (
     <div className="tl-row tl-assistant">
       <div className="tl-assistant-body">
-        <MarkdownView text={body} />
+        {response.text ? <MarkdownView text={response.text} /> : null}
+        <ResponseChoices choices={response.choices} onSelect={onSelectChoice} disabled={choiceDisabled} />
       </div>
     </div>
   );
@@ -161,6 +171,8 @@ export function MessageList({
   onToggleAllPlan,
   onOpenAttachment,
   showProcessInChat = false,
+  onSelectChoice,
+  choiceDisabled = false,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -219,6 +231,8 @@ export function MessageList({
                 onTogglePlanEntry={onTogglePlanEntry}
                 onToggleAllPlan={onToggleAllPlan}
                 onOpenAttachment={onOpenAttachment}
+                onSelectChoice={onSelectChoice}
+                choiceDisabled={choiceDisabled}
               />
             </div>
           );
