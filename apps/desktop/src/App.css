@@ -5119,6 +5119,22 @@ button.pill:hover {
   font-size: 12px;
 }
 
+.model-test-status {
+  margin-top: 2px;
+}
+
+.model-test-status.verified {
+  color: var(--success, #22863a);
+}
+
+.model-test-status.failed {
+  color: var(--danger, #c94242);
+}
+
+.model-test-status.unverified {
+  color: var(--muted);
+}
+
 .kernel-meta {
   font-size: 12px;
   color: var(--muted);

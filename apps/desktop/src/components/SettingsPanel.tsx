@@ -34,6 +34,7 @@ import {
   testCustomModel,
   upsertCustomModel,
   type CustomModelRow,
+  type ModelTestResult,
   type ModelsConfigSnapshot,
 } from '../lib/modelsConfig';
 import { t } from '../lib/i18n';
@@ -136,6 +137,15 @@ type NavItem = {
 
 type ModelPreset = 'openai' | 'anthropic' | 'ollama' | 'custom';
 
+type StoredModelTestStatus = {
+  ok: boolean;
+  status: number;
+  checkedAt: number;
+};
+
+const MODEL_TEST_STATUS_STORAGE_KEY = 'gorkx.modelTestStatus.v1';
+const MAX_STORED_MODEL_TESTS = 80;
+
 const modelPresetValues: Record<ModelPreset, Pick<CustomModelRow, 'baseUrl' | 'apiBackend' | 'providerLabel'>> = {
   openai: { baseUrl: 'https://api.openai.com/v1', apiBackend: 'responses', providerLabel: 'OpenAI API' },
   anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiBackend: 'messages', providerLabel: 'Anthropic API' },
@@ -154,6 +164,35 @@ function formatWhen(ts: number): string {
     return new Date(ts).toLocaleString();
   } catch {
     return String(ts);
+  }
+}
+
+/** This deliberately excludes display names and API keys. */
+function modelTestStatusKey(model: Pick<CustomModelRow, 'apiBackend' | 'baseUrl' | 'model'>): string {
+  return [model.apiBackend, model.baseUrl.trim().toLowerCase(), model.model.trim().toLowerCase()].join('|');
+}
+
+function loadStoredModelTestStatuses(): Record<string, StoredModelTestStatus> {
+  try {
+    const raw = localStorage.getItem(MODEL_TEST_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: Record<string, StoredModelTestStatus> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as StoredModelTestStatus).ok === 'boolean' &&
+        typeof (value as StoredModelTestStatus).status === 'number' &&
+        Number.isFinite((value as StoredModelTestStatus).checkedAt)
+      ) {
+        result[key] = value as StoredModelTestStatus;
+      }
+    }
+    return result;
+  } catch {
+    return {};
   }
 }
 
@@ -208,6 +247,9 @@ export function SettingsPanel({
   });
   const [modelBusy, setModelBusy] = useState(false);
   const [modelPreset, setModelPreset] = useState<ModelPreset>('openai');
+  const [modelTestStatuses, setModelTestStatuses] = useState<Record<string, StoredModelTestStatus>>(
+    () => loadStoredModelTestStatuses(),
+  );
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
@@ -634,6 +676,29 @@ export function SettingsPanel({
       providerLabel: values.providerLabel,
       apiKey: preset === 'ollama' ? '' : current.apiKey,
     }));
+  };
+
+  const recordModelTest = (model: CustomModelRow, result: ModelTestResult) => {
+    setModelTestStatuses((previous) => {
+      const next = {
+        ...previous,
+        [modelTestStatusKey(model)]: {
+          ok: result.ok,
+          status: result.status,
+          checkedAt: Date.now(),
+        },
+      };
+      const kept = Object.entries(next)
+        .sort(([, a], [, b]) => b.checkedAt - a.checkedAt)
+        .slice(0, MAX_STORED_MODEL_TESTS);
+      const trimmed = Object.fromEntries(kept);
+      try {
+        localStorage.setItem(MODEL_TEST_STATUS_STORAGE_KEY, JSON.stringify(trimmed));
+      } catch {
+        // This is only non-secret UI metadata; the connection test itself remains valid.
+      }
+      return trimmed;
+    });
   };
 
   const makeDefaultModel = async (modelWireId: string) => {
@@ -1155,7 +1220,10 @@ export function SettingsPanel({
                         providerLabel: modelForm.providerLabel.trim(),
                       };
                       void testCustomModel(row)
-                        .then((r) => setMsg(r.note))
+                        .then((r) => {
+                          recordModelTest(row, r);
+                          setMsg(r.note);
+                        })
                         .catch((e) => setMsg(String(e)))
                         .finally(() => setModelBusy(false));
                     }}
@@ -1204,6 +1272,7 @@ export function SettingsPanel({
                     const isDefault =
                       modelsSnap?.defaultModel === m.model ||
                       modelsSnap?.defaultModel === m.id;
+                    const testStatus = modelTestStatuses[modelTestStatusKey(m)];
                     return (
                       <div key={m.id} className="settings-row">
                         <div>
@@ -1221,6 +1290,11 @@ export function SettingsPanel({
                           <div className="settings-row-hint">
                             {m.hasPlaintextSecret ? t('settingsModelsPlaintextStatus') : m.hasKeychainSecret ? t('settingsModelsKeychainStatus') : m.apiKey.startsWith('env:') ? t('settingsModelsEnvStatus') : t('settingsModelsNoKeyStatus')}
                           </div>
+                          <div className={`settings-row-hint model-test-status${testStatus ? (testStatus.ok ? ' verified' : ' failed') : ' unverified'}`}>
+                            {testStatus
+                              ? (testStatus.ok ? t('settingsModelsVerifiedAt') : t('settingsModelsTestFailedAt')).replace('{when}', formatWhen(testStatus.checkedAt))
+                              : t('settingsModelsNotTested')}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button
@@ -1231,7 +1305,10 @@ export function SettingsPanel({
                               setModelBusy(true);
                               setMsg(t('settingsModelsTesting'));
                               void testCustomModel(m)
-                                .then((r) => setMsg(r.note))
+                                .then((r) => {
+                                  recordModelTest(m, r);
+                                  setMsg(r.note);
+                                })
                                 .catch((e) => setMsg(String(e)))
                                 .finally(() => setModelBusy(false));
                             }}
