@@ -20,8 +20,8 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Compact | `/compact` pass-through and context status | 🟡 engine decides compaction availability |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar file save and `/export` clipboard route via restricted CLI bridge | ✅ |
-| Fork | — | ❌ hidden: locked `grok agent stdio` returns `Method not found` for `x.ai/session/fork` despite source-level implementation |
-| Rewind | — | ❌ hidden: locked `grok agent stdio` returns `Method not found` for `x.ai/rewind/points`; the dormant client adapter is not exposed |
+| Fork | Toolbar calls `_x.ai/session/fork`, creates a durable child task, then loads it while preserving the original task | ✅ isolated ACP gate verifies child load and unchanged parent |
+| Rewind | Desktop lists `_x.ai/rewind/points`, makes the user choose a checkpoint and scope, then calls `_x.ai/rewind/execute` with `force: false` before reloading the task | 🟡 the route and safe parameters are ACP-gated; full prompted execution awaits account-credit acceptance evidence |
 | Goal | Persistent goal console wired to `/goal`, plan and `update_goal` updates | ✅ shell; loop quality is engine-side |
 
 ## Worktree & review

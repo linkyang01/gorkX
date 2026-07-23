@@ -8,6 +8,10 @@
 // it never sends a prompt to that provider.
 // --session-controls checks native session forking and checkpoint listing
 // without making a model request or modifying the supplied project CWD.
+// --runtime-controls checks the exact session roster, delete and model-reload
+// routes used by the gorkX desktop client; it creates/removes only test sessions.
+// --rewind-execute requires --resource and performs one real, isolated
+// conversation-only rewind after the resource prompt creates a checkpoint.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -16,7 +20,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -24,11 +28,17 @@ const worktreeSmoke = options.includes('--worktree');
 const resourceSmoke = options.includes('--resource');
 const customModelSmoke = options.includes('--custom-model');
 const sessionControlsSmoke = options.includes('--session-controls');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model and --session-controls require --authenticated with an explicit disposable CWD');
+const runtimeControlsSmoke = options.includes('--runtime-controls');
+const rewindExecuteSmoke = options.includes('--rewind-execute');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls and --rewind-execute require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls'];
+if (rewindExecuteSmoke && !resourceSmoke) {
+  console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
+  process.exit(2);
+}
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -181,8 +191,8 @@ try {
       // disposable test home. It sends no prompt and leaves the parent active.
       // ACP extensions are not baseline methods; record an unavailable method
       // as an explicit capability gap rather than silently passing it.
-      try {
-        const forked = unwrapResult(await request('x.ai/session/fork', {
+      const verifyFork = async (method) => {
+        const forked = unwrapResult(await request(method, {
           sourceSessionId: sessionId,
           sourceCwd: cwd,
           newCwd: cwd,
@@ -201,10 +211,22 @@ try {
         if (loadedSourceId !== sessionId) {
           throw new Error(`source session changed after fork: ${JSON.stringify(sourceLoaded)}`);
         }
-        console.log('PASS: ACP x.ai/session/fork (durable child and unchanged parent)');
+        console.log(`PASS: ACP ${method} (durable child and unchanged parent)`);
+      };
+      try {
+        await verifyFork('x.ai/session/fork');
       } catch (error) {
         if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
-          console.log('SKIP: ACP x.ai/session/fork (kernel does not expose session fork API)');
+          try {
+            await verifyFork('_x.ai/session/fork');
+            console.log('NOTE: session fork is available only through the legacy underscored ACP route');
+          } catch (legacyError) {
+            if (/method not found/i.test(legacyError instanceof Error ? legacyError.message : String(legacyError))) {
+              console.log('SKIP: ACP session/fork (kernel exposes neither x.ai nor _x.ai route)');
+            } else {
+              throw legacyError;
+            }
+          }
         } else {
           throw error;
         }
@@ -213,20 +235,66 @@ try {
       // A new session has no prompt checkpoint. A well-typed empty response
       // proves the native list endpoint is available without inventing a
       // destructive execute case or billing a model request.
-      try {
-        const rewindPoints = unwrapResult(await request('x.ai/rewind/points', { sessionId }, 15_000));
+      const verifyRewindPoints = async (method) => {
+        const rewindPoints = unwrapResult(await request(method, { sessionId }, 15_000));
         const points = rewindPoints?.rewindPoints ?? rewindPoints?.rewind_points;
         if (!Array.isArray(points)) {
           throw new Error(`x.ai/rewind/points returned invalid payload: ${JSON.stringify(rewindPoints)}`);
         }
-        console.log('PASS: ACP x.ai/rewind/points (native empty checkpoint list)');
+        console.log(`PASS: ACP ${method} (native empty checkpoint list)`);
+      };
+      try {
+        await verifyRewindPoints('x.ai/rewind/points');
       } catch (error) {
         if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
-          console.log('SKIP: ACP x.ai/rewind/points (kernel does not expose rewind API)');
+          try {
+            await verifyRewindPoints('_x.ai/rewind/points');
+            console.log('NOTE: rewind is available only through the legacy underscored ACP route');
+          } catch (legacyError) {
+            if (/method not found/i.test(legacyError instanceof Error ? legacyError.message : String(legacyError))) {
+              console.log('SKIP: ACP rewind/points (kernel exposes neither x.ai nor _x.ai route)');
+            } else {
+              throw legacyError;
+            }
+          }
         } else {
           throw error;
         }
       }
+    }
+
+    if (runtimeControlsSmoke) {
+      // Check the exact underscored routes the desktop client calls. A source
+      // implementation under another spelling is not enough to call the UI
+      // feature real.
+      const rosterRaw = unwrapResult(await request('_x.ai/sessions/list', { cwd }, 15_000));
+      const roster = rosterRaw?.sessions;
+      if (!Array.isArray(roster) || !roster.some((entry) => entry?.sessionId === sessionId)) {
+        throw new Error(`_x.ai/sessions/list did not include the live session: ${JSON.stringify(rosterRaw)}`);
+      }
+      console.log('PASS: ACP _x.ai/sessions/list (contains live session)');
+
+      const reloadRaw = unwrapResult(await request('_x.ai/internal/reload_models', {}, 15_000));
+      if (!reloadRaw || typeof reloadRaw !== 'object') {
+        throw new Error(`_x.ai/internal/reload_models returned invalid payload: ${JSON.stringify(reloadRaw)}`);
+      }
+      console.log('PASS: ACP _x.ai/internal/reload_models');
+
+      const disposable = await request('session/new', { cwd, mcpServers: [] });
+      const disposableSessionId = disposable?.sessionId;
+      if (typeof disposableSessionId !== 'string' || !disposableSessionId) {
+        throw new Error(`session/new returned no disposable sessionId: ${JSON.stringify(disposable)}`);
+      }
+      await request('_x.ai/session/delete', { sessionId: disposableSessionId }, 15_000);
+      try {
+        await request('session/load', { sessionId: disposableSessionId, cwd, mcpServers: [] }, 15_000);
+        throw new Error('_x.ai/session/delete did not make the disposable session unavailable');
+      } catch (error) {
+        if (/did not make the disposable session unavailable/.test(error instanceof Error ? error.message : String(error))) {
+          throw error;
+        }
+      }
+      console.log('PASS: ACP _x.ai/session/delete (deleted session cannot load)');
     }
 
     if (resourceSmoke) {
@@ -249,6 +317,45 @@ try {
         ],
       }, 120_000);
       console.log('PASS: ACP session/prompt resource_link');
+
+      if (rewindExecuteSmoke) {
+        // Rewinding a session to its only prompt is correctly rejected by the
+        // kernel. Add a second minimal turn, then restore to the first saved
+        // point so this covers a meaningful, non-destructive history change.
+        await request('session/prompt', {
+          sessionId,
+          prompt: [{ type: 'text', text: 'Reply with exactly: REWIND_SECOND_TURN_OK' }],
+        }, 120_000);
+        console.log('PASS: ACP session/prompt rewind second turn');
+        // `session/prompt` acknowledges dispatch before the actor has written
+        // its history/checkpoint. Wait for the bounded actor flush before
+        // testing a destructive operation against that persisted history.
+        await delay(8_000);
+        const rewindPoints = unwrapResult(await request('_x.ai/rewind/points', { sessionId }, 15_000));
+        const points = rewindPoints?.rewindPoints ?? rewindPoints?.rewind_points;
+        const target = Array.isArray(points) && points.length >= 2 ? points[0] : null;
+        const targetPromptIndex = typeof target?.promptIndex === 'number'
+          ? target.promptIndex
+          : typeof target?.prompt_index === 'number' ? target.prompt_index : null;
+        if (targetPromptIndex === null) {
+          throw new Error(`_x.ai/rewind/points did not produce two checkpoints after prompts: ${JSON.stringify(rewindPoints)}`);
+        }
+        const rewind = unwrapResult(await request('_x.ai/rewind/execute', {
+          sessionId,
+          targetPromptIndex,
+          mode: 'conversation_only',
+          force: false,
+        }, 30_000));
+        if (rewind?.success !== true || rewind?.mode !== 'conversation_only') {
+          throw new Error(`_x.ai/rewind/execute did not safely rewind: ${JSON.stringify(rewind)}`);
+        }
+        const rewoundLoaded = await request('session/load', { sessionId, cwd, mcpServers: [] }, 15_000);
+        const rewoundId = rewoundLoaded?.sessionId ?? rewoundLoaded?._meta?.sessionId;
+        if (rewoundId !== sessionId) {
+          throw new Error(`rewound session could not be loaded: ${JSON.stringify(rewoundLoaded)}`);
+        }
+        console.log('PASS: ACP _x.ai/rewind/execute (conversation_only, force=false, reloadable)');
+      }
     }
 
     try {

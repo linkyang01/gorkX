@@ -54,7 +54,7 @@ export interface HookInfo {
   disabled: boolean;
 }
 
-/** A real kernel-level copy of a local session, returned by `x.ai/session/fork`. */
+/** A real kernel-level copy of a local session, returned by `_x.ai/session/fork`. */
 export interface ForkSessionResult {
   newSessionId: string;
   chatMessagesCopied: number;
@@ -853,7 +853,7 @@ export class AcpClient {
    * while the source session remains untouched.
    */
   async forkSession(sessionId: string, cwd: string): Promise<ForkSessionResult> {
-    const raw = (await this.request('x.ai/session/fork', {
+    const raw = (await this.request('_x.ai/session/fork', {
       sourceSessionId: sessionId,
       sourceCwd: cwd,
       newCwd: cwd,
@@ -865,7 +865,7 @@ export class AcpClient {
 
   /** List the kernel's durable checkpoints. No conversation or files are changed. */
   async rewindPoints(sessionId: string): Promise<RewindPoint[]> {
-    const raw = (await this.request('x.ai/rewind/points', { sessionId }, 15_000)) as Record<string, unknown>;
+    const raw = (await this.request('_x.ai/rewind/points', { sessionId }, 15_000)) as Record<string, unknown>;
     const nested = raw.result && typeof raw.result === 'object' ? raw.result as Record<string, unknown> : {};
     const points = raw.rewindPoints ?? raw.rewind_points ?? nested.rewindPoints ?? nested.rewind_points;
     if (!Array.isArray(points)) return [];
@@ -892,7 +892,7 @@ export class AcpClient {
     targetPromptIndex: number,
     mode: RewindMode,
   ): Promise<RewindResult> {
-    const raw = (await this.request('x.ai/rewind/execute', {
+    const raw = (await this.request('_x.ai/rewind/execute', {
       sessionId,
       targetPromptIndex,
       mode,
