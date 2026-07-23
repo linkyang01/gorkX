@@ -130,6 +130,33 @@ function renderChart(raw: string): string | null {
   return `<figure class="md-chart"><figcaption>${escapeHtml(chart.title || '数据图表')}</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(chart.title || '数据图表')}">${grid}<line x1="${left}" y1="${zeroY}" x2="${width - right}" y2="${zeroY}" class="md-chart-zero" />${series}${labels}</svg>${legend ? `<div class="md-chart-legend">${legend}</div>` : ''}</figure>`;
 }
 
+/**
+ * Turn a compact two-column numeric comparison table into a chart without the
+ * model having to know a special gorkX command. The original table remains
+ * below it, so precision and units are never lost. Ambiguous tables stay text.
+ */
+function renderTableComparisonChart(headers: string[], rows: string[][]): string | null {
+  if (headers.length !== 2 || rows.length < 2 || rows.length > 10) return null;
+  const values = rows.map((row) => {
+    const raw = row[1]?.trim() ?? '';
+    // Accept displayed quantities such as 1,250 / 12.5% / ¥98. For any other
+    // representation, preserve the table only rather than inventing data.
+    const normalized = raw.replace(/[,$¥€£]/g, '').replace(/%$/, '').trim();
+    if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) return null;
+    const value = Number(normalized);
+    return Number.isFinite(value) ? value : null;
+  });
+  if (values.some((value) => value === null)) return null;
+  const labels = rows.map((row) => row[0]?.replace(/[*`]/g, '').trim() ?? '');
+  if (labels.some((label) => !label || label.length > 24)) return null;
+  return renderChart(JSON.stringify({
+    type: 'bar',
+    title: `${headers[1]} · ${headers[0]}`,
+    labels,
+    datasets: [{ label: headers[1], values }],
+  }));
+}
+
 function renderBlock(md: string): string {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   const out: string[] = [];
@@ -184,6 +211,8 @@ function renderBlock(md: string): string {
         rows.push(row);
         i++;
       }
+      const comparisonChart = renderTableComparisonChart(headers, rows);
+      if (comparisonChart) out.push(`<div class="md-auto-chart">${comparisonChart}</div>`);
       out.push(
         `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headers.map((cell) => `<th>${inlineFormat(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${inlineFormat(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,
       );

@@ -2868,6 +2868,10 @@ button.pill:hover {
   background: color-mix(in srgb, var(--panel) 78%, transparent);
 }
 
+.md-auto-chart {
+  margin: 12px 0 10px;
+}
+
 .md-table {
   width: 100%;
   min-width: max-content;
