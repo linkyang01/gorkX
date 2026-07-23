@@ -9,6 +9,7 @@ mod grok_admin;
 mod memory;
 mod media;
 mod models_config;
+mod media_tools_config;
 mod paths;
 mod pty;
 mod scheduler;
@@ -193,6 +194,8 @@ pub fn run() {
             models_config::models_list_available,
             models_config::models_test_connection,
             models_config::models_migrate_plaintext_keys,
+            media_tools_config::media_tools_config_get,
+            media_tools_config::media_tools_config_set,
             subagents_config::subagents_config_get,
             subagents_config::subagents_config_set_enabled,
             subagents_config::subagents_config_set_type_enabled,
