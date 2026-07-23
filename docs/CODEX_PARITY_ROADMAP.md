@@ -75,7 +75,7 @@ Local worker or hosted worker
 
 ### P3 — GitHub 与工程协作（3–4 周）
 
-**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR、其 head commit 的 check-runs，以及讨论/逐行审阅评论；不读取 `gh` 凭据，不做远端写操作。
+**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前已提供用户手动输入、先验证再存入 macOS Keychain 的细粒度 Token 入口，可读取当前 `origin` 的开放 PR、其 head commit 的 check-runs，以及讨论/逐行审阅评论；对已经由用户推送到 `origin` 的当前分支，用户填写标题/目标分支并二次确认后可创建 PR。gorkX 不读取 `gh` 凭据、不自动推送分支，其他远端写入仍未提供。
 
 **P3.1 — 一键网页授权（已排期）**：把 Token 输入降为“高级/兼容方式”，主路径改为“连接 GitHub”→ 系统浏览器授权 → 回到 gorkX 完成连接。目标采用 **GitHub App 的最小只读权限**（Metadata、Pull requests、Checks、Issues）和仓库选择，而不是把用户的 PAT 交给 Agent。实现前置条件与安全边界：
 

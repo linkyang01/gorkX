@@ -1,10 +1,11 @@
-//! User-authorized, read-only GitHub REST adapter.
+//! User-authorized GitHub REST adapter.
 //!
 //! A fine-grained PAT is deliberately entered by the user and stored only in
 //! macOS Keychain. This is not a substitute for GitHub OAuth/App support and
-//! never reads `gh` credentials or performs remote writes.
+//! never reads `gh` credentials. Remote writes are restricted to individually
+//! confirmed actions in the UI.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
@@ -31,6 +32,29 @@ pub struct GithubPullRequest {
     pub url: String,
     pub author: String,
     pub updated_at: String,
+    pub draft: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCreatePullRequestInput {
+    pub cwd: String,
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    pub base: String,
+    #[serde(default)]
+    pub draft: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCreatedPullRequest {
+    pub number: u64,
+    pub title: String,
+    pub url: String,
+    pub head: String,
+    pub base: String,
     pub draft: bool,
 }
 
@@ -288,6 +312,94 @@ fn github_repo_segment(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
+/// Git branch/ref validation is intentionally stricter than git's full ref
+/// grammar: this value is displayed to the user and sent to GitHub as a PR
+/// head/base, never as an arbitrary git argument.
+fn github_branch_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 255
+        && value != "HEAD"
+        && !value.starts_with('-')
+        && !value.starts_with('/')
+        && !value.ends_with('/')
+        && !value.contains("..")
+        && !value.contains("//")
+        && !value.bytes().any(|b| b.is_ascii_control() || b == b' ' || b == b'~' || b == b'^' || b == b':' || b == b'?' || b == b'*' || b == b'[' || b == b'\\')
+}
+
+fn current_pushed_branch(cwd: &str) -> Result<String, String> {
+    let out = Command::new("git")
+        .args(["-C", cwd, "branch", "--show-current"])
+        .output()
+        .map_err(|e| format!("read current branch: {e}"))?;
+    if !out.status.success() {
+        return Err("Could not read the current Git branch.".into());
+    }
+    let branch = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if !github_branch_name(&branch) {
+        return Err("Create a named Git branch before opening a pull request.".into());
+    }
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let pushed = Command::new("git")
+        .args(["-C", cwd, "show-ref", "--verify", "--quiet", &remote_ref])
+        .status()
+        .map_err(|e| format!("check pushed branch: {e}"))?;
+    if !pushed.success() {
+        return Err("Push the current branch to origin before creating a pull request. gorkX will not push it automatically.".into());
+    }
+    Ok(branch)
+}
+
+/// Create a pull request only after the UI gives a separate explicit
+/// confirmation. This command never creates or pushes a local branch.
+#[tauri::command]
+pub fn github_create_pull_request(input: GithubCreatePullRequestInput) -> Result<GithubCreatedPullRequest, String> {
+    let token = token_read().ok_or_else(|| "Connect a GitHub token with Pull requests: write permission first.".to_string())?;
+    let title = input.title.trim();
+    if title.is_empty() || title.len() > 256 || title.bytes().any(|b| b.is_ascii_control()) {
+        return Err("Pull request title must be 1–256 characters without control characters.".into());
+    }
+    if input.body.len() > 65_536 {
+        return Err("Pull request description is too long (maximum 65,536 characters).".into());
+    }
+    let base = input.base.trim();
+    if !github_branch_name(base) {
+        return Err("Enter a valid base branch, such as main.".into());
+    }
+    let (owner, repo) = github_repo_from_remote(&input.cwd)?;
+    let head = current_pushed_branch(&input.cwd)?;
+    let response = client()?
+        .post(format!("{API}/repos/{owner}/{repo}/pulls"))
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2026-03-10")
+        .json(&serde_json::json!({
+            "title": title,
+            "body": input.body,
+            "head": head,
+            "base": base,
+            "draft": input.draft,
+        }))
+        .send()
+        .map_err(|e| format!("GitHub network: {e}"))?;
+    if !response.status().is_success() {
+        return Err(match response.status().as_u16() {
+            401 | 403 => "GitHub refused to create the pull request. The token needs Pull requests: write permission for this repository.".into(),
+            422 => "GitHub could not create the pull request. Check that the pushed branch differs from the base branch and no equivalent PR is already open.".into(),
+            status => format!("GitHub HTTP {status} while creating the pull request (response details hidden)."),
+        });
+    }
+    let body: serde_json::Value = response.json().map_err(|e| format!("GitHub response: {e}"))?;
+    Ok(GithubCreatedPullRequest {
+        number: body.get("number").and_then(|v| v.as_u64()).ok_or_else(|| "GitHub create response has no PR number.".to_string())?,
+        title: body.get("title").and_then(|v| v.as_str()).unwrap_or(title).to_string(),
+        url: body.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        head,
+        base: base.to_string(),
+        draft: input.draft,
+    })
+}
+
 #[tauri::command]
 pub fn github_list_open_prs(cwd: String) -> Result<Vec<GithubPullRequest>, String> {
     list_open_prs(&cwd, token_read().as_deref())
@@ -491,7 +603,7 @@ pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<Github
 
 #[cfg(test)]
 mod tests {
-    use super::{github_read_error, parse_github_remote};
+    use super::{github_branch_name, github_read_error, parse_github_remote};
 
     #[test]
     fn parses_supported_github_remote_forms() {
@@ -533,6 +645,16 @@ mod tests {
         );
         assert!(message.contains("rate-limited"));
         assert!(message.contains("read-only token"));
+    }
+
+    #[test]
+    fn accepts_safe_branch_names_for_pr_creation() {
+        for branch in ["main", "feature/model-catalog", "release_1.0"] {
+            assert!(github_branch_name(branch), "rejected {branch}");
+        }
+        for branch in ["HEAD", "-bad", "a..b", "a b", "a:ref", "a//b"] {
+            assert!(!github_branch_name(branch), "accepted {branch}");
+        }
     }
 
 }
