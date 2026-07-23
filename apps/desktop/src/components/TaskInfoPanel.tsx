@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AcpClient, SessionInfo } from '../lib/acpClient';
+import type { AcpClient, SessionSnapshot } from '../lib/acpClient';
 import { t } from '../lib/i18n';
 
 interface Props {
@@ -15,7 +15,7 @@ function number(value: number | undefined) {
 
 /** A readable desktop surface for the engine's read-only session snapshot. */
 export function TaskInfoPanel({ open, client, sessionId, onClose }: Props) {
-  const [info, setInfo] = useState<SessionInfo | null>(null);
+  const [info, setInfo] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

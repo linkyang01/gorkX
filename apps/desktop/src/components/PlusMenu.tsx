@@ -20,10 +20,11 @@ export type PlusAction =
   | { type: 'rewind-session' }
   | { type: 'ask-btw' }
   | { type: 'task-info' }
+  | { type: 'compact-session' }
+  | { type: 'export-session' }
+  | { type: 'new-task' }
   | { type: 'set-goal' }
   | { type: 'generate-media'; media: 'image' | 'video' }
-  | { type: 'stage'; cmd: string; label: string }
-  | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
 
 type Row =
@@ -127,38 +128,13 @@ export function PlusMenu({
       desc: t('plusGoalHint'),
       action: { type: 'set-goal' },
     },
-    {
-      kind: 'action',
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
       id: 'compact',
       title: t('plusCompact'),
-      desc: t('slashDescCompact'),
-      action: hasActiveSession
-        ? { type: 'send-now', cmd: '/compact' }
-        : { type: 'stage', cmd: '/compact', label: t('plusCompact') },
-    },
-    {
-      kind: 'action',
-      id: 'context',
-      title: t('plusContext'),
-      desc: t('slashDescContext'),
-      action: hasActiveSession
-        ? { type: 'send-now', cmd: '/context' }
-        : { type: 'stage', cmd: '/context', label: t('plusContext') },
-    },
-    {
-      kind: 'action',
-      id: 'model',
-      title: t('plusModel'),
-      desc: t('slashDescModel'),
-      action: { type: 'stage', cmd: '/model', label: t('plusModel') },
-    },
-    {
-      kind: 'action',
-      id: 'effort',
-      title: t('plusEffort'),
-      desc: t('slashDescEffort'),
-      action: { type: 'stage', cmd: '/effort', label: t('plusEffort') },
-    },
+      desc: t('plusCompactHint'),
+      action: { type: 'compact-session' } as PlusAction,
+    }] as Row[]) : []),
 
     { kind: 'label', id: 'l-gen', title: t('plusCatGenerate') },
     {
@@ -183,31 +159,6 @@ export function PlusMenu({
       title: t('memoryTitle'),
       desc: t('plusMemoryHint'),
       action: { type: 'memory-panel' },
-    },
-    {
-      kind: 'action',
-      id: 'remember',
-      title: t('memoryRemember'),
-      desc: t('slashDescRemember'),
-      action: { type: 'stage', cmd: '/remember', label: t('memoryRemember') },
-    },
-    {
-      kind: 'action',
-      id: 'flush',
-      title: t('memoryFlush'),
-      desc: t('slashDescFlush'),
-      action: hasActiveSession
-        ? { type: 'send-now', cmd: '/flush' }
-        : { type: 'stage', cmd: '/flush', label: t('memoryFlush') },
-    },
-    {
-      kind: 'action',
-      id: 'dream',
-      title: t('memoryDream'),
-      desc: t('slashDescDream'),
-      action: hasActiveSession
-        ? { type: 'send-now', cmd: '/dream' }
-        : { type: 'stage', cmd: '/dream', label: t('memoryDream') },
     },
 
     { kind: 'label', id: 'l-session', title: t('plusCatSession') },
@@ -239,19 +190,19 @@ export function PlusMenu({
       desc: t('btwHint'),
       action: { type: 'ask-btw' },
     },
-    {
-      kind: 'action',
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
       id: 'export',
       title: t('plusExport'),
-      desc: t('slashDescExport'),
-      action: { type: 'stage', cmd: '/export', label: t('plusExport') },
-    },
+      desc: t('plusExportHint'),
+      action: { type: 'export-session' } as PlusAction,
+    }] as Row[]) : []),
     {
       kind: 'action',
       id: 'new',
       title: t('plusNewTask'),
       desc: t('slashDescNew'),
-      action: { type: 'send-now', cmd: '/new' },
+      action: { type: 'new-task' },
     },
 
     ...(invocable.length
@@ -277,22 +228,12 @@ export function PlusMenu({
       desc: t('plusExtHint'),
       action: { type: 'extensions' },
     },
-    {
-      kind: 'action',
-      id: 'mcps',
-      title: t('plusMcps'),
-      desc: t('plusMcpsHint'),
-      action: { type: 'stage', cmd: '/mcps', label: t('plusMcps') },
-    },
   ];
 
   // Drop engine slash rows the current session does not advertise
   const rows: Row[] = rawRows.filter((row) => {
     if (row.kind !== 'action') return true;
     const a = row.action;
-    if (a.type === 'stage' || a.type === 'send-now') {
-      return slashAllowed(a.cmd, availableCommandNames);
-    }
     if (a.type === 'ask-btw') return slashAllowed('/btw', availableCommandNames);
     if (a.type === 'generate-media') return slashAllowed(a.media === 'image' ? '/imagine' : '/imagine-video', availableCommandNames);
     return true;

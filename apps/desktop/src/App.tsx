@@ -1110,32 +1110,6 @@ function App() {
     }, 30);
   }, []);
 
-  /** Only for actions that must fire immediately (flush/dream with no extra text). */
-  const applySlashCommand = useCallback(
-    async (line: string) => {
-      const cmd = line.startsWith('/') ? line : `/${line}`;
-      setPlusMenuOpen(false);
-      setSlashOpen(false);
-      setCapabilityArm(null);
-      if (!active?.client || !active.sessionId) {
-        setDraft(cmd.endsWith(' ') ? cmd : `${cmd} `);
-        return;
-      }
-      appendLine(active.id, { id: nid(), role: 'user', text: cmd });
-      patchThread(active.id, { busy: true, error: null });
-      try {
-        await active.client.prompt(active.sessionId, cmd);
-      } catch (e) {
-        patchThread(active.id, {
-          error: e instanceof Error ? e.message : String(e),
-        });
-      } finally {
-        patchThread(active.id, { busy: false });
-      }
-    },
-    [active],
-  );
-
   const diskSkillCommands = useMemo(() => {
     return (extSnap?.skills ?? [])
       .filter((s) => s.userInvocable)
@@ -2160,6 +2134,42 @@ function App() {
     if (question) dispatchBtw(agent, question);
   };
 
+  /** Compress through the native ACP endpoint, without exposing `/compact`. */
+  const compactActiveSession = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!agent?.client || !agent.sessionId || agent.busy) return;
+    patchThread(agent.id, { busy: true, error: null });
+    try {
+      await agent.client.compact(agent.sessionId);
+      appendLine(agent.id, { id: nid(), role: 'system', text: t('autoCompactDone') });
+    } catch (error) {
+      patchThread(agent.id, { error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      patchThread(agent.id, { busy: false });
+    }
+  };
+
+  /** Native file-picker export; `/export` remains keyboard compatibility only. */
+  const exportActiveSession = async () => {
+    if (!active?.sessionId || active.busy) return;
+    try {
+      const path = await save({
+        defaultPath: `gorkx-${active.sessionId.slice(0, 8)}.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      });
+      if (typeof path !== 'string' || !path) return;
+      await exportSessionMarkdown(active.sessionId, path, grokCmd || undefined);
+      alert(`${t('exportSessionDone')}: ${path}`);
+    } catch (error) {
+      try {
+        await exportSessionClipboard(active.sessionId, grokCmd || undefined);
+        alert(t('exportSessionClipboard'));
+      } catch (fallbackError) {
+        alert(fallbackError instanceof Error ? fallbackError.message : String(error));
+      }
+    }
+  };
+
   const handlePlusAction = async (action: PlusAction) => {
     switch (action.type) {
       case 'attach-files':
@@ -2211,6 +2221,17 @@ function App() {
       case 'task-info':
         setTaskInfoOpen(true);
         return;
+      case 'compact-session':
+        await compactActiveSession();
+        return;
+      case 'export-session':
+        await exportActiveSession();
+        return;
+      case 'new-task':
+        selectThread(null);
+        setDraft('');
+        setCapabilityArm(null);
+        return;
       case 'set-goal':
         setPlusMenuOpen(false);
         await openGoalAction();
@@ -2219,20 +2240,8 @@ function App() {
         setPlusMenuOpen(false);
         await openMediaAction(action.media);
         return;
-      case 'stage':
-        stageCapability(action.cmd, action.label);
-        return;
-      case 'send-now':
-        if (action.cmd === '/new' || action.cmd === '/clear') {
-          selectThread(null);
-          setDraft('');
-          setCapabilityArm(null);
-          return;
-        }
-        await applySlashCommand(action.cmd);
-        return;
       case 'skill':
-        stageCapability(`/${action.skill.name}`, action.skill.name);
+        await openSkillAction(action.skill);
         return;
       default:
         return;
@@ -4944,26 +4953,7 @@ function App() {
                     title={t('exportSession')}
                     aria-label={t('exportSession')}
                     disabled={active.busy}
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          const path = await save({
-                            defaultPath: `gorkx-${active.sessionId!.slice(0, 8)}.md`,
-                            filters: [{ name: 'Markdown', extensions: ['md'] }],
-                          });
-                          if (typeof path !== 'string' || !path) return;
-                          await exportSessionMarkdown(active.sessionId!, path, grokCmd || undefined);
-                          alert(`${t('exportSessionDone')}: ${path}`);
-                        } catch (e) {
-                          try {
-                            await exportSessionClipboard(active.sessionId!, grokCmd || undefined);
-                            alert(t('exportSessionClipboard'));
-                          } catch (e2) {
-                            alert(e2 instanceof Error ? e2.message : String(e));
-                          }
-                        }
-                      })();
-                    }}
+                    onClick={() => void exportActiveSession()}
                   >
                     <IconExport />
                   </button>

@@ -97,8 +97,8 @@ export interface BtwResult {
   answer: string;
 }
 
-/** Read-only task snapshot returned by the Grok Build session-info extension. */
-export interface SessionInfo {
+/** Read-only snapshot returned by `_x.ai/session/info`. */
+export interface SessionSnapshot {
   sessionId: string;
   cwd: string;
   agentName?: string | null;
@@ -922,7 +922,7 @@ export class AcpClient {
    * Read the engine's live task snapshot. This is a local ACP query, not a
    * model prompt: it exposes the current model, turns and context capacity.
    */
-  async getSessionInfo(sessionId: string): Promise<SessionInfo> {
+  async getSessionInfo(sessionId: string): Promise<SessionSnapshot> {
     let raw: unknown;
     try {
       raw = await this.request('x.ai/session/info', { sessionId }, 15_000);
@@ -937,7 +937,7 @@ export class AcpClient {
       ? (raw as { result: unknown }).result
       : raw;
     if (!value || typeof value !== 'object') throw new Error('Kernel returned an invalid task info snapshot');
-    const info = value as SessionInfo;
+    const info = value as SessionSnapshot;
     if (!info.sessionId || !info.cwd || !info.context) throw new Error('Kernel returned an incomplete task info snapshot');
     return info;
   }
