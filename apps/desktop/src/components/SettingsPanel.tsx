@@ -1143,11 +1143,11 @@ export function SettingsPanel({
                 ) : null}
               </div>
               <div className="settings-card" style={{ marginTop: 12 }}>
-                <div className="settings-row-title">媒体工具</div>
-                <p className="settings-row-hint">开关写入 App 自管 Grok Build 配置；新启动的会话生效，内核仍会按账户能力决定最终可用性。</p>
+                <div className="settings-row-title">{t('mediaToolsTitle')}</div>
+                <p className="settings-row-hint">{t('mediaToolsHint')}</p>
                 {(['image', 'video'] as const).map((kind) => {
                   const enabled = kind === 'image' ? (mediaTools?.imageGenEnabled ?? true) : (mediaTools?.videoGenEnabled ?? true);
-                  return <div className="settings-row" style={{ marginTop: 10 }} key={kind}><div><div className="settings-row-title">{kind === 'image' ? '图片生成' : '视频生成'}</div><div className="settings-row-hint">{enabled ? '已启用' : '已停用'}</div></div><button type="button" className={`btn${enabled ? ' primary' : ''}`} disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setMediaToolEnabled(kind, !enabled).then(setMediaTools).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{enabled ? '停用' : '启用'}</button></div>;
+                  return <div className="settings-row" style={{ marginTop: 10 }} key={kind}><div><div className="settings-row-title">{kind === 'image' ? t('mediaImage') : t('mediaVideo')}</div><div className="settings-row-hint">{enabled ? t('mediaEnabled') : t('mediaDisabled')}</div></div><button type="button" className={`btn${enabled ? ' primary' : ''}`} disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setMediaToolEnabled(kind, !enabled).then(setMediaTools).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{enabled ? t('mediaDisabled') : t('mediaEnabled')}</button></div>;
                 })}
               </div>
               <h3 className="subhead">{t('settingsModelsCustom')}</h3>
