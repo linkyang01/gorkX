@@ -1560,6 +1560,19 @@ function App() {
    */
   const reconcileRunningSubagents = useCallback(
     async (threadId: string, client: AcpClient, sessionId: string) => {
+      const markPersistedRunningAsUnverified = () => {
+        setThreads((prev) =>
+          prev.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            const lines = thread.lines.map((line) =>
+              line.toolKind === 'subagent' && /^(running|initializing|cancelling)\b/i.test(line.toolStatus || '')
+                ? { ...line, toolStatus: 'unverified after reconnect' }
+                : line,
+            );
+            return { ...thread, lines };
+          }),
+        );
+      };
       try {
         const snapshots = await client.listRunningSubagents(sessionId);
         const rows = snapshots.flatMap((snapshot) => {
@@ -1583,11 +1596,24 @@ function App() {
             status: detail.length ? `running · ${detail.join(' · ')}` : 'running',
           }];
         });
-        if (!rows.length) return;
+        if (!rows.length) {
+          // An authoritative empty response means none of the persisted rows
+          // is still live. Do not leave yesterday's lifecycle event looking
+          // like an active process.
+          markPersistedRunningAsUnverified();
+          return;
+        }
         setThreads((prev) =>
           prev.map((thread) => {
             if (thread.id !== threadId) return thread;
-            const lines = [...thread.lines];
+            const liveKeys = new Set(rows.map((row) => row.key));
+            const lines = thread.lines.map((line) =>
+              line.toolKind === 'subagent' &&
+              /^(running|initializing|cancelling)\b/i.test(line.toolStatus || '') &&
+              !liveKeys.has(line.toolKey || '')
+                ? { ...line, toolStatus: 'unverified after reconnect' }
+                : line,
+            );
             for (const row of rows) {
               const index = lines.findIndex((line) => line.toolKey === row.key);
               if (index >= 0) {
@@ -1607,8 +1633,10 @@ function App() {
           }),
         );
       } catch {
-        // This extension is optional on older kernels. Session replay remains
-        // usable even when a running-list probe is unavailable.
+        // This extension is absent from the current locked kernel. Session
+        // replay stays readable, but its historical "running" status is not
+        // evidence that a child survived the desktop restart.
+        markPersistedRunningAsUnverified();
       }
     },
     [],

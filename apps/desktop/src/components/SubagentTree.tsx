@@ -32,6 +32,7 @@ export function subagentTree(lines: ChatLine[]): Node[] {
 
 function statusLabel(raw: string | undefined): string {
   if (!raw) return t('subagentTreeRunning');
+  if (/unverified|not verified|未验证/i.test(raw)) return t('subagentTreeUnverified');
   if (/^(running|initializing|cancelling)\b/i.test(raw)) return t('subagentTreeRunning');
   if (/fail|error/i.test(raw)) return t('subagentTreeFailed');
   if (/complete|done|success/i.test(raw)) return t('subagentTreeComplete');

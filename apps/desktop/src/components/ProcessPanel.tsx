@@ -84,7 +84,7 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
                 subagentId && /^running\b/i.test(line.toolStatus || ''),
               );
               const canInspect = Boolean(
-                subagentId && !/^(running|initializing|cancelling)\b/i.test(line.toolStatus || ''),
+                subagentId && /^(complete|done|success|fail|error|cancel)\b/i.test(line.toolStatus || ''),
               );
               return (
                 <div key={line.id} className={`process-item tool${failed ? ' fail' : ''}`}>
