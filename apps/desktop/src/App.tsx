@@ -2165,7 +2165,12 @@ function App() {
       source: 'session' as const,
     }));
     const names = new Set(fromSession.map((c) => c.name.toLowerCase()));
-    const fromBuiltins = builtins.filter((c) => !names.has(c.name.toLowerCase()));
+    // Local rows have a direct shell/ACP implementation. Agent rows are only
+    // useful when this exact live session advertised them — do not turn a
+    // typed slash fallback into a fake product capability.
+    const fromBuiltins = builtins.filter(
+      (c) => !names.has(c.name.toLowerCase()) && c.source !== 'agent',
+    );
     const fromDisk = diskSkillCommands.filter((c) => !names.has(c.name.toLowerCase()));
     return [...fromSession, ...fromBuiltins, ...fromDisk]
       .filter(

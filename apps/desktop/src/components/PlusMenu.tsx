@@ -43,7 +43,7 @@ function slashAllowed(cmd: string, available?: string[]): boolean {
   // These are intercepted by gorkX itself and therefore never depend on an
   // engine-advertised slash command. Every other slash entry is only shown
   // after the live session explicitly advertises it: no optimistic dead rows.
-  if (['clear', 'new', 'goal', 'worktree'].includes(n)) {
+  if (['clear', 'new', 'worktree'].includes(n)) {
     return true;
   }
   return Boolean(available?.some((a) => a.toLowerCase() === n));
