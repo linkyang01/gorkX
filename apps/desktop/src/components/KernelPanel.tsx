@@ -4,8 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import type { GrokStatus } from '../lib/acpClient';
 import { clearChatCache, storeDataDir, storeDbPath } from '../lib/threads';
 import { revealInFinder } from '../lib/host';
-import { shellExec } from '../lib/terminal';
-import { fetchAccountSummary, fetchSubscriptionModels } from '../lib/account';
+import { fetchAccountSummary, fetchSubscriptionModelsSnapshot } from '../lib/account';
 import type { AccountSummary } from '../lib/account';
 import { t } from '../lib/i18n';
 
@@ -106,30 +105,18 @@ export function KernelPanel({
   const refreshModels = async () => {
     setMsg('…');
     try {
-      const rows = await fetchSubscriptionModels(true);
-      // Cross-check with official CLI `grok models` (same catalog Grok Build uses)
-      let cliNote = '';
-      try {
-        const bin = (status?.grokPath || grokCmd || 'grok').trim() || 'grok';
-        const r = await shellExec(`${JSON.stringify(bin)} models`);
-        const out = `${r.stdout || ''}\n${r.stderr || ''}`;
-        const stars = (out.match(/^\s*\*\s+\S+/gm) || []).length;
-        const lines = out
-          .split('\n')
-          .map((l) => l.trim())
-          .filter((l) => l.startsWith('*'));
-        cliNote =
-          lines.length > 0
-            ? ` · grok models: ${lines.map((l) => l.replace(/^\*\s+/, '')).join(', ')}`
-            : stars
-              ? ` · grok models: ${stars}`
-              : '';
-      } catch {
-        /* optional */
-      }
+      const snapshot = await fetchSubscriptionModelsSnapshot(true);
+      const rows = snapshot.models;
+      const source =
+        snapshot.source === 'live'
+          ? t('settingsModelsSourceLive')
+          : snapshot.source === 'cache'
+            ? t('settingsModelsSourceCache')
+            : t('settingsModelsSourceNone');
       const names = rows.map((r) => r.name || r.modelId).join(', ') || '—';
       setMsg(
-        `${t('refreshModels')}: ${names} (${rows.length})${cliNote}` +
+        `${t('refreshModels')}: ${names} (${rows.length}) · ${source}` +
+          (snapshot.refreshError ? `\n${t('settingsModelsRefreshFailed')}: ${snapshot.refreshError}` : '') +
           (rows.length <= 1 ? `\n${t('modelSubOnlyOneHint')}` : ''),
       );
       onModelsRefreshed?.();
