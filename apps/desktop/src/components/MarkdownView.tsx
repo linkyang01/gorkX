@@ -163,11 +163,13 @@ function renderBlock(md: string): string {
   let i = 0;
   let inList = false;
   let listTag = 'ul';
+  let listClass = 'md-list';
 
   const closeList = () => {
-    if (inList) {
-      out.push(`</${listTag}>`);
-      inList = false;
+      if (inList) {
+        out.push(`</${listTag}>`);
+        inList = false;
+        listClass = 'md-list';
     }
   };
 
@@ -254,13 +256,23 @@ function renderBlock(md: string): string {
     const ol = /^(\d+)\.\s+(.+)$/.exec(line);
     if (ul || ol) {
       const tag = ul ? 'ul' : 'ol';
+      const itemText = (ul ? ul[1] : ol![2]) ?? '';
+      const checklist = /^\[[ xX]\]\s+/.test(itemText);
       if (!inList || listTag !== tag) {
         closeList();
         listTag = tag;
-        out.push(`<${tag} class="md-list">`);
+        listClass = checklist ? 'md-list md-checklist' : tag === 'ol' ? 'md-list md-steps' : 'md-list';
+        out.push(`<${tag} class="${listClass}">`);
         inList = true;
       }
-      out.push(`<li>${inlineFormat((ul ? ul[1] : ol![2]) ?? '')}</li>`);
+      const done = /^\[[xX]\]\s+/.exec(itemText);
+      const open = /^\[ \]\s+/.exec(itemText);
+      if (done || open) {
+        const content = itemText.slice((done ?? open)![0].length);
+        out.push(`<li class="md-check-item${done ? ' done' : ''}"><span class="md-check-mark" aria-hidden="true">${done ? '✓' : ''}</span><span>${inlineFormat(content)}</span></li>`);
+      } else {
+        out.push(`<li class="${listTag === 'ol' ? 'md-step-item' : ''}">${inlineFormat(itemText)}</li>`);
+      }
       i++;
       continue;
     }

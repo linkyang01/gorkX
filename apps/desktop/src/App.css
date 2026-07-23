@@ -2811,6 +2811,68 @@ button.pill:hover {
   margin: 0.28em 0;
 }
 
+/* Normal agent answers frequently contain a short execution sequence or a
+   checklist. Render those semantics as readable conversation cards; they stay
+   informational, never mutate the user's project when clicked. */
+.md-body ol.md-steps,
+.md-body ul.md-checklist {
+  display: grid;
+  gap: 7px;
+  margin: 0.65em 0 1em;
+  padding: 0;
+  list-style: none;
+}
+
+.md-body .md-step-item,
+.md-body .md-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+
+.md-body .md-step-item::before {
+  content: counter(list-item);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.md-body .md-check-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 5px;
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.md-body .md-check-item.done .md-check-mark {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.md-body .md-check-item.done > span:last-child {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .md-body code {
   font-family: var(--mono);
   font-size: 0.86em;
