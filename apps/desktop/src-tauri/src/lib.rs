@@ -115,6 +115,8 @@ pub fn run() {
             github::github_create_pr_comment,
             grok_admin::grok_admin_exec,
             workspace::workspace_list_files,
+            workspace::workspace_read_agents_md,
+            workspace::workspace_write_agents_md,
             workspace::read_workspace_file_preview,
             extensions::extensions_snapshot,
             extensions::extensions_open_skills_dir,

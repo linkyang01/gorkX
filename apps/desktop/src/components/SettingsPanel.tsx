@@ -26,6 +26,11 @@ import {
 } from '../lib/updates';
 import { fetchMemoryStatus, setMemoryEnabled, type MemoryStatus } from '../lib/memory';
 import {
+  readProjectInstructions,
+  writeProjectInstructions,
+  type ProjectInstructionsSnapshot,
+} from '../lib/projectInstructions';
+import {
   listCustomModels,
   listAvailableModels,
   migratePlaintextModelKeys,
@@ -269,6 +274,9 @@ export function SettingsPanel({
   const [githubChecks, setGithubChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [githubComments, setGithubComments] = useState<Record<number, GithubComment[]>>({});
   const [githubBusy, setGithubBusy] = useState(false);
+  const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
+  const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
+  const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -285,6 +293,28 @@ export function SettingsPanel({
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
   }, [isOpen, initialSection]);
+
+  const loadProjectInstructions = () => {
+    if (!project) {
+      setProjectInstructions(null);
+      setProjectInstructionsDraft('');
+      return;
+    }
+    setProjectInstructionsBusy(true);
+    void readProjectInstructions(project)
+      .then((snapshot) => {
+        setProjectInstructions(snapshot);
+        setProjectInstructionsDraft(snapshot.content);
+      })
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setProjectInstructionsBusy(false));
+  };
+
+  useEffect(() => {
+    if (isOpen && section === 'hooks') loadProjectInstructions();
+    // Reload only when this project-instructions surface becomes relevant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, section, project]);
 
   const refreshBrowser = async () => {
     const snap = await fetchExtensionsSnapshot(project, grokCmd);
@@ -1594,6 +1624,55 @@ export function SettingsPanel({
           {section === 'hooks' ? (
             <>
               <h2>{t('settingsHooks')}</h2>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('settingsInstructionsTitle')}</div>
+                <p className="settings-row-hint">{t('settingsInstructionsHint')}</p>
+                {!project ? (
+                  <p className="hint">{t('settingsInstructionsNeedProject')}</p>
+                ) : (
+                  <>
+                    <label className="field">
+                      <span>{projectInstructions?.path || 'AGENTS.md'}</span>
+                      <textarea
+                        value={projectInstructionsDraft}
+                        disabled={projectInstructionsBusy}
+                        onChange={(event) => setProjectInstructionsDraft(event.target.value)}
+                        placeholder={t('settingsInstructionsPlaceholder')}
+                        maxLength={200000}
+                        spellCheck={false}
+                        rows={12}
+                      />
+                    </label>
+                    <div className="field-row" style={{ marginTop: 10 }}>
+                      <button type="button" className="btn" disabled={projectInstructionsBusy} onClick={loadProjectInstructions}>
+                        {t('refresh')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={projectInstructionsBusy}
+                        onClick={() => {
+                          if (!project) return;
+                          setProjectInstructionsBusy(true);
+                          void writeProjectInstructions(project, projectInstructionsDraft)
+                            .then((snapshot) => {
+                              setProjectInstructions(snapshot);
+                              setProjectInstructionsDraft(snapshot.content);
+                              setMsg(t('settingsInstructionsSaved'));
+                            })
+                            .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+                            .finally(() => setProjectInstructionsBusy(false));
+                        }}
+                      >
+                        {t('settingsInstructionsSave')}
+                      </button>
+                    </div>
+                    <p className="settings-row-hint" style={{ marginTop: 10 }}>
+                      {projectInstructions?.exists ? t('settingsInstructionsExists') : t('settingsInstructionsNew')}
+                    </p>
+                  </>
+                )}
+              </div>
               <Soon text={t('settingsHooksUnavailable')} />
             </>
           ) : null}

@@ -41,7 +41,8 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Settings · Browser | Connect / diagnose a version-pinned, isolated Playwright MCP for Chrome; optional origin allowlist | **Real** — new connections use `@playwright/mcp@0.0.78`, an in-memory profile and blocked service workers; browser tools depend on Chrome and the kernel MCP runtime |
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
 | Settings · Computer | Explicit macOS screen-region picker → local PNG attached to the composer | **Half** — capture is real; computer-use automation is not shipped |
-| Settings · Hooks | Project instructions via `AGENTS.md` | **Soon** — locked Grok Build currently returns `Method not found` for the ACP Hooks API, so gorkX does not present inactive controls as usable |
+| Settings · Project instructions | Read / create / edit the project-root `AGENTS.md` | **Real** — gorkX edits only the selected project's regular local file with bounded, atomic writes and refuses symlinks. It does not claim that this file enables ACP Hooks. |
+| Settings · Hooks | Native Hook lifecycle and controls | **Soon** — locked Grok Build currently returns `Method not found` for the ACP Hooks API, so gorkX does not present inactive controls as usable |
 | Project trust | Native `x.ai/folder_trust/request` prompt before project-local MCP, Hooks or LSP configuration is activated | **Kernel-wired** — gorkX advertises the interactive safety capability and returns only explicit `trust` or fail-closed `reject`; it appears only when the engine enables and requests the folder-trust gate |
 
 ## Deliberate limits still not shipped
