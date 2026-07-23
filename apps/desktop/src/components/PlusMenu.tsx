@@ -19,6 +19,8 @@ export type PlusAction =
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'ask-btw' }
+  | { type: 'set-goal' }
+  | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'stage'; cmd: string; label: string }
   | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -122,7 +124,7 @@ export function PlusMenu({
       id: 'goal',
       title: t('plusGoal'),
       desc: t('plusGoalHint'),
-      action: { type: 'stage', cmd: '/goal', label: t('plusGoal') },
+      action: { type: 'set-goal' },
     },
     {
       kind: 'action',
@@ -163,14 +165,14 @@ export function PlusMenu({
       id: 'imagine',
       title: t('plusImagine'),
       desc: t('plusImagineHint'),
-      action: { type: 'stage', cmd: '/imagine', label: t('plusImagine') },
+      action: { type: 'generate-media', media: 'image' },
     },
     {
       kind: 'action',
       id: 'imagine-video',
       title: t('plusImagineVideo'),
       desc: t('plusImagineVideoHint'),
-      action: { type: 'stage', cmd: '/imagine-video', label: t('plusImagineVideo') },
+      action: { type: 'generate-media', media: 'video' },
     },
 
     { kind: 'label', id: 'l-mem', title: t('plusCatMemory') },
@@ -284,6 +286,7 @@ export function PlusMenu({
       return slashAllowed(a.cmd, availableCommandNames);
     }
     if (a.type === 'ask-btw') return slashAllowed('/btw', availableCommandNames);
+    if (a.type === 'generate-media') return slashAllowed(a.media === 'image' ? '/imagine' : '/imagine-video', availableCommandNames);
     return true;
   });
 

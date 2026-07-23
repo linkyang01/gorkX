@@ -5425,6 +5425,30 @@ button.pill:hover {
   line-height: 1.5;
 }
 
+.action-prompt-modal {
+  width: min(620px, 100%);
+}
+
+.action-prompt-modal textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border-dim);
+  border-radius: var(--radius-sm);
+  background: var(--glass-soft);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.action-prompt-help {
+  margin-top: 6px;
+  font-size: var(--type-xs);
+  color: var(--muted);
+}
+
 .btw-card {
   width: min(var(--chat-max), calc(100% - 32px));
   margin: 0 auto 10px;

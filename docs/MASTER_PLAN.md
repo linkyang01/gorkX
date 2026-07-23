@@ -122,10 +122,10 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
 | Rewind `/rewind` | Rewind UI | 🟡 路由与安全范围已接线；真实两轮会话执行待余额恢复后验收 | C |
 | Context `/context` | Breakdown popover | 🟡 | B |
-| Goal `/goal` | Persisted goal banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
+| Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | 🟡 本地计划任务真实可用；不是内核原生 `/loop` 控制面 | C |
 | `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；真实模型回答待余额恢复后验收 | C |
-| `/imagine*` | Optional entry | ❌ | later |
+| `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
 ### 5.2 Worktree & git review
 
@@ -141,7 +141,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
 | `grok mcp` / `/mcps` | Full list/add/remove/doctor | 🟡 | B |
-| Skills `/skills` | List + run | 🟡 | B |
+| Skills `/skills` | List + “运行技能”自然语言表单 | 🟡 | B |
 | Plugins + marketplace | Install/enable/update/uninstall | 🟡 | B |
 | Hooks `/hooks` | View/toggle | ✅ 活动会话 `_x.ai/hooks/list/action` 已接线 | C |
 

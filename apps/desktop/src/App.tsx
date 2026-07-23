@@ -52,6 +52,10 @@ import {
   type TextPromptRequest,
 } from './components/TextPromptModal';
 import {
+  ActionPromptModal,
+  type ActionPromptRequest,
+} from './components/ActionPromptModal';
+import {
   OnboardingModal,
   dismissOnboarding,
   isOnboardingDismissed,
@@ -493,6 +497,9 @@ function App() {
   const [textPrompt, setTextPrompt] = useState<
     (TextPromptRequest & { resolve: (v: string | null) => void }) | null
   >(null);
+  const [actionPrompt, setActionPrompt] = useState<
+    (ActionPromptRequest & { resolve: (v: string | null) => void }) | null
+  >(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const permModeRef = useRef(perm);
   permModeRef.current = perm;
@@ -574,6 +581,7 @@ function App() {
     | ((opts?: {
         worktree?: boolean;
         initialPrompt?: string;
+        initialDisplay?: string;
         initialAttachments?: ComposerAttachment[];
       }) => Promise<{ ok: boolean; error?: string }>)
     | null
@@ -972,6 +980,13 @@ function App() {
     });
   }, []);
 
+  /** Multiline, button-launched desktop form. Never exposes slash syntax. */
+  const askAction = useCallback((req: ActionPromptRequest): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setActionPrompt({ ...req, resolve });
+    });
+  }, []);
+
   /** Merge custom [model.*] rows into the composer picker. */
   const loadCustomModels = useCallback(async () => {
     const snap = await listCustomModels();
@@ -1063,27 +1078,10 @@ function App() {
     refreshExtensions();
   }, [refreshExtensions]);
 
-  /** Insert skill into composer; user completes the request in chat. */
-  const runSkill = useCallback(
-    (skill: SkillInfo) => {
-      const cmd = `/${skill.name} `;
-      setDraft(cmd);
-      setSlashOpen(false);
-      setPlusMenuOpen(false);
-      setCapabilityArm({ prefix: `/${skill.name}`, label: skill.name });
-      window.setTimeout(() => {
-        const el = document.querySelector(
-          '.composer textarea',
-        ) as HTMLTextAreaElement | null;
-        el?.focus();
-        el?.setSelectionRange(cmd.length, cmd.length);
-      }, 30);
-      if (!active && project) {
-        void createThreadRef.current?.();
-      }
-    },
-    [active, project],
-  );
+  /** Desktop launcher; the slash form remains only a keyboard compatibility path. */
+  const runSkill = (skill: SkillInfo) => {
+    void openSkillAction(skill);
+  };
 
   /**
    * Arm a Grok capability in the composer: user finishes the request in chat
@@ -2081,6 +2079,71 @@ function App() {
     );
   };
 
+  /**
+   * Sends a real engine capability while keeping its implementation command
+   * out of the user's desktop workflow and visible conversation wording.
+   */
+  const runDesktopAction = async (
+    command: string,
+    visibleText: string,
+    onReady?: (agent: Thread) => void,
+  ) => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!agent?.client || !agent.sessionId) {
+      await createThreadRef.current?.({ initialPrompt: command, initialDisplay: visibleText });
+      return;
+    }
+    if (agent.busy) return;
+    onReady?.(agent);
+    appendLine(agent.id, { id: nid(), role: 'user', text: visibleText });
+    patchThread(agent.id, { busy: true, error: null });
+    try {
+      await agent.client.prompt(agent.sessionId, command);
+    } catch (error) {
+      patchThread(agent.id, { error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      patchThread(agent.id, { busy: false });
+    }
+  };
+
+  const openGoalAction = async () => {
+    const objective = await askAction({
+      title: t('goalDialogTitle'),
+      message: t('goalDialogHint'),
+      placeholder: t('goalDialogPlaceholder'),
+      submitLabel: t('goalDialogSubmit'),
+    });
+    if (!objective) return;
+    await runDesktopAction(`/goal ${objective}`, `${t('goalDialogVisible')}: ${objective}`, (agent) => {
+      patchThread(agent.id, { sessionGoal: makeGoal(objective) });
+    });
+  };
+
+  const openMediaAction = async (media: 'image' | 'video') => {
+    const image = media === 'image';
+    const prompt = await askAction({
+      title: image ? t('imageDialogTitle') : t('videoDialogTitle'),
+      message: image ? t('imageDialogHint') : t('videoDialogHint'),
+      placeholder: image ? t('imageDialogPlaceholder') : t('videoDialogPlaceholder'),
+      submitLabel: image ? t('imageDialogSubmit') : t('videoDialogSubmit'),
+    });
+    if (!prompt) return;
+    const command = image ? `/imagine ${prompt}` : `/imagine-video ${prompt}`;
+    const visible = `${image ? t('imageDialogVisible') : t('videoDialogVisible')}: ${prompt}`;
+    await runDesktopAction(command, visible);
+  };
+
+  const openSkillAction = async (skill: SkillInfo) => {
+    const request = await askAction({
+      title: t('skillDialogTitle').replace('{name}', skill.name),
+      message: skill.description || skill.whenToUse || t('skillDialogHint'),
+      placeholder: t('skillDialogPlaceholder'),
+      submitLabel: t('skillDialogSubmit'),
+    });
+    if (!request) return;
+    await runDesktopAction(`/${skill.name} ${request}`, `${t('skillDialogVisible').replace('{name}', skill.name)}: ${request}`);
+  };
+
   const openBtwQuestion = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
     if (!agent?.client || !agent.sessionId) return;
@@ -2140,6 +2203,14 @@ function App() {
       case 'ask-btw':
         setPlusMenuOpen(false);
         await openBtwQuestion();
+        return;
+      case 'set-goal':
+        setPlusMenuOpen(false);
+        await openGoalAction();
+        return;
+      case 'generate-media':
+        setPlusMenuOpen(false);
+        await openMediaAction(action.media);
         return;
       case 'stage':
         stageCapability(action.cmd, action.label);
@@ -2461,10 +2532,13 @@ function App() {
     /** Explicit cwd (e.g. open existing worktree path as a new task) */
     cwdOverride?: string;
     initialPrompt?: string;
+    /** Friendly wording shown in chat when the engine command is internal. */
+    initialDisplay?: string;
     initialAttachments?: ComposerAttachment[];
   }) => {
     const useWorktree = Boolean(opts?.worktree);
     const initialPrompt = (opts?.initialPrompt || '').trim();
+    const initialDisplay = (opts?.initialDisplay || '').trim();
     const initialAttachments = opts?.initialAttachments || [];
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
@@ -2475,7 +2549,7 @@ function App() {
     const cwdBase = cwdOverride || project || (await homeDir());
     const id = tid();
     const rawSeed = initialPrompt
-      ? titleFromUserText(initialPrompt) || (project ? t('newThread') : t('inboxChat'))
+      ? titleFromUserText(initialDisplay || initialPrompt) || (project ? t('newThread') : t('inboxChat'))
       : useWorktree
         ? t('worktree')
         : project
@@ -2597,9 +2671,9 @@ function App() {
 
       // Home-style: first message creates the session
       if (initialPrompt) {
-        const userVisible =
+        const userVisible = initialDisplay ||
           initialPrompt.replace(/\n\n\[Attached files[\s\S]*$/i, '').trim() || initialPrompt;
-        const goalParsed = parseGoalCommand(userVisible);
+        const goalParsed = parseGoalCommand(initialPrompt);
         if (goalParsed?.text && !goalParsed.sub) {
           patchThread(id, { sessionGoal: makeGoal(goalParsed.text) });
         }
@@ -5666,6 +5740,18 @@ function App() {
         onSubmit={(v) => {
           textPrompt?.resolve(v);
           setTextPrompt(null);
+        }}
+      />
+
+      <ActionPromptModal
+        request={actionPrompt}
+        onCancel={() => {
+          actionPrompt?.resolve(null);
+          setActionPrompt(null);
+        }}
+        onSubmit={(value) => {
+          actionPrompt?.resolve(value);
+          setActionPrompt(null);
         }}
       />
 
