@@ -1182,6 +1182,44 @@ export function extractUpdateText(
   return { kind: null, text: '' };
 }
 
+export type AcpImageBlock = {
+  data: string;
+  mimeType: string;
+};
+
+/**
+ * ACP image blocks can arrive as a streamed message or as tool-call content.
+ * Keep the parser data-only: only a bounded base64 raster payload may reach
+ * the local persistence command.
+ */
+export function extractUpdateImages(update: SessionUpdate): AcpImageBlock[] {
+  const images: AcpImageBlock[] = [];
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 3 || images.length >= 8 || !value) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const row = value as Record<string, unknown>;
+    if (
+      row.type === 'image' &&
+      typeof row.data === 'string' &&
+      typeof row.mimeType === 'string' &&
+      row.data.length > 0 &&
+      row.data.length <= 17 * 1024 * 1024 &&
+      /^(image\/png|image\/jpeg|image\/gif|image\/webp)$/.test(row.mimeType)
+    ) {
+      images.push({ data: row.data, mimeType: row.mimeType });
+      return;
+    }
+    if ('content' in row) visit(row.content, depth + 1);
+  };
+  const raw = update as Record<string, unknown>;
+  visit(raw.content);
+  return images;
+}
+
 /** True if string is a protocol call id (not for humans). */
 export function isToolCallIdLike(s: string | undefined | null): boolean {
   if (!s) return true;

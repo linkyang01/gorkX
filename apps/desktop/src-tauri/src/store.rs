@@ -45,6 +45,8 @@ pub struct ChatLineRow {
     pub parent_subagent_id: Option<String>,
     pub tool_status: Option<String>,
     pub tool_kind: Option<String>,
+    #[serde(default)]
+    pub attachments_json: Option<String>,
 }
 
 pub fn db_path() -> Result<PathBuf, String> {
@@ -91,6 +93,7 @@ impl AppStore {
               parent_subagent_id TEXT,
               tool_status TEXT,
               tool_kind TEXT,
+              attachments_json TEXT,
               PRIMARY KEY (project, thread_id, seq)
             );
             CREATE INDEX IF NOT EXISTS idx_chat_thread
@@ -124,6 +127,7 @@ impl AppStore {
             "ALTER TABLE chat_lines ADD COLUMN parent_subagent_id TEXT",
             [],
         );
+        let _ = conn.execute("ALTER TABLE chat_lines ADD COLUMN attachments_json TEXT", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -1057,6 +1061,7 @@ pub fn store_remove_thread(
         params![project, id],
     )
     .map_err(|e| e.to_string())?;
+    crate::media::remove_thread_media(&id);
     conn.execute(
         "DELETE FROM chat_lines WHERE project = ?1 AND thread_id = ?2",
         params![project, id],
@@ -1087,8 +1092,8 @@ pub fn store_save_chat(
             .prepare(
                 r#"
                 INSERT INTO chat_lines (
-                  thread_id, project, seq, id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind
-                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+                  thread_id, project, seq, id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json
+                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
                 "#,
             )
             .map_err(|e| e.to_string())?;
@@ -1104,6 +1109,7 @@ pub fn store_save_chat(
                 line.parent_subagent_id,
                 line.tool_status,
                 line.tool_kind,
+                line.attachments_json,
             ])
             .map_err(|e| e.to_string())?;
         }
@@ -1122,7 +1128,7 @@ pub fn store_load_chat(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind
+            SELECT id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json
             FROM chat_lines
             WHERE project = ?1 AND thread_id = ?2
             ORDER BY seq ASC
@@ -1139,6 +1145,7 @@ pub fn store_load_chat(
                 parent_subagent_id: r.get(4)?,
                 tool_status: r.get(5)?,
                 tool_kind: r.get(6)?,
+                attachments_json: r.get(7)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1187,19 +1194,39 @@ pub fn store_data_dir() -> Result<String, String> {
 }
 
 /// Drop chat snapshots for a project (keeps thread_meta).
+fn chat_thread_ids(conn: &Connection, project: Option<&str>) -> Result<Vec<String>, String> {
+    let (sql, params): (&str, Vec<&str>) = match project.filter(|value| !value.is_empty()) {
+        Some(value) => (
+            "SELECT DISTINCT thread_id FROM chat_lines WHERE project = ?1",
+            vec![value],
+        ),
+        None => ("SELECT DISTINCT thread_id FROM chat_lines", Vec::new()),
+    };
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(params), |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn store_clear_chat(
     store: State<'_, AppStore>,
     project: Option<String>,
 ) -> Result<u64, String> {
     let conn = store.conn.lock().map_err(|e| e.to_string())?;
-    let n = if let Some(p) = project.filter(|s| !s.is_empty()) {
+    let project_ref = project.as_deref().filter(|value| !value.is_empty());
+    let targets = chat_thread_ids(&conn, project_ref)?;
+    let n = if let Some(p) = project_ref {
         conn.execute("DELETE FROM chat_lines WHERE project = ?1", params![p])
             .map_err(|e| e.to_string())?
     } else {
         conn.execute("DELETE FROM chat_lines", [])
             .map_err(|e| e.to_string())?
     };
+    for id in targets {
+        crate::media::remove_thread_media(&id);
+    }
     Ok(n as u64)
 }
 
@@ -1207,6 +1234,7 @@ pub fn store_clear_chat(
 #[tauri::command]
 pub fn store_clear_project(store: State<'_, AppStore>, project: String) -> Result<(), String> {
     let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    let targets = chat_thread_ids(&conn, Some(&project))?;
     conn.execute(
         "DELETE FROM chat_lines WHERE project = ?1",
         params![project],
@@ -1217,5 +1245,8 @@ pub fn store_clear_project(store: State<'_, AppStore>, project: String) -> Resul
         params![project],
     )
     .map_err(|e| e.to_string())?;
+    for id in targets {
+        crate::media::remove_thread_media(&id);
+    }
     Ok(())
 }

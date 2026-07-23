@@ -7,6 +7,7 @@ mod git_panel;
 mod github;
 mod grok_admin;
 mod memory;
+mod media;
 mod models_config;
 mod paths;
 mod pty;
@@ -151,6 +152,7 @@ pub fn run() {
             scheduler::scheduler_list_runs,
             store::store_clear_chat,
             store::store_clear_project,
+            media::media_save_agent_image,
             store::home_dir,
             store::projects_root,
             store::create_named_project,

@@ -7,12 +7,14 @@ interface Props {
   onOpen: (a: ComposerAttachment) => void;
   /** compact chips in message bubble */
   compact?: boolean;
+  /** Larger media-first presentation for an agent's returned content. */
+  variant?: 'chips' | 'gallery';
 }
 
-export function AttachmentStrip({ items, onRemove, onOpen, compact }: Props) {
+export function AttachmentStrip({ items, onRemove, onOpen, compact, variant = 'chips' }: Props) {
   if (!items.length) return null;
   return (
-    <div className={compact ? 'att-strip compact' : 'att-strip'}>
+    <div className={`${compact ? 'att-strip compact' : 'att-strip'}${variant === 'gallery' ? ' att-gallery' : ''}`}>
       {items.map((a) => (
         <button
           key={a.id}

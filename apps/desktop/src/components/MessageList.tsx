@@ -150,11 +150,15 @@ function LineView({
   }
   if (line.role === 'system') return <SystemRow text={line.text} />;
   const body = sanitizeText(line.text);
-  if (!body) return null;
+  const attachments = line.attachments || [];
+  if (!body && !attachments.length) return null;
   const response = extractResponseChoices(body);
   return (
     <div className="tl-row tl-assistant">
       <div className="tl-assistant-body">
+        {attachments.length && onOpenAttachment ? (
+          <AttachmentStrip items={attachments} onOpen={onOpenAttachment} variant="gallery" />
+        ) : null}
         {response.text ? <MarkdownView text={response.text} /> : null}
         <ResponseChoices choices={response.choices} onSelect={onSelectChoice} disabled={choiceDisabled} />
       </div>

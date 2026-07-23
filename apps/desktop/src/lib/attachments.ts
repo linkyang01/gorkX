@@ -132,6 +132,34 @@ export async function buildAttachment(path: string): Promise<ComposerAttachment>
   return { id, path, name, kind, previewUrl };
 }
 
+/** Persisted media uses app-local paths; never restore an expired blob URL. */
+export function attachmentFromStored(item: Pick<ComposerAttachment, 'id' | 'path' | 'name' | 'kind' | 'size'>): ComposerAttachment {
+  let previewUrl: string | undefined;
+  if (item.kind === 'image' || item.kind === 'video' || item.kind === 'audio') {
+    try { previewUrl = convertFileSrc(item.path); } catch { /* */ }
+  }
+  return { ...item, previewUrl };
+}
+
+export async function saveAgentImage(
+  threadId: string,
+  data: string,
+  mimeType: string,
+): Promise<ComposerAttachment> {
+  const saved = await invoke<{ path: string; name: string; size: number }>('media_save_agent_image', {
+    threadId,
+    data,
+    mimeType,
+  });
+  return attachmentFromStored({
+    id: newAttachId(),
+    path: saved.path,
+    name: saved.name,
+    kind: 'image',
+    size: saved.size,
+  });
+}
+
 export function revokeAttachment(a: ComposerAttachment) {
   if (a.previewUrl?.startsWith('blob:')) {
     try {

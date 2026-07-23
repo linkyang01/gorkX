@@ -41,6 +41,7 @@ export interface ChatLineSnap {
   parentSubagentId?: string | null;
   toolStatus?: string | null;
   toolKind?: string | null;
+  attachmentsJson?: string | null;
 }
 
 type LsStore = Record<string, ThreadMeta[]>;
@@ -264,6 +265,7 @@ export async function saveChatSnapshot(
         parentSubagentId: l.parentSubagentId ?? null,
         toolStatus: l.toolStatus ?? null,
         toolKind: l.toolKind ?? null,
+        attachmentsJson: l.attachmentsJson ?? null,
       })),
     });
   } catch {

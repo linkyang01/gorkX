@@ -13,6 +13,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   AcpClient,
   extractUpdateText,
+  extractUpdateImages,
   fetchGrokStatus,
   stopAllAgents,
   parsePlanUpdate,
@@ -113,6 +114,7 @@ import {
   attachmentsPromptBlock,
   attachmentResourceLinks,
   buildAttachment,
+  saveAgentImage,
   createNamedProject,
   projectsRoot,
   revokeAttachment,
@@ -753,6 +755,9 @@ function App() {
           parentSubagentId: l.parentSubagentId,
           toolStatus: l.toolStatus,
           toolKind: l.toolKind,
+          attachmentsJson: l.attachments?.length
+            ? JSON.stringify(l.attachments.map(({ id, path, name, kind, size }) => ({ id, path, name, kind, size })))
+            : null,
         })),
       );
     }, 900);
@@ -1395,6 +1400,27 @@ function App() {
   const wireClient = useCallback(
     (threadId: string, client: AcpClient) => {
       client.onSessionUpdate = (update: SessionUpdate) => {
+        const imageBlocks = extractUpdateImages(update);
+        const persistImages = () => {
+          if (
+            update.sessionUpdate !== 'agent_message_chunk' &&
+            update.sessionUpdate !== 'tool_call' &&
+            update.sessionUpdate !== 'tool_call_update'
+          ) return;
+          for (const image of imageBlocks) {
+            void saveAgentImage(threadId, image.data, image.mimeType)
+              .then((attachment) => appendLine(threadId, {
+                id: nid(),
+                role: 'assistant',
+                text: '',
+                attachments: [attachment],
+              }))
+              .catch(() => {
+                // The media command deliberately rejects malformed, oversized,
+                // or unsupported content without leaking bytes into the chat.
+              });
+          }
+        };
         const subagent = parseSubagentUpdate(update);
         if (subagent) {
           appendOrMerge(threadId, 'tool', subagent.label, `subagent:${subagent.subagentId}`, {
@@ -1402,6 +1428,7 @@ function App() {
             toolKind: subagent.kind,
             parentSubagentId: subagent.parentSubagentId,
           });
+          persistImages();
           return;
         }
 
@@ -1494,6 +1521,7 @@ function App() {
             }
           }
         }
+        persistImages();
       };
 
       client.onWorktreeStatus = (st) => {
