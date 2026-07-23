@@ -1459,10 +1459,24 @@ export function SettingsPanel({
                   </div>
                 </div>
                 {!github?.configured ? (
-                  <div className="field-row" style={{ marginTop: 10 }}>
-                    <input type="password" value={githubToken} onChange={(e) => setGithubToken(e.target.value)} placeholder={t('githubTokenPlaceholder')} aria-label={t('githubTokenPlaceholder')} />
-                    <button type="button" className="btn primary" disabled={githubBusy || !githubToken.trim()} onClick={() => void connectGithub()}>{t('githubConnect')}</button>
-                  </div>
+                  <>
+                    <div className="settings-card muted-block" style={{ marginTop: 10 }}>
+                      <div className="settings-row-title">{t('githubTokenGuideTitle')}</div>
+                      <ol className="settings-list" style={{ marginTop: 7 }}>
+                        <li>{t('githubTokenGuide1')}</li>
+                        <li>{t('githubTokenGuide2')}</li>
+                        <li>{t('githubTokenGuide3')}</li>
+                      </ol>
+                      <div className="field-row" style={{ marginTop: 9 }}>
+                        <button type="button" className="btn" onClick={() => void openUrlSafe('https://github.com/settings/personal-access-tokens/new')}>{t('githubCreateToken')}</button>
+                        <button type="button" className="btn" onClick={() => void openUrlSafe('https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens')}>{t('githubTokenDocs')}</button>
+                      </div>
+                    </div>
+                    <div className="field-row" style={{ marginTop: 10 }}>
+                      <input type="password" value={githubToken} onChange={(e) => setGithubToken(e.target.value)} placeholder={t('githubTokenPlaceholder')} aria-label={t('githubTokenPlaceholder')} />
+                      <button type="button" className="btn primary" disabled={githubBusy || !githubToken.trim()} onClick={() => void connectGithub()}>{t('githubConnect')}</button>
+                    </div>
+                  </>
                 ) : (
                   <div className="field-row" style={{ marginTop: 10 }}>
                     <button type="button" className="btn" disabled={githubBusy} onClick={() => void withGithub(githubTestConnection)}>{t('githubTest')}</button>
