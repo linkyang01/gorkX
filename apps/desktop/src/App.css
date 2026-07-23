@@ -3026,6 +3026,23 @@ button.pill:hover {
 .response-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .user-question-backdrop { z-index: 80; padding: 24px; }
+.user-question-inline {
+  margin: 16px 0 10px;
+}
+.user-question-inline .user-question-modal {
+  width: 100%;
+  max-height: none;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--panel) 88%, var(--glass));
+}
+.user-question-inline .user-question-list {
+  overflow: visible;
+  max-height: none;
+}
+.user-question-inline .user-question-actions {
+  position: sticky;
+  bottom: 0;
+}
 .user-question-modal {
   width: min(780px, calc(100vw - 32px));
   max-height: min(820px, calc(100vh - 48px));
@@ -3670,8 +3687,6 @@ button.pill:hover {
   min-width: 0;
   max-width: min(168px, 36vw);
 }
-
-.response-presentation-ctl { flex-shrink: 1; min-width: 0; }
 
 .composer-toolbar-right .composer-ctl {
   max-width: 100%;

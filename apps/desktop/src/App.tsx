@@ -5157,6 +5157,21 @@ function App() {
               showProcessInChat={false}
               choiceDisabled={active.busy}
               onSelectChoice={(value) => void send(value)}
+              footer={
+                userQuestionReq && userQuestionAgentId === active.id ? (
+                  <UserQuestionPrompt
+                    presentation="inline"
+                    request={userQuestionReq}
+                    onAccept={(answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) =>
+                      void answerUserQuestion(userQuestionAcceptedResult(answers, annotations))
+                    }
+                    onPlanAction={(outcome, partialAnswers) =>
+                      void answerUserQuestion(userQuestionPlanResult(outcome, partialAnswers))
+                    }
+                    onCancel={() => void answerUserQuestion(userQuestionCancelledResult())}
+                  />
+                ) : null
+              }
             />
             <div className="composer-dock">
               <div
@@ -5751,7 +5766,7 @@ function App() {
       {permReq ? (
         <PermissionPrompt request={permReq} onAnswer={(optionId) => void answerPermission(optionId)} />
       ) : null}
-      {userQuestionReq ? (
+      {userQuestionReq && userQuestionAgentId !== active?.id ? (
         <UserQuestionPrompt
           request={userQuestionReq}
           onAccept={(answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) =>

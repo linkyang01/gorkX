@@ -8,6 +8,8 @@ import { t } from '../lib/i18n';
 
 interface Props {
   request: UserQuestionRequest;
+  /** Current-task interviews can live in the transcript; background ones stay modal. */
+  presentation?: 'modal' | 'inline';
   onAccept: (answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) => void;
   onPlanAction: (action: 'chat_about_this' | 'skip_interview', partialAnswers: Record<string, string>) => void;
   onCancel: () => void;
@@ -17,7 +19,7 @@ interface Props {
  * Native Grok Build interview UI. It intentionally stays outside Markdown:
  * every click produces the ACP tool response, never an ambiguous chat message.
  */
-export function UserQuestionPrompt({ request, onAccept, onPlanAction, onCancel }: Props) {
+export function UserQuestionPrompt({ request, presentation = 'modal', onAccept, onPlanAction, onCancel }: Props) {
   const [selected, setSelected] = useState<UserQuestionAnswers>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
 
@@ -66,9 +68,13 @@ export function UserQuestionPrompt({ request, onAccept, onPlanAction, onCancel }
     Object.entries(selected).flatMap(([question, labels]) => labels[0] ? [[question, labels[0]]] : []),
   );
 
-  return (
-    <div className="modal-backdrop user-question-backdrop" role="presentation">
-      <section className="modal user-question-modal" role="dialog" aria-modal="true" aria-labelledby="user-question-title">
+  const content = (
+    <section
+      className="modal user-question-modal"
+      role={presentation === 'modal' ? 'dialog' : 'region'}
+      aria-modal={presentation === 'modal' ? true : undefined}
+      aria-labelledby="user-question-title"
+    >
         <header className="user-question-head">
           <div>
             <p className="user-question-eyebrow">{request.mode === 'plan' ? t('userQuestionPlanEyebrow') : t('userQuestionEyebrow')}</p>
@@ -134,7 +140,11 @@ export function UserQuestionPrompt({ request, onAccept, onPlanAction, onCancel }
           ) : null}
           <button type="button" className="btn primary" onClick={accept}>{t('userQuestionSubmit')}</button>
         </footer>
-      </section>
-    </div>
+    </section>
   );
+
+  if (presentation === 'inline') {
+    return <div className="user-question-inline">{content}</div>;
+  }
+  return <div className="modal-backdrop user-question-backdrop" role="presentation">{content}</div>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { MarkdownView } from './MarkdownView';
 import { extractResponseChoices, ResponseChoices } from './ResponseChoices';
 import { PlanCard } from './PlanCard';
@@ -39,6 +39,8 @@ interface Props {
   /** Explicit user click on a model-provided quick-reply option. */
   onSelectChoice?: (value: string) => void;
   choiceDisabled?: boolean;
+  /** Native, current-session action requested by the kernel. */
+  footer?: ReactNode;
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -173,6 +175,7 @@ export function MessageList({
   showProcessInChat = false,
   onSelectChoice,
   choiceDisabled = false,
+  footer,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -237,6 +240,7 @@ export function MessageList({
             </div>
           );
         })}
+        {footer}
         <div ref={bottomRef} />
       </div>
     </div>
