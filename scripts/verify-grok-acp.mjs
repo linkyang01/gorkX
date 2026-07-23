@@ -12,6 +12,10 @@
 // routes used by the gorkX desktop client; it creates/removes only test sessions.
 // --rewind-execute requires --resource and performs one real, isolated
 // conversation-only rewind after the resource prompt creates a checkpoint.
+// --subagent-controls probes lifecycle routes with a guaranteed-missing ID;
+// it never starts or cancels a real subagent.
+// --hooks-controls reloads the current isolated project's discovered hooks;
+// it never creates, enables or executes a hook.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -20,7 +24,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -30,15 +34,17 @@ const customModelSmoke = options.includes('--custom-model');
 const sessionControlsSmoke = options.includes('--session-controls');
 const runtimeControlsSmoke = options.includes('--runtime-controls');
 const rewindExecuteSmoke = options.includes('--rewind-execute');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls and --rewind-execute require --authenticated with an explicit disposable CWD');
+const subagentControlsSmoke = options.includes('--subagent-controls');
+const hooksControlsSmoke = options.includes('--hooks-controls');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls and --hooks-controls require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -297,6 +303,48 @@ try {
       console.log('PASS: ACP _x.ai/session/delete (deleted session cannot load)');
     }
 
+    if (subagentControlsSmoke) {
+      const missingId = `gorkx-acp-missing-${Date.now().toString(36)}`;
+      const probe = async (method, params) => {
+        try {
+          return { method, value: unwrapResult(await request(method, params, 15_000)) };
+        } catch (error) {
+          if (/method not found/i.test(error instanceof Error ? error.message : String(error))) return null;
+          // A missing subagent is the expected business-level response. It is
+          // evidence that the route reached the control plane, not a failure.
+          return { method, value: null };
+        }
+      };
+      const preferRuntimeRoute = async (suffix, params) => {
+        const standard = await probe(`x.ai/${suffix}`, params);
+        return standard ?? probe(`_x.ai/${suffix}`, params);
+      };
+      const listed = await preferRuntimeRoute('subagent/list_running', { sessionId });
+      if (!listed || !Array.isArray(listed.value?.subagents ?? listed.value?.result?.subagents)) {
+        throw new Error('subagent/list_running is not exposed by either ACP route');
+      }
+      console.log(`PASS: ACP ${listed.method} (subagent list_running)`);
+
+      const snapshot = await preferRuntimeRoute('subagent/get', { subagentId: missingId, block: false });
+      if (!snapshot) throw new Error('subagent/get is not exposed by either ACP route');
+      console.log(`PASS: ACP ${snapshot.method} (subagent get route)`);
+
+      const cancelled = await preferRuntimeRoute('subagent/cancel', { subagentId: missingId });
+      if (!cancelled) throw new Error('subagent/cancel is not exposed by either ACP route');
+      console.log(`PASS: ACP ${cancelled.method} (subagent cancel route)`);
+    }
+
+    if (hooksControlsSmoke) {
+      const reloaded = unwrapResult(await request('_x.ai/hooks/action', {
+        sessionId,
+        action: { type: 'reload' },
+      }, 15_000));
+      if (!reloaded || (reloaded.status !== 'success' && !Array.isArray(reloaded.hooks))) {
+        throw new Error(`_x.ai/hooks/action(reload) returned invalid payload: ${JSON.stringify(reloaded)}`);
+      }
+      console.log('PASS: ACP _x.ai/hooks/action(reload)');
+    }
+
     if (resourceSmoke) {
       // Deliberately opt-in: this makes a real model request. The caller must
       // supply a disposable CWD, and the fixture is deleted in finally.
@@ -359,17 +407,26 @@ try {
     }
 
     try {
-      const hooks = await request('x.ai/hooks/list', { sessionId });
-      if (!hooks || !Array.isArray(hooks.hooks)) {
-        throw new Error(`x.ai/hooks/list returned invalid payload: ${JSON.stringify(hooks)}`);
+      let hooks;
+      let hooksMethod = 'x.ai/hooks/list';
+      try {
+        hooks = await request(hooksMethod, { sessionId });
+      } catch (error) {
+        if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+        hooksMethod = '_x.ai/hooks/list';
+        hooks = await request(hooksMethod, { sessionId });
       }
-      console.log('PASS: ACP x.ai/hooks/list');
+      const hooksSnapshot = hooks?.result ?? hooks;
+      if (!hooksSnapshot || !Array.isArray(hooksSnapshot.hooks)) {
+        throw new Error(`${hooksMethod} returned invalid payload: ${JSON.stringify(hooks)}`);
+      }
+      console.log(`PASS: ACP ${hooksMethod}`);
     } catch (error) {
       // Hooks are an optional Grok Build extension. A missing method is a
       // capability gap to report, not evidence that session/Plan regression
       // failed; other advertised ACP extensions still need their own gate.
       if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
-        console.log('SKIP: ACP x.ai/hooks/list (kernel does not expose Hooks API)');
+        console.log('SKIP: ACP hooks/list (kernel does not expose either ACP route)');
       } else {
         throw error;
       }
@@ -383,19 +440,27 @@ try {
     console.log('PASS: ACP _x.ai/git/worktree/list');
 
     try {
-      const raw = await request('x.ai/subagent/list_running', { sessionId });
+      let raw;
+      let subagentListMethod = 'x.ai/subagent/list_running';
+      try {
+        raw = await request(subagentListMethod, { sessionId });
+      } catch (error) {
+        if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+        subagentListMethod = '_x.ai/subagent/list_running';
+        raw = await request(subagentListMethod, { sessionId });
+      }
       const subagents = Array.isArray(raw?.result?.subagents)
         ? raw.result.subagents
         : Array.isArray(raw?.subagents)
           ? raw.subagents
           : null;
       if (!subagents) {
-        throw new Error(`x.ai/subagent/list_running returned invalid payload: ${JSON.stringify(raw)}`);
+        throw new Error(`${subagentListMethod} returned invalid payload: ${JSON.stringify(raw)}`);
       }
-      console.log('PASS: ACP x.ai/subagent/list_running');
+      console.log(`PASS: ACP ${subagentListMethod}`);
     } catch (error) {
       if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
-        console.log('SKIP: ACP x.ai/subagent/list_running (kernel does not expose subagent recovery API)');
+        console.log('SKIP: ACP subagent/list_running (kernel does not expose either ACP route)');
       } else {
         throw error;
       }

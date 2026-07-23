@@ -5565,6 +5565,8 @@ function App() {
         project={project}
         recentProjects={recentProjects}
         account={account}
+        hookClient={active?.client ?? null}
+        hookSessionId={active?.sessionId ?? null}
         onModelsRefreshed={() => {
           void loadSubscriptionModels(true);
           void reloadLiveModelCatalogs();

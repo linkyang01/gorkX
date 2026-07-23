@@ -1014,7 +1014,7 @@ export class AcpClient {
 
   /** Grok Build ACP extension. Hooks are discovered and executed by the engine. */
   async listHooks(sessionId: string): Promise<HooksSnapshot> {
-    const raw = (await this.request('x.ai/hooks/list', { sessionId }, 15_000)) as
+    const raw = (await this.request('_x.ai/hooks/list', { sessionId }, 15_000)) as
       | HooksSnapshot
       | { result?: HooksSnapshot };
     return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
@@ -1024,7 +1024,7 @@ export class AcpClient {
     sessionId: string,
     action: { type: 'reload' | 'trust' | 'untrust' } | { type: 'enable' | 'disable'; hookName: string },
   ): Promise<HooksSnapshot> {
-    const raw = (await this.request('x.ai/hooks/action', { sessionId, action }, 15_000)) as
+    const raw = (await this.request('_x.ai/hooks/action', { sessionId, action }, 15_000)) as
       | HooksSnapshot
       | { result?: HooksSnapshot };
     return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
@@ -1097,7 +1097,7 @@ export class AcpClient {
     cancelled: boolean;
     outcome?: { kind?: string; status?: string };
   }> {
-    const raw = (await this.request('x.ai/subagent/cancel', { subagentId }, 15_000)) as {
+    const raw = (await this.request('_x.ai/subagent/cancel', { subagentId }, 15_000)) as {
       result?: Record<string, unknown>;
     } & Record<string, unknown>;
     const result = (raw.result ?? raw) as Record<string, unknown>;
@@ -1121,7 +1121,7 @@ export class AcpClient {
 
   /** Read-only reconciliation after reconnect; returns only engine-owned state. */
   async listRunningSubagents(sessionId: string): Promise<unknown[]> {
-    const raw = (await this.request('x.ai/subagent/list_running', { sessionId }, 15_000)) as {
+    const raw = (await this.request('_x.ai/subagent/list_running', { sessionId }, 15_000)) as {
       result?: { subagents?: unknown[] };
       subagents?: unknown[];
     };
@@ -1130,7 +1130,7 @@ export class AcpClient {
 
   /** Fetch an engine-owned snapshot; completed output is returned only on demand. */
   async getSubagent(subagentId: string): Promise<Record<string, unknown> | null> {
-    const raw = (await this.request('x.ai/subagent/get', { subagentId, block: false }, 15_000)) as {
+    const raw = (await this.request('_x.ai/subagent/get', { subagentId, block: false }, 15_000)) as {
       result?: { snapshot?: Record<string, unknown> | null };
       snapshot?: Record<string, unknown> | null;
     };

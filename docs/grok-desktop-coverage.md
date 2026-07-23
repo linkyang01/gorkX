@@ -17,6 +17,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Model / effort | Subscription and custom-model picker; effort is applied at engine spawn | ✅ |
 | Permission modes | Default / Auto / Full chooser + permission cards | ✅ |
 | Plan mode | ACP mode, Review plan and execute/retry controls | 🟡 engine plan quality decides the result |
+| Native subagents | Persisted tree from lifecycle updates; `_x.ai/subagent/list_running` reconciliation after reconnect; get/cancel controls | 🟡 kernel decides delegation and isolation; isolated ACP gate confirms the three control routes, but a real delegated coding task remains a release acceptance scenario |
 | Compact | `/compact` pass-through and context status | 🟡 engine decides compaction availability |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar file save and `/export` clipboard route via restricted CLI bridge | ✅ |

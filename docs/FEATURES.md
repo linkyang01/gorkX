@@ -28,7 +28,7 @@ mock as the corresponding Grok Build capability.
 | Goal | Stage `/goal`, persist banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
 | Scheduled | SQLite jobs; foreground tasks plus opt-in macOS launchd worker | **Real with limits** — background runs every 5 minutes in Grok plan mode only (no silent repository writes), save output locally, require the installed macOS app; each worker claim/recovery/completion uses an SQLite immediate transaction, and an unreported claim is retried only after a 30-minute lease with recorded backoff |
-| Native subagents | Lifecycle events → persisted parent/child task tree; cancel and snapshots when advertised by the engine; Settings policy for enabling all, `explore`, and `plan` types | **Half** — settings write the documented Grok Build `[subagents]` policy for new dispatches, but the kernel—not gorkX—chooses delegation, capability mode and worktree isolation. Current locked kernel does not expose `x.ai/subagent/list_running`, so gorkX does not claim restart/reconnect recovery; persisted historical rows become **unverified after reconnect**, never falsely running |
+| Native subagents | Lifecycle events → persisted parent/child task tree; cancel and snapshots; reconnect reconciles engine-reported running children; Settings policy for enabling all, `explore`, and `plan` types | **Kernel-wired** — 0.2.110 stdio exposes its control plane under `_x.ai/subagent/*`; gorkX uses the runtime route for list/get/cancel. Settings write the documented Grok Build `[subagents]` policy for new dispatches, while the kernel—not gorkX—still chooses delegation, capability mode and worktree isolation. |
 | Terminal | PTY dock | **Real** |
 | Extensions | Skills / MCP / plugins via engine CLI and App `GROK_HOME` | **Real** (depends on engine; does not read `~/.grok` by default) |
 | Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember / Forget / keyword search / local compact | **Real (v0.4+)** — kernel `/flush`/`/dream` still optional extras |
@@ -49,7 +49,7 @@ mock as the corresponding Grok Build capability.
 | Settings · Git | Opens real project Review (status, diff, stage / unstage) | **Real** |
 | Settings · Computer | Explicit macOS screen-region picker → local PNG attached to the composer | **Half** — capture is real; computer-use automation is not shipped |
 | Settings · Project instructions | Read / create / edit the project-root `AGENTS.md` | **Real** — gorkX edits only the selected project's regular local file with bounded, atomic writes and refuses symlinks. It does not claim that this file enables ACP Hooks. |
-| Settings · Hooks | Native Hook lifecycle and controls | **Soon** — locked Grok Build currently returns `Method not found` for the ACP Hooks API, so gorkX does not present inactive controls as usable |
+| Settings · Hooks | Load engine-discovered hooks for the active task; explicit reload, project trust/untrust and enable/disable actions | **Kernel-wired** — 0.2.110 stdio exposes `_x.ai/hooks/list` and `_x.ai/hooks/action`; gorkX only acts after the user chooses a visible control. It does not fabricate Hook authoring or execute a Hook itself. |
 | Project trust | Native `x.ai/folder_trust/request` prompt before project-local MCP, Hooks or LSP configuration is activated | **Kernel-wired** — gorkX advertises the interactive safety capability and returns only explicit `trust` or fail-closed `reject`; it appears only when the engine enables and requests the folder-trust gate |
 
 ## Deliberate limits still not shipped
@@ -59,7 +59,7 @@ mock as the corresponding Grok Build capability.
 - **Hooks authoring:** gorkX manages hooks the engine discovers; it does not yet create or edit hook files/configuration.
 - **Provider subscriptions:** Grok login is real. OpenAI/Anthropic are API-key or compatible-gateway configurations; a ChatGPT/Claude web subscription is not treated as an API login.
 - **Background schedules:** available only through the user-enabled macOS launchd worker; it is deliberately plan-only and does not create an interactive task while the app is closed.
-- **Subagent recovery:** current Grok Build lacks the ACP recovery-list API; child work that was running while gorkX was closed cannot be reconstructed as active work.
+- **Subagent delegation policy:** gorkX can persist and reconcile engine-reported child work, but it does not invent assignments, worktree isolation or completion results; those remain kernel-owned decisions.
 
 ## Run
 

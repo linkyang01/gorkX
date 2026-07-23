@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { runKernelDoctor, type GrokStatus, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
+import {
+  runKernelDoctor,
+  type AcpClient,
+  type GrokStatus,
+  type HooksSnapshot,
+  type KernelDoctor,
+  type PermissionMode,
+} from '../lib/acpClient';
 import type { AccountSummary, SubscriptionModelsSnapshot } from '../lib/account';
 import { fetchAccountSummary, fetchSubscriptionModelsSnapshot, logoutAccount, startLoginFlow } from '../lib/account';
 import {
@@ -122,6 +129,8 @@ interface Props {
   project?: string;
   recentProjects?: string[];
   account?: AccountSummary | null;
+  hookClient?: AcpClient | null;
+  hookSessionId?: string | null;
   onModelsRefreshed?: () => void;
   perm: PermissionMode;
   onPerm: (p: PermissionMode) => void;
@@ -215,6 +224,8 @@ export function SettingsPanel({
   project,
   recentProjects = [],
   account: accountProp,
+  hookClient,
+  hookSessionId,
   onModelsRefreshed,
   perm,
   onPerm,
@@ -280,6 +291,8 @@ export function SettingsPanel({
   const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
   const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
+  const [hooksSnapshot, setHooksSnapshot] = useState<HooksSnapshot | null>(null);
+  const [hooksBusy, setHooksBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -312,6 +325,32 @@ export function SettingsPanel({
       })
       .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
       .finally(() => setProjectInstructionsBusy(false));
+  };
+
+  const loadHooks = async () => {
+    if (!hookClient || !hookSessionId) return;
+    setHooksBusy(true);
+    try {
+      setHooksSnapshot(await hookClient.listHooks(hookSessionId));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setHooksBusy(false);
+    }
+  };
+
+  const manageHooks = async (
+    action: { type: 'reload' | 'trust' | 'untrust' } | { type: 'enable' | 'disable'; hookName: string },
+  ) => {
+    if (!hookClient || !hookSessionId) return;
+    setHooksBusy(true);
+    try {
+      setHooksSnapshot(await hookClient.manageHooks(hookSessionId, action));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setHooksBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -774,12 +813,6 @@ export function SettingsPanel({
       setModelBusy(false);
     }
   };
-
-  const Soon = ({ text }: { text: string }) => (
-    <div className="settings-card muted-block">
-      <p className="hint">{text}</p>
-    </div>
-  );
 
   const updateAppearance = <K extends keyof AppearancePreferences>(
     key: K,
@@ -1685,7 +1718,60 @@ export function SettingsPanel({
                   </>
                 )}
               </div>
-              <Soon text={t('settingsHooksUnavailable')} />
+              <div className="settings-card">
+                <p className="hint">{t('settingsHooksRealHint')}</p>
+                {!hookClient || !hookSessionId ? (
+                  <p className="settings-row-hint">{t('settingsHooksNeedTask')}</p>
+                ) : (
+                  <>
+                    <div className="field-row">
+                      <button type="button" className="btn" disabled={hooksBusy} onClick={() => void loadHooks()}>
+                        {hooksBusy ? t('settingsHooksLoading') : t('settingsHooksLoad')}
+                      </button>
+                      {hooksSnapshot ? (
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={hooksBusy}
+                          onClick={() => void manageHooks({ type: hooksSnapshot.projectTrusted ? 'untrust' : 'trust' })}
+                        >
+                          {hooksSnapshot.projectTrusted ? t('settingsHooksUntrust') : t('settingsHooksTrust')}
+                        </button>
+                      ) : null}
+                    </div>
+                    {hooksSnapshot ? (
+                      <>
+                        <p className="settings-row-hint">
+                          {hooksSnapshot.projectTrusted ? t('settingsHooksTrusted') : t('settingsHooksUntrusted')}
+                        </p>
+                        {hooksSnapshot.hooks.length ? (
+                          <div className="settings-list" style={{ marginTop: 10 }}>
+                            {hooksSnapshot.hooks.map((hook) => (
+                              <div className="settings-row" key={`${hook.sourceDir}:${hook.name}`}>
+                                <div>
+                                  <strong>{hook.name}</strong>
+                                  <p className="settings-row-hint">{hook.event}{hook.matcher ? ` · ${hook.matcher}` : ''}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  disabled={hooksBusy}
+                                  onClick={() => void manageHooks({
+                                    type: hook.disabled ? 'enable' : 'disable',
+                                    hookName: hook.name,
+                                  })}
+                                >
+                                  {hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : <p className="settings-row-hint">{t('settingsHooksEmpty')}</p>}
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </div>
             </>
           ) : null}
 
