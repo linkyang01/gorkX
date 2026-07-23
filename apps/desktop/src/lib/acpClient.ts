@@ -97,6 +97,30 @@ export interface BtwResult {
   answer: string;
 }
 
+/** Read-only task snapshot returned by the Grok Build session-info extension. */
+export interface SessionInfo {
+  sessionId: string;
+  cwd: string;
+  agentName?: string | null;
+  model?: string | null;
+  modelDisplayName?: string | null;
+  resolvedModelId?: string | null;
+  turns?: number;
+  turnIndex?: number;
+  context?: {
+    used?: number;
+    total?: number;
+    freeTokens?: number;
+    usagePct?: number;
+    compactionCount?: number;
+    turnCount?: number;
+    toolCallCount?: number;
+    messageCount?: number;
+    autoCompactThresholdPercent?: number;
+    usageCategories?: Array<{ label?: string; tokens?: number; detail?: string | null }>;
+  };
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -892,6 +916,30 @@ export class AcpClient {
       : '';
     if (!answer) throw new Error('Kernel returned an empty /btw answer');
     return { answer };
+  }
+
+  /**
+   * Read the engine's live task snapshot. This is a local ACP query, not a
+   * model prompt: it exposes the current model, turns and context capacity.
+   */
+  async getSessionInfo(sessionId: string): Promise<SessionInfo> {
+    let raw: unknown;
+    try {
+      raw = await this.request('x.ai/session/info', { sessionId }, 15_000);
+    } catch (error) {
+      // The bundled 0.2.110 compatibility server exposes this endpoint under
+      // the underscored route. Only fall back for a missing method so actual
+      // session errors remain visible to the person using the app.
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('_x.ai/session/info', { sessionId }, 15_000);
+    }
+    const value = raw && typeof raw === 'object' && 'result' in raw && (raw as { result?: unknown }).result
+      ? (raw as { result: unknown }).result
+      : raw;
+    if (!value || typeof value !== 'object') throw new Error('Kernel returned an invalid task info snapshot');
+    const info = value as SessionInfo;
+    if (!info.sessionId || !info.cwd || !info.context) throw new Error('Kernel returned an incomplete task info snapshot');
+    return info;
   }
 
   /** List the kernel's durable checkpoints. No conversation or files are changed. */

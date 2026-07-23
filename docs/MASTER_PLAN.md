@@ -121,7 +121,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
 | Rewind `/rewind` | Rewind UI | 🟡 路由与安全范围已接线；真实两轮会话执行待余额恢复后验收 | C |
-| Context `/context` | Breakdown popover | 🟡 | B |
+| Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | 🟡 本地计划任务真实可用；不是内核原生 `/loop` 控制面 | C |
 | `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；真实模型回答待余额恢复后验收 | C |

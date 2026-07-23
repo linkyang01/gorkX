@@ -18,6 +18,8 @@
 // it never creates, enables or executes a hook.
 // --btw sends one native side question. It is a billable model acceptance gate
 // and must return the exact isolated response, never a queued main prompt.
+// --session-info reads the active session's kernel snapshot. It sends no model
+// request and proves the desktop Task Info panel's ACP contract.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -26,7 +28,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -39,15 +41,16 @@ const rewindExecuteSmoke = options.includes('--rewind-execute');
 const subagentControlsSmoke = options.includes('--subagent-controls');
 const hooksControlsSmoke = options.includes('--hooks-controls');
 const btwSmoke = options.includes('--btw');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls and --btw require --authenticated with an explicit disposable CWD');
+const sessionInfoSmoke = options.includes('--session-info');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw and --session-info require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -207,6 +210,25 @@ try {
         throw new Error(`x.ai/btw returned unexpected side answer: ${JSON.stringify(result)}`);
       }
       console.log('PASS: ACP x.ai/btw (isolated side answer)');
+    }
+
+    if (sessionInfoSmoke) {
+      // This is a local session snapshot, not a model turn. Validate the
+      // stable session-level fields plus the structured context payload the
+      // desktop client presents as Task Info.
+      let method = 'x.ai/session/info';
+      let info;
+      try {
+        info = unwrapResult(await request(method, { sessionId }, 15_000));
+      } catch (error) {
+        if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+        method = '_x.ai/session/info';
+        info = unwrapResult(await request(method, { sessionId }, 15_000));
+      }
+      if (!info || info.sessionId !== sessionId || typeof info.cwd !== 'string' || !info.context || typeof info.context !== 'object') {
+        throw new Error(`${method} returned invalid payload: ${JSON.stringify(info)}`);
+      }
+      console.log(`PASS: ACP ${method} (session and context snapshot)`);
     }
 
     if (sessionControlsSmoke) {

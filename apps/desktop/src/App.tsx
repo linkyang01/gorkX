@@ -227,6 +227,9 @@ const ScheduledPanel = lazy(() =>
 const ProjectInspectPanel = lazy(() =>
   import('./components/ProjectInspectPanel').then(({ ProjectInspectPanel }) => ({ default: ProjectInspectPanel })),
 );
+const TaskInfoPanel = lazy(() =>
+  import('./components/TaskInfoPanel').then(({ TaskInfoPanel }) => ({ default: TaskInfoPanel })),
+);
 
 function DeferredPanelFallback() {
   return <div className="app-panel-loading" role="status">{t('reviewLoading')}</div>;
@@ -373,6 +376,7 @@ function App() {
   const [projectAliases, setProjectAliases] = useState(() => loadProjectAliases());
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
+  const [taskInfoOpen, setTaskInfoOpen] = useState(false);
   const [btwCard, setBtwCard] = useState<BtwCardState | null>(null);
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -2203,6 +2207,9 @@ function App() {
       case 'ask-btw':
         setPlusMenuOpen(false);
         await openBtwQuestion();
+        return;
+      case 'task-info':
+        setTaskInfoOpen(true);
         return;
       case 'set-goal':
         setPlusMenuOpen(false);
@@ -5852,6 +5859,13 @@ function App() {
         project={projectInspectPath}
         grokCmd={grokCmd}
         onClose={() => setProjectInspectPath(null)}
+      /></Suspense> : null}
+
+      {taskInfoOpen ? <Suspense fallback={<DeferredPanelFallback />}><TaskInfoPanel
+        open
+        client={active?.client ?? null}
+        sessionId={active?.sessionId ?? null}
+        onClose={() => setTaskInfoOpen(false)}
       /></Suspense> : null}
 
       {permReq ? (

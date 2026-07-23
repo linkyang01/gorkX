@@ -19,6 +19,7 @@ export type PlusAction =
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'ask-btw' }
+  | { type: 'task-info' }
   | { type: 'set-goal' }
   | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'stage'; cmd: string; label: string }
@@ -210,6 +211,13 @@ export function PlusMenu({
     },
 
     { kind: 'label', id: 'l-session', title: t('plusCatSession') },
+    {
+      kind: 'action',
+      id: 'task-info',
+      title: t('taskInfoTitle'),
+      desc: t('taskInfoMenuHint'),
+      action: { type: 'task-info' },
+    },
     {
       kind: 'action',
       id: 'fork',
