@@ -5576,6 +5576,16 @@ function App() {
                               <div className="ctx-pop-detail muted">
                                 {t('autoCompactHint')}
                               </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm ctx-task-info-btn"
+                                onClick={() => {
+                                  setCtxPopOpen(false);
+                                  setTaskInfoOpen(true);
+                                }}
+                              >
+                                {t('taskInfoTitle')}
+                              </button>
                             </div>
                           ) : null}
                         </div>

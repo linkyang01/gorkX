@@ -5439,6 +5439,7 @@ button.pill:hover {
 .task-info-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .task-info-path code { font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
 @media (max-width: 560px) { .task-info-grid, .task-info-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ctx-task-info-btn { width: 100%; margin-top: 10px; }
 
 .action-prompt-modal {
   width: min(620px, 100%);
