@@ -146,7 +146,7 @@ export interface UserQuestionRequest {
 export type UserQuestionAnswers = Record<string, string[]>;
 export type UserQuestionAnnotations = Record<string, { preview?: string; notes?: string }>;
 
-/** Exact Grok Build ACP response for `x.ai/ask_user_question` (kernel 0.2.105). */
+/** Exact Grok Build ACP response for `x.ai/ask_user_question` (kernel 0.2.110). */
 export function userQuestionAcceptedResult(
   answers: UserQuestionAnswers,
   annotations?: UserQuestionAnnotations,
@@ -177,7 +177,7 @@ export interface PlanApprovalRequest {
   raw: unknown;
 }
 
-/** Exact Grok Build ACP response for `x.ai/exit_plan_mode` (kernel 0.2.105). */
+/** Exact Grok Build ACP response for `x.ai/exit_plan_mode` (kernel 0.2.110). */
 export function planApprovalResult(
   outcome: 'approved' | 'cancelled' | 'abandoned',
   feedback?: string,

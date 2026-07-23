@@ -129,11 +129,13 @@ function unwrapResult(value) {
 }
 
 try {
+  // Keep this aligned with the desktop ACP client. A configured/authenticated
+  // GROK_HOME can load catalogs and credential state before initialize replies.
   await request('initialize', {
     protocolVersion: 1,
     clientInfo: { name: 'gorkX-kernel-smoke', version: '0' },
     clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: true },
-  });
+  }, 30_000);
   console.log(`PASS: ACP initialize (${bin})`);
 
   if (!authenticated) {
