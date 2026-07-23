@@ -12,6 +12,7 @@
 | 浏览器动作 | `node scripts/verify-playwright-mcp.mjs --origin https://example.com` | 通过；隔离 Playwright MCP 发现 24 个工具，并成功 `browser_navigate` 到 `https://example.com` | 不发送模型提示词、不使用用户 Chrome profile；不代表 Grok 模型已在真实任务中调用浏览器 |
 | App-only 包 | `cd apps/desktop && npm run build:app` | 通过；只构建 `.app`，未生成 DMG | 不代表签名、公证或发行 |
 | 包内内核 | `scripts/verify-macos-app-bundle.sh apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app` | 通过；发现包内 `grok`、许可证与 NOTICE、隔离 `GROK_HOME`，版本为 `grok 0.2.105 (7cfcb20)` | 不是干净 Mac 安装、App 内登录、真实项目首轮与重开续聊的人工闭环 |
+| 隔离 Worktree ACP | `GORKX_ACP_TEST_HOME=/private/tmp/gorkx-worktree-acp-home GORKX_ACP_TEST_CWD=/private/tmp/gorkx-worktree-acp-project node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --worktree` | 2026-07-23 通过：cached-token 认证、session/new、session/load、Plan mode、Worktree list 与 create；实际创建于临时 home 的 worktrees 目录 | 不发送模型提示；Hooks 与运行中子代理恢复接口仍由该内核报告为未开放 |
 
 ## 仍未通过的发布阻断项
 
