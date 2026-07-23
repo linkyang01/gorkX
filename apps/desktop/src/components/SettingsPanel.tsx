@@ -135,7 +135,7 @@ type NavItem = {
   keywords?: string;
 };
 
-type ModelPreset = 'openai' | 'anthropic' | 'ollama' | 'custom';
+type ModelPreset = 'openai' | 'anthropic' | 'openrouter' | 'gemini' | 'ollama' | 'custom';
 
 type StoredModelTestStatus = {
   ok: boolean;
@@ -149,6 +149,8 @@ const MAX_STORED_MODEL_TESTS = 80;
 const modelPresetValues: Record<ModelPreset, Pick<CustomModelRow, 'baseUrl' | 'apiBackend' | 'providerLabel'>> = {
   openai: { baseUrl: 'https://api.openai.com/v1', apiBackend: 'responses', providerLabel: 'OpenAI API' },
   anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiBackend: 'messages', providerLabel: 'Anthropic API' },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', apiBackend: 'chat_completions', providerLabel: 'OpenRouter API' },
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/', apiBackend: 'chat_completions', providerLabel: 'Google Gemini API' },
   ollama: { baseUrl: 'http://127.0.0.1:11434/v1', apiBackend: 'chat_completions', providerLabel: 'Local / Ollama' },
   custom: { baseUrl: '', apiBackend: 'chat_completions', providerLabel: '' },
 };
@@ -1111,6 +1113,8 @@ export function SettingsPanel({
                     [
                       ['openai', t('settingsModelsPresetOpenAI')],
                       ['anthropic', t('settingsModelsPresetAnthropic')],
+                      ['openrouter', t('settingsModelsPresetOpenRouter')],
+                      ['gemini', t('settingsModelsPresetGemini')],
                       ['ollama', t('settingsModelsPresetOllama')],
                       ['custom', t('settingsModelsPresetCustom')],
                     ] as const
@@ -1134,6 +1138,16 @@ export function SettingsPanel({
                 {modelPreset === 'anthropic' ? (
                   <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://platform.claude.com/settings/keys')}>
                     {t('settingsModelsAnthropicKeys')}
+                  </button>
+                ) : null}
+                {modelPreset === 'openrouter' ? (
+                  <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://openrouter.ai/keys')}>
+                    {t('settingsModelsOpenRouterKeys')}
+                  </button>
+                ) : null}
+                {modelPreset === 'gemini' ? (
+                  <button type="button" className="link-btn model-preset-guide" onClick={() => void openUrlSafe('https://aistudio.google.com/app/apikey')}>
+                    {t('settingsModelsGeminiKeys')}
                   </button>
                 ) : null}
                 {modelPreset === 'ollama' ? (
