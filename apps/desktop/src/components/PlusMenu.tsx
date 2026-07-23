@@ -16,6 +16,7 @@ export type PlusAction =
   | { type: 'extensions' }
   | { type: 'memory-panel' }
   | { type: 'plan-toggle'; on: boolean }
+  | { type: 'fork-session' }
   | { type: 'stage'; cmd: string; label: string }
   | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -210,7 +211,7 @@ export function PlusMenu({
       id: 'fork',
       title: t('plusFork'),
       desc: t('slashDescFork'),
-      action: { type: 'stage', cmd: '/fork', label: t('plusFork') },
+      action: { type: 'fork-session' },
     },
     {
       kind: 'action',

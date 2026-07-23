@@ -54,6 +54,17 @@ export interface HookInfo {
   disabled: boolean;
 }
 
+/** A real kernel-level copy of a local session, returned by `x.ai/session/fork`. */
+export interface ForkSessionResult {
+  newSessionId: string;
+  chatMessagesCopied: number;
+  updatesCopied: number;
+  planStateCopied: boolean;
+  newCwd: string;
+  parentSessionId: string;
+  newModelId?: string | null;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -807,6 +818,22 @@ export class AcpClient {
     } catch (e) {
       throw e instanceof Error ? e : new Error(String(e));
     }
+  }
+
+  /**
+   * Copy a saved Grok Build session into a new local session. This is not a
+   * slash prompt: the kernel copies the persisted transcript and plan state,
+   * while the source session remains untouched.
+   */
+  async forkSession(sessionId: string, cwd: string): Promise<ForkSessionResult> {
+    const raw = (await this.request('x.ai/session/fork', {
+      sourceSessionId: sessionId,
+      sourceCwd: cwd,
+      newCwd: cwd,
+    }, 30_000)) as ForkSessionResult | { result?: ForkSessionResult };
+    const result = ('result' in raw && raw.result ? raw.result : raw) as ForkSessionResult;
+    if (!result?.newSessionId) throw new Error('Kernel did not return a forked session ID');
+    return result;
   }
 
   async prompt(

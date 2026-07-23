@@ -1945,6 +1945,13 @@ function App() {
       setSlashIndex(0);
       return;
     }
+    if (name === 'fork') {
+      void forkActiveSession();
+      setDraft('');
+      setSlashOpen(false);
+      setSlashIndex(0);
+      return;
+    }
     insertSlash(name);
   };
 
@@ -2053,6 +2060,10 @@ function App() {
         return;
       case 'plan-toggle':
         await changeChatMode(action.on ? 'plan' : 'agent');
+        return;
+      case 'fork-session':
+        setPlusMenuOpen(false);
+        await forkActiveSession();
         return;
       case 'stage':
         stageCapability(action.cmd, action.label);
@@ -2675,6 +2686,63 @@ function App() {
       : responsePresentation === 'choices'
         ? t('responseFormatChoices')
         : t('responseFormatAuto');
+
+  /**
+   * A Codex-like branch is a native session copy, not a `/fork` sentence for
+   * the model to interpret. Keep the source task intact and activate the new
+   * child only after the kernel has returned its durable session id.
+   */
+  const forkActiveSession = async () => {
+    const source = threadsRef.current.find((thread) => thread.id === activeId);
+    if (!source?.client || !source.sessionId || source.busy) return;
+    patchThread(source.id, { busy: true, error: null });
+    try {
+      const fork = await source.client.forkSession(source.sessionId, source.cwd);
+      const id = tid();
+      const siblings = threadsRef.current.filter(
+        (thread) => projectScopeKey(thread.projectKey) === projectScopeKey(source.projectKey) && !thread.archived,
+      );
+      const title = uniquifyThreadTitle(`${source.title} · ${t('forkSession')}`, siblings);
+      const createdAt = Date.now();
+      setThreads((previous) => [
+        ...previous,
+        {
+          id,
+          title,
+          sessionId: fork.newSessionId,
+          modelId: fork.newModelId ?? source.modelId,
+          client: source.client,
+          lines: [],
+          busy: true,
+          error: null,
+          chatMode: source.chatMode,
+          cwd: fork.newCwd || source.cwd,
+          projectKey: source.projectKey,
+          worktreePath: source.worktreePath,
+          effort: source.effort,
+          archived: false,
+          updatedAt: createdAt,
+        },
+      ]);
+      wireClient(id, source.client);
+      selectThread(id);
+      const loaded = await source.client.loadSession(fork.newSessionId, fork.newCwd || source.cwd);
+      rememberModels(loaded);
+      patchThread(id, {
+        sessionId: loaded.sessionId || fork.newSessionId,
+        modelId: loaded.models?.currentModelId ?? fork.newModelId ?? source.modelId,
+        busy: false,
+      });
+      appendLine(id, { id: nid(), role: 'system', text: t('forkSessionDone') });
+      void reconcileRunningSubagents(id, source.client, loaded.sessionId || fork.newSessionId);
+    } catch (error) {
+      patchThread(source.id, {
+        error: `${t('forkSessionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      patchThread(source.id, { busy: false });
+    }
+  };
 
   const cycleResponsePresentation = () => {
     setResponsePresentation((previous) => {
@@ -4771,22 +4839,7 @@ function App() {
                     title={t('forkSession')}
                     aria-label={t('forkSession')}
                     disabled={active.busy || !active.client}
-                    onClick={() => {
-                      void (async () => {
-                        if (!active.client || !active.sessionId) return;
-                        appendLine(active.id, { id: nid(), role: 'user', text: '/fork' });
-                        patchThread(active.id, { busy: true, error: null });
-                        try {
-                          await active.client.prompt(active.sessionId, '/fork');
-                        } catch (e) {
-                          patchThread(active.id, {
-                            error: e instanceof Error ? e.message : String(e),
-                          });
-                        } finally {
-                          patchThread(active.id, { busy: false });
-                        }
-                      })();
-                    }}
+                    onClick={() => void forkActiveSession()}
                   >
                     <IconFork />
                   </button>
