@@ -63,6 +63,12 @@ import {
   type GithubPullRequest,
   type GithubStatus,
 } from '../lib/github';
+import {
+  fetchSubagentsConfig,
+  setSubagentTypeEnabled,
+  setSubagentsEnabled,
+  type SubagentsConfigSnapshot,
+} from '../lib/subagentsConfig';
 
 const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
@@ -79,6 +85,7 @@ export type SettingsSection =
   | 'browser'
   | 'computer'
   | 'hooks'
+  | 'subagents'
   | 'mcp'
   | 'git'
   | 'environment'
@@ -178,6 +185,8 @@ export function SettingsPanel({
   const [archived, setArchived] = useState<ArchivedTaskRow[]>([]);
   const [archBusy, setArchBusy] = useState(false);
   const [modelsSnap, setModelsSnap] = useState<ModelsConfigSnapshot | null>(null);
+  const [subagentsSnap, setSubagentsSnap] = useState<SubagentsConfigSnapshot | null>(null);
+  const [subagentsBusy, setSubagentsBusy] = useState(false);
   const [subscriptionModels, setSubscriptionModels] = useState<SubscriptionModelsSnapshot | null>(null);
   const [modelForm, setModelForm] = useState({
     id: '',
@@ -215,6 +224,7 @@ export function SettingsPanel({
     void fetchSubscriptionModelsSnapshot(false).then(setSubscriptionModels);
     void fetchMemoryStatus().then(setMemory);
     void listCustomModels().then(setModelsSnap);
+    void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
   }, [isOpen, initialSection]);
@@ -381,6 +391,7 @@ export function SettingsPanel({
         title: t('settingsGroupCoding'),
         items: [
           { id: 'hooks', label: t('settingsHooks'), keywords: 'hooks 钩子' },
+          { id: 'subagents', label: t('settingsSubagents'), keywords: 'subagent 子任务 委派 worktree 隔离' },
           { id: 'mcp', label: t('settingsMcp'), keywords: 'mcp connect 连接' },
           { id: 'git', label: t('settingsGit'), keywords: 'git' },
           {
@@ -1306,6 +1317,86 @@ export function SettingsPanel({
                 >
                   {t('settingsComputerCapture')}
                 </button>
+              </div>
+            </>
+          ) : null}
+
+          {section === 'subagents' ? (
+            <>
+              <h2>{t('settingsSubagents')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsSubagentsHint')}
+              </p>
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsSubagentsEnabled')}</div>
+                    <div className="settings-row-hint">{t('settingsSubagentsEnabledHint')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn${(subagentsSnap?.enabled ?? true) ? ' primary' : ''}`}
+                    disabled={subagentsBusy}
+                    onClick={() => {
+                      const next = !(subagentsSnap?.enabled ?? true);
+                      setSubagentsBusy(true);
+                      void setSubagentsEnabled(next)
+                        .then((snapshot) => {
+                          setSubagentsSnap(snapshot);
+                          setMsg(next ? t('settingsSubagentsEnabledNow') : t('settingsSubagentsDisabledNow'));
+                        })
+                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setSubagentsBusy(false));
+                    }}
+                  >
+                    {(subagentsSnap?.enabled ?? true) ? t('settingsSubagentsEnabledNow') : t('settingsSubagentsDisabledNow')}
+                  </button>
+                </div>
+                <div className="settings-row" style={{ marginTop: 12 }}>
+                  <div>
+                    <div className="settings-row-title">{t('settingsSubagentsExplore')}</div>
+                    <div className="settings-row-hint">{t('settingsSubagentsExploreHint')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn${(subagentsSnap?.exploreEnabled ?? true) ? ' primary' : ''}`}
+                    disabled={subagentsBusy || !(subagentsSnap?.enabled ?? true)}
+                    onClick={() => {
+                      const next = !(subagentsSnap?.exploreEnabled ?? true);
+                      setSubagentsBusy(true);
+                      void setSubagentTypeEnabled('explore', next)
+                        .then(setSubagentsSnap)
+                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setSubagentsBusy(false));
+                    }}
+                  >
+                    {(subagentsSnap?.exploreEnabled ?? true) ? t('settingsSubagentsEnabledNow') : t('settingsSubagentsDisabledNow')}
+                  </button>
+                </div>
+                <div className="settings-row" style={{ marginTop: 12 }}>
+                  <div>
+                    <div className="settings-row-title">{t('settingsSubagentsPlan')}</div>
+                    <div className="settings-row-hint">{t('settingsSubagentsPlanHint')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`btn${(subagentsSnap?.planEnabled ?? true) ? ' primary' : ''}`}
+                    disabled={subagentsBusy || !(subagentsSnap?.enabled ?? true)}
+                    onClick={() => {
+                      const next = !(subagentsSnap?.planEnabled ?? true);
+                      setSubagentsBusy(true);
+                      void setSubagentTypeEnabled('plan', next)
+                        .then(setSubagentsSnap)
+                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setSubagentsBusy(false));
+                    }}
+                  >
+                    {(subagentsSnap?.planEnabled ?? true) ? t('settingsSubagentsEnabledNow') : t('settingsSubagentsDisabledNow')}
+                  </button>
+                </div>
+                <p className="settings-row-hint" style={{ marginTop: 12 }}>
+                  {t('settingsSubagentsRecoveryHint')}
+                </p>
               </div>
             </>
           ) : null}

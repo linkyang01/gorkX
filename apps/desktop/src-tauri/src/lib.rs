@@ -12,6 +12,7 @@ mod paths;
 mod pty;
 mod scheduler;
 mod store;
+mod subagents_config;
 mod terminal;
 mod workspace;
 
@@ -185,6 +186,9 @@ pub fn run() {
             models_config::models_open_config,
             models_config::models_test_connection,
             models_config::models_migrate_plaintext_keys,
+            subagents_config::subagents_config_get,
+            subagents_config::subagents_config_set_enabled,
+            subagents_config::subagents_config_set_type_enabled,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
