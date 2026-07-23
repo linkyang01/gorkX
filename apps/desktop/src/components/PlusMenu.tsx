@@ -16,8 +16,6 @@ export type PlusAction =
   | { type: 'extensions' }
   | { type: 'memory-panel' }
   | { type: 'plan-toggle'; on: boolean }
-  | { type: 'fork-session' }
-  | { type: 'rewind-session' }
   | { type: 'stage'; cmd: string; label: string }
   | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -207,20 +205,6 @@ export function PlusMenu({
     },
 
     { kind: 'label', id: 'l-session', title: t('plusCatSession') },
-    {
-      kind: 'action',
-      id: 'fork',
-      title: t('plusFork'),
-      desc: t('slashDescFork'),
-      action: { type: 'fork-session' },
-    },
-    {
-      kind: 'action',
-      id: 'rewind',
-      title: t('plusRewind'),
-      desc: t('slashDescRewind'),
-      action: { type: 'rewind-session' },
-    },
     {
       kind: 'action',
       id: 'export',

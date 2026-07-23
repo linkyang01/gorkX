@@ -6,6 +6,8 @@
 // --resource sends one minimal model request with a temporary local attachment.
 // --custom-model verifies a disposable [model.*] override can be selected;
 // it never sends a prompt to that provider.
+// --session-controls checks native session forking and checkpoint listing
+// without making a model request or modifying the supplied project CWD.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -14,19 +16,21 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
 const worktreeSmoke = options.includes('--worktree');
 const resourceSmoke = options.includes('--resource');
 const customModelSmoke = options.includes('--custom-model');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke) && !authenticated) {
-  console.error('--worktree, --resource and --custom-model require --authenticated with an explicit disposable CWD');
+const sessionControlsSmoke = options.includes('--session-controls');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model and --session-controls require --authenticated with an explicit disposable CWD');
   process.exit(2);
 }
-if (options.some((option) => !['--authenticated', '--worktree', '--resource', '--custom-model'].includes(option))) {
-  console.error(`unknown option: ${options.find((option) => !['--authenticated', '--worktree', '--resource', '--custom-model'].includes(option))}`);
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls'];
+if (options.some((option) => !knownOptions.includes(option))) {
+  console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
 }
 
@@ -171,6 +175,59 @@ try {
 
     await request('session/set_mode', { sessionId, modeId: 'plan' });
     console.log('PASS: ACP session/set_mode(plan)');
+
+    if (sessionControlsSmoke) {
+      // Forking copies only kernel-owned session data into the explicitly
+      // disposable test home. It sends no prompt and leaves the parent active.
+      // ACP extensions are not baseline methods; record an unavailable method
+      // as an explicit capability gap rather than silently passing it.
+      try {
+        const forked = unwrapResult(await request('x.ai/session/fork', {
+          sourceSessionId: sessionId,
+          sourceCwd: cwd,
+          newCwd: cwd,
+        }, 30_000));
+        const forkedSessionId = typeof forked?.newSessionId === 'string' ? forked.newSessionId : '';
+        if (!forkedSessionId || forkedSessionId === sessionId || forked.parentSessionId !== sessionId) {
+          throw new Error(`x.ai/session/fork returned invalid payload: ${JSON.stringify(forked)}`);
+        }
+        const forkedLoaded = await request('session/load', { sessionId: forkedSessionId, cwd, mcpServers: [] });
+        const loadedForkedId = forkedLoaded?.sessionId ?? forkedLoaded?._meta?.sessionId;
+        if (loadedForkedId !== forkedSessionId) {
+          throw new Error(`forked session could not be loaded: ${JSON.stringify(forkedLoaded)}`);
+        }
+        const sourceLoaded = await request('session/load', { sessionId, cwd, mcpServers: [] });
+        const loadedSourceId = sourceLoaded?.sessionId ?? sourceLoaded?._meta?.sessionId;
+        if (loadedSourceId !== sessionId) {
+          throw new Error(`source session changed after fork: ${JSON.stringify(sourceLoaded)}`);
+        }
+        console.log('PASS: ACP x.ai/session/fork (durable child and unchanged parent)');
+      } catch (error) {
+        if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
+          console.log('SKIP: ACP x.ai/session/fork (kernel does not expose session fork API)');
+        } else {
+          throw error;
+        }
+      }
+
+      // A new session has no prompt checkpoint. A well-typed empty response
+      // proves the native list endpoint is available without inventing a
+      // destructive execute case or billing a model request.
+      try {
+        const rewindPoints = unwrapResult(await request('x.ai/rewind/points', { sessionId }, 15_000));
+        const points = rewindPoints?.rewindPoints ?? rewindPoints?.rewind_points;
+        if (!Array.isArray(points)) {
+          throw new Error(`x.ai/rewind/points returned invalid payload: ${JSON.stringify(rewindPoints)}`);
+        }
+        console.log('PASS: ACP x.ai/rewind/points (native empty checkpoint list)');
+      } catch (error) {
+        if (/method not found/i.test(error instanceof Error ? error.message : String(error))) {
+          console.log('SKIP: ACP x.ai/rewind/points (kernel does not expose rewind API)');
+        } else {
+          throw error;
+        }
+      }
+    }
 
     if (resourceSmoke) {
       // Deliberately opt-in: this makes a real model request. The caller must

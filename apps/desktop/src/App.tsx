@@ -34,8 +34,6 @@ import {
   type FolderTrustRequest,
   type PlanApprovalRequest,
   type ReasoningEffort,
-  type RewindMode,
-  type RewindPoint,
   type SessionUpdate,
   type UserQuestionAnswers,
   type UserQuestionAnnotations,
@@ -83,7 +81,6 @@ import {
 } from './lib/sessionGoal';
 import {
   IconExport,
-  IconFork,
   IconForward,
   IconProcess,
   IconReview,
@@ -152,7 +149,6 @@ import { PermissionPrompt } from './components/PermissionPrompt';
 import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
 import { FolderTrustPrompt } from './components/FolderTrustPrompt';
-import { RewindDialog } from './components/RewindDialog';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -440,12 +436,6 @@ function App() {
   const [folderTrustReq, setFolderTrustReq] = useState<FolderTrustRequest | null>(null);
   const [folderTrustAgentId, setFolderTrustAgentId] = useState<string | null>(null);
   const folderTrustAgentRef = useRef<string | null>(null);
-  const [rewindDialog, setRewindDialog] = useState<{
-    threadId: string;
-    points: RewindPoint[];
-    error?: string | null;
-    busy?: boolean;
-  } | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
   const [projectSessions, setProjectSessions] = useState<Record<string, RecentSession[]>>({});
   const [dismissedSessions, setDismissedSessions] = useState<string[]>(() => {
@@ -1972,20 +1962,6 @@ function App() {
       setSlashIndex(0);
       return;
     }
-    if (name === 'fork') {
-      void forkActiveSession();
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
-    }
-    if (name === 'rewind') {
-      void openRewindDialog();
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
-    }
     insertSlash(name);
   };
 
@@ -2095,14 +2071,6 @@ function App() {
       case 'plan-toggle':
         await changeChatMode(action.on ? 'plan' : 'agent');
         return;
-      case 'fork-session':
-        setPlusMenuOpen(false);
-        await forkActiveSession();
-        return;
-      case 'rewind-session':
-        setPlusMenuOpen(false);
-        await openRewindDialog();
-        return;
       case 'stage':
         stageCapability(action.cmd, action.label);
         return;
@@ -2139,8 +2107,6 @@ function App() {
       { name: 'flush', description: t('slashDescFlush'), source: 'agent' as const },
       { name: 'dream', description: t('slashDescDream'), source: 'agent' as const },
       { name: 'remember', description: t('slashDescRemember'), source: 'agent' as const },
-      { name: 'fork', description: t('slashDescFork'), source: 'agent' as const },
-      { name: 'rewind', description: t('slashDescRewind'), source: 'agent' as const },
       { name: 'model', description: t('slashDescModel'), source: 'agent' as const },
       { name: 'effort', description: t('slashDescEffort'), source: 'agent' as const },
       { name: 'context', description: t('slashDescContext'), source: 'agent' as const },
@@ -2720,128 +2686,6 @@ function App() {
         busy: false,
         error: e instanceof Error ? e.message : String(e),
       });
-    }
-  };
-
-  /**
-   * A Codex-like branch is a native session copy, not a `/fork` sentence for
-   * the model to interpret. Keep the source task intact and activate the new
-   * child only after the kernel has returned its durable session id.
-   */
-  const forkActiveSession = async () => {
-    const source = threadsRef.current.find((thread) => thread.id === activeId);
-    if (!source?.client || !source.sessionId || source.busy) return;
-    patchThread(source.id, { busy: true, error: null });
-    try {
-      const fork = await source.client.forkSession(source.sessionId, source.cwd);
-      const id = tid();
-      const siblings = threadsRef.current.filter(
-        (thread) => projectScopeKey(thread.projectKey) === projectScopeKey(source.projectKey) && !thread.archived,
-      );
-      const title = uniquifyThreadTitle(`${source.title} · ${t('forkSession')}`, siblings);
-      const createdAt = Date.now();
-      setThreads((previous) => [
-        ...previous,
-        {
-          id,
-          title,
-          sessionId: fork.newSessionId,
-          modelId: fork.newModelId ?? source.modelId,
-          client: source.client,
-          lines: [],
-          busy: true,
-          error: null,
-          chatMode: source.chatMode,
-          cwd: fork.newCwd || source.cwd,
-          projectKey: source.projectKey,
-          worktreePath: source.worktreePath,
-          effort: source.effort,
-          archived: false,
-          updatedAt: createdAt,
-        },
-      ]);
-      wireClient(id, source.client);
-      selectThread(id);
-      const loaded = await source.client.loadSession(fork.newSessionId, fork.newCwd || source.cwd);
-      rememberModels(loaded);
-      patchThread(id, {
-        sessionId: loaded.sessionId || fork.newSessionId,
-        modelId: loaded.models?.currentModelId ?? fork.newModelId ?? source.modelId,
-        busy: false,
-      });
-      appendLine(id, { id: nid(), role: 'system', text: t('forkSessionDone') });
-      void reconcileRunningSubagents(id, source.client, loaded.sessionId || fork.newSessionId);
-    } catch (error) {
-      patchThread(source.id, {
-        error: `${t('forkSessionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      patchThread(source.id, { busy: false });
-    }
-  };
-
-  /** Fetch checkpoints first; opening this dialog has no effect on the session or files. */
-  const openRewindDialog = async () => {
-    let source = threadsRef.current.find((thread) => thread.id === activeId);
-    if (!source?.sessionId) {
-      alert(t('rewindNeedsSession'));
-      return;
-    }
-    if (!source.client) {
-      await reconnectThread(source.id);
-      source = threadsRef.current.find((thread) => thread.id === activeId);
-    }
-    if (!source?.client || !source.sessionId || source.busy) return;
-    patchThread(source.id, { busy: true, error: null });
-    try {
-      const points = await source.client.rewindPoints(source.sessionId);
-      setRewindDialog({ threadId: source.id, points });
-    } catch (error) {
-      patchThread(source.id, {
-        error: `${t('rewindFailed')}: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      patchThread(source.id, { busy: false });
-    }
-  };
-
-  /** Execute only after the user has chosen both a checkpoint and its scope. */
-  const executeRewind = async (point: RewindPoint, mode: RewindMode) => {
-    const dialog = rewindDialog;
-    const source = threadsRef.current.find((thread) => thread.id === dialog?.threadId);
-    if (!dialog || !source?.client || !source.sessionId) return;
-    setRewindDialog({ ...dialog, busy: true, error: null });
-    patchThread(source.id, { busy: true, error: null });
-    try {
-      const result = await source.client.rewind(source.sessionId, point.promptIndex, mode);
-      if (!result.success) {
-        const conflicts = result.conflicts.slice(0, 5).map((item) => item.path).join(', ');
-        setRewindDialog({
-          ...dialog,
-          busy: false,
-          error: `${result.error || t('rewindFailed')}${conflicts ? `: ${conflicts}` : ''}`,
-        });
-        return;
-      }
-      // The in-memory transcript may include now-discarded turns. Clear it and
-      // reload the kernel-owned history rather than guessing which UI rows map
-      // to prompt indexes.
-      patchThread(source.id, { lines: [] });
-      const loaded = await source.client.loadSession(source.sessionId, source.cwd);
-      rememberModels(loaded);
-      patchThread(source.id, { sessionId: loaded.sessionId || source.sessionId, busy: false });
-      if (result.promptText?.trim()) setDraft(result.promptText);
-      setComposerAtts([]);
-      appendLine(source.id, { id: nid(), role: 'system', text: t('rewindDone') });
-      setRewindDialog(null);
-    } catch (error) {
-      setRewindDialog({
-        ...dialog,
-        busy: false,
-        error: `${t('rewindFailed')}: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    } finally {
-      patchThread(source.id, { busy: false });
     }
   };
 
@@ -4654,7 +4498,6 @@ function App() {
                             'diff',
                             'review',
                             'memory',
-                            'fork',
                             'worktree',
                             'imagine',
                             'flush',
@@ -4840,16 +4683,6 @@ function App() {
                     }}
                   >
                     <IconExport />
-                  </button>
-                  <button
-                    type="button"
-                    className="chrome-btn"
-                    title={t('forkSession')}
-                    aria-label={t('forkSession')}
-                    disabled={active.busy || !active.client}
-                    onClick={() => void forkActiveSession()}
-                  >
-                    <IconFork />
                   </button>
                 </>
               ) : null}
@@ -5734,15 +5567,6 @@ function App() {
       ) : null}
       {folderTrustReq ? (
         <FolderTrustPrompt request={folderTrustReq} onAnswer={(outcome) => void answerFolderTrust(outcome)} />
-      ) : null}
-      {rewindDialog ? (
-        <RewindDialog
-          points={rewindDialog.points}
-          busy={rewindDialog.busy}
-          error={rewindDialog.error}
-          onClose={() => setRewindDialog(null)}
-          onConfirm={(point, mode) => void executeRewind(point, mode)}
-        />
       ) : null}
     </div>
   );

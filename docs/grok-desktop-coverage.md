@@ -20,8 +20,8 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Compact | `/compact` pass-through and context status | 🟡 engine decides compaction availability |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar file save and `/export` clipboard route via restricted CLI bridge | ✅ |
-| Fork | Toolbar sends `/fork` to the active engine session | 🟡 current locked `grok agent stdio` does not expose `x.ai/session/fork`, so gorkX cannot yet prove and index a separate visible child task |
-| Rewind | `/rewind` is passed to the engine | 🟡 no independent desktop rewind history is maintained |
+| Fork | — | ❌ hidden: locked `grok agent stdio` returns `Method not found` for `x.ai/session/fork` despite source-level implementation |
+| Rewind | — | ❌ hidden: locked `grok agent stdio` returns `Method not found` for `x.ai/rewind/points`; the dormant client adapter is not exposed |
 | Goal | Persistent goal console wired to `/goal`, plan and `update_goal` updates | ✅ shell; loop quality is engine-side |
 
 ## Worktree & review
@@ -71,4 +71,4 @@ scripts/verify-grok-kernel-patches.sh
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
 
-Updated: 2026-07-21
+Updated: 2026-07-23
