@@ -39,7 +39,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Surface | Desktop control | Status |
 |---|---|---|
 | MCP / Skills / Plugins | Discover and manage through App `GROK_HOME` | ✅ engine capability governs individual entries |
-| Hooks | No inactive controls | ❌ locked Grok Build returns ACP `Method not found` |
+| Hooks | Active-task settings loads discovered hooks; explicit reload, trust/untrust and enable/disable controls | 🟡 `_x.ai/hooks/list` and reload are ACP-gated; authored hook files and a real configured-hook run remain acceptance scenarios |
 | Memory | Browse, search, remember, forget, local compact and per-project injection | ✅ |
 
 ## Account and independent kernel

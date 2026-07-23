@@ -16,7 +16,7 @@
 |----|------|
 | Plan mode | 执行/重试/空计划提示已加；引擎 plan 质量仍依赖内核 |
 | Worktree | 用作项目 / 新任务 / Finder / 返回主仓 / 侧栏 WT 标记 |
-| Voice | 原生 STT 或 Whisper 后备 |
+| Voice | 需要内核提供可维护的 ACP 录音/转写接口；不以浏览器语音 API 冒充 Grok Build Voice Mode |
 | Review | 复制 diff/路径、显示文件、非 git 预览 |
 | Goal | 壳侧完整：持久化 + 控制台 + plan/工具进度 |
 | + 菜单 slash | 首页过滤用 builtins 缓存；会话内对齐 available_commands |

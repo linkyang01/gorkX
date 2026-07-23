@@ -522,7 +522,7 @@ Grok Build 已支持自定义模型（`[model.*]`）：`base_url`、`api_key`/`e
 | 浏览器 | 版本锁定、隔离 profile 的 Playwright MCP；可选 origin allowlist 与诊断 | ✅ 配置与 MCP 启动/握手已验证；具体网页动作仍由 Agent 与用户授权决定 |
 | 电脑操控 | 显式 macOS 区域截图并附到消息 | 🟡 本地截图真实；鼠标/键盘自动化未交付 |
 | 项目指令 | 项目根目录 `AGENTS.md` 的读取 / 新建 / 编辑 | ✅ 仅写入项目内常规文件，原子保存且拒绝符号链接 |
-| 钩子 | 原生 Hook 生命周期 | ⏳ 锁定内核未开放 Hooks ACP 生命周期，保持 Soon |
+| 钩子 | 原生 Hook 生命周期 | 🟡 `_x.ai/hooks/list/action` 已接入当前活动会话，可加载/重载/信任/启停；Hook 创作和真实项目执行仍需验收 |
 | 连接 | MCP → 扩展中心 | ✅ 跳转 |
 | Git | 当前项目的状态、Diff、暂存 / 取消暂存与非 Git 文件预览 | ✅ Review 中真实执行 |
 | 环境 | App 数据 + Grok home 说明 | ✅ 诚实路径 |

@@ -119,8 +119,8 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Slash + skills | Full pass-through + autocomplete from `available_commands` | 🟡 | A |
 | Attachments / images | Drag-drop + preview | 🟡 | A |
 | Export `/export`, `grok export` | Export Markdown | ❌ | B |
-| Fork `/fork` | Fork thread | ❌ | B |
-| Rewind `/rewind` | Rewind UI | ❌ | C |
+| Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
+| Rewind `/rewind` | Rewind UI | 🟡 路由与安全范围已接线；真实两轮会话执行待余额恢复后验收 | C |
 | Context `/context` | Breakdown popover | 🟡 | B |
 | Goal `/goal` | Goal banner | ❌ | C |
 | `/loop` | Scheduler panel | ❌ | C |
@@ -143,7 +143,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | `grok mcp` / `/mcps` | Full list/add/remove/doctor | 🟡 | B |
 | Skills `/skills` | List + run | 🟡 | B |
 | Plugins + marketplace | Install/enable/update/uninstall | 🟡 | B |
-| Hooks `/hooks` | View/toggle | 🟡 | C |
+| Hooks `/hooks` | View/toggle | ✅ 活动会话 `_x.ai/hooks/list/action` 已接线 | C |
 
 ### 5.4 Memory (Hermes-class UX, Grok engine)
 
