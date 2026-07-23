@@ -1,4 +1,5 @@
 /** Lightweight markdown renderer (no heavy deps). Safe-ish for agent output. */
+import { t } from '../lib/i18n';
 
 function escapeHtml(s: string): string {
   return s
@@ -119,7 +120,12 @@ function renderMermaidFlowchart(raw: string): string | null {
     }
   }
   const groups = new Map<number, DiagramNode[]>();
-  for (const node of diagram.nodes) (groups.get(rank.get(node.id) ?? 0) ?? groups.set(rank.get(node.id) ?? 0, []).get(rank.get(node.id) ?? 0)!).push(node);
+  for (const node of diagram.nodes) {
+    const level = rank.get(node.id) ?? 0;
+    const group = groups.get(level);
+    if (group) group.push(node);
+    else groups.set(level, [node]);
+  }
   const levels = [...groups.keys()].sort((a, b) => a - b);
   const horizontal = diagram.direction === 'LR';
   const lane = horizontal ? 180 : 104;
@@ -154,7 +160,8 @@ function renderMermaidFlowchart(raw: string): string | null {
     const label = node.label.length > 22 ? `${node.label.slice(0, 21)}…` : node.label;
     return `<g><rect x="${pos.x}" y="${pos.y}" width="${nodeWidth}" height="${nodeHeight}" rx="9" class="md-diagram-node" /><text x="${pos.x + nodeWidth / 2}" y="${pos.y + 28}" class="md-diagram-node-label" text-anchor="middle">${escapeHtml(label)}</text></g>`;
   }).join('');
-  return `<figure class="md-diagram"><figcaption>流程图</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="流程图"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="md-diagram-arrow" /></marker></defs>${edgeMarkup}${nodesMarkup}</svg></figure>`;
+  const title = t('conversationFlowchart');
+  return `<figure class="md-diagram"><figcaption>${escapeHtml(title)}</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}"><defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" class="md-diagram-arrow" /></marker></defs>${edgeMarkup}${nodesMarkup}</svg></figure>`;
 }
 
 /**

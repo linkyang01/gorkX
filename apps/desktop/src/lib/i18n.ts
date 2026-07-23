@@ -23,6 +23,7 @@ const dict = {
   en: {
     appName: 'gorkX',
     tagline: 'Grok agent command center',
+    conversationFlowchart: 'Flowchart',
     project: 'Project',
     pickFolder: 'Choose folder…',
     noProject: 'Select a project folder to start',
@@ -939,6 +940,7 @@ const dict = {
   zh: {
     appName: 'gorkX',
     tagline: 'Grok 智能体指挥台',
+    conversationFlowchart: '流程图',
     project: '项目',
     pickFolder: '选择文件夹…',
     noProject: '请先选择项目目录',
