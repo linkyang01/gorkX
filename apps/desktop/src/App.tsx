@@ -144,7 +144,7 @@ import {
   type ThreadMeta,
 } from './lib/threads';
 import { ContextRing } from './components/ContextRing';
-import { MicIcon, PermShieldIcon } from './components/ComposerIcons';
+import { PermShieldIcon } from './components/ComposerIcons';
 import { SidebarNav } from './components/SidebarNav';
 import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
@@ -194,10 +194,6 @@ import { t } from './lib/i18n';
 import { effortShortLabel, formatPeriodEnd, modelShortLabel } from './lib/threadLabels';
 import { formatThreadClock, threadListLabel } from './lib/threadList';
 import { snapToLines } from './lib/threadSnapshots';
-import {
-  isVoiceInputSupported,
-  VoiceInputSession,
-} from './lib/voiceInput';
 import './App.css';
 
 // Panels below are opened deliberately, not needed to render a task or the
@@ -464,11 +460,6 @@ function App() {
   /** Composer compact menus: model+effort · permission (Codex-style). */
   const [modelPopOpen, setModelPopOpen] = useState(false);
   const [permPopOpen, setPermPopOpen] = useState(false);
-  const [voiceListening, setVoiceListening] = useState(false);
-  const [voiceHint, setVoiceHint] = useState<string | null>(null);
-  const voiceSessionRef = useRef<VoiceInputSession | null>(null);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   /** Local-only nickname for the sidebar chip (API name stays unchanged). */
@@ -3179,59 +3170,6 @@ function App() {
     appendLine(active.id, { id: nid(), role: 'system', text: t('stop') });
   };
 
-  const mapVoiceError = (code: string): string => {
-    if (code === 'unsupported') return t('voiceUnsupported');
-    if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'PermissionDeniedError') {
-      return t('voiceErrorDenied');
-    }
-    if (code === 'network') return t('voiceErrorNetwork');
-    if (code === 'no-speech') return t('voiceErrorNoSpeech');
-    if (code === 'no-device' || code === 'NotFoundError') return t('voiceErrorNoDevice');
-    if (code === 'no-mediadevices') return t('voiceUnsupported');
-    return `${t('voiceErrorGeneric')} (${code})`;
-  };
-
-  const stopVoiceInput = useCallback(() => {
-    voiceSessionRef.current?.stop();
-    voiceSessionRef.current = null;
-    setVoiceListening(false);
-  }, []);
-
-  const toggleVoiceInput = useCallback(() => {
-    if (voiceSessionRef.current?.isListening()) {
-      stopVoiceInput();
-      setVoiceHint(null);
-      return;
-    }
-    if (!isVoiceInputSupported()) {
-      setVoiceHint(t('voiceUnsupported'));
-      window.setTimeout(() => setVoiceHint(null), 3200);
-      return;
-    }
-    setVoiceHint(t('voiceListening'));
-    const session = new VoiceInputSession({
-      onDraft: (text) => setDraft(text),
-      onListeningChange: (on) => {
-        setVoiceListening(on);
-        if (on) setVoiceHint(t('voiceListening'));
-        else setVoiceHint((h) => (h === t('voiceListening') ? null : h));
-      },
-      onError: (code) => {
-        setVoiceHint(mapVoiceError(code));
-        window.setTimeout(() => setVoiceHint(null), 3600);
-      },
-    });
-    voiceSessionRef.current = session;
-    session.start(draftRef.current);
-  }, [stopVoiceInput]);
-
-  useEffect(() => {
-    return () => {
-      voiceSessionRef.current?.dispose();
-      voiceSessionRef.current = null;
-    };
-  }, []);
-
   /** Send /goal subcommand; optimistic local status when applicable. */
   const runGoalCommand = async (
     sub: 'status' | 'pause' | 'resume' | 'clear',
@@ -4822,20 +4760,10 @@ function App() {
                     })()}
                     <button
                       type="button"
-                      className={`composer-icon-btn voice-btn${voiceListening ? ' listening' : ''}`}
-                      title={voiceListening ? t('voiceInputStop') : t('voiceInput')}
-                      aria-pressed={voiceListening}
-                      onClick={() => toggleVoiceInput()}
-                    >
-                      <MicIcon active={voiceListening} />
-                    </button>
-                    <button
-                      type="button"
                       className="btn-send"
                       title={t('send')}
                       disabled={!draft.trim() && composerAtts.length === 0}
                       onClick={() => {
-                        stopVoiceInput();
                         void send();
                       }}
                     >
@@ -4843,7 +4771,6 @@ function App() {
                     </button>
                   </div>
                 </div>
-                {voiceHint ? <div className="voice-hint">{voiceHint}</div> : null}
               </div>
             </div>
           </div>
@@ -5537,16 +5464,6 @@ function App() {
                     })()}
                     <button
                       type="button"
-                      className={`composer-icon-btn voice-btn${voiceListening ? ' listening' : ''}`}
-                      title={voiceListening ? t('voiceInputStop') : t('voiceInput')}
-                      aria-pressed={voiceListening}
-                      disabled={active.busy}
-                      onClick={() => toggleVoiceInput()}
-                    >
-                      <MicIcon active={voiceListening} />
-                    </button>
-                    <button
-                      type="button"
                       className={`btn-send${active.busy ? ' btn-send-stop' : ''}`}
                       title={active.busy ? t('stop') : t('send')}
                       disabled={
@@ -5557,7 +5474,6 @@ function App() {
                       onClick={() => {
                         if (active.busy) void cancelTurn();
                         else {
-                          stopVoiceInput();
                           void send();
                         }
                       }}
@@ -5570,7 +5486,6 @@ function App() {
                     </button>
                   </div>
                 </div>
-                {voiceHint ? <div className="voice-hint">{voiceHint}</div> : null}
               </div>
             </div>
           </>

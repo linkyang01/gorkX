@@ -4,6 +4,13 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 
 **Rule:** no fake product surfaces. Real = works end-to-end. Half = wired to engine/local with limits. Planned = not shipped.
 
+**Upstream parity rule:** every useful Grok Build capability is reviewed at each
+locked-kernel update. A capability that ACP exposes is presented in gorkX as a
+clear desktop flow; a TUI-only capability is implemented through a maintained
+kernel ACP extension, or is explicitly marked unavailable until that extension
+exists. gorkX never relabels a browser API, a typed slash command, or a local
+mock as the corresponding Grok Build capability.
+
 **Connector UX rule:** ordinary users connect third-party platforms through a clear browser/system authorization flow and return to gorkX. Manual tokens, URLs, CLIs and config files are advanced fallbacks only; a platform without a real authorization chain is shown as unavailable/Soon, never as connected.
 
 | Area | Feature | Status |
@@ -30,7 +37,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Onboarding | First-run checklist: engine · login · project | **Real (v0.4.3)** |
 | Plan mode | setMode + review steps + execute / retry after fail; native `x.ai/exit_plan_mode` approval gate with plan preview, revision feedback, approval and abandon outcomes | **Kernel-wired** — response shape matches bundled Grok Build 0.2.105 source; it appears only when the engine actually requests plan approval, while plan quality still varies by engine/model |
 | Worktree | create / list / use / new task / Finder / **back to main repo** | **Half→improved** |
-| Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
+| Voice Mode / dictation | Grok Build streaming STT and macOS low-memory capture helper | **Kernel TUI only — unavailable in gorkX for now.** The browser Web Speech implementation was removed rather than being presented as Grok Build Voice Mode. Upstream 0.2.110 advertises only the boolean `voiceMode` in ACP; it has no ACP start/stop/transcript interface. gorkX needs a maintained kernel ACP extension before it can expose the microphone again. |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
 | GitHub | Review → Remote reads the current origin's open PRs; checks and discussion/review comments load on demand. A user-provided fine-grained token stays in macOS Keychain. A pushed current branch can open a PR only after the user fills title/base and confirms the exact remote write; a discussion comment on an existing PR also requires its own visible confirmation. | **Half** — public origins are attempted anonymously for reads first, but GitHub may rate-limit or block that path and gorkX then provides a one-click official Token-creation guide as its advanced fallback. PR creation requires a user token with `Pull requests: write`; PR discussion comments require `Issues: write` or `Pull requests: write`. gorkX never pushes a branch automatically. GitHub App one-click browser authorization, inline review comments and other remote writes are still planned. |
 | Custom API / compatible models | Settings quick setup for OpenAI API / Anthropic API / OpenRouter API / Google Gemini API / local Ollama / compatible gateway; provider model-directory reader; App `config.toml`; task/session selection and default; provider labels/groups; macOS Keychain | **Real** — quick setup pre-fills only real protocol endpoints and opens the provider's official key/download page; it never claims web subscriptions are API connections. A user can read a configured provider's standard model directory and select a returned ID rather than guess one; this call never saves the form, logs a key, or exposes provider response bodies. The released bundled engine was isolated-tested to advertise and accept a configured `[model.*]` through ACP `session/set_model`; after a settings change, active kernel processes receive native `reload_models` so the model need not wait for a task restart. The connection probe is one small provider request and reports success only after it verifies generated text in the matching protocol response. Saved models visibly retain a non-secret pass/fail state and timestamp, so “configured” is not presented as “verified”. Endpoint response bodies never reach the UI or logs. |
