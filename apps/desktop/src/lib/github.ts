@@ -54,6 +54,12 @@ export interface GithubCreatePullRequestInput {
   draft: boolean;
 }
 
+export interface GithubCreatedIssueComment {
+  url: string;
+  author: string;
+  createdAt: string;
+}
+
 export const githubStatus = () => invoke<GithubStatus>('github_status');
 export const githubConnectReadonly = (token: string) =>
   invoke<GithubStatus>('github_connect_readonly', { token });
@@ -67,3 +73,7 @@ export const githubListPrComments = (cwd: string, prNumber: number) =>
   invoke<GithubComment[]>('github_list_pr_comments', { cwd, prNumber });
 export const githubCreatePullRequest = (input: GithubCreatePullRequestInput) =>
   invoke<GithubCreatedPullRequest>('github_create_pull_request', { input });
+export const githubCreatePrComment = (cwd: string, prNumber: number, body: string) =>
+  invoke<GithubCreatedIssueComment>('github_create_pr_comment', {
+    input: { cwd, prNumber, body },
+  });

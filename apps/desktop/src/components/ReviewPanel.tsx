@@ -5,6 +5,7 @@ import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 import {
   githubCreatePullRequest,
+  githubCreatePrComment,
   githubListOpenPrs,
   githubListPrChecks,
   githubListPrComments,
@@ -108,6 +109,9 @@ export function ReviewPanel({
   const [prDraft, setPrDraft] = useState(false);
   const [prConfirmOpen, setPrConfirmOpen] = useState(false);
   const [createdPr, setCreatedPr] = useState<GithubCreatedPullRequest | null>(null);
+  const [commentPrNumber, setCommentPrNumber] = useState<number | null>(null);
+  const [commentBody, setCommentBody] = useState('');
+  const [commentConfirmOpen, setCommentConfirmOpen] = useState(false);
 
   const refresh = () => {
     if (!cwd) {
@@ -185,6 +189,22 @@ export function ReviewPanel({
         setPrBody('');
         setPrDraft(false);
         refreshRemote();
+      })
+      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setRemoteBusy(false));
+  };
+
+  const createPrComment = () => {
+    if (!cwd || !commentPrNumber || !commentBody.trim()) return;
+    setCommentConfirmOpen(false);
+    setRemoteBusy(true);
+    setRemoteError(null);
+    void githubCreatePrComment(cwd, commentPrNumber, commentBody)
+      .then(() => {
+        setMsg(t('reviewCommentCreated'));
+        setCommentBody('');
+        setCommentPrNumber(null);
+        void loadRemoteComments(commentPrNumber);
       })
       .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
       .finally(() => setRemoteBusy(false));
@@ -821,7 +841,41 @@ export function ReviewPanel({
                     >
                       {t('githubLoadComments')}
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={remoteBusy}
+                      onClick={() => {
+                        setCommentPrNumber((current) => current === pr.number ? null : pr.number);
+                        setCommentConfirmOpen(false);
+                      }}
+                    >
+                      {t('reviewCommentCreate')}
+                    </button>
                   </div>
+                  {commentPrNumber === pr.number ? (
+                    <div className="settings-card" style={{ marginTop: 10 }}>
+                      <div className="settings-row-title">{t('reviewCommentCreate')}</div>
+                      <label className="field">
+                        <span>{t('reviewCommentBody')}</span>
+                        <textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={65536} placeholder={t('reviewCommentPlaceholder')} />
+                      </label>
+                      <div className="review-plan-actions" style={{ marginTop: 8 }}>
+                        <button type="button" className="btn" onClick={() => { setCommentPrNumber(null); setCommentConfirmOpen(false); }}>{t('cancel')}</button>
+                        <button type="button" className="btn primary" disabled={remoteBusy || !commentBody.trim()} onClick={() => setCommentConfirmOpen(true)}>{t('reviewCommentCreate')}</button>
+                      </div>
+                      {commentConfirmOpen ? (
+                        <div className="review-explain" style={{ marginTop: 10 }}>
+                          <strong>{t('reviewCommentConfirmTitle')}</strong>
+                          <p>{t('reviewCommentConfirmDetails').replace('{number}', String(pr.number))}</p>
+                          <div className="review-plan-actions">
+                            <button type="button" className="btn" onClick={() => setCommentConfirmOpen(false)}>{t('cancel')}</button>
+                            <button type="button" className="btn primary" disabled={remoteBusy} onClick={createPrComment}>{t('reviewCommentConfirm')}</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {remoteChecks[pr.number] ? (
                     <ul className="settings-list" style={{ marginTop: 8 }}>
                       {remoteChecks[pr.number].map((check) => (

@@ -112,6 +112,7 @@ pub fn run() {
             github::github_list_pr_checks,
             github::github_list_pr_comments,
             github::github_create_pull_request,
+            github::github_create_pr_comment,
             grok_admin::grok_admin_exec,
             workspace::workspace_list_files,
             workspace::read_workspace_file_preview,

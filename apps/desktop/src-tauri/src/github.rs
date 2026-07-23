@@ -58,6 +58,22 @@ pub struct GithubCreatedPullRequest {
     pub draft: bool,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCreateIssueCommentInput {
+    pub cwd: String,
+    pub pr_number: u64,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubCreatedIssueComment {
+    pub url: String,
+    pub author: String,
+    pub created_at: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GithubCheckRun {
@@ -327,6 +343,11 @@ fn github_branch_name(value: &str) -> bool {
         && !value.bytes().any(|b| b.is_ascii_control() || b == b' ' || b == b'~' || b == b'^' || b == b':' || b == b'?' || b == b'*' || b == b'[' || b == b'\\')
 }
 
+fn valid_comment_body(value: &str) -> bool {
+    let trimmed = value.trim();
+    !trimmed.is_empty() && trimmed.len() <= 65_536 && !trimmed.as_bytes().contains(&0)
+}
+
 fn current_pushed_branch(cwd: &str) -> Result<String, String> {
     let out = Command::new("git")
         .args(["-C", cwd, "branch", "--show-current"])
@@ -397,6 +418,44 @@ pub fn github_create_pull_request(input: GithubCreatePullRequestInput) -> Result
         head,
         base: base.to_string(),
         draft: input.draft,
+    })
+}
+
+/// Add a discussion comment to an existing pull request. The UI must present a
+/// separate confirmation before calling this command; no model/tool call can
+/// silently publish text through the GitHub adapter.
+#[tauri::command]
+pub fn github_create_pr_comment(input: GithubCreateIssueCommentInput) -> Result<GithubCreatedIssueComment, String> {
+    let token = token_read().ok_or_else(|| "Connect a GitHub token with Issues: write or Pull requests: write permission first.".to_string())?;
+    if input.pr_number == 0 {
+        return Err("Choose a pull request before commenting.".into());
+    }
+    let body = input.body.trim();
+    if !valid_comment_body(body) {
+        return Err("Comment must be 1–65,536 characters and cannot contain NUL bytes.".into());
+    }
+    let (owner, repo) = github_repo_from_remote(&input.cwd)?;
+    let response = client()?
+        .post(format!("{API}/repos/{owner}/{repo}/issues/{}/comments", input.pr_number))
+        .bearer_auth(token)
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2026-03-10")
+        .json(&serde_json::json!({ "body": body }))
+        .send()
+        .map_err(|e| format!("GitHub network: {e}"))?;
+    if !response.status().is_success() {
+        return Err(match response.status().as_u16() {
+            401 | 403 => "GitHub refused to post the comment. The token needs Issues: write or Pull requests: write permission for this repository.".into(),
+            404 => "GitHub could not find this pull request in the current origin repository.".into(),
+            422 => "GitHub could not post this comment. Check the text and try again later.".into(),
+            status => format!("GitHub HTTP {status} while posting the comment (response details hidden)."),
+        });
+    }
+    let body: serde_json::Value = response.json().map_err(|e| format!("GitHub response: {e}"))?;
+    Ok(GithubCreatedIssueComment {
+        url: body.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        author: body.get("user").and_then(|v| v.get("login")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        created_at: body.get("created_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
     })
 }
 
@@ -603,7 +662,7 @@ pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<Github
 
 #[cfg(test)]
 mod tests {
-    use super::{github_branch_name, github_read_error, parse_github_remote};
+    use super::{github_branch_name, github_read_error, parse_github_remote, valid_comment_body};
 
     #[test]
     fn parses_supported_github_remote_forms() {
@@ -655,6 +714,14 @@ mod tests {
         for branch in ["HEAD", "-bad", "a..b", "a b", "a:ref", "a//b"] {
             assert!(!github_branch_name(branch), "accepted {branch}");
         }
+    }
+
+    #[test]
+    fn comment_body_requires_bounded_visible_content() {
+        assert!(valid_comment_body("Looks good."));
+        assert!(!valid_comment_body(" \n\t "));
+        assert!(!valid_comment_body("bad\0comment"));
+        assert!(!valid_comment_body(&"a".repeat(65_537)));
     }
 
 }
