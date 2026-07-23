@@ -186,6 +186,7 @@ pub fn run() {
             models_config::models_remove_custom,
             models_config::models_set_default,
             models_config::models_open_config,
+            models_config::models_list_available,
             models_config::models_test_connection,
             models_config::models_migrate_plaintext_keys,
             subagents_config::subagents_config_get,

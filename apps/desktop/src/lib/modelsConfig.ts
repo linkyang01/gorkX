@@ -64,6 +64,17 @@ export interface ModelTestResult {
   note: string;
 }
 
+export interface ModelCatalogResult {
+  models: string[];
+  status: number;
+  note: string;
+}
+
+/** Read the configured endpoint's model identifiers without saving any form data. */
+export async function listAvailableModels(model: CustomModelRow): Promise<ModelCatalogResult> {
+  return invoke<ModelCatalogResult>('models_list_available', { model });
+}
+
 /** Probe endpoint with a tiny request (does not save config). */
 export async function testCustomModel(model: CustomModelRow): Promise<ModelTestResult> {
   return invoke<ModelTestResult>('models_test_connection', { model });

@@ -27,6 +27,7 @@ import {
 import { fetchMemoryStatus, setMemoryEnabled, type MemoryStatus } from '../lib/memory';
 import {
   listCustomModels,
+  listAvailableModels,
   migratePlaintextModelKeys,
   openModelsConfig,
   removeCustomModel,
@@ -248,6 +249,8 @@ export function SettingsPanel({
     providerLabel: '',
   });
   const [modelBusy, setModelBusy] = useState(false);
+  const [modelCatalog, setModelCatalog] = useState<string[]>([]);
+  const [modelCatalogBusy, setModelCatalogBusy] = useState(false);
   const [modelPreset, setModelPreset] = useState<ModelPreset>('openai');
   const [modelTestStatuses, setModelTestStatuses] = useState<Record<string, StoredModelTestStatus>>(
     () => loadStoredModelTestStatuses(),
@@ -670,6 +673,7 @@ export function SettingsPanel({
 
   const chooseModelPreset = (preset: ModelPreset) => {
     setModelPreset(preset);
+    setModelCatalog([]);
     const values = modelPresetValues[preset];
     setModelForm((current) => ({
       ...current,
@@ -1175,13 +1179,22 @@ export function SettingsPanel({
                     onChange={(e) => setModelForm((f) => ({ ...f, model: e.target.value }))}
                     placeholder="gpt-4o"
                     spellCheck={false}
+                    list="gorkx-provider-model-catalog"
                   />
+                  {modelCatalog.length ? (
+                    <datalist id="gorkx-provider-model-catalog">
+                      {modelCatalog.map((model) => <option key={model} value={model} />)}
+                    </datalist>
+                  ) : null}
                 </label>
                 <label className="field">
                   <span>base_url</span>
                   <input
                     value={modelForm.baseUrl}
-                    onChange={(e) => setModelForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                    onChange={(e) => {
+                      setModelCatalog([]);
+                      setModelForm((f) => ({ ...f, baseUrl: e.target.value }));
+                    }}
                     placeholder="https://api.openai.com/v1"
                     spellCheck={false}
                   />
@@ -1209,6 +1222,33 @@ export function SettingsPanel({
                   </select>
                 </label>
                 <div className="field-row" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={modelCatalogBusy || !modelForm.baseUrl.trim()}
+                    onClick={() => {
+                      setModelCatalogBusy(true);
+                      setMsg(t('settingsModelsListing'));
+                      const row: CustomModelRow = {
+                        id: modelForm.id.trim() || modelForm.model.trim() || 'catalog',
+                        model: modelForm.model.trim(),
+                        name: modelForm.name.trim(),
+                        baseUrl: modelForm.baseUrl.trim(),
+                        apiKey: modelForm.apiKey,
+                        apiBackend: modelForm.apiBackend,
+                        providerLabel: modelForm.providerLabel.trim(),
+                      };
+                      void listAvailableModels(row)
+                        .then((result) => {
+                          setModelCatalog(result.models);
+                          setMsg(result.note);
+                        })
+                        .catch((error) => setMsg(String(error)))
+                        .finally(() => setModelCatalogBusy(false));
+                    }}
+                  >
+                    {modelCatalogBusy ? t('settingsModelsListing') : t('settingsModelsListAvailable')}
+                  </button>
                   <button
                     type="button"
                     className="btn primary"

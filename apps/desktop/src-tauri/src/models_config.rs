@@ -4,6 +4,7 @@
 use crate::paths::{config_toml_path, ensure_dirs, grok_home};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 
 const KEYCHAIN_SERVICE: &str = "com.gorkx.model-api-key";
@@ -79,6 +80,16 @@ pub struct ModelsConfigSnapshot {
     pub config_path: String,
     pub custom_models: Vec<CustomModelRow>,
     pub default_model: Option<String>,
+    pub note: String,
+}
+
+/// A bounded, non-secret model id catalog returned by an already user-authorized
+/// provider endpoint. Response bodies and keys never leave this command.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogResult {
+    pub models: Vec<String>,
+    pub status: u16,
     pub note: String,
 }
 
@@ -463,6 +474,127 @@ fn has_generated_text(backend: &str, body: &[u8]) -> bool {
     }
 }
 
+fn normalized_backend(raw: &str) -> &str {
+    match raw.trim() {
+        "responses" | "messages" => raw.trim(),
+        _ => "chat_completions",
+    }
+}
+
+fn resolved_model_key(model: &CustomModelRow) -> String {
+    let key = model.api_key.trim();
+    if let Some(envn) = key.strip_prefix("env:") {
+        let envn = envn.trim();
+        std::env::var(envn).unwrap_or_else(|_| {
+            if envn == key_env_name(&model.id) {
+                keychain_read(&model.id).unwrap_or_default()
+            } else {
+                String::new()
+            }
+        })
+    } else if key.is_empty() {
+        keychain_read(&model.id).unwrap_or_default()
+    } else {
+        key.to_string()
+    }
+}
+
+/// Convert a configured inference base URL to its conventional model catalog
+/// endpoint. This is deliberately protocol-driven instead of provider-name
+/// driven, so compatible enterprise gateways remain usable.
+fn model_catalog_url(base: &str, backend: &str) -> String {
+    let base = base.trim_end_matches('/');
+    if let Some(root) = base.strip_suffix("/chat/completions") {
+        return format!("{root}/models");
+    }
+    if let Some(root) = base.strip_suffix("/responses") {
+        return format!("{root}/models");
+    }
+    if normalized_backend(backend) == "messages" {
+        return if base.ends_with("/v1") { format!("{base}/models") } else { format!("{base}/v1/models") };
+    }
+    if base.contains("/v1") {
+        format!("{base}/models")
+    } else {
+        format!("{base}/v1/models")
+    }
+}
+
+fn catalog_model_ids(body: &[u8]) -> Vec<String> {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) else {
+        return Vec::new();
+    };
+    let rows = value.get("data").or_else(|| value.get("models")).and_then(|v| v.as_array())
+        .or_else(|| value.as_array());
+    let mut ids = rows.into_iter().flatten().filter_map(|item| {
+        item.as_str().map(str::to_string).or_else(|| {
+            item.get("id").or_else(|| item.get("name")).or_else(|| item.get("model"))
+                .and_then(|v| v.as_str()).map(str::to_string)
+        })
+    }).map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty() && id.len() <= 256)
+        .collect::<Vec<_>>();
+    ids.sort_by_key(|id| id.to_ascii_lowercase());
+    ids.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    ids.truncate(500);
+    ids
+}
+
+/// Read model identifiers from a provider's standard catalog endpoint. This
+/// does not persist a key, configuration or provider response body.
+#[tauri::command]
+pub fn models_list_available(model: CustomModelRow) -> Result<ModelCatalogResult, String> {
+    let base = model.base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        return Err("base_url required".into());
+    }
+    validate_base_url(base)?;
+    let backend = normalized_backend(&model.api_backend);
+    let key = resolved_model_key(&model);
+    let url = model_catalog_url(base, backend);
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("gorkX-model-catalog/0.4.3")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut request = client.get(&url).header("Accept", "application/json");
+    if !key.is_empty() {
+        request = if backend == "messages" {
+            request.header("x-api-key", &key).header("anthropic-version", "2023-06-01")
+        } else {
+            request.header("Authorization", format!("Bearer {key}"))
+        };
+    }
+    let response = match request.send() {
+        Ok(response) => response,
+        Err(error) => return Ok(ModelCatalogResult {
+            models: Vec::new(), status: 0, note: format!("读取模型列表失败：{error}"),
+        }),
+    };
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        let note = match status {
+            401 | 403 => format!("鉴权失败 HTTP {status} — 检查 API Key"),
+            404 => "模型目录路径不存在 HTTP 404 — 可手动填写模型名称".into(),
+            _ => format!("读取模型列表失败 HTTP {status}（响应详情已隐藏）"),
+        };
+        return Ok(ModelCatalogResult { models: Vec::new(), status, note });
+    }
+    // Bound response parsing and immediately discard provider-controlled data.
+    let mut body = Vec::new();
+    let _ = response.take(1_048_577).read_to_end(&mut body);
+    if body.len() > 1_048_576 {
+        return Ok(ModelCatalogResult { models: Vec::new(), status, note: "模型目录过大，已拒绝读取；可手动填写模型名称".into() });
+    }
+    let models = catalog_model_ids(&body);
+    let note = if models.is_empty() {
+        format!("HTTP {status}，但未发现可选模型；可手动填写模型名称")
+    } else {
+        format!("已读取 {} 个可选模型", models.len())
+    };
+    Ok(ModelCatalogResult { models, status, note })
+}
+
 /// Probe a custom OpenAI/Anthropic-compatible endpoint (does not change config).
 #[tauri::command]
 pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, String> {
@@ -475,21 +607,8 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     if mid.is_empty() {
         return Err("model id required".into());
     }
-    let key = model.api_key.trim();
-    let key = if let Some(envn) = key.strip_prefix("env:") {
-        let envn = envn.trim();
-        std::env::var(envn).unwrap_or_else(|_| {
-            if envn == key_env_name(&model.id) { keychain_read(&model.id).unwrap_or_default() } else { String::new() }
-        })
-    } else if key.is_empty() {
-        keychain_read(&model.id).unwrap_or_default()
-    } else {
-        key.to_string()
-    };
-    let backend = match model.api_backend.trim() {
-        "responses" | "messages" => model.api_backend.trim(),
-        _ => "chat_completions",
-    };
+    let key = resolved_model_key(&model);
+    let backend = normalized_backend(&model.api_backend);
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(25))
         .user_agent("gorkX-model-test/0.4.3")
@@ -687,7 +806,7 @@ pub fn config_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_generated_text, validate_base_url};
+    use super::{catalog_model_ids, has_generated_text, model_catalog_url, validate_base_url};
 
     #[test]
     fn accepts_https_and_local_http_model_endpoints() {
@@ -719,5 +838,20 @@ mod tests {
         assert!(!has_generated_text("chat_completions", br#"{"choices":[]}"#));
         assert!(!has_generated_text("responses", br#"{"output_text":""}"#));
         assert!(!has_generated_text("messages", br#"{"content":[]}"#));
+    }
+
+    #[test]
+    fn model_catalog_uses_protocol_compatible_paths() {
+        assert_eq!(model_catalog_url("https://api.openai.com/v1", "responses"), "https://api.openai.com/v1/models");
+        assert_eq!(model_catalog_url("https://api.anthropic.com/v1", "messages"), "https://api.anthropic.com/v1/models");
+        assert_eq!(model_catalog_url("https://openrouter.ai/api/v1", "chat_completions"), "https://openrouter.ai/api/v1/models");
+        assert_eq!(model_catalog_url("https://gateway.example/chat/completions", "chat_completions"), "https://gateway.example/models");
+    }
+
+    #[test]
+    fn model_catalog_extracts_only_bounded_ids() {
+        let ids = catalog_model_ids(br#"{"data":[{"id":"gpt-4o"},{"id":"GPT-4O"},{"name":"claude-test"},{"id":""}]}"#);
+        assert_eq!(ids, vec!["claude-test", "gpt-4o"]);
+        assert!(catalog_model_ids(br#"not json"#).is_empty());
     }
 }
