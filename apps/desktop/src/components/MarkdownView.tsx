@@ -243,7 +243,28 @@ function renderChart(raw: string): string | null {
   const legend = chart.datasets.map((dataset, index) => dataset.label
     ? `<span><i style="background:${chartColors[index]}"></i>${escapeHtml(dataset.label)}</span>`
     : '').filter(Boolean).join('');
-  return `<figure class="md-chart"><figcaption>${escapeHtml(chart.title || '数据图表')}</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(chart.title || '数据图表')}">${grid}<line x1="${left}" y1="${zeroY}" x2="${width - right}" y2="${zeroY}" class="md-chart-zero" />${series}${labels}</svg>${legend ? `<div class="md-chart-legend">${legend}</div>` : ''}</figure>`;
+  const title = chart.title || t('conversationDataChart');
+  return `<figure class="md-chart"><figcaption>${escapeHtml(title)}</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">${grid}<line x1="${left}" y1="${zeroY}" x2="${width - right}" y2="${zeroY}" class="md-chart-zero" />${series}${labels}</svg>${legend ? `<div class="md-chart-legend">${legend}</div>` : ''}</figure>`;
+}
+
+/** Render a bounded, escaped unified diff without treating it as executable code. */
+function renderDiff(raw: string): string | null {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  if (!lines.length || lines.length > 600) return null;
+  const meaningful = lines.filter((line) => /^(?:@@|\+\+\+|---|\+|-)/.test(line));
+  if (meaningful.length < 2) return null;
+  const body = lines.map((line) => {
+    const safe = escapeHtml(line.length > 1000 ? `${line.slice(0, 999)}…` : line);
+    const tone = line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')
+      ? ' meta'
+      : line.startsWith('+')
+        ? ' add'
+        : line.startsWith('-')
+          ? ' remove'
+          : '';
+    return `<span class="md-diff-line${tone}">${safe || ' '}</span>`;
+  }).join('\n');
+  return `<figure class="md-diff"><figcaption>${escapeHtml(t('conversationDiff'))}</figcaption><pre><code>${body}</code></pre></figure>`;
 }
 
 /**
@@ -314,6 +335,13 @@ function renderBlock(md: string): string {
         const diagram = renderMermaidFlowchart(body.join('\n'));
         if (diagram) {
           out.push(diagram);
+          continue;
+        }
+      }
+      if (lang === 'diff' || lang === 'patch') {
+        const diff = renderDiff(body.join('\n'));
+        if (diff) {
+          out.push(diff);
           continue;
         }
       }

@@ -2998,6 +2998,20 @@ button.pill:hover {
 .md-diagram-node { fill: color-mix(in srgb, var(--accent) 10%, var(--panel)); stroke: color-mix(in srgb, var(--accent) 46%, var(--hairline)); stroke-width: 1; }
 .md-diagram-node-label { fill: var(--text); font-size: 12px; font-weight: 600; }
 
+.md-diff {
+  margin: 0.9em 0 1.05em;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--code-bg);
+}
+.md-diff figcaption { margin: 0; padding: 9px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.09); color: var(--code-fg); font-size: 0.85em; font-weight: 650; }
+.md-diff pre { margin: 0; padding: 8px 0; border-radius: 0; box-shadow: none; }
+.md-diff-line { display: block; min-width: max-content; padding: 0 12px; white-space: pre; }
+.md-diff-line.meta { color: color-mix(in srgb, var(--code-fg) 72%, var(--accent)); }
+.md-diff-line.add { color: #9ee8b5; background: rgba(46, 160, 67, 0.22); }
+.md-diff-line.remove { color: #ffb4ae; background: rgba(248, 81, 73, 0.2); }
+
 .response-choices {
   margin: 0.9em 0 0.15em;
   padding: 12px;
