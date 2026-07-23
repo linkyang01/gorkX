@@ -78,6 +78,112 @@ export interface PermissionRequest {
   raw: unknown;
 }
 
+/** A structured decision request emitted by Grok Build's ask_user_question tool. */
+export interface UserQuestionOption {
+  label: string;
+  description: string;
+  /** Optional comparison content. Rendered as text only by the desktop client. */
+  preview?: string;
+  id?: string;
+}
+
+export interface UserQuestion {
+  question: string;
+  options: UserQuestionOption[];
+  multiSelect?: boolean;
+  id?: string;
+}
+
+export type UserQuestionMode = 'default' | 'plan';
+
+export interface UserQuestionRequest {
+  jsonrpcId: number | string;
+  sessionId?: string;
+  toolCallId?: string;
+  questions: UserQuestion[];
+  mode: UserQuestionMode;
+  raw: unknown;
+}
+
+export type UserQuestionAnswers = Record<string, string[]>;
+export type UserQuestionAnnotations = Record<string, { preview?: string; notes?: string }>;
+
+/** Exact Grok Build ACP response for `x.ai/ask_user_question` (kernel 0.2.105). */
+export function userQuestionAcceptedResult(
+  answers: UserQuestionAnswers,
+  annotations?: UserQuestionAnnotations,
+) {
+  const cleanAnnotations = annotations && Object.keys(annotations).length ? annotations : undefined;
+  return cleanAnnotations
+    ? { outcome: 'accepted', answers, annotations: cleanAnnotations }
+    : { outcome: 'accepted', answers };
+}
+
+export function userQuestionPlanResult(
+  outcome: 'chat_about_this' | 'skip_interview',
+  partialAnswers: Record<string, string>,
+) {
+  return { outcome, partial_answers: partialAnswers };
+}
+
+export function userQuestionCancelledResult() {
+  return { outcome: 'cancelled' };
+}
+
+function readUserQuestions(value: unknown): UserQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const raw = entry as Record<string, unknown>;
+    const question = typeof raw.question === 'string' ? raw.question.trim().slice(0, 800) : '';
+    if (!question) return [];
+    const options = Array.isArray(raw.options)
+      ? raw.options.flatMap((option) => {
+          if (!option || typeof option !== 'object') return [];
+          const item = option as Record<string, unknown>;
+          const label = typeof item.label === 'string' ? item.label.trim().slice(0, 240) : '';
+          if (!label) return [];
+          return [{
+            label,
+            description: typeof item.description === 'string' ? item.description.trim().slice(0, 800) : '',
+            preview: typeof item.preview === 'string' ? item.preview.slice(0, 4_000) : undefined,
+            id: typeof item.id === 'string' ? item.id : undefined,
+          }];
+        }).slice(0, 12)
+      : [];
+    return [{
+      question,
+      options,
+      multiSelect: raw.multiSelect === true || raw.multi_select === true,
+      id: typeof raw.id === 'string' ? raw.id : undefined,
+    }];
+  }).slice(0, 8);
+}
+
+/** Accept both direct and Grok Build leader-wrapped extension requests. */
+export function parseUserQuestionRequest(
+  jsonrpcId: number | string,
+  method: string,
+  rawParams: unknown,
+  raw: unknown,
+): UserQuestionRequest | null {
+  const outer = rawParams && typeof rawParams === 'object' ? rawParams as Record<string, unknown> : {};
+  const wrapped = typeof outer.method === 'string' && outer.params && typeof outer.params === 'object';
+  const effectiveMethod = wrapped ? String(outer.method) : method.replace(/^_/, '');
+  if (effectiveMethod !== 'x.ai/ask_user_question') return null;
+  const params = (wrapped ? outer.params : outer) as Record<string, unknown>;
+  const questions = readUserQuestions(params.questions);
+  if (!questions.length) return null;
+  return {
+    jsonrpcId,
+    sessionId: typeof params.sessionId === 'string' ? params.sessionId : typeof params.session_id === 'string' ? params.session_id : undefined,
+    toolCallId: typeof params.toolCallId === 'string' ? params.toolCallId : typeof params.tool_call_id === 'string' ? params.tool_call_id : undefined,
+    questions,
+    mode: params.mode === 'plan' ? 'plan' : 'default',
+    raw,
+  };
+}
+
 export interface PromptResult {
   stopReason?: string;
   _meta?: Record<string, unknown>;
@@ -171,6 +277,7 @@ export class AcpClient {
 
   onSessionUpdate: ((update: SessionUpdate, sessionId?: string) => void) | null = null;
   onPermissionRequest: ((req: PermissionRequest) => void) | null = null;
+  onUserQuestionRequest: ((req: UserQuestionRequest) => void) | null = null;
   onStderr: ((line: string) => void) | null = null;
   onExit: (() => void) | null = null;
   onNotification: ((method: string, params: unknown) => void) | null = null;
@@ -356,6 +463,12 @@ export class AcpClient {
   private async handleServerRequest(method: string, msg: Record<string, unknown>) {
     const id = msg.id as number | string;
     const params = (msg.params ?? {}) as Record<string, unknown>;
+
+    const userQuestion = parseUserQuestionRequest(id, method, params, msg);
+    if (userQuestion) {
+      this.onUserQuestionRequest?.(userQuestion);
+      return;
+    }
 
     if (
       method === 'session/request_permission' ||

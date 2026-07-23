@@ -21,12 +21,18 @@ import {
   parseToolUpdate,
   permissionResult,
   pickPermissionOption,
+  userQuestionAcceptedResult,
+  userQuestionCancelledResult,
+  userQuestionPlanResult,
   type GrokStatus,
   type ModelInfo,
   type PermissionMode,
   type PermissionRequest,
   type ReasoningEffort,
   type SessionUpdate,
+  type UserQuestionAnswers,
+  type UserQuestionAnnotations,
+  type UserQuestionRequest,
 } from './lib/acpClient';
 import type { ArchivedTaskRow } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
@@ -135,6 +141,7 @@ import { SidebarNav } from './components/SidebarNav';
 import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
 import { PermissionPrompt } from './components/PermissionPrompt';
+import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -427,6 +434,9 @@ function App() {
   } | null>(null);
   const [permReq, setPermReq] = useState<PermissionRequest | null>(null);
   const [permAgentId, setPermAgentId] = useState<string | null>(null);
+  const [userQuestionReq, setUserQuestionReq] = useState<UserQuestionRequest | null>(null);
+  const [userQuestionAgentId, setUserQuestionAgentId] = useState<string | null>(null);
+  const userQuestionAgentRef = useRef<string | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
   const [projectSessions, setProjectSessions] = useState<Record<string, RecentSession[]>>({});
   const [dismissedSessions, setDismissedSessions] = useState<string[]>(() => {
@@ -1495,6 +1505,16 @@ function App() {
         );
       };
 
+      client.onUserQuestionRequest = (req) => {
+        userQuestionAgentRef.current = threadId;
+        setUserQuestionAgentId(threadId);
+        setUserQuestionReq(req);
+        void notifyPermission(
+          'gorkX',
+          req.mode === 'plan' ? 'Plan needs your decisions — open gorkX to continue.' : 'Grok needs your decision — open gorkX to continue.',
+        );
+      };
+
       client.onTerminalCreated = (terminalId) => {
         // Agent ACP terminals still run in backend; user shell is the embedded xterm dock.
         appendLine(threadId, {
@@ -1520,6 +1540,11 @@ function App() {
       };
 
       client.onExit = () => {
+        if (userQuestionAgentRef.current === threadId) {
+          userQuestionAgentRef.current = null;
+          setUserQuestionReq(null);
+          setUserQuestionAgentId(null);
+        }
         patchThread(threadId, {
           busy: false,
           client: null,
@@ -3421,6 +3446,20 @@ function App() {
     }
     setPermReq(null);
     setPermAgentId(null);
+  };
+
+  const answerUserQuestion = async (
+    result:
+      | ReturnType<typeof userQuestionAcceptedResult>
+      | ReturnType<typeof userQuestionCancelledResult>
+      | ReturnType<typeof userQuestionPlanResult>,
+  ) => {
+    if (!userQuestionReq || !userQuestionAgentId) return;
+    const thread = threads.find((item) => item.id === userQuestionAgentId);
+    if (thread?.client) await thread.client.respond(userQuestionReq.jsonrpcId, result);
+    userQuestionAgentRef.current = null;
+    setUserQuestionReq(null);
+    setUserQuestionAgentId(null);
   };
 
   // Close composer popovers on outside click / Escape
@@ -5557,6 +5596,18 @@ function App() {
 
       {permReq ? (
         <PermissionPrompt request={permReq} onAnswer={(optionId) => void answerPermission(optionId)} />
+      ) : null}
+      {userQuestionReq ? (
+        <UserQuestionPrompt
+          request={userQuestionReq}
+          onAccept={(answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) =>
+            void answerUserQuestion(userQuestionAcceptedResult(answers, annotations))
+          }
+          onPlanAction={(outcome, partialAnswers) =>
+            void answerUserQuestion(userQuestionPlanResult(outcome, partialAnswers))
+          }
+          onCancel={() => void answerUserQuestion(userQuestionCancelledResult())}
+        />
       ) : null}
     </div>
   );
