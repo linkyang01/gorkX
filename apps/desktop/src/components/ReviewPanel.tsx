@@ -106,6 +106,7 @@ export function ReviewPanel({
   const [prBody, setPrBody] = useState('');
   const [prBase, setPrBase] = useState('main');
   const [prDraft, setPrDraft] = useState(false);
+  const [prConfirmOpen, setPrConfirmOpen] = useState(false);
   const [createdPr, setCreatedPr] = useState<GithubCreatedPullRequest | null>(null);
 
   const refresh = () => {
@@ -167,7 +168,7 @@ export function ReviewPanel({
 
   const createPullRequest = () => {
     if (!cwd || !prTitle.trim() || !prBase.trim()) return;
-    if (!window.confirm(t('reviewPrConfirm'))) return;
+    setPrConfirmOpen(false);
     setRemoteBusy(true);
     setRemoteError(null);
     void githubCreatePullRequest({
@@ -743,11 +744,21 @@ export function ReviewPanel({
               <span>{t('reviewPrDraft')}</span>
             </label>
             <div className="review-plan-actions" style={{ marginTop: 10 }}>
-              <button type="button" className="btn primary" disabled={!cwd || remoteBusy || !prTitle.trim() || !prBase.trim()} onClick={createPullRequest}>
+              <button type="button" className="btn primary" disabled={!cwd || remoteBusy || !prTitle.trim() || !prBase.trim()} onClick={() => setPrConfirmOpen(true)}>
                 {t('reviewPrCreate')}
               </button>
             </div>
           </section>
+          {prConfirmOpen ? (
+            <section className="review-explain" style={{ marginBottom: 12 }}>
+              <strong>{t('reviewPrConfirmTitle')}</strong>
+              <p>{t('reviewPrConfirmDetails').replace('{base}', prBase.trim())}</p>
+              <div className="review-plan-actions">
+                <button type="button" className="btn" onClick={() => setPrConfirmOpen(false)}>{t('cancel')}</button>
+                <button type="button" className="btn primary" disabled={remoteBusy} onClick={createPullRequest}>{t('reviewPrConfirm')}</button>
+              </div>
+            </section>
+          ) : null}
           {createdPr ? (
             <div className="review-explain" style={{ marginBottom: 12 }}>
               <strong>{t('reviewPrCreated').replace('{number}', String(createdPr.number))}</strong>
