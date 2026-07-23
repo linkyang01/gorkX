@@ -130,6 +130,53 @@ export function userQuestionCancelledResult() {
   return { outcome: 'cancelled' };
 }
 
+/** A blocking plan approval emitted after Grok Build has written its plan file. */
+export interface PlanApprovalRequest {
+  jsonrpcId: number | string;
+  sessionId?: string;
+  toolCallId?: string;
+  planContent?: string;
+  raw: unknown;
+}
+
+/** Exact Grok Build ACP response for `x.ai/exit_plan_mode` (kernel 0.2.105). */
+export function planApprovalResult(
+  outcome: 'approved' | 'cancelled' | 'abandoned',
+  feedback?: string,
+) {
+  const cleanFeedback = feedback?.trim();
+  return cleanFeedback && outcome === 'cancelled'
+    ? { outcome, feedback: cleanFeedback.slice(0, 4_000) }
+    : { outcome };
+}
+
+function extMethodParams(method: string, rawParams: unknown): { method: string; params: Record<string, unknown> } {
+  const outer = rawParams && typeof rawParams === 'object' ? rawParams as Record<string, unknown> : {};
+  const wrapped = typeof outer.method === 'string' && outer.params && typeof outer.params === 'object';
+  return {
+    method: wrapped ? String(outer.method) : method.replace(/^_/, ''),
+    params: (wrapped ? outer.params : outer) as Record<string, unknown>,
+  };
+}
+
+/** Accept both direct and Grok Build leader-wrapped plan approval requests. */
+export function parsePlanApprovalRequest(
+  jsonrpcId: number | string,
+  method: string,
+  rawParams: unknown,
+  raw: unknown,
+): PlanApprovalRequest | null {
+  const ext = extMethodParams(method, rawParams);
+  if (ext.method !== 'x.ai/exit_plan_mode') return null;
+  return {
+    jsonrpcId,
+    sessionId: typeof ext.params.sessionId === 'string' ? ext.params.sessionId : typeof ext.params.session_id === 'string' ? ext.params.session_id : undefined,
+    toolCallId: typeof ext.params.toolCallId === 'string' ? ext.params.toolCallId : typeof ext.params.tool_call_id === 'string' ? ext.params.tool_call_id : undefined,
+    planContent: typeof ext.params.planContent === 'string' ? ext.params.planContent.slice(0, 100_000) : typeof ext.params.plan_content === 'string' ? ext.params.plan_content.slice(0, 100_000) : undefined,
+    raw,
+  };
+}
+
 function readUserQuestions(value: unknown): UserQuestion[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
@@ -167,11 +214,9 @@ export function parseUserQuestionRequest(
   rawParams: unknown,
   raw: unknown,
 ): UserQuestionRequest | null {
-  const outer = rawParams && typeof rawParams === 'object' ? rawParams as Record<string, unknown> : {};
-  const wrapped = typeof outer.method === 'string' && outer.params && typeof outer.params === 'object';
-  const effectiveMethod = wrapped ? String(outer.method) : method.replace(/^_/, '');
-  if (effectiveMethod !== 'x.ai/ask_user_question') return null;
-  const params = (wrapped ? outer.params : outer) as Record<string, unknown>;
+  const ext = extMethodParams(method, rawParams);
+  if (ext.method !== 'x.ai/ask_user_question') return null;
+  const params = ext.params;
   const questions = readUserQuestions(params.questions);
   if (!questions.length) return null;
   return {
@@ -278,6 +323,7 @@ export class AcpClient {
   onSessionUpdate: ((update: SessionUpdate, sessionId?: string) => void) | null = null;
   onPermissionRequest: ((req: PermissionRequest) => void) | null = null;
   onUserQuestionRequest: ((req: UserQuestionRequest) => void) | null = null;
+  onPlanApprovalRequest: ((req: PlanApprovalRequest) => void) | null = null;
   onStderr: ((line: string) => void) | null = null;
   onExit: (() => void) | null = null;
   onNotification: ((method: string, params: unknown) => void) | null = null;
@@ -467,6 +513,12 @@ export class AcpClient {
     const userQuestion = parseUserQuestionRequest(id, method, params, msg);
     if (userQuestion) {
       this.onUserQuestionRequest?.(userQuestion);
+      return;
+    }
+
+    const planApproval = parsePlanApprovalRequest(id, method, params, msg);
+    if (planApproval) {
+      this.onPlanApprovalRequest?.(planApproval);
       return;
     }
 

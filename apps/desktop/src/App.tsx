@@ -20,6 +20,7 @@ import {
   isToolCallIdLike,
   parseToolUpdate,
   permissionResult,
+  planApprovalResult,
   pickPermissionOption,
   userQuestionAcceptedResult,
   userQuestionCancelledResult,
@@ -28,6 +29,7 @@ import {
   type ModelInfo,
   type PermissionMode,
   type PermissionRequest,
+  type PlanApprovalRequest,
   type ReasoningEffort,
   type SessionUpdate,
   type UserQuestionAnswers,
@@ -142,6 +144,7 @@ import { ThreadListRow } from './components/ThreadListRow';
 import { AccountAvatar } from './components/AccountAvatar';
 import { PermissionPrompt } from './components/PermissionPrompt';
 import { UserQuestionPrompt } from './components/UserQuestionPrompt';
+import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -437,6 +440,9 @@ function App() {
   const [userQuestionReq, setUserQuestionReq] = useState<UserQuestionRequest | null>(null);
   const [userQuestionAgentId, setUserQuestionAgentId] = useState<string | null>(null);
   const userQuestionAgentRef = useRef<string | null>(null);
+  const [planApprovalReq, setPlanApprovalReq] = useState<PlanApprovalRequest | null>(null);
+  const [planApprovalAgentId, setPlanApprovalAgentId] = useState<string | null>(null);
+  const planApprovalAgentRef = useRef<string | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
   const [projectSessions, setProjectSessions] = useState<Record<string, RecentSession[]>>({});
   const [dismissedSessions, setDismissedSessions] = useState<string[]>(() => {
@@ -1515,6 +1521,16 @@ function App() {
         );
       };
 
+      client.onPlanApprovalRequest = (req) => {
+        planApprovalAgentRef.current = threadId;
+        setPlanApprovalAgentId(threadId);
+        setPlanApprovalReq(req);
+        void notifyPermission(
+          'gorkX',
+          'Plan is ready for your review — open gorkX to approve or request changes.',
+        );
+      };
+
       client.onTerminalCreated = (terminalId) => {
         // Agent ACP terminals still run in backend; user shell is the embedded xterm dock.
         appendLine(threadId, {
@@ -1544,6 +1560,11 @@ function App() {
           userQuestionAgentRef.current = null;
           setUserQuestionReq(null);
           setUserQuestionAgentId(null);
+        }
+        if (planApprovalAgentRef.current === threadId) {
+          planApprovalAgentRef.current = null;
+          setPlanApprovalReq(null);
+          setPlanApprovalAgentId(null);
         }
         patchThread(threadId, {
           busy: false,
@@ -3460,6 +3481,20 @@ function App() {
     userQuestionAgentRef.current = null;
     setUserQuestionReq(null);
     setUserQuestionAgentId(null);
+  };
+
+  const answerPlanApproval = async (
+    outcome: 'approved' | 'cancelled' | 'abandoned',
+    feedback?: string,
+  ) => {
+    if (!planApprovalReq || !planApprovalAgentId) return;
+    const thread = threads.find((item) => item.id === planApprovalAgentId);
+    if (thread?.client) {
+      await thread.client.respond(planApprovalReq.jsonrpcId, planApprovalResult(outcome, feedback));
+    }
+    planApprovalAgentRef.current = null;
+    setPlanApprovalReq(null);
+    setPlanApprovalAgentId(null);
   };
 
   // Close composer popovers on outside click / Escape
@@ -5607,6 +5642,12 @@ function App() {
             void answerUserQuestion(userQuestionPlanResult(outcome, partialAnswers))
           }
           onCancel={() => void answerUserQuestion(userQuestionCancelledResult())}
+        />
+      ) : null}
+      {planApprovalReq ? (
+        <PlanApprovalPrompt
+          request={planApprovalReq}
+          onAnswer={(outcome, feedback) => void answerPlanApproval(outcome, feedback)}
         />
       ) : null}
     </div>

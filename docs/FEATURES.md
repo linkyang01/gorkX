@@ -27,7 +27,7 @@ See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 | Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** |
 | App update | Settings check + download DMG; launch banner | **Real (v0.4.2)** — drag into Applications to replace |
 | Onboarding | First-run checklist: engine · login · project | **Real (v0.4.3)** |
-| Plan mode | setMode + review steps + execute / retry after fail; clean agent state on success | **Half→improved** — engine plan quality still varies |
+| Plan mode | setMode + review steps + execute / retry after fail; native `x.ai/exit_plan_mode` approval gate with plan preview, revision feedback, approval and abandon outcomes | **Kernel-wired** — response shape matches bundled Grok Build 0.2.105 source; it appears only when the engine actually requests plan approval, while plan quality still varies by engine/model |
 | Worktree | create / list / use / new task / Finder / **back to main repo** | **Half→improved** |
 | Voice input | Web Speech + mic preflight | **Half** — may fail in WKWebView |
 | Review Diff | Git porcelain + file diff; copy path/diff; reveal file; non-git **file preview** | **Half→improved** — non-git is preview not unified diff |
