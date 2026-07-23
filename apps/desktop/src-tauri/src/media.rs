@@ -59,6 +59,25 @@ fn media_dir(thread_id: &str) -> Result<std::path::PathBuf, String> {
     Ok(root)
 }
 
+fn persist_image(dir: &std::path::Path, mime_type: &str, bytes: &[u8]) -> Result<SavedAgentImage, String> {
+    let (extension, _) = media_kind(mime_type.trim(), bytes)?;
+    fs::create_dir_all(dir).map_err(|e| format!("create media directory: {e}"))?;
+    let seq = IMAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let name = format!("agent-{}-{}.{}", chrono::Utc::now().timestamp_millis(), seq, extension);
+    let final_path = dir.join(&name);
+    let temp_path = dir.join(format!(".{name}.tmp"));
+    fs::write(&temp_path, bytes).map_err(|e| format!("write agent image: {e}"))?;
+    fs::rename(&temp_path, &final_path).map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("finalize agent image: {e}")
+    })?;
+    Ok(SavedAgentImage {
+        path: final_path.display().to_string(),
+        name,
+        size: bytes.len(),
+    })
+}
+
 #[tauri::command]
 pub fn media_save_agent_image(
     thread_id: String,
@@ -74,22 +93,8 @@ pub fn media_save_agent_image(
     if bytes.is_empty() || bytes.len() > MAX_IMAGE_BYTES {
         return Err("ACP image exceeds the 12 MiB limit".into());
     }
-    let (extension, _) = media_kind(mime_type.trim(), &bytes)?;
     let dir = media_dir(&thread_id)?;
-    let seq = IMAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let name = format!("agent-{}-{}.{}", chrono::Utc::now().timestamp_millis(), seq, extension);
-    let final_path = dir.join(&name);
-    let temp_path = dir.join(format!(".{name}.tmp"));
-    fs::write(&temp_path, &bytes).map_err(|e| format!("write agent image: {e}"))?;
-    fs::rename(&temp_path, &final_path).map_err(|e| {
-        let _ = fs::remove_file(&temp_path);
-        format!("finalize agent image: {e}")
-    })?;
-    Ok(SavedAgentImage {
-        path: final_path.display().to_string(),
-        name,
-        size: bytes.len(),
-    })
+    persist_image(&dir, &mime_type, &bytes)
 }
 
 pub fn remove_thread_media(thread_id: &str) {
@@ -102,7 +107,8 @@ pub fn remove_thread_media(thread_id: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::media_kind;
+    use super::{media_kind, persist_image};
+    use std::fs;
 
     #[test]
     fn accepts_only_matching_raster_headers() {
@@ -110,5 +116,20 @@ mod tests {
         assert_eq!(media_kind("image/jpeg", &[0xff, 0xd8, 0xff, 0xdb]).unwrap().0, "jpg");
         assert!(media_kind("image/png", b"not an image").is_err());
         assert!(media_kind("image/svg+xml", b"<svg/>").is_err());
+    }
+
+    #[test]
+    fn persists_and_reads_back_validated_image() {
+        let dir = std::env::temp_dir().join(format!(
+            "gorkx-media-test-{}-{}",
+            std::process::id(),
+            super::IMAGE_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        ));
+        let bytes = b"\x89PNG\r\n\x1a\nvalidated-image";
+        let saved = persist_image(&dir, "image/png", bytes).unwrap();
+        assert_eq!(saved.size, bytes.len());
+        assert_eq!(fs::read(&saved.path).unwrap(), bytes);
+        assert!(!dir.join(format!(".{}.tmp", saved.name)).exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 }
