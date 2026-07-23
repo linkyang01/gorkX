@@ -17,6 +17,7 @@ export type PlusAction =
   | { type: 'memory-panel' }
   | { type: 'plan-toggle'; on: boolean }
   | { type: 'fork-session' }
+  | { type: 'rewind-session' }
   | { type: 'stage'; cmd: string; label: string }
   | { type: 'send-now'; cmd: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -218,7 +219,7 @@ export function PlusMenu({
       id: 'rewind',
       title: t('plusRewind'),
       desc: t('slashDescRewind'),
-      action: { type: 'stage', cmd: '/rewind', label: t('plusRewind') },
+      action: { type: 'rewind-session' },
     },
     {
       kind: 'action',

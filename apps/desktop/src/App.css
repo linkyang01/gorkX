@@ -4740,6 +4740,145 @@ button.pill:hover {
   justify-content: flex-end;
 }
 
+/* ── Native session rewind ───────────────────────────── */
+
+.rewind-modal {
+  width: min(620px, 100%);
+}
+
+.rewind-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rewind-eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rewind-badge {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.rewind-explain,
+.rewind-warning {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rewind-warning {
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+}
+
+.rewind-points,
+.rewind-modes {
+  display: grid;
+  gap: 7px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}
+
+.rewind-points > strong,
+.rewind-modes legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.rewind-point,
+.rewind-mode {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.rewind-point:hover,
+.rewind-mode:hover,
+.rewind-point.selected,
+.rewind-mode.selected {
+  background: var(--glass);
+  border-color: var(--glass-border);
+}
+
+.rewind-point input,
+.rewind-mode input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.rewind-point-main,
+.rewind-mode span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rewind-point-main > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.rewind-point-main small,
+.rewind-mode small,
+.rewind-point-files {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.rewind-point-files {
+  margin-left: auto;
+  text-align: right;
+}
+
+.rewind-mode strong {
+  font-size: 13px;
+}
+
+.rewind-empty,
+.rewind-error {
+  margin: 14px 0;
+  padding: 11px;
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rewind-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.rewind-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .perm-modal {
   width: min(480px, 100%);
 }

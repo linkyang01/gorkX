@@ -65,6 +65,33 @@ export interface ForkSessionResult {
   newModelId?: string | null;
 }
 
+export type RewindMode = 'all' | 'conversation_only' | 'files_only';
+
+/** A kernel-provided checkpoint; prompt indexes are stable ACP identifiers, not UI row indexes. */
+export interface RewindPoint {
+  promptIndex: number;
+  createdAt: string;
+  numFileSnapshots: number;
+  hasFileChanges: boolean;
+  promptPreview?: string | null;
+}
+
+export interface RewindConflict {
+  path: string;
+  conflictType: string;
+}
+
+export interface RewindResult {
+  success: boolean;
+  targetPromptIndex: number;
+  mode: RewindMode;
+  revertedFiles: string[];
+  cleanFiles: string[];
+  conflicts: RewindConflict[];
+  promptText?: string | null;
+  error?: string | null;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -834,6 +861,74 @@ export class AcpClient {
     const result = ('result' in raw && raw.result ? raw.result : raw) as ForkSessionResult;
     if (!result?.newSessionId) throw new Error('Kernel did not return a forked session ID');
     return result;
+  }
+
+  /** List the kernel's durable checkpoints. No conversation or files are changed. */
+  async rewindPoints(sessionId: string): Promise<RewindPoint[]> {
+    const raw = (await this.request('x.ai/rewind/points', { sessionId }, 15_000)) as Record<string, unknown>;
+    const nested = raw.result && typeof raw.result === 'object' ? raw.result as Record<string, unknown> : {};
+    const points = raw.rewindPoints ?? raw.rewind_points ?? nested.rewindPoints ?? nested.rewind_points;
+    if (!Array.isArray(points)) return [];
+    return points.flatMap((point: unknown) => {
+      const row = point as Record<string, unknown>;
+      const promptIndex = typeof row.promptIndex === 'number' ? row.promptIndex : row.prompt_index;
+      if (typeof promptIndex !== 'number' || !Number.isInteger(promptIndex) || promptIndex < 0) return [];
+      return [{
+        promptIndex,
+        createdAt: typeof row.createdAt === 'string' ? row.createdAt : typeof row.created_at === 'string' ? row.created_at : '',
+        numFileSnapshots: typeof row.numFileSnapshots === 'number' ? row.numFileSnapshots : typeof row.num_file_snapshots === 'number' ? row.num_file_snapshots : 0,
+        hasFileChanges: row.hasFileChanges === true || row.has_file_changes === true,
+        promptPreview: typeof row.promptPreview === 'string' ? row.promptPreview : typeof row.prompt_preview === 'string' ? row.prompt_preview : null,
+      }];
+    });
+  }
+
+  /**
+   * Execute an explicit, user-selected rollback. `force` stays false: callers
+   * must never silently overwrite a file conflict.
+   */
+  async rewind(
+    sessionId: string,
+    targetPromptIndex: number,
+    mode: RewindMode,
+  ): Promise<RewindResult> {
+    const raw = (await this.request('x.ai/rewind/execute', {
+      sessionId,
+      targetPromptIndex,
+      mode,
+      force: false,
+    }, 30_000)) as Record<string, unknown>;
+    const result = raw.result && typeof raw.result === 'object' ? raw.result as Record<string, unknown> : raw;
+    const files = (value: unknown) => Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string').slice(0, 500)
+      : [];
+    const conflicts = Array.isArray(result.conflicts)
+      ? result.conflicts.flatMap((item) => {
+          if (!item || typeof item !== 'object') return [];
+          const row = item as Record<string, unknown>;
+          const path = typeof row.path === 'string' ? row.path : '';
+          const conflictType = typeof row.conflictType === 'string'
+            ? row.conflictType
+            : typeof row.conflict_type === 'string' ? row.conflict_type : 'unknown';
+          return path ? [{ path, conflictType }] : [];
+        })
+      : [];
+    return {
+      success: result.success === true,
+      targetPromptIndex: typeof result.targetPromptIndex === 'number'
+        ? result.targetPromptIndex
+        : typeof result.target_prompt_index === 'number' ? result.target_prompt_index : targetPromptIndex,
+      mode: result.mode === 'conversation_only' || result.mode === 'files_only' || result.mode === 'all'
+        ? result.mode
+        : mode,
+      revertedFiles: files(result.revertedFiles ?? result.reverted_files),
+      cleanFiles: files(result.cleanFiles ?? result.clean_files),
+      conflicts,
+      promptText: typeof result.promptText === 'string'
+        ? result.promptText
+        : typeof result.prompt_text === 'string' ? result.prompt_text : null,
+      error: typeof result.error === 'string' ? result.error : null,
+    };
   }
 
   async prompt(
