@@ -157,6 +157,7 @@ pub fn run() {
             store::store_rekey_project,
             store::account_summary,
             store::list_available_models,
+            store::subscription_models_snapshot,
             store::model_context_info,
             auth::auth_logout,
             auth::auth_login_browser,

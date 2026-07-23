@@ -62,6 +62,14 @@ export interface SubscriptionModel {
   hidden?: boolean | null;
 }
 
+export interface SubscriptionModelsSnapshot {
+  models: SubscriptionModel[];
+  /** Whether this display came from a successful live refresh, prior cache, or neither. */
+  source: 'live' | 'cache' | 'none';
+  fetchedAt?: string | null;
+  refreshError?: string | null;
+}
+
 function isTauri(): boolean {
   return typeof window !== 'undefined' && !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 }
@@ -139,6 +147,24 @@ export async function fetchSubscriptionModels(refresh = false): Promise<Subscrip
     return await invoke<SubscriptionModel[]>('list_available_models', { refresh });
   } catch {
     return [];
+  }
+}
+
+/**
+ * Subscription-only model evidence from Grok Build. Custom provider entries
+ * are intentionally absent so a provider catalog cannot be mistaken for the
+ * models actually entitled by the current Grok login.
+ */
+export async function fetchSubscriptionModelsSnapshot(refresh = false): Promise<SubscriptionModelsSnapshot> {
+  if (!isTauri()) return { models: [], source: 'none' };
+  try {
+    return await invoke<SubscriptionModelsSnapshot>('subscription_models_snapshot', { refresh });
+  } catch (e) {
+    return {
+      models: [],
+      source: 'none',
+      refreshError: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 

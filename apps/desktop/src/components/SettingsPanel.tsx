@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { runKernelDoctor, type GrokStatus, type KernelDoctor, type PermissionMode } from '../lib/acpClient';
-import type { AccountSummary } from '../lib/account';
-import { fetchAccountSummary, fetchSubscriptionModels, logoutAccount, startLoginFlow } from '../lib/account';
+import type { AccountSummary, SubscriptionModelsSnapshot } from '../lib/account';
+import { fetchAccountSummary, fetchSubscriptionModelsSnapshot, logoutAccount, startLoginFlow } from '../lib/account';
 import {
   clearChatCache,
   loadThreadMetas,
@@ -178,6 +178,7 @@ export function SettingsPanel({
   const [archived, setArchived] = useState<ArchivedTaskRow[]>([]);
   const [archBusy, setArchBusy] = useState(false);
   const [modelsSnap, setModelsSnap] = useState<ModelsConfigSnapshot | null>(null);
+  const [subscriptionModels, setSubscriptionModels] = useState<SubscriptionModelsSnapshot | null>(null);
   const [modelForm, setModelForm] = useState({
     id: '',
     name: '',
@@ -211,6 +212,7 @@ export function SettingsPanel({
     void storeDbPath().then(setDbPath);
     void storeDataDir().then(setDataDir);
     void fetchAccountSummary().then(setAccount);
+    void fetchSubscriptionModelsSnapshot(false).then(setSubscriptionModels);
     void fetchMemoryStatus().then(setMemory);
     void listCustomModels().then(setModelsSnap);
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
@@ -467,9 +469,18 @@ export function SettingsPanel({
   const refreshModels = async () => {
     setMsg('…');
     try {
-      const rows = await fetchSubscriptionModels(true);
+      const snapshot = await fetchSubscriptionModelsSnapshot(true);
+      setSubscriptionModels(snapshot);
+      const rows = snapshot.models;
+      const source =
+        snapshot.source === 'live'
+          ? t('settingsModelsSourceLive')
+          : snapshot.source === 'cache'
+            ? t('settingsModelsSourceCache')
+            : t('settingsModelsSourceNone');
       setMsg(
-        `${t('refreshModels')}: ${rows.map((r) => r.name || r.modelId).join(', ') || '—'} (${rows.length})`,
+        `${t('refreshModels')}: ${rows.map((r) => r.name || r.modelId).join(', ') || '—'} (${rows.length}) · ${source}` +
+          (snapshot.refreshError ? `\n${t('settingsModelsRefreshFailed')}: ${snapshot.refreshError}` : ''),
       );
       onModelsRefreshed?.();
     } catch (e) {
@@ -957,6 +968,41 @@ export function SettingsPanel({
                 <div className="settings-row-hint mono" style={{ marginTop: 4 }}>
                   {status?.grokHome || modelsSnap?.grokHome || '—'}
                 </div>
+                <div className="settings-row" style={{ marginTop: 14 }}>
+                  <div>
+                    <div className="settings-row-title">{t('settingsModelsEntitled')}</div>
+                    <div className="settings-row-hint">
+                      {subscriptionModels?.source === 'live'
+                        ? t('settingsModelsSourceLiveHint')
+                        : subscriptionModels?.source === 'cache'
+                          ? t('settingsModelsSourceCacheHint')
+                          : t('settingsModelsSourceNoneHint')}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!status?.authenticated}
+                    onClick={() => void refreshModels()}
+                  >
+                    {t('refreshModels')}
+                  </button>
+                </div>
+                {subscriptionModels?.models.length ? (
+                  <div className="settings-list mono" style={{ marginTop: 10 }}>
+                    {subscriptionModels.models.map((model) => (
+                      <div key={model.modelId}>
+                        {model.name || model.modelId}
+                        {model.name && model.name !== model.modelId ? ` · ${model.modelId}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {subscriptionModels?.refreshError ? (
+                  <div className="settings-row-hint" style={{ marginTop: 8 }}>
+                    {t('settingsModelsRefreshFailed')}: {subscriptionModels.refreshError}
+                  </div>
+                ) : null}
               </div>
               <h3 className="subhead">{t('settingsModelsCustom')}</h3>
               <div className="settings-card">

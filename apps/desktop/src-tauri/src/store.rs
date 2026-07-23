@@ -724,6 +724,20 @@ pub struct CachedModelRow {
     pub hidden: Option<bool>,
 }
 
+/// The subscription-only model list. Unlike `list_available_models`, this
+/// deliberately excludes custom providers configured by the user so the UI
+/// can distinguish the Grok Build account response from a provider catalog.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionModelsSnapshot {
+    pub models: Vec<CachedModelRow>,
+    /// `live` means this call refreshed `/v1/models`; `cache` is the previous
+    /// App GROK_HOME response; `none` means neither was available.
+    pub source: String,
+    pub fetched_at: Option<String>,
+    pub refresh_error: Option<String>,
+}
+
 fn models_cache_path() -> std::path::PathBuf {
     crate::paths::grok_home().join("models_cache.json")
 }
@@ -767,6 +781,67 @@ fn first_model_id(models: &serde_json::Map<String, serde_json::Value>) -> Option
     models.keys().next().cloned()
 }
 
+fn visible_models_from_cache(v: &serde_json::Value) -> Vec<CachedModelRow> {
+    let mut rows = Vec::new();
+    for (id, entry) in models_map_from_cache(v) {
+        let info = entry.get("info").unwrap_or(&entry);
+        if info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false) {
+            continue;
+        }
+        rows.push(CachedModelRow {
+            model_id: id.clone(),
+            name: info
+                .get("name")
+                .or_else(|| info.get("system_prompt_label"))
+                .and_then(|x| x.as_str())
+                .map(str::to_owned)
+                .or(Some(id)),
+            context_window: info.get("context_window").and_then(|x| x.as_u64()),
+            hidden: Some(false),
+        });
+    }
+    rows.sort_by(|a, b| a.model_id.cmp(&b.model_id));
+    rows
+}
+
+/// Read only the models returned to the current Grok Build CLI session.
+///
+/// A refresh failure is returned as data rather than silently looking like a
+/// successful refresh of an old cache. This keeps the desktop model picker
+/// honest when the account's entitlement changes or the network is offline.
+#[tauri::command]
+pub fn subscription_models_snapshot(refresh: Option<bool>) -> Result<SubscriptionModelsSnapshot, String> {
+    let requested_refresh = refresh.unwrap_or(false);
+    let refresh_error = if requested_refresh {
+        refresh_models_cache_from_network().err()
+    } else {
+        None
+    };
+    let cache = read_models_cache_value()?;
+    let models = cache
+        .as_ref()
+        .map(visible_models_from_cache)
+        .unwrap_or_default();
+    let fetched_at = cache.as_ref().and_then(|v| {
+        v.get("fetched_at")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+    });
+    let source = if requested_refresh && refresh_error.is_none() {
+        "live"
+    } else if cache.is_some() {
+        "cache"
+    } else {
+        "none"
+    };
+    Ok(SubscriptionModelsSnapshot {
+        models,
+        source: source.into(),
+        fetched_at,
+        refresh_error,
+    })
+}
+
 /// List models from App GROK_HOME models cache + custom [model.*] entries.
 #[tauri::command]
 pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow>, String> {
@@ -777,27 +852,9 @@ pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow
     let mut rows: Vec<CachedModelRow> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     if let Some(v) = read_models_cache_value()? {
-        let models = models_map_from_cache(&v);
-        for (id, entry) in models.iter() {
-            let info = entry.get("info").unwrap_or(entry);
-            let hidden = info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false);
-            if hidden {
-                continue;
-            }
-            let name = info
-                .get("name")
-                .or_else(|| info.get("system_prompt_label"))
-                .and_then(|x| x.as_str())
-                .map(|s| s.to_string())
-                .or_else(|| Some(id.clone()));
-            let context_window = info.get("context_window").and_then(|x| x.as_u64());
-            seen.insert(id.clone());
-            rows.push(CachedModelRow {
-                model_id: id.clone(),
-                name,
-                context_window,
-                hidden: Some(false),
-            });
+        for row in visible_models_from_cache(&v) {
+            seen.insert(row.model_id.clone());
+            rows.push(row);
         }
     }
     // Custom / third-party models from config.toml
@@ -905,6 +962,27 @@ fn chrono_like_now() -> String {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     format!("{secs}")
+}
+
+#[cfg(test)]
+mod model_cache_tests {
+    use super::visible_models_from_cache;
+
+    #[test]
+    fn visible_models_excludes_hidden_entries_and_keeps_real_ids() {
+        let cache = serde_json::json!({
+            "models": {
+                "grok-visible": { "info": { "name": "Grok Visible", "context_window": 128000 } },
+                "internal": { "info": { "hidden": true } }
+            }
+        });
+
+        let rows = visible_models_from_cache(&cache);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].model_id, "grok-visible");
+        assert_eq!(rows[0].name.as_deref(), Some("Grok Visible"));
+        assert_eq!(rows[0].context_window, Some(128000));
+    }
 }
 
 /// Read context_window / auto_compact from ~/.grok/models_cache.json
