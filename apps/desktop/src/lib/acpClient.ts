@@ -1000,6 +1000,18 @@ export class AcpClient {
     );
   }
 
+  /**
+   * Re-read App GROK_HOME `config.toml` in this live Grok Build process.
+   * This makes a newly saved custom provider selectable without requiring the
+   * user to abandon or restart an existing task.
+   */
+  async reloadModels(): Promise<{ models?: number }> {
+    const raw = (await this.request('_x.ai/internal/reload_models', {}, 15_000)) as
+      | { models?: number; result?: { models?: number } }
+      | null;
+    return raw?.result ?? raw ?? {};
+  }
+
   /** Grok Build ACP extension. Hooks are discovered and executed by the engine. */
   async listHooks(sessionId: string): Promise<HooksSnapshot> {
     const raw = (await this.request('x.ai/hooks/list', { sessionId }, 15_000)) as

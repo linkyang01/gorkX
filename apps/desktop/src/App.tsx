@@ -1025,6 +1025,15 @@ function App() {
     void loadCustomModels();
   }, [loadCustomModels]);
 
+  /** Keep every already-running kernel in sync after Settings writes `[model.*]`. */
+  const reloadLiveModelCatalogs = useCallback(async () => {
+    const clients = Array.from(
+      new Set(threadsRef.current.map((thread) => thread.client).filter((client): client is AcpClient => Boolean(client))),
+    );
+    await Promise.allSettled(clients.map((client) => client.reloadModels()));
+    await loadCustomModels();
+  }, [loadCustomModels]);
+
   useEffect(() => {
     void loadCustomModels();
   }, [loadCustomModels]);
@@ -5607,7 +5616,7 @@ function App() {
         account={account}
         onModelsRefreshed={() => {
           void loadSubscriptionModels(true);
-          void loadCustomModels();
+          void reloadLiveModelCatalogs();
         }}
         perm={perm}
         onPerm={setPerm}
