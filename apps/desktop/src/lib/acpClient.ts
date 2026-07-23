@@ -150,6 +150,21 @@ export function planApprovalResult(
     : { outcome };
 }
 
+/** A folder safety gate emitted before project-local MCP, hooks, or LSP config is loaded. */
+export interface FolderTrustRequest {
+  jsonrpcId: number | string;
+  sessionId?: string;
+  cwd: string;
+  workspace: string;
+  configKinds: string[];
+  raw: unknown;
+}
+
+/** Exact Grok Build ACP response for `x.ai/folder_trust/request` (fail-closed). */
+export function folderTrustResult(outcome: 'trust' | 'reject') {
+  return { outcome };
+}
+
 function extMethodParams(method: string, rawParams: unknown): { method: string; params: Record<string, unknown> } {
   const outer = rawParams && typeof rawParams === 'object' ? rawParams as Record<string, unknown> : {};
   const wrapped = typeof outer.method === 'string' && outer.params && typeof outer.params === 'object';
@@ -173,6 +188,32 @@ export function parsePlanApprovalRequest(
     sessionId: typeof ext.params.sessionId === 'string' ? ext.params.sessionId : typeof ext.params.session_id === 'string' ? ext.params.session_id : undefined,
     toolCallId: typeof ext.params.toolCallId === 'string' ? ext.params.toolCallId : typeof ext.params.tool_call_id === 'string' ? ext.params.tool_call_id : undefined,
     planContent: typeof ext.params.planContent === 'string' ? ext.params.planContent.slice(0, 100_000) : typeof ext.params.plan_content === 'string' ? ext.params.plan_content.slice(0, 100_000) : undefined,
+    raw,
+  };
+}
+
+export function parseFolderTrustRequest(
+  jsonrpcId: number | string,
+  method: string,
+  rawParams: unknown,
+  raw: unknown,
+): FolderTrustRequest | null {
+  const ext = extMethodParams(method, rawParams);
+  if (ext.method !== 'x.ai/folder_trust/request') return null;
+  const cwd = typeof ext.params.cwd === 'string' ? ext.params.cwd : '';
+  const workspace = typeof ext.params.workspace === 'string' ? ext.params.workspace : cwd;
+  if (!cwd || !workspace) return null;
+  const configKinds = Array.isArray(ext.params.configKinds)
+    ? ext.params.configKinds.filter((item): item is string => typeof item === 'string').slice(0, 12)
+    : Array.isArray(ext.params.config_kinds)
+      ? ext.params.config_kinds.filter((item): item is string => typeof item === 'string').slice(0, 12)
+      : [];
+  return {
+    jsonrpcId,
+    sessionId: typeof ext.params.sessionId === 'string' ? ext.params.sessionId : typeof ext.params.session_id === 'string' ? ext.params.session_id : undefined,
+    cwd: cwd.slice(0, 4_000),
+    workspace: workspace.slice(0, 4_000),
+    configKinds,
     raw,
   };
 }
@@ -324,6 +365,7 @@ export class AcpClient {
   onPermissionRequest: ((req: PermissionRequest) => void) | null = null;
   onUserQuestionRequest: ((req: UserQuestionRequest) => void) | null = null;
   onPlanApprovalRequest: ((req: PlanApprovalRequest) => void) | null = null;
+  onFolderTrustRequest: ((req: FolderTrustRequest) => void) | null = null;
   onStderr: ((line: string) => void) | null = null;
   onExit: (() => void) | null = null;
   onNotification: ((method: string, params: unknown) => void) | null = null;
@@ -522,6 +564,12 @@ export class AcpClient {
       return;
     }
 
+    const folderTrust = parseFolderTrustRequest(id, method, params, msg);
+    if (folderTrust) {
+      this.onFolderTrustRequest?.(folderTrust);
+      return;
+    }
+
     if (
       method === 'session/request_permission' ||
       method === 'session/requestPermission' ||
@@ -675,6 +723,7 @@ export class AcpClient {
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: false },
           terminal: true,
+          meta: { 'x.ai/folderTrust': { interactive: true } },
         },
       },
       30_000,

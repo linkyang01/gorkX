@@ -3045,6 +3045,23 @@ button.pill:hover {
   .plan-approval-actions { padding: 12px 16px 14px; }
 }
 
+.folder-trust-backdrop { z-index: 82; padding: 24px; }
+.folder-trust-modal { width: min(620px, calc(100vw - 32px)); padding: 24px; border: 1px solid color-mix(in srgb, #ff9f0a 36%, var(--hairline)); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3); }
+.folder-trust-head { display: flex; align-items: center; gap: 12px; }
+.folder-trust-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, #ff9f0a 18%, var(--glass)); color: #d47700; font-size: 20px; font-weight: 800; }
+.folder-trust-eyebrow { margin: 0 0 3px; color: var(--text-2); font-size: 12px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
+.folder-trust-head h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+.folder-trust-explain, .folder-trust-warning { margin: 16px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.folder-trust-details { display: grid; gap: 11px; margin: 18px 0 0; padding: 14px; border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--glass) 78%, var(--panel)); }
+.folder-trust-details div { display: grid; gap: 4px; }
+.folder-trust-details dt { color: var(--text-3); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em; }
+.folder-trust-details dd { margin: 0; overflow-wrap: anywhere; color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.45; }
+.folder-trust-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.folder-trust-kinds span { padding: 3px 7px; border-radius: 999px; color: var(--text-2); background: var(--panel); font-family: inherit; font-size: 12px; }
+.folder-trust-warning { padding-left: 11px; border-left: 2px solid #ff9f0a; }
+.folder-trust-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+@media (max-width: 620px) { .folder-trust-backdrop { padding: 12px; } .folder-trust-modal { width: 100%; padding: 18px; } }
+
 .msg-plan {
   padding: 0;
 }

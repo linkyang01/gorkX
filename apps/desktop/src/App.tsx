@@ -20,6 +20,7 @@ import {
   isToolCallIdLike,
   parseToolUpdate,
   permissionResult,
+  folderTrustResult,
   planApprovalResult,
   pickPermissionOption,
   userQuestionAcceptedResult,
@@ -29,6 +30,7 @@ import {
   type ModelInfo,
   type PermissionMode,
   type PermissionRequest,
+  type FolderTrustRequest,
   type PlanApprovalRequest,
   type ReasoningEffort,
   type SessionUpdate,
@@ -145,6 +147,7 @@ import { AccountAvatar } from './components/AccountAvatar';
 import { PermissionPrompt } from './components/PermissionPrompt';
 import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
+import { FolderTrustPrompt } from './components/FolderTrustPrompt';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -443,6 +446,9 @@ function App() {
   const [planApprovalReq, setPlanApprovalReq] = useState<PlanApprovalRequest | null>(null);
   const [planApprovalAgentId, setPlanApprovalAgentId] = useState<string | null>(null);
   const planApprovalAgentRef = useRef<string | null>(null);
+  const [folderTrustReq, setFolderTrustReq] = useState<FolderTrustRequest | null>(null);
+  const [folderTrustAgentId, setFolderTrustAgentId] = useState<string | null>(null);
+  const folderTrustAgentRef = useRef<string | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
   const [projectSessions, setProjectSessions] = useState<Record<string, RecentSession[]>>({});
   const [dismissedSessions, setDismissedSessions] = useState<string[]>(() => {
@@ -1531,6 +1537,13 @@ function App() {
         );
       };
 
+      client.onFolderTrustRequest = (req) => {
+        folderTrustAgentRef.current = threadId;
+        setFolderTrustAgentId(threadId);
+        setFolderTrustReq(req);
+        void notifyPermission('gorkX', 'Project configuration needs your trust decision — open gorkX to continue.');
+      };
+
       client.onTerminalCreated = (terminalId) => {
         // Agent ACP terminals still run in backend; user shell is the embedded xterm dock.
         appendLine(threadId, {
@@ -1565,6 +1578,11 @@ function App() {
           planApprovalAgentRef.current = null;
           setPlanApprovalReq(null);
           setPlanApprovalAgentId(null);
+        }
+        if (folderTrustAgentRef.current === threadId) {
+          folderTrustAgentRef.current = null;
+          setFolderTrustReq(null);
+          setFolderTrustAgentId(null);
         }
         patchThread(threadId, {
           busy: false,
@@ -3495,6 +3513,15 @@ function App() {
     planApprovalAgentRef.current = null;
     setPlanApprovalReq(null);
     setPlanApprovalAgentId(null);
+  };
+
+  const answerFolderTrust = async (outcome: 'trust' | 'reject') => {
+    if (!folderTrustReq || !folderTrustAgentId) return;
+    const thread = threads.find((item) => item.id === folderTrustAgentId);
+    if (thread?.client) await thread.client.respond(folderTrustReq.jsonrpcId, folderTrustResult(outcome));
+    folderTrustAgentRef.current = null;
+    setFolderTrustReq(null);
+    setFolderTrustAgentId(null);
   };
 
   // Close composer popovers on outside click / Escape
@@ -5649,6 +5676,9 @@ function App() {
           request={planApprovalReq}
           onAnswer={(outcome, feedback) => void answerPlanApproval(outcome, feedback)}
         />
+      ) : null}
+      {folderTrustReq ? (
+        <FolderTrustPrompt request={folderTrustReq} onAnswer={(outcome) => void answerFolderTrust(outcome)} />
       ) : null}
     </div>
   );
