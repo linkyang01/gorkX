@@ -421,6 +421,48 @@ pub struct ModelTestResult {
     pub note: String,
 }
 
+/// Confirm a provider returned generated text without exposing provider-owned
+/// response data to the renderer or logs. A successful HTTP status alone is
+/// not evidence that the configured model can answer a request.
+fn has_generated_text(backend: &str, body: &[u8]) -> bool {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(body) else {
+        return false;
+    };
+    let text = |value: &serde_json::Value| value.as_str().is_some_and(|s| !s.trim().is_empty());
+    match backend {
+        "messages" => value.get("content").and_then(|v| v.as_array()).is_some_and(|items| {
+            items.iter().any(|item| {
+                item.get("type").and_then(|v| v.as_str()) == Some("text")
+                    && item.get("text").is_some_and(text)
+            })
+        }),
+        "responses" => {
+            value.get("output_text").is_some_and(text)
+                || value.get("output").and_then(|v| v.as_array()).is_some_and(|items| {
+                    items.iter().any(|item| {
+                        item.get("content").and_then(|v| v.as_array()).is_some_and(|content| {
+                            content.iter().any(|part| {
+                                part.get("type").and_then(|v| v.as_str()) == Some("output_text")
+                                    && part.get("text").is_some_and(text)
+                            })
+                        })
+                    })
+                })
+        }
+        _ => value.get("choices").and_then(|v| v.as_array()).is_some_and(|choices| {
+            choices.iter().any(|choice| {
+                let Some(content) = choice.get("message").and_then(|message| message.get("content")) else {
+                    return false;
+                };
+                text(content)
+                    || content.as_array().is_some_and(|parts| parts.iter().any(|part| {
+                        part.get("text").is_some_and(text)
+                    }))
+            })
+        }),
+    }
+}
+
 /// Probe a custom OpenAI/Anthropic-compatible endpoint (does not change config).
 #[tauri::command]
 pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, String> {
@@ -537,11 +579,18 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     let latency_ms = started.elapsed().as_millis() as u64;
     // Never put an endpoint-controlled response body in UI state. Error bodies
     // frequently echo request metadata and can contain credentials on broken
-    // compatible gateways.
-    let _ = resp.bytes();
-    let ok = (200..300).contains(&status);
+    // compatible gateways. We inspect the success body only in-process to
+    // verify a real generated response, then discard it.
+    let generated = if (200..300).contains(&status) {
+        resp.bytes().ok().is_some_and(|body| has_generated_text(backend, &body))
+    } else {
+        false
+    };
+    let ok = (200..300).contains(&status) && generated;
     let note = if ok {
-        format!("连接成功 · HTTP {status} · {latency_ms} ms")
+        format!("模型响应成功 · HTTP {status} · {latency_ms} ms")
+    } else if (200..300).contains(&status) {
+        format!("HTTP {status}，但未确认有效模型输出（响应详情已隐藏）")
     } else if status == 401 || status == 403 {
         format!("鉴权失败 HTTP {status} — 检查 API Key")
     } else if status == 404 {
@@ -638,7 +687,7 @@ pub fn config_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_base_url;
+    use super::{has_generated_text, validate_base_url};
 
     #[test]
     fn accepts_https_and_local_http_model_endpoints() {
@@ -651,5 +700,24 @@ mod tests {
         assert!(validate_base_url("https://token@example.com/v1").is_err());
         assert!(validate_base_url("https://api.example.com/v1?api_key=nope").is_err());
         assert!(validate_base_url("file:///tmp/model").is_err());
+    }
+
+    #[test]
+    fn model_probe_requires_generated_content_for_each_supported_protocol() {
+        assert!(has_generated_text(
+            "chat_completions",
+            br#"{"choices":[{"message":{"content":"pong"}}]}"#,
+        ));
+        assert!(has_generated_text(
+            "responses",
+            br#"{"output":[{"content":[{"type":"output_text","text":"pong"}]}]}"#,
+        ));
+        assert!(has_generated_text(
+            "messages",
+            br#"{"content":[{"type":"text","text":"pong"}]}"#,
+        ));
+        assert!(!has_generated_text("chat_completions", br#"{"choices":[]}"#));
+        assert!(!has_generated_text("responses", br#"{"output_text":""}"#));
+        assert!(!has_generated_text("messages", br#"{"content":[]}"#));
     }
 }
