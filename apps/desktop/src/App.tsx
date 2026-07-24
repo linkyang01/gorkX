@@ -1717,12 +1717,17 @@ function App() {
     [],
   );
 
-  const bootstrapClient = useCallback(async () => {
-    const client = await AcpClient.start(perm, grokCmd || undefined, effort);
+  const bootstrapClient = useCallback(async (workingDirectory?: string) => {
+    const client = await AcpClient.start(
+      perm,
+      grokCmd || undefined,
+      effort,
+      workingDirectory || project || undefined,
+    );
     await client.initialize();
     await client.authenticate('cached_token');
     return client;
-  }, [perm, grokCmd, effort]);
+  }, [perm, grokCmd, effort, project]);
 
   const rememberModels = useCallback(
     (session: { models?: { currentModelId?: string; availableModels?: ModelInfo[] } }) => {
@@ -1761,9 +1766,10 @@ function App() {
   const hardDeleteGrokSession = useCallback(
     async (sessionId: string) => {
       if (!sessionId) return;
+      const target = threadsRef.current.find((thread) => thread.sessionId === sessionId);
       let client: AcpClient | null = null;
       try {
-        client = await bootstrapClient();
+        client = await bootstrapClient(target?.cwd || project || undefined);
         await client.deleteSession(sessionId);
       } catch {
         /* still hide locally if kernel rejects */
@@ -1789,7 +1795,7 @@ function App() {
       if (!cwd || !status?.installed) return;
       let client: AcpClient | null = null;
       try {
-        client = await bootstrapClient();
+        client = await bootstrapClient(cwd);
         const list = await client.listSessions(cwd);
         const filtered = list
           .filter((s) => s.sessionId)
@@ -2598,7 +2604,7 @@ function App() {
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient();
+      const client = await bootstrapClient(cwdBase);
       wireClient(id, client);
       const session = await client.newSession(cwdBase);
       rememberModels(session);
@@ -2758,9 +2764,9 @@ function App() {
       if (existing.client) return;
       // Fall through to reconnect into the same row id
       try {
-        const client = await bootstrapClient();
-        wireClient(existing.id, client);
         const cwdBase = existing.cwd || project || (await homeDir());
+        const client = await bootstrapClient(cwdBase);
+        wireClient(existing.id, client);
         const session = await client.loadSession(sessionId, cwdBase);
         rememberModels(session);
         patchThread(existing.id, {
@@ -2811,7 +2817,7 @@ function App() {
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient();
+      const client = await bootstrapClient(cwdBase);
       wireClient(id, client);
       const session = await client.loadSession(sessionId, cwdBase);
       rememberModels(session);
@@ -3566,7 +3572,7 @@ function App() {
     });
     try {
       await active.client.stop();
-      const client = await AcpClient.start(perm, grokCmd || undefined, next);
+      const client = await AcpClient.start(perm, grokCmd || undefined, next, cwd || project || undefined);
       await client.initialize();
       await client.authenticate('cached_token');
       wireClient(threadId, client);
@@ -3614,7 +3620,7 @@ function App() {
     if (th?.sessionId) {
       let client: AcpClient | null = null;
       try {
-        client = await bootstrapClient();
+        client = await bootstrapClient(th.cwd || project || undefined);
         await client.deleteSession(th.sessionId);
       } catch {
         /* local remove still */
@@ -3663,7 +3669,12 @@ function App() {
     if (th.client) return th.client;
     patchThread(id, { busy: true, error: null });
     try {
-      const client = await AcpClient.start(perm, grokCmd || undefined, th.effort || effort);
+      const client = await AcpClient.start(
+        perm,
+        grokCmd || undefined,
+        th.effort || effort,
+        th.cwd || project || undefined,
+      );
       await client.initialize();
       await client.authenticate('cached_token');
       wireClient(id, client);

@@ -14,6 +14,7 @@ export interface AgentInfo {
   id: string;
   pid: number;
   permissionMode: string;
+  workingDirectory: string;
 }
 
 export interface GrokStatus {
@@ -463,11 +464,13 @@ export class AcpClient {
     permissionMode: PermissionMode,
     grokCmd?: string,
     reasoningEffort?: ReasoningEffort | string,
+    workingDirectory?: string,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
       grokCmd: grokCmd ?? null,
       reasoningEffort: reasoningEffort ?? null,
+      workingDirectory: workingDirectory ?? null,
     });
     const client = new AcpClient(info.id);
     await client.attachListener();

@@ -84,6 +84,12 @@ import {
   type SubagentsConfigSnapshot,
 } from '../lib/subagentsConfig';
 import { fetchMediaToolsConfig, setMediaToolEnabled, type MediaToolsConfigSnapshot } from '../lib/mediaToolsConfig';
+import {
+  fetchSandboxConfig,
+  setSandboxProfile,
+  type SandboxConfigSnapshot,
+  type SandboxProfile,
+} from '../lib/sandboxConfig';
 
 const APP_VERSION = '0.4.3'; // keep in sync with package.json
 
@@ -257,6 +263,8 @@ export function SettingsPanel({
   const [subagentsBusy, setSubagentsBusy] = useState(false);
   const [mediaTools, setMediaTools] = useState<MediaToolsConfigSnapshot | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [sandboxSnap, setSandboxSnap] = useState<SandboxConfigSnapshot | null>(null);
+  const [sandboxBusy, setSandboxBusy] = useState(false);
   const [subscriptionModels, setSubscriptionModels] = useState<SubscriptionModelsSnapshot | null>(null);
   const [modelForm, setModelForm] = useState({
     id: '',
@@ -307,6 +315,7 @@ export function SettingsPanel({
     void listCustomModels().then(setModelsSnap);
     void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
     void fetchMediaToolsConfig().then(setMediaTools).catch(() => setMediaTools(null));
+    void fetchSandboxConfig().then(setSandboxSnap).catch(() => setSandboxSnap(null));
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
   }, [isOpen, initialSection]);
@@ -1944,6 +1953,51 @@ export function SettingsPanel({
                     {t('clearChatCache')}
                   </button>
                 </div>
+              </div>
+              <h3 className="subhead">{t('settingsSandboxTitle')}</h3>
+              <div className="settings-card">
+                <p className="hint">{t('settingsSandboxHint')}</p>
+                {(
+                  [
+                    ['workspace', t('settingsSandboxWorkspace'), t('settingsSandboxWorkspaceHint')],
+                    ['read-only', t('settingsSandboxReadOnly'), t('settingsSandboxReadOnlyHint')],
+                    ['strict', t('settingsSandboxStrict'), t('settingsSandboxStrictHint')],
+                    ['devbox', t('settingsSandboxDevbox'), t('settingsSandboxDevboxHint')],
+                    ['off', t('settingsSandboxOff'), t('settingsSandboxOffHint')],
+                  ] as const
+                ).map(([id, title, hint]) => (
+                  <label key={id} className="settings-row toggle-row">
+                    <div>
+                      <div className="settings-row-title">{title}</div>
+                      <div className="settings-row-hint">{hint}</div>
+                    </div>
+                    <input
+                      type="radio"
+                      name="sandbox-profile"
+                      checked={(sandboxSnap?.profile || 'off') === id}
+                      disabled={sandboxBusy}
+                      onChange={() => {
+                        setSandboxBusy(true);
+                        setMsg(null);
+                        void setSandboxProfile(id as SandboxProfile)
+                          .then((snapshot) => {
+                            setSandboxSnap(snapshot);
+                            setMsg(t('settingsSandboxSaved'));
+                          })
+                          .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+                          .finally(() => setSandboxBusy(false));
+                      }}
+                    />
+                  </label>
+                ))}
+                {sandboxSnap?.profile && !['off', 'workspace', 'read-only', 'strict', 'devbox'].includes(sandboxSnap.profile) ? (
+                  <p className="settings-row-hint" style={{ marginTop: 10 }}>
+                    {t('settingsSandboxCustomActive').replace('{name}', sandboxSnap.profile)}
+                  </p>
+                ) : null}
+                <p className="settings-row-hint" style={{ marginTop: 10 }}>
+                  {t('settingsSandboxRestartHint')}
+                </p>
               </div>
             </>
           ) : null}

@@ -27,12 +27,14 @@ pub struct AgentInfo {
     pub id: String,
     pub pid: u32,
     pub permission_mode: String,
+    pub working_directory: String,
 }
 
 struct LiveAgent {
     child: Child,
     stdin: ChildStdin,
     permission_mode: String,
+    working_directory: String,
 }
 
 pub struct AgentPool {
@@ -101,6 +103,22 @@ fn agent_cli_args(permission_mode: &str, reasoning_effort: Option<&str>) -> Vec<
     args
 }
 
+/// The OS-level sandbox is fixed at kernel-process startup, before ACP's
+/// `session/new` supplies a cwd. Resolve and validate the task directory here
+/// so the kernel applies its profile to the same project the task will open.
+fn resolve_agent_working_directory(working_directory: Option<String>) -> Result<PathBuf, String> {
+    if let Some(raw) = working_directory.filter(|path| !path.trim().is_empty()) {
+        let path = std::fs::canonicalize(&raw)
+            .map_err(|e| format!("Project folder is unavailable for the agent sandbox: {e}"))?;
+        if !path.is_dir() {
+            return Err("Project folder is not a directory for the agent sandbox.".into());
+        }
+        Ok(path)
+    } else {
+        std::env::current_dir().map_err(|e| format!("resolve agent working directory: {e}"))
+    }
+}
+
 #[tauri::command]
 pub async fn agent_start(
     app: AppHandle,
@@ -108,6 +126,7 @@ pub async fn agent_start(
     permission_mode: String,
     grok_cmd: Option<String>,
     reasoning_effort: Option<String>,
+    working_directory: Option<String>,
 ) -> Result<AgentInfo, String> {
     let mode = match permission_mode.as_str() {
         "auto" | "full" => permission_mode.clone(),
@@ -126,10 +145,12 @@ pub async fn agent_start(
     let bin = resolve_grok_bin(grok_cmd.as_deref());
     let args = agent_cli_args(&mode, reasoning_effort.as_deref());
     let _ = paths::ensure_dirs();
+    let working_directory = resolve_agent_working_directory(working_directory)?;
 
     let mut command = Command::new(&bin);
     command
         .args(&args)
+        .current_dir(&working_directory)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -207,6 +228,7 @@ pub async fn agent_start(
         id: id.clone(),
         pid,
         permission_mode: mode.clone(),
+        working_directory: working_directory.display().to_string(),
     };
 
     pool.agents.lock().await.insert(
@@ -215,6 +237,7 @@ pub async fn agent_start(
             child,
             stdin,
             permission_mode: mode,
+            working_directory: info.working_directory.clone(),
         },
     );
 
@@ -277,6 +300,7 @@ pub async fn agent_list(pool: State<'_, Arc<AgentPool>>) -> Result<Vec<AgentInfo
             id: id.clone(),
             pid: a.child.id().unwrap_or(0),
             permission_mode: a.permission_mode.clone(),
+            working_directory: a.working_directory.clone(),
         })
         .collect())
 }
@@ -520,7 +544,7 @@ fn dunce_canonicalize(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_engine_diagnostic;
+    use super::{resolve_agent_working_directory, sanitize_engine_diagnostic};
 
     #[test]
     fn engine_stderr_never_exposes_credential_derived_fields() {
@@ -534,5 +558,19 @@ mod tests {
     #[test]
     fn engine_stderr_keeps_non_sensitive_diagnostics() {
         assert_eq!(sanitize_engine_diagnostic("connection refused"), "connection refused");
+    }
+
+    #[test]
+    fn agent_working_directory_is_canonical_project_folder() {
+        let raw = std::env::temp_dir();
+        let actual = resolve_agent_working_directory(Some(raw.display().to_string())).unwrap();
+        assert!(actual.is_absolute());
+        assert!(actual.is_dir());
+    }
+
+    #[test]
+    fn agent_working_directory_rejects_a_missing_project() {
+        let missing = std::env::temp_dir().join("gorkx-no-such-project-for-sandbox");
+        assert!(resolve_agent_working_directory(Some(missing.display().to_string())).is_err());
     }
 }

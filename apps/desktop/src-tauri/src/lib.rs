@@ -13,6 +13,7 @@ mod media_tools_config;
 mod paths;
 mod pty;
 mod scheduler;
+mod sandbox_config;
 mod store;
 mod subagents_config;
 mod terminal;
@@ -199,6 +200,8 @@ pub fn run() {
             subagents_config::subagents_config_get,
             subagents_config::subagents_config_set_enabled,
             subagents_config::subagents_config_set_type_enabled,
+            sandbox_config::sandbox_config_get,
+            sandbox_config::sandbox_config_set_profile,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
