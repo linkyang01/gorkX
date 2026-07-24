@@ -3,9 +3,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import {
   runKernelDoctor,
   runKernelDoctorFix,
-  type AcpClient,
   type GrokStatus,
-  type HooksSnapshot,
   type KernelDoctor,
   type PermissionMode,
 } from '../lib/acpClient';
@@ -137,8 +135,6 @@ interface Props {
   project?: string;
   recentProjects?: string[];
   account?: AccountSummary | null;
-  hookClient?: AcpClient | null;
-  hookSessionId?: string | null;
   onModelsRefreshed?: () => void;
   perm: PermissionMode;
   onPerm: (p: PermissionMode) => void;
@@ -232,8 +228,6 @@ export function SettingsPanel({
   project,
   recentProjects = [],
   account: accountProp,
-  hookClient,
-  hookSessionId,
   onModelsRefreshed,
   perm,
   onPerm,
@@ -303,8 +297,6 @@ export function SettingsPanel({
   const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
   const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
-  const [hooksSnapshot, setHooksSnapshot] = useState<HooksSnapshot | null>(null);
-  const [hooksBusy, setHooksBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -338,32 +330,6 @@ export function SettingsPanel({
       })
       .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
       .finally(() => setProjectInstructionsBusy(false));
-  };
-
-  const loadHooks = async () => {
-    if (!hookClient || !hookSessionId) return;
-    setHooksBusy(true);
-    try {
-      setHooksSnapshot(await hookClient.listHooks(hookSessionId));
-    } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
-    } finally {
-      setHooksBusy(false);
-    }
-  };
-
-  const manageHooks = async (
-    action: { type: 'reload' | 'trust' | 'untrust' } | { type: 'enable' | 'disable'; hookName: string },
-  ) => {
-    if (!hookClient || !hookSessionId) return;
-    setHooksBusy(true);
-    try {
-      setHooksSnapshot(await hookClient.manageHooks(hookSessionId, action));
-    } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
-    } finally {
-      setHooksBusy(false);
-    }
   };
 
   useEffect(() => {
@@ -547,7 +513,7 @@ export function SettingsPanel({
       {
         title: t('settingsGroupCoding'),
         items: [
-          { id: 'hooks', label: t('settingsHooks'), keywords: 'hooks 钩子' },
+          { id: 'hooks', label: t('settingsInstructionsTitle'), keywords: '项目指令 agents 规则 约定' },
           { id: 'subagents', label: t('settingsSubagents'), keywords: 'subagent 子任务 委派 worktree 隔离' },
           { id: 'mcp', label: t('settingsMcp'), keywords: 'mcp connect 连接' },
           { id: 'git', label: t('settingsGit'), keywords: 'git' },
@@ -1728,7 +1694,7 @@ export function SettingsPanel({
 
           {section === 'hooks' ? (
             <>
-              <h2>{t('settingsHooks')}</h2>
+              <h2>{t('settingsInstructionsTitle')}</h2>
               <div className="settings-card">
                 <div className="settings-row-title">{t('settingsInstructionsTitle')}</div>
                 <p className="settings-row-hint">{t('settingsInstructionsHint')}</p>
@@ -1775,60 +1741,6 @@ export function SettingsPanel({
                     <p className="settings-row-hint" style={{ marginTop: 10 }}>
                       {projectInstructions?.exists ? t('settingsInstructionsExists') : t('settingsInstructionsNew')}
                     </p>
-                  </>
-                )}
-              </div>
-              <div className="settings-card">
-                <p className="hint">{t('settingsHooksRealHint')}</p>
-                {!hookClient || !hookSessionId ? (
-                  <p className="settings-row-hint">{t('settingsHooksNeedTask')}</p>
-                ) : (
-                  <>
-                    <div className="field-row">
-                      <button type="button" className="btn" disabled={hooksBusy} onClick={() => void loadHooks()}>
-                        {hooksBusy ? t('settingsHooksLoading') : t('settingsHooksLoad')}
-                      </button>
-                      {hooksSnapshot ? (
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={hooksBusy}
-                          onClick={() => void manageHooks({ type: hooksSnapshot.projectTrusted ? 'untrust' : 'trust' })}
-                        >
-                          {hooksSnapshot.projectTrusted ? t('settingsHooksUntrust') : t('settingsHooksTrust')}
-                        </button>
-                      ) : null}
-                    </div>
-                    {hooksSnapshot ? (
-                      <>
-                        <p className="settings-row-hint">
-                          {hooksSnapshot.projectTrusted ? t('settingsHooksTrusted') : t('settingsHooksUntrusted')}
-                        </p>
-                        {hooksSnapshot.hooks.length ? (
-                          <div className="settings-list" style={{ marginTop: 10 }}>
-                            {hooksSnapshot.hooks.map((hook) => (
-                              <div className="settings-row" key={`${hook.sourceDir}:${hook.name}`}>
-                                <div>
-                                  <strong>{hook.name}</strong>
-                                  <p className="settings-row-hint">{hook.event}{hook.matcher ? ` · ${hook.matcher}` : ''}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="btn"
-                                  disabled={hooksBusy}
-                                  onClick={() => void manageHooks({
-                                    type: hook.disabled ? 'enable' : 'disable',
-                                    hookName: hook.name,
-                                  })}
-                                >
-                                  {hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : <p className="settings-row-hint">{t('settingsHooksEmpty')}</p>}
-                      </>
-                    ) : null}
                   </>
                 )}
               </div>
