@@ -44,6 +44,13 @@ export interface ChatLineSnap {
   attachmentsJson?: string | null;
 }
 
+/** A local-only task/history search result from gorkX's SQLite snapshots. */
+export interface ThreadSearchHit extends ThreadMeta {
+  project: string;
+  archived: boolean;
+  excerpt: string;
+}
+
 type LsStore = Record<string, ThreadMeta[]>;
 
 function loadLsStore(): LsStore {
@@ -159,6 +166,37 @@ export async function loadThreadMetas(project: string): Promise<ThreadMeta[]> {
   }
   const store = loadLsStore();
   return Array.isArray(store[scope]) ? store[scope] : [];
+}
+
+export async function searchThreadHistory(query: string, limit = 36): Promise<ThreadSearchHit[]> {
+  if (!isTauri() || !query.trim()) return [];
+  try {
+    const rows = await invoke<Array<{
+      id: string;
+      project: string;
+      title: string;
+      sessionId?: string | null;
+      modelId?: string | null;
+      cwd: string;
+      worktreePath?: string | null;
+      effort: string;
+      chatMode: string;
+      updatedAt: number;
+      archived?: boolean;
+      sessionGoalText?: string | null;
+      sessionGoalStatus?: string | null;
+      sessionGoalMessage?: string | null;
+      excerpt?: string;
+    }>>('store_search_threads', { query: query.trim().slice(0, 160), limit });
+    return rows.map((row) => ({
+      ...rowToMeta(row),
+      project: row.project,
+      archived: Boolean(row.archived),
+      excerpt: row.excerpt || '',
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function upsertThreadMeta(project: string, meta: ThreadMeta): Promise<void> {

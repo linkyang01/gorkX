@@ -44,6 +44,7 @@ import {
 import type { ArchivedTaskRow, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
+import { TaskSearchDialog } from './components/TaskSearchDialog';
 import { MessageList, type ChatLine } from './components/MessageList';
 import { AttachmentStrip } from './components/AttachmentStrip';
 import { AttachmentPreview } from './components/AttachmentPreview';
@@ -145,6 +146,7 @@ import {
   saveChatSnapshot,
   upsertThreadMeta,
   type ThreadMeta,
+  type ThreadSearchHit,
 } from './lib/threads';
 import { ContextRing } from './components/ContextRing';
 import { PermShieldIcon } from './components/ComposerIcons';
@@ -391,6 +393,7 @@ function App() {
   /** Highlight index in @ file menu. */
   const [atIndex, setAtIndex] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [taskSearchOpen, setTaskSearchOpen] = useState(false);
   const [perm, setPerm] = useState<PermissionMode>(() => {
     const v = localStorage.getItem('gorkx.perm');
     return v === 'auto' || v === 'full' ? v : 'default';
@@ -549,6 +552,29 @@ function App() {
       }
     }
   }, []);
+
+  /** Open a local search result without treating the kernel session store as a
+   * second task list. The result always comes from gorkX's own SQLite index. */
+  const openTaskSearchHit = useCallback(async (hit: ThreadSearchHit) => {
+    // Opening an archived result is an intentional restore action; otherwise
+    // the normal workspace filter would immediately hide the selected task.
+    const opened = hit.archived ? { ...hit, archived: false, updatedAt: Date.now() } : hit;
+    if (hit.archived) await upsertThreadMeta(hit.project, opened);
+    const snaps = await loadChatSnapshot(opened.project, opened.id);
+    const restored = metaToStub(opened, snapToLines(snaps));
+    setThreads((previous) => {
+      const current = previous.find((thread) => thread.id === opened.id && thread.projectKey === opened.project);
+      if (current?.client) return previous;
+      return [...previous.filter((thread) => !(thread.id === opened.id && thread.projectKey === opened.project)), restored];
+    });
+    const nextProject = opened.project === NO_PROJECT_KEY ? '' : opened.project;
+    setProject(nextProject);
+    if (nextProject) setRecentProjects(pushRecentProject(nextProject));
+    setTaskSearchOpen(false);
+    // Wait for the project scope and restored row to reach state before using
+    // the normal task-opening path (including its usual session reconnect).
+    window.setTimeout(() => selectThread(opened.id), 0);
+  }, [selectThread]);
 
   const canNavBack = navIdxRef.current > 0;
   const canNavForward =
@@ -833,6 +859,11 @@ function App() {
       if (meta && (e.key === 'k' || e.key === 'K') && !e.shiftKey) {
         e.preventDefault();
         setKernelOpen(true);
+        return;
+      }
+      if (meta && (e.key === 'f' || e.key === 'F') && e.shiftKey) {
+        e.preventDefault();
+        setTaskSearchOpen(true);
         return;
       }
       if (meta && (e.key === 'e' || e.key === 'E') && e.shiftKey) {
@@ -4093,7 +4124,16 @@ function App() {
               {t('taskSearchPlaceholder')}
             </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <IconSearch size={14} />
+              <button
+                type="button"
+                className="btn btn-sm"
+                title={t('taskSearchAll')}
+                aria-label={t('taskSearchAll')}
+                onClick={() => setTaskSearchOpen(true)}
+                style={{ padding: 3, minWidth: 24 }}
+              >
+                <IconSearch size={14} />
+              </button>
               <input
                 id="task-filter-input"
                 type="search"
@@ -5817,6 +5857,12 @@ function App() {
       /></Suspense> : null}
 
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <TaskSearchDialog
+        open={taskSearchOpen}
+        aliases={projectAliases}
+        onClose={() => setTaskSearchOpen(false)}
+        onOpenTask={(hit) => void openTaskSearchHit(hit)}
+      />
 
       {kernelOpen ? <Suspense fallback={<DeferredPanelFallback />}><SettingsPanel
         open={kernelOpen}

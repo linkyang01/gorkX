@@ -36,6 +36,7 @@
 | 独立网页资料预览 | `cd apps/desktop && npx tsc --noEmit && npm run build:app`；本机新构建 App 的设置 → 浏览器 → 打开预览 | 2026-07-24 通过：设置页仅接受带 hostname 的 HTTP(S) 链接；补齐 Tauri `core:webview:allow-create-webview-window` ACL 后，`https://example.com` 实际打开独立 `gorkX · Web preview` 原生窗口并加载页面。网页资料与 Agent 的 MCP Chrome profile、gorkX 凭据桥均隔离 | 此门禁不代表网页可被 Agent 读取或控制；Agent 浏览能力仍经 Playwright MCP 与其自身诊断验证 |
 | 账户状态桌面引导 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle && npm run build:app`；本机新构建 App 打开账户菜单 | 2026-07-24 通过：账户菜单在额度不可用时显示“请在「设置 → 账户」中登录后查看账户信息。”，未出现 `grok login` 或其它终端命令；未点击登录，也未发送模型请求 | 未覆盖浏览器登录/重新认证本身；该验证只覆盖账户状态的桌面提示与安全导航 |
 | ACP 客户端文本写入 | `cd apps/desktop/src-tauri && cargo test && cargo check`；`node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --client-fs-write` | 2026-07-24 通过：52 项 Rust 测试包含项目内原子替换、`..` 越界拒绝与符号链接拒绝；锁定内核在无认证 initialize 中接受 Full 任务才会声明的 `writeTextFile` 能力 | 门禁不创建会话或写项目文件；真实模型回合仍需有额度账号。Default/Auto 任务不宣告客户端写入能力 |
+| 本地任务与会话搜索 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle && npm run build:app`；`cd src-tauri && cargo test && cargo check`；本机新构建 App 点击侧栏“搜索全部任务” | 2026-07-25 通过：第 53 项 Rust 测试覆盖标题、中文对话、跨项目和归档任务检索；实际 UI 以“读取”命中任务标题与已保存对话内容，点击后恢复原项目及完整本地快照 | 不扫描项目文件、附件、用户 CLI home，也不发送模型提示词；只检索 gorkX SQLite 中的自有任务与最近快照 |
 
 ## 发布后的真实体验验收项
 

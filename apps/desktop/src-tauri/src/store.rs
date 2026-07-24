@@ -49,6 +49,29 @@ pub struct ChatLineRow {
     pub attachments_json: Option<String>,
 }
 
+/// A bounded, local-only task search result. It deliberately contains only
+/// task metadata and one short message excerpt; attachments and raw SQLite
+/// rows never leave the App data store through this search surface.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadSearchHit {
+    pub id: String,
+    pub project: String,
+    pub title: String,
+    pub session_id: Option<String>,
+    pub model_id: Option<String>,
+    pub cwd: String,
+    pub worktree_path: Option<String>,
+    pub effort: String,
+    pub chat_mode: String,
+    pub updated_at: i64,
+    pub archived: bool,
+    pub session_goal_text: Option<String>,
+    pub session_goal_status: Option<String>,
+    pub session_goal_message: Option<String>,
+    pub excerpt: String,
+}
+
 pub fn db_path() -> Result<PathBuf, String> {
     let base = dirs::data_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join("Library/Application Support")))
@@ -174,6 +197,81 @@ pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     Ok(rows)
+}
+
+fn search_thread_history(conn: &Connection, query: &str, limit: usize) -> Result<Vec<ThreadSearchHit>, String> {
+    let needle = query.trim();
+    if needle.is_empty() {
+        return Ok(vec![]);
+    }
+    // `instr(lower(...))` keeps the query parameter bound and works for exact
+    // Unicode matches such as Chinese text, while retaining case-insensitive
+    // matching for the common Latin task/project names.
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT m.id, m.project, m.title, m.session_id, m.model_id, m.cwd,
+                   m.worktree_path, m.effort, m.chat_mode, m.updated_at,
+                   COALESCE(m.archived, 0),
+                   m.session_goal_text, m.session_goal_status, m.session_goal_message,
+                   COALESCE((
+                     SELECT substr(c.text,
+                       CASE WHEN instr(lower(c.text), lower(?1)) > 120
+                         THEN instr(lower(c.text), lower(?1)) - 120
+                         ELSE 1 END,
+                       420)
+                     FROM chat_lines c
+                     WHERE c.project = m.project AND c.thread_id = m.id
+                       AND instr(lower(c.text), lower(?1)) > 0
+                     ORDER BY c.seq DESC
+                     LIMIT 1
+                   ), '')
+            FROM thread_meta m
+            WHERE instr(lower(m.title), lower(?1)) > 0
+               OR EXISTS (
+                 SELECT 1 FROM chat_lines c
+                 WHERE c.project = m.project AND c.thread_id = m.id
+                   AND instr(lower(c.text), lower(?1)) > 0
+               )
+            ORDER BY m.updated_at DESC
+            LIMIT ?2
+            "#,
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt.query_map(params![needle, limit as i64], |r| {
+        let archived: i64 = r.get(10)?;
+        Ok(ThreadSearchHit {
+            id: r.get(0)?,
+            project: r.get(1)?,
+            title: r.get(2)?,
+            session_id: r.get(3)?,
+            model_id: r.get(4)?,
+            cwd: r.get(5)?,
+            worktree_path: r.get(6)?,
+            effort: r.get(7)?,
+            chat_mode: r.get(8)?,
+            updated_at: r.get(9)?,
+            archived: archived != 0,
+            session_goal_text: r.get(11)?,
+            session_goal_status: r.get(12)?,
+            session_goal_message: r.get(13)?,
+            excerpt: r.get::<_, String>(14)?.chars().take(420).collect(),
+        })
+    })
+    .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Search only gorkX's own persisted task metadata and chat snapshots. This
+/// does not scan a user-installed Grok home, project files, or attachments.
+#[tauri::command]
+pub fn store_search_threads(
+    store: State<'_, AppStore>,
+    query: String,
+    limit: Option<usize>,
+) -> Result<Vec<ThreadSearchHit>, String> {
+    let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    search_thread_history(&conn, &query, limit.unwrap_or(36).clamp(1, 60))
 }
 
 #[tauri::command]
@@ -970,7 +1068,8 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::visible_models_from_cache;
+    use super::{search_thread_history, visible_models_from_cache};
+    use rusqlite::{params, Connection};
 
     #[test]
     fn visible_models_excludes_hidden_entries_and_keeps_real_ids() {
@@ -986,6 +1085,45 @@ mod model_cache_tests {
         assert_eq!(rows[0].model_id, "grok-visible");
         assert_eq!(rows[0].name.as_deref(), Some("Grok Visible"));
         assert_eq!(rows[0].context_window, Some(128000));
+    }
+
+    #[test]
+    fn local_task_search_finds_titles_and_chat_across_projects() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE thread_meta (
+              id TEXT, project TEXT, title TEXT, session_id TEXT, model_id TEXT,
+              cwd TEXT, worktree_path TEXT, effort TEXT, chat_mode TEXT,
+              updated_at INTEGER, archived INTEGER,
+              session_goal_text TEXT, session_goal_status TEXT, session_goal_message TEXT
+            );
+            CREATE TABLE chat_lines (
+              thread_id TEXT, project TEXT, seq INTEGER, text TEXT
+            );
+            "#,
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO thread_meta VALUES (?1, ?2, ?3, NULL, NULL, ?2, NULL, 'high', 'agent', ?4, ?5, NULL, NULL, NULL)",
+            params!["a", "/project-a", "Quarterly report", 20_i64, 0_i64],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO thread_meta VALUES (?1, ?2, ?3, NULL, NULL, ?2, NULL, 'high', 'plan', ?4, ?5, NULL, NULL, NULL)",
+            params!["b", "/project-b", "归档任务", 10_i64, 1_i64],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO chat_lines VALUES (?1, ?2, ?3, ?4)",
+            params!["b", "/project-b", 0_i64, "请比较两种方案的成本与风险"],
+        ).unwrap();
+
+        let title_hits = search_thread_history(&conn, "report", 36).unwrap();
+        assert_eq!(title_hits.len(), 1);
+        assert_eq!(title_hits[0].id, "a");
+        let chat_hits = search_thread_history(&conn, "成本", 36).unwrap();
+        assert_eq!(chat_hits.len(), 1);
+        assert_eq!(chat_hits[0].id, "b");
+        assert!(chat_hits[0].archived);
+        assert!(chat_hits[0].excerpt.contains("成本"));
     }
 }
 

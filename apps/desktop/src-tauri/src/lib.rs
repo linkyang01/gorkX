@@ -146,6 +146,7 @@ pub fn run() {
             pty::pty_close,
             pty::pty_list,
             store::store_list_threads,
+            store::store_search_threads,
             store::store_upsert_thread,
             store::store_remove_thread,
             store::store_save_chat,
