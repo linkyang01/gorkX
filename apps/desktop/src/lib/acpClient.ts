@@ -961,6 +961,28 @@ export class AcpClient {
     return info;
   }
 
+  /**
+   * Start Grok Build's native, low-memory voice capture for this ACP session.
+   * This is deliberately not Web Speech: the bundled macOS engine owns the
+   * microphone, streaming transcription, and lifecycle. Transcript events
+   * arrive through `onNotification` as `x.ai/voice/transcript`. ACP's wire
+   * protocol reserves the leading underscore for extension requests, so the
+   * desktop sends `_x.ai/*` while Grok Build receives `x.ai/*`.
+   */
+  async startVoice(sessionId: string): Promise<void> {
+    await this.request('_x.ai/voice/start', { sessionId }, 15_000);
+  }
+
+  /** Release push-to-talk / finish the current native voice utterance. */
+  async stopVoice(sessionId: string): Promise<void> {
+    await this.request('_x.ai/voice/stop', { sessionId }, 15_000);
+  }
+
+  /** Stop and dispose the native voice pipeline for this session. */
+  async shutdownVoice(sessionId: string): Promise<void> {
+    await this.request('_x.ai/voice/shutdown', { sessionId }, 15_000);
+  }
+
   /** List the kernel's durable checkpoints. No conversation or files are changed. */
   async rewindPoints(sessionId: string): Promise<RewindPoint[]> {
     const raw = (await this.request('_x.ai/rewind/points', { sessionId }, 15_000)) as Record<string, unknown>;

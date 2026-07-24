@@ -437,6 +437,11 @@ function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  /** Session currently holding Grok Build's native microphone pipeline. */
+  const [voiceListeningSessionId, setVoiceListeningSessionId] = useState<string | null>(null);
+  /** Streaming text is intentionally preview-only until Grok Build finalizes it. */
+  const [voiceInterim, setVoiceInterim] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   /** Capability armed in composer (user completes request in chat). */
   const [capabilityArm, setCapabilityArm] = useState<{
     prefix: string;
@@ -592,6 +597,7 @@ function App() {
   >(null);
   const reconnectRef = useRef<((id: string) => Promise<AcpClient | null>) | null>(null);
   const threadsRef = useRef<Thread[]>([]);
+  const activeIdRef = useRef<string | null>(activeId);
   /** Prevent reconnect storm if agent keeps dying */
   const autoReconnectTried = useRef<Set<string>>(new Set());
 
@@ -606,6 +612,7 @@ function App() {
     active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
   );
   threadsRef.current = threads;
+  activeIdRef.current = activeId;
 
   useEffect(() => {
     localStorage.setItem('gorkx.project', project);
@@ -1573,6 +1580,40 @@ function App() {
         if (u) patchThread(threadId, { usage: u });
       };
 
+      client.onNotification = (method, rawParams) => {
+        if (method !== 'x.ai/voice/transcript' && method !== '_x.ai/voice/transcript') return;
+        const params = rawParams && typeof rawParams === 'object'
+          ? rawParams as { sessionId?: unknown; kind?: unknown; text?: unknown; message?: unknown; hint?: unknown }
+          : null;
+        const sessionId = typeof params?.sessionId === 'string' ? params.sessionId : '';
+        const live = threadsRef.current.find((thread) => thread.id === threadId);
+        // The ACP channel is shared by one agent process. Never place a
+        // transcript from a background task in the currently visible draft.
+        if (!sessionId || sessionId !== live?.sessionId || activeIdRef.current !== threadId) return;
+        const kind = typeof params?.kind === 'string' ? params.kind : '';
+        if (kind === 'interim' && typeof params?.text === 'string') {
+          setVoiceInterim(params.text);
+          setVoiceError(null);
+          return;
+        }
+        if (kind === 'final' && typeof params?.text === 'string') {
+          const transcript = params.text.trim();
+          if (transcript) {
+            setDraft((previous) => previous.trim() ? `${previous.trim()} ${transcript}` : transcript);
+          }
+          setVoiceInterim('');
+          setVoiceError(null);
+          return;
+        }
+        if (kind === 'error') {
+          const message = typeof params?.message === 'string' ? params.message : t('voiceErrorGeneric');
+          const hint = typeof params?.hint === 'string' && params.hint.trim() ? ` ${params.hint.trim()}` : '';
+          setVoiceError(`${message}${hint}`);
+          setVoiceInterim('');
+          setVoiceListeningSessionId(null);
+        }
+      };
+
       client.onStderr = (line) => {
         if (/error|Error|panic|failed/i.test(line)) {
           appendLine(threadId, { id: nid(), role: 'system', text: line });
@@ -1627,6 +1668,39 @@ function App() {
     },
     [appendLine, appendOrMerge, patchThread],
   );
+
+  /**
+   * Toggle the engine-owned macOS voice pipeline. A finalized transcript only
+   * edits the draft: sending remains an explicit user action.
+   */
+  const toggleNativeVoice = useCallback(async () => {
+    const current = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+    if (!current?.client || !current.sessionId) return;
+    const sessionId = current.sessionId;
+    setVoiceError(null);
+    try {
+      if (voiceListeningSessionId === sessionId) {
+        await current.client.stopVoice(sessionId);
+        setVoiceListeningSessionId(null);
+        setVoiceInterim('');
+        return;
+      }
+      // A task switch must not leave a hidden microphone capture active.
+      if (voiceListeningSessionId) {
+        const previous = threadsRef.current.find((thread) => thread.sessionId === voiceListeningSessionId);
+        if (previous?.client) {
+          await previous.client.shutdownVoice(voiceListeningSessionId).catch(() => undefined);
+        }
+      }
+      await current.client.startVoice(sessionId);
+      setVoiceListeningSessionId(sessionId);
+      setVoiceInterim('');
+    } catch (error) {
+      setVoiceListeningSessionId(null);
+      setVoiceInterim('');
+      setVoiceError(error instanceof Error ? error.message : t('voiceErrorGeneric'));
+    }
+  }, [voiceListeningSessionId]);
 
   /**
    * Rehydrate only the engine's currently-running child tasks after a session
@@ -5395,6 +5469,11 @@ function App() {
                     }
                   }}
                 />
+                {voiceInterim || voiceError || voiceListeningSessionId === active.sessionId ? (
+                  <div className="voice-hint" role={voiceError ? 'alert' : 'status'}>
+                    {voiceError || voiceInterim || t('voiceListening')}
+                  </div>
+                ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
                     <div className="plus-wrap">
@@ -5476,6 +5555,28 @@ function App() {
                         </div>
                       ) : null}
                     </div>
+                    <button
+                      type="button"
+                      className={`composer-icon-btn voice-btn${voiceListeningSessionId === active.sessionId ? ' listening' : ''}`}
+                      title={
+                        voiceListeningSessionId === active.sessionId
+                          ? t('voiceInputStop')
+                          : t('voiceInput')
+                      }
+                      aria-label={
+                        voiceListeningSessionId === active.sessionId
+                          ? t('voiceInputStop')
+                          : t('voiceInput')
+                      }
+                      aria-pressed={voiceListeningSessionId === active.sessionId}
+                      disabled={!active.client || !active.sessionId}
+                      onClick={() => void toggleNativeVoice()}
+                    >
+                      <svg className="mic-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                        <rect x="5.25" y="2" width="5.5" height="8" rx="2.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        <path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25v2M5.75 14.25h4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </button>
                     {(active.chatMode ?? chatMode) === 'plan' ? (
                       <button
                         type="button"

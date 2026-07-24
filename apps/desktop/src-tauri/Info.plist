@@ -16,7 +16,5 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>gorkX 需要使用麦克风，以便将语音转为文字输入到对话中。</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>gorkX 需要语音识别权限，以便将你的讲话转成可编辑的文字。</string>
 </dict>
 </plist>

@@ -47,7 +47,7 @@ const dict = {
     voiceListening: 'Listening… speak now',
     voiceUnsupported: 'Voice input is not available in this environment',
     voiceErrorDenied:
-      'Microphone was denied. Allow gorkX under System Settings → Privacy & Security → Microphone (and Speech Recognition), then restart the app.',
+      'Microphone was denied. Allow gorkX under System Settings → Privacy & Security → Microphone, then restart the app.',
     voiceErrorNetwork: 'Speech recognition needs network access',
     voiceErrorNoSpeech: 'No speech detected — try again',
     voiceErrorNoDevice: 'No microphone found',
@@ -1080,7 +1080,7 @@ const dict = {
     voiceListening: '正在听… 请说话',
     voiceUnsupported: '当前环境不支持语音输入',
     voiceErrorDenied:
-      '麦克风被拒绝。请到「系统设置 → 隐私与安全性 → 麦克风（及语音识别）」允许 gorkX，然后重启应用再试。',
+      '麦克风被拒绝。请到「系统设置 → 隐私与安全性 → 麦克风」允许 gorkX，然后重启应用再试。',
     voiceErrorNetwork: '语音识别需要网络',
     voiceErrorNoSpeech: '没有听到声音，请再试一次',
     voiceErrorNoDevice: '未检测到麦克风',

@@ -20,6 +20,9 @@
 // and must return the exact isolated response, never a queued main prompt.
 // --session-info reads the active session's kernel snapshot. It sends no model
 // request and proves the desktop Task Info panel's ACP contract.
+// --voice-controls verifies native voice ACP routes reach the session control
+// plane without starting capture, requesting microphone permission, or sending
+// audio to a provider.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -28,7 +31,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -42,6 +45,7 @@ const subagentControlsSmoke = options.includes('--subagent-controls');
 const hooksControlsSmoke = options.includes('--hooks-controls');
 const btwSmoke = options.includes('--btw');
 const sessionInfoSmoke = options.includes('--session-info');
+const voiceControlsSmoke = options.includes('--voice-controls');
 if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke) && !authenticated) {
   console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw and --session-info require --authenticated with an explicit disposable CWD');
   process.exit(2);
@@ -50,7 +54,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -163,6 +167,27 @@ try {
     clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: true },
   }, 30_000);
   console.log(`PASS: ACP initialize (${bin})`);
+
+  if (voiceControlsSmoke) {
+    // Do not call voice/start on a real session: that would request macOS
+    // microphone access and could stream audio. A guaranteed-missing session
+    // still reaches the native route and is rejected at its session guard,
+    // proving the desktop control plane without authentication or capture.
+    const missingVoiceSessionId = `gorkx-voice-missing-${Date.now().toString(36)}`;
+    for (const method of ['_x.ai/voice/start', '_x.ai/voice/stop', '_x.ai/voice/shutdown']) {
+      try {
+        await request(method, { sessionId: missingVoiceSessionId }, 15_000);
+        throw new Error(`${method} unexpectedly accepted a missing session`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/unexpectedly accepted|method not found/i.test(message)) throw error;
+        if (!/session not found|resource.*not found|not found/i.test(message)) {
+          throw new Error(`${method} did not reach native voice session guard: ${message}`);
+        }
+      }
+      console.log(`PASS: ACP ${method} (native route, no capture)`);
+    }
+  }
 
   if (!authenticated) {
     console.log('SKIP: authenticated session/extensions gate (pass --authenticated with isolated test paths)');

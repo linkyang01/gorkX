@@ -1,0 +1,189 @@
+diff --git a/crates/codegen/xai-grok-shell/Cargo.toml b/crates/codegen/xai-grok-shell/Cargo.toml
+index fce5aa6..b7f7ebb 100644
+--- a/crates/codegen/xai-grok-shell/Cargo.toml
++++ b/crates/codegen/xai-grok-shell/Cargo.toml
+@@ -146,6 +146,7 @@ xai-grok-config = { workspace = true }
+ xai-grok-config-types = { workspace = true }
+ xai-grok-memory = { workspace = true }
+ xai-grok-hooks = { path = "../xai-grok-hooks" }
++xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
+ xai-hooks-plugins-types = { path = "../xai-hooks-plugins-types" }
+ xai-grok-plugin-marketplace = { path = "../xai-grok-plugin-marketplace" }
+ xai-file-utils = { path = "../xai-file-utils" }
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
+index fd9501c..2e26dc0 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
+@@ -3410,6 +3410,10 @@ impl acp::Agent for MvpAgent {
+             }
+             "x.ai/session/repair" => crate::extensions::repair::handle(self, &args).await,
+             "x.ai/session/usage" => crate::extensions::usage::handle(self, &args).await,
++            "x.ai/voice/start" | "x.ai/voice/stop" | "x.ai/voice/shutdown"
++            | "_x.ai/voice/start" | "_x.ai/voice/stop" | "_x.ai/voice/shutdown" => {
++                self.handle_voice_extension(&args).await
++            }
+             "x.ai/memory/flush" | "x.ai/memory/rewrite" => {
+                 crate::extensions::memory::handle(self, &args).await
+             }
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
+index a2f4b58..cd915df 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
+@@ -1535,6 +1535,7 @@ impl MvpAgent {
+         let activity = crate::agent::activity::AgentActivity::default();
+         let instance = Self {
+             sessions: RefCell::new(HashMap::new()),
++            voice_commands: RefCell::new(HashMap::new()),
+             activity,
+             loading_sessions: RefCell::new(HashMap::new()),
+             dispatch_locks: RefCell::new(HashMap::new()),
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
+index 1c7e1fb..b09bc9f 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
+@@ -607,6 +607,9 @@ pub struct MvpAgent {
+     /// per client request; no cross-session iteration except cleanup
+     /// (`remove_session`, `sweep_dead_sessions`).
+     pub(crate) sessions: RefCell<HashMap<acp::SessionId, SessionHandle>>,
++    /// Native Grok Build voice pipelines, isolated per ACP session. A session
++    /// close always sends Shutdown before this entry is dropped.
++    voice_commands: RefCell<HashMap<acp::SessionId, tokio::sync::mpsc::Sender<xai_grok_voice::VoiceCommand>>>,
+     /// `Send + Sync` mirror of per-session activity (running turn, pending
+     /// interactions, subagent gauge) shared with the leader's auto-update
+     /// checker, which cannot read the `!Send` maps above. Sessions are
+@@ -1263,6 +1266,7 @@ mod session_lifecycle;
+ mod subagent_coordinator;
+ mod agent_ops;
+ mod acp_agent;
++mod voice;
+ pub(crate) use session_lifecycle::RegistrySnapshot;
+ pub(super) use super::ext_parsers;
+ /// Emit the `auth.lifecycle` login span with optional user id and error
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
+index 9c9638a..b6c6d62 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
+@@ -30,6 +30,9 @@ impl MvpAgent {
+     }
+     /// Remove a session without finalizing; it stays resumable on disk.
+     pub(crate) fn remove_session(&self, id: &acp::SessionId) {
++        if let Some(tx) = self.voice_commands.borrow_mut().remove(id) {
++            let _ = tx.try_send(xai_grok_voice::VoiceCommand::Shutdown);
++        }
+         self.sessions.borrow_mut().remove(id);
+         self.dispatch_locks.borrow_mut().remove(id);
+         self.session_threads.borrow_mut().remove(id);
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/voice.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/voice.rs
+new file mode 100644
+index 0000000..ebc24d4
+--- /dev/null
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/voice.rs
+@@ -0,0 +1,96 @@
++//! Native Grok Build voice exposed to ACP clients.
++//!
++//! The pager already owns the low-memory macOS capture pipeline. This adapter
++//! preserves that pipeline and only turns its events into session-scoped ACP
++//! notifications; it does not implement browser speech recognition.
++use super::*;
++use std::future::Future;
++use std::pin::Pin;
++
++use xai_grok_tools::types::SharedApiKeyProvider;
++use xai_grok_voice::{SharedVoiceAuth, VoiceAuthProvider, VoiceCommand, VoiceConfig, VoiceEvent};
++
++struct AuthManagerVoiceAuth(SharedApiKeyProvider);
++
++impl std::fmt::Debug for AuthManagerVoiceAuth {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.write_str("AuthManagerVoiceAuth")
++    }
++}
++
++impl VoiceAuthProvider for AuthManagerVoiceAuth {
++    fn bearer(&self) -> Pin<Box<dyn Future<Output = Option<String>> + Send + '_>> {
++        let provider = self.0.clone();
++        Box::pin(async move { provider.current_api_key_async().await })
++    }
++}
++
++fn parse_session_id(args: &acp::ExtRequest) -> Result<acp::SessionId, acp::Error> {
++    let params: serde_json::Value = serde_json::from_str(args.params.get())
++        .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
++    let session_id = params.get("sessionId").and_then(serde_json::Value::as_str)
++        .ok_or_else(|| acp::Error::invalid_params().data("missing sessionId"))?;
++    Ok(acp::SessionId::new(session_id))
++}
++
++impl MvpAgent {
++    pub(super) async fn handle_voice_extension(&self, args: &acp::ExtRequest) -> Result<acp::ExtResponse, acp::Error> {
++        let session_id = parse_session_id(args)?;
++        if !self.sessions.borrow().contains_key(&session_id) {
++            return Err(acp::Error::resource_not_found(Some("session not found".into())));
++        }
++        match args.method.as_ref() {
++            "x.ai/voice/start" | "_x.ai/voice/start" => self.start_voice(&session_id).await?,
++            "x.ai/voice/stop" | "_x.ai/voice/stop" => self.send_voice(&session_id, VoiceCommand::PttRelease)?,
++            "x.ai/voice/shutdown" | "_x.ai/voice/shutdown" => self.shutdown_voice(&session_id),
++            _ => return Err(acp::Error::method_not_found()),
++        }
++        crate::extensions::to_raw_response(&serde_json::json!({ "ok": true, "sessionId": session_id.0.as_ref() }))
++    }
++
++    fn send_voice(&self, session_id: &acp::SessionId, command: VoiceCommand) -> Result<(), acp::Error> {
++        let tx = self.voice_commands.borrow().get(session_id).cloned()
++            .ok_or_else(|| acp::Error::resource_not_found(Some("voice is not active for this session".into())))?;
++        tx.try_send(command).map_err(|_| acp::Error::internal_error().data("voice pipeline is unavailable"))
++    }
++
++    fn shutdown_voice(&self, session_id: &acp::SessionId) {
++        if let Some(tx) = self.voice_commands.borrow_mut().remove(session_id) {
++            let _ = tx.try_send(VoiceCommand::Shutdown);
++        }
++    }
++
++    async fn start_voice(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
++        if self.voice_commands.borrow().contains_key(session_id) {
++            return self.send_voice(session_id, VoiceCommand::PttPress);
++        }
++        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
++        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel(64);
++        let auth: SharedVoiceAuth = std::sync::Arc::new(AuthManagerVoiceAuth(
++            crate::auth::shared_api_key_provider(self.auth_manager.clone()),
++        ));
++        let mut config = VoiceConfig::default();
++        config.client_identifier = "gorkx-acp".into();
++        config.user_agent = format!("gorkX/{}", xai_grok_version::VERSION);
++        let gateway = self.gateway.clone();
++        let event_session_id = session_id.0.to_string();
++        tokio::spawn(xai_grok_voice::run_voice_pipeline(config, auth, cmd_rx, event_tx));
++        // Gateway delivery is deliberately !Send (the ACP connection lives on
++        // the agent LocalSet), so this relay must stay local even though the
++        // capture pipeline itself is spawned on the multi-thread runtime.
++        tokio::task::spawn_local(async move {
++            while let Some(event) = event_rx.recv().await {
++                let body = match event {
++                    VoiceEvent::InterimTranscript { text } => serde_json::json!({"sessionId": event_session_id, "kind": "interim", "text": text}),
++                    VoiceEvent::UtteranceFinal { text } => serde_json::json!({"sessionId": event_session_id, "kind": "final", "text": text}),
++                    VoiceEvent::Error { message, hint } => serde_json::json!({"sessionId": event_session_id, "kind": "error", "message": message, "hint": hint}),
++                };
++                if let Ok(params) = serde_json::value::to_raw_value(&body) {
++                    let _ = gateway.ext_notification(acp::ExtNotification::new("x.ai/voice/transcript", params.into())).await;
++                }
++            }
++        });
++        self.voice_commands.borrow_mut().insert(session_id.clone(), cmd_tx);
++        self.send_voice(session_id, VoiceCommand::PttPress)
++    }
++}
+diff --git a/Cargo.lock b/Cargo.lock
+index 7ee0410..1c0de1e 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -13872,6 +13872,7 @@ dependencies = [
+  "xai-grok-test-support",
+  "xai-grok-tools",
+  "xai-grok-version",
++ "xai-grok-voice",
+  "xai-grok-workspace",
+  "xai-hooks-plugins-types",
+  "xai-hunk-tracker",
