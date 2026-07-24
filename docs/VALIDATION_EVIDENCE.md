@@ -31,11 +31,12 @@
 | Grok Build 诊断与修复 | 设置 → 环境 → 运行诊断；`apps/desktop/src-tauri/resources/grok doctor --json` | 2026-07-24 通过：桌面端合并 app-owned 预检与 0.2.111 内核 JSON findings；自动修复按钮仅接受内核当次广告的 fix ID，后端再次核验；50 项 Rust 测试、前端构建与 app-only bundle 均通过 | 本机本次诊断没有自动修复项，故不执行会修改终端/配置的 `doctor fix`；实际修复需在出现内核广告的项目上由用户明确点击确认 |
 | 会话认证来源 ACP 探测 | `GORKX_ACP_TEST_HOME=… GORKX_ACP_TEST_CWD=… node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --session-info` | 待本次受控内核重建后复跑：应在隔离认证会话返回 OAuth/API Key/外部/未登录之一与 `account`/`models`，并拒绝任何令牌内容 | 已登录 OAuth/API Key 的人工观察仍是发布验收项；桌面只显示类别并跳转到本地账户或模型设置 |
 | 原生语音 ACP 控制面 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --voice-controls` | 2026-07-24 通过：实际应用资源 `grok 0.2.111 (69f0ba8)` 完成 ACP initialize，并令 `_x.ai/voice/start`、`stop`、`shutdown` 分别抵达新内核的原生语音会话守卫 | 该门禁使用不存在的会话 ID，因此不会触发 macOS 麦克风授权、不会启动采集、不会上传音频或发送模型请求；仍需在有授权的 macOS 上人工验证一次真实转写、草稿写入与用户自行发送 |
+| v0.4.3 DMG 安装包 | `npm run tauri build`；只读挂载 DMG 后执行 `verify-macos-app-bundle.sh` 和 `verify-grok-acp.mjs --voice-controls` | 2026-07-24 通过：`gorkX_0.4.3_aarch64.dmg` 可只读挂载，包内 `grok 0.2.111 (69f0ba8)`、LICENSE 与 NOTICE 完整；原生语音 start/stop/shutdown 路由通过。SHA-256：`12ed907987898890659f0de8f22fcbbf0f110bc185ab76d2e16ebb3725593047` | 不替代真实登录、真实语音转写和真实 provider 回复的人工走查 |
 
-## 仍未通过的发布阻断项
+## 发布后的真实体验验收项
 
 1. 一台没有既有 Grok 数据的 macOS：只安装 gorkX → App 内登录 → 真实项目首轮 → 退出重开恢复。
 2. 两条用户授权的真实 Provider：连接测试 → 会话选中 → 真实回复，并保留脱敏记录。
 3. 上述真实项目会话中的分叉、三种回退范围、冲突拒绝、计划批准和工具审批人工走查。
 
-因此，当前证据只支持继续开发和本地验证；**不支持创建 tag、GitHub Release 或 DMG 发行。**
+以上项目不以构建或路由门禁替代；它们是后续版本体验完善与回归验收的依据。v0.4.3 已发布时，只对本文件列出的构建、包结构和 ACP 路由证据作出声明，不将其扩大为全功能端到端验收。
