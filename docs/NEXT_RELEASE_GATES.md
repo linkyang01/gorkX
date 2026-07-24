@@ -37,7 +37,7 @@ gorkX，就能登录 Grok、打开真实项目、由 Agent 读取/修改并审�
 
 - GitHub 一键网页 OAuth：需要开发方注册 GitHub App 和受控回调/Device Flow；在此之前，细粒度 Token 是高级兼容路径（读取可用最小只读权限；创建 PR 另需 Pull requests 写入权限和单次确认）。
 - Computer 自动化：需要 macOS TCC/Accessibility、可见动作和紧急停止的完整安全链路。
-- Hooks：当前已可查看和管理内核发现的 Hooks；Hook 文件创作与真实项目执行仍需单独验收，不能宣称 App 自己执行 Hooks。
+- Hooks：当前设置只提供真实的项目 `AGENTS.md` 指令编辑；内核 Hook 控制链路须在有余额账号的真实项目中重新验收后，才可重新进入产品界面。不能宣称 App 自己执行 Hooks。
 - 直接使用 ChatGPT Plus / Claude Pro 网页订阅：不等同于 API 或合法的官方授权通道。
 
 这些能力可继续开发，但未完成时不能放入 v0.5.0 的“已支持”宣传；界面必须说明真实边界。

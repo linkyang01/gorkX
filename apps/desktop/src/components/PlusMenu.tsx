@@ -10,6 +10,7 @@ export type PlusAction =
   | { type: 'attach-files' }
   | { type: 'attach-folders' }
   | { type: 'capture-screen' }
+  | { type: 'open-web-source' }
   | { type: 'pick-project' }
   | { type: 'terminal' }
   | { type: 'review' }
@@ -96,6 +97,13 @@ export function PlusMenu({
       title: t('plusCaptureScreen'),
       desc: t('plusCaptureScreenHint'),
       action: { type: 'capture-screen' },
+    },
+    {
+      kind: 'action',
+      id: 'web-source',
+      title: t('plusWebSource'),
+      desc: t('plusWebSourceHint'),
+      action: { type: 'open-web-source' },
     },
     {
       kind: 'action',

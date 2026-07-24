@@ -175,6 +175,7 @@ import type { AccountSummary } from './lib/account';
 import {
   checkAppUpdate,
   installAppUpdate,
+  openWebPreview,
   type AppUpdateInfo,
 } from './lib/updates';
 import {
@@ -2223,6 +2224,21 @@ function App() {
     await runDesktopAction(command, visible);
   };
 
+  const openWebSourceAction = async () => {
+    const url = await askAction({
+      title: t('plusWebSource'),
+      message: t('plusWebSourceDialogHint'),
+      placeholder: t('plusWebSourcePlaceholder'),
+      submitLabel: t('plusWebSourceOpen'),
+    });
+    if (!url) return;
+    try {
+      await openWebPreview(url);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const openSkillAction = async (skill: SkillInfo) => {
     const request = await askAction({
       title: t('skillDialogTitle').replace('{name}', skill.name),
@@ -2297,6 +2313,10 @@ function App() {
         } catch (e) {
           alert(e instanceof Error ? e.message : String(e));
         }
+        return;
+      case 'open-web-source':
+        setPlusMenuOpen(false);
+        await openWebSourceAction();
         return;
       case 'pick-project':
         setPlusMenuOpen(false);
