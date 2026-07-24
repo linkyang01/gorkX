@@ -66,7 +66,13 @@ export function PlusMenu({
 }: Props) {
   if (!open) return null;
 
-  const invocable = skills.filter((s) => s.userInvocable).slice(0, 10);
+  // Keep compatibility-only presentation helpers out of the everyday menu.
+  // Rich replies are rendered by the app; users should not have to discover
+  // an internal `/answer-mode` command to get a readable result.
+  const expertOnlySkillNames = new Set(['answer-mode']);
+  const invocable = skills
+    .filter((s) => s.userInvocable && !expertOnlySkillNames.has(s.name.toLowerCase()))
+    .slice(0, 10);
 
   const rawRows: Row[] = [
     { kind: 'label', id: 'l-add', title: t('plusCatAdd') },
@@ -162,27 +168,27 @@ export function PlusMenu({
     },
 
     { kind: 'label', id: 'l-session', title: t('plusCatSession') },
-    {
-      kind: 'action',
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
       id: 'task-info',
       title: t('taskInfoTitle'),
       desc: t('taskInfoMenuHint'),
-      action: { type: 'task-info' },
-    },
-    {
-      kind: 'action',
+      action: { type: 'task-info' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && slashAllowed('/fork', availableCommandNames) ? ([{
+      kind: 'action' as const,
       id: 'fork',
       title: t('plusFork'),
       desc: t('slashDescFork'),
-      action: { type: 'fork-session' },
-    },
-    {
-      kind: 'action',
+      action: { type: 'fork-session' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && slashAllowed('/rewind', availableCommandNames) ? ([{
+      kind: 'action' as const,
       id: 'rewind',
       title: t('plusRewind'),
       desc: t('slashDescRewind'),
-      action: { type: 'rewind-session' },
-    },
+      action: { type: 'rewind-session' } as PlusAction,
+    }] as Row[]) : []),
     {
       kind: 'action',
       id: 'btw',
@@ -235,7 +241,7 @@ export function PlusMenu({
     if (row.kind !== 'action') return true;
     const a = row.action;
     if (a.type === 'ask-btw') return slashAllowed('/btw', availableCommandNames);
-    if (a.type === 'generate-media') return slashAllowed(a.media === 'image' ? '/imagine' : '/imagine-video', availableCommandNames);
+    if (a.type === 'generate-media') return hasActiveSession && slashAllowed(a.media === 'image' ? '/imagine' : '/imagine-video', availableCommandNames);
     return true;
   });
 

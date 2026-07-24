@@ -777,7 +777,7 @@ const dict = {
     settingsBrowserConnected: 'Chrome browser MCP configured. Run Diagnose to verify Chrome and the runtime.',
     settingsBrowserDiagnose: 'Diagnose connection',
     settingsBrowserManage: 'Manage MCP',
-    settingsComputer: 'Computer control',
+    settingsComputer: 'Screen capture',
     settingsComputerHint:
       'Screen capture is explicit and local: gorkX opens the macOS picker, then adds your chosen image to the next message.',
     settingsComputerCaptureTitle: 'Capture part of the screen',
@@ -1839,7 +1839,7 @@ const dict = {
     settingsBrowserConnected: '已配置 Chrome 浏览器 MCP；请运行「诊断」确认 Chrome 与运行时可用。',
     settingsBrowserDiagnose: '诊断连接',
     settingsBrowserManage: '管理 MCP',
-    settingsComputer: '电脑操控',
+    settingsComputer: '屏幕截图',
     settingsComputerHint:
       '截图完全由你主动触发且只存本机：gorkX 打开 macOS 选区，随后将所选图片加入下一条消息。',
     settingsComputerCaptureTitle: '截取屏幕区域',

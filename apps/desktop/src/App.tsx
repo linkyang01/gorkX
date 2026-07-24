@@ -4914,22 +4914,12 @@ function App() {
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         availableCommandNames={
-                          // Prefer last live session's commands; else builtins cache
+                          // Only expose engine-owned actions after an actual session
+                          // advertised them. A static fallback made image generation
+                          // look available before the bundled engine/account confirmed it.
                           threads.find((th) => th.commands?.length)?.commands?.map((c) =>
                             c.name.replace(/^\//, ''),
-                          ) ?? [
-                            'plan',
-                            'goal',
-                            'compact',
-                            'diff',
-                            'review',
-                            'memory',
-                            'fork',
-                            'worktree',
-                            'imagine',
-                            'flush',
-                            'dream',
-                          ]
+                          )
                         }
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
