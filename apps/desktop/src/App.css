@@ -1324,13 +1324,31 @@ button.pill:hover {
   line-height: 1.5;
 }
 
+.starter-groups {
+  width: 100%;
+  max-width: 420px;
+  margin: 12px 0 16px;
+}
+
+.starter-section + .starter-section {
+  margin-top: 14px;
+}
+
+.starter-section h3 {
+  margin: 0 0 7px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--muted);
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
 .starter-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 200px));
   gap: 10px;
-  margin: 12px 0 16px;
+  margin: 0;
   width: 100%;
-  max-width: 420px;
 }
 
 .starter-card {

@@ -4677,42 +4677,47 @@ function App() {
               </div>
               <h2>{t('emptyHello')}</h2>
               <p>{project ? t('emptyHelloSub') : t('emptyTasksSub')}</p>
-              <div className="starter-grid">
+              <div className="starter-groups">
                 {(
                   [
                     [
-                      'starterExplore',
-                      'starterExploreHint',
-                      'Explore the repository structure and summarize the architecture.',
+                      'starterOfficeTitle',
+                      [
+                        ['starterSummarize', 'starterSummarizeHint', 'starterSummarizePrompt'],
+                        ['starterReport', 'starterReportHint', 'starterReportPrompt'],
+                        ['starterResearch', 'starterResearchHint', 'starterResearchPrompt'],
+                        ['starterPlanWork', 'starterPlanWorkHint', 'starterPlanWorkPrompt'],
+                      ],
                     ],
                     [
-                      'starterBug',
-                      'starterBugHint',
-                      'Help me find and fix a bug. Ask me for symptoms or logs first if needed.',
-                    ],
-                    [
-                      'starterFeature',
-                      'starterFeatureHint',
-                      'Help me design and implement a new feature end-to-end.',
-                    ],
-                    [
-                      'starterTest',
-                      'starterTestHint',
-                      'Add focused tests for the most important paths in this project.',
+                      'starterCodeTitle',
+                      [
+                        ['starterExplore', 'starterExploreHint', 'starterExplorePrompt'],
+                        ['starterBug', 'starterBugHint', 'starterBugPrompt'],
+                        ['starterFeature', 'starterFeatureHint', 'starterFeaturePrompt'],
+                        ['starterTest', 'starterTestHint', 'starterTestPrompt'],
+                      ],
                     ],
                   ] as const
-                ).map(([titleKey, hintKey, prompt]) => (
-                  <button
-                    key={titleKey}
-                    type="button"
-                    className="starter-card"
-                    onClick={() => {
-                      void createThread({ initialPrompt: prompt });
-                    }}
-                  >
-                    <strong>{t(titleKey)}</strong>
-                    <span>{t(hintKey)}</span>
-                  </button>
+                ).map(([groupKey, cards]) => (
+                  <section className="starter-section" key={groupKey} aria-label={t(groupKey)}>
+                    <h3>{t(groupKey)}</h3>
+                    <div className="starter-grid">
+                      {cards.map(([titleKey, hintKey, promptKey]) => (
+                        <button
+                          key={titleKey}
+                          type="button"
+                          className="starter-card"
+                          onClick={() => {
+                            void createThread({ initialPrompt: t(promptKey) });
+                          }}
+                        >
+                          <strong>{t(titleKey)}</strong>
+                          <span>{t(hintKey)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             </div>
