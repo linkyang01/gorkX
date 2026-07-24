@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ModelContextInfo } from './usage';
+import { t } from './i18n';
 
 export interface AccountSummary {
   email?: string | null;
@@ -74,13 +75,30 @@ function isTauri(): boolean {
   return typeof window !== 'undefined' && !!(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 }
 
+/**
+ * The kernel is allowed to describe its own authentication failure, but the
+ * ordinary desktop path must never tell a non-technical user to run a CLI.
+ */
+function localizeAccountNote(raw: string | null | undefined): string {
+  const note = (raw || '').trim();
+  if (!note) return note;
+  if (/not logged in|no auth(?:entication)? session|no auth\.json/i.test(note)) {
+    return t('accountSignInRequired');
+  }
+  if (/token expired|refresh failed|re-?login/i.test(note)) {
+    return t('accountSignInAgain');
+  }
+  return note;
+}
+
 export async function fetchAccountSummary(): Promise<AccountSummary | null> {
   if (!isTauri()) return null;
   try {
-    return await invoke<AccountSummary>('account_summary');
+    const summary = await invoke<AccountSummary>('account_summary');
+    return { ...summary, quotaNote: localizeAccountNote(summary.quotaNote) };
   } catch (e) {
     // Surface a synthetic summary so UI can show the error instead of silent "—"
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = localizeAccountNote(e instanceof Error ? e.message : String(e));
     return {
       authenticated: false,
       quotaNote: msg || 'account_summary invoke failed',
@@ -120,16 +138,17 @@ export async function startLoginFlow(opts?: {
       note: string;
       verificationUri?: string | null;
     }>('auth_login_browser');
-    opts?.onTick?.(r.note);
+    const note = localizeAccountNote(r.note);
+    opts?.onTick?.(note);
     const account = await fetchAccountSummary();
     return {
       ok: r.ok,
       importedFromSystem: r.note.includes('系统'),
-      note: r.note,
+      note,
       account,
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = localizeAccountNote(e instanceof Error ? e.message : String(e));
     opts?.onTick?.(msg);
     return {
       ok: false,

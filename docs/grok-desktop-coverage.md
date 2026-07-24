@@ -47,7 +47,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Surface | Desktop control | Status |
 |---|---|---|
 | Login / logout | Browser login, App-owned `auth.json`, explicit sign-out | ✅ |
-| Quota | Account chip/menu with foreground and interval refresh | 🟡 upstream availability and quota format govern precision |
+| Quota | Account chip/menu with foreground and interval refresh; unavailable status routes to Settings → Account | 🟡 upstream availability and quota format govern precision; the desktop surface does not expose CLI recovery instructions |
 | Kernel resolve | Resources → App runtime → App GROK_HOME bin; system PATH only through explicit debug escape hatch | ✅ |
 | Kernel governance | Locked source revision, ordered patch queue, isolated ACP and macOS bundle gates | ✅ |
 | App update | Release check/download flow exists | 🟡 no release is implied until one is explicitly published |

@@ -36,7 +36,7 @@ mock as the corresponding Grok Build capability.
 | Terminal | PTY dock | **Real** |
 | Extensions | Skills / MCP / plugins via engine CLI and App `GROK_HOME` | **Real** — a Skill’s Run button opens a natural-language task form; it does not require a user to compose its slash syntax. Depends on engine and does not read `~/.grok` by default. |
 | Memory (Hermes) | Default on; USER/AGENT/project files; inject on first prompt; auto-learn dumps; Remember / Forget / keyword search / local compact | **Real (v0.4+)** — kernel `/flush`/`/dream` still optional extras |
-| Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** |
+| Auth / quota | Browser device login; stay signed in; silent refresh; membership + avatar | **Real (v0.4.1+)** — when account data cannot be read, the desktop status directs the user to **Settings → Account**; it never asks ordinary users to run a terminal command. |
 | App update | Settings check + download DMG; launch banner | **Real (v0.4.2)** — drag into Applications to replace |
 | Onboarding | First-run checklist: engine · login · project | **Real (v0.4.3)** |
 | Start screen | Button-first office and project workflows: read & summarize, draft a report, research & compare, plan a project, explore code, fix a bug, add a feature, write tests | **Real** — each card pre-fills the localized, editable composer brief. The user can tailor it or add files, then explicitly sends it to create the normal durable Grok Build task; no slash command or second agent loop is involved. |
