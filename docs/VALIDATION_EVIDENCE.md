@@ -32,7 +32,7 @@
 | 会话认证来源 ACP 探测 | `GORKX_ACP_TEST_HOME=… GORKX_ACP_TEST_CWD=… node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --session-info` | 待本次受控内核重建后复跑：应在隔离认证会话返回 OAuth/API Key/外部/未登录之一与 `account`/`models`，并拒绝任何令牌内容 | 已登录 OAuth/API Key 的人工观察仍是发布验收项；桌面只显示类别并跳转到本地账户或模型设置 |
 | 原生语音 ACP 控制面 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --voice-controls` | 2026-07-24 通过：实际应用资源 `grok 0.2.111 (69f0ba8)` 完成 ACP initialize，并令 `_x.ai/voice/start`、`stop`、`shutdown` 分别抵达新内核的原生语音会话守卫 | 该门禁使用不存在的会话 ID，因此不会触发 macOS 麦克风授权、不会启动采集、不会上传音频或发送模型请求；仍需在有授权的 macOS 上人工验证一次真实转写、草稿写入与用户自行发送 |
 | v0.4.3 DMG 安装包 | `npm run tauri build`；只读挂载 DMG 后执行 `verify-macos-app-bundle.sh` 和 `verify-grok-acp.mjs --voice-controls` | 2026-07-24 通过：`gorkX_0.4.3_aarch64.dmg` 可只读挂载，包内 `grok 0.2.111 (69f0ba8)`、LICENSE 与 NOTICE 完整；原生语音 start/stop/shutdown 路由通过。SHA-256：`12ed907987898890659f0de8f22fcbbf0f110bc185ab76d2e16ebb3725593047` | 不替代真实登录、真实语音转写和真实 provider 回复的人工走查 |
-| 首页办公工作流 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle` | 2026-07-24 通过：中英文首页的阅读总结、报告、调研、项目计划和开发卡片均以本地化自然语言 brief 创建普通持久任务；生产包首屏 JS gzip 97,722 / 512,000 bytes，懒加载边界保持 | 不发送模型提示词；实际内容质量属于用户任务使用时的内核/模型行为 |
+| 首页办公工作流 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle` | 2026-07-24 通过：中英文首页的阅读总结、报告、调研、项目计划和开发卡片均将本地化自然语言 brief 填入可编辑输入框；用户可增补材料后显式发送，生产包首屏 JS gzip 97,731 / 512,000 bytes，懒加载边界保持 | 不发送模型提示词；实际内容质量属于用户任务使用时的内核/模型行为 |
 
 ## 发布后的真实体验验收项
 

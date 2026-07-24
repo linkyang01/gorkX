@@ -40,6 +40,7 @@ Grok Build is powerful, but a terminal is a poor place to keep a project moving.
 | In gorkX | Why it feels better |
 |---|---|
 | **Projects and durable tasks** | Come back to real work with the folder, session, and history still attached. |
+| **Office-ready task starters** | Start with a button for summarizing material, drafting a report, comparing options, or planning a project — then edit the brief before sending. |
 | **Streaming agent workspace** | Write, research, plan, operate files, and follow tool activity from one focused screen. |
 | **Review that explains itself** | Inspect file changes, plans, Git state, and Chinese summaries of agent actions before you accept a result. |
 | **Long-term local memory** | Save working preferences and project conventions; inspect and clean them whenever you want. |
@@ -174,6 +175,7 @@ Grok Build 很强，但终端并不适合承载持续推进的项目。gorkX 把
 | 在 gorkX 中 | 你得到的体验 |
 |---|---|
 | **项目与持久任务** | 下次回来，文件夹、会话和工作历史仍在原处。 |
+| **办公任务快捷入口** | 一键开始阅读总结、起草报告、方案对比或项目计划；发送前仍可修改任务说明。 |
 | **流式 Agent 工作区** | 写作、研究、计划、文件操作与工具过程，都在一个专注界面中完成。 |
 | **会解释自己的审阅** | 在接受结果前，查看文件变更、计划、Git 状态，以及 Agent 行动的中文摘要。 |
 | **本地长期记忆** | 保存你的习惯与项目约定，随时检查和清理。 |

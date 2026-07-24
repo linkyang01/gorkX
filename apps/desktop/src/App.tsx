@@ -4709,7 +4709,11 @@ function App() {
                           type="button"
                           className="starter-card"
                           onClick={() => {
-                            void createThread({ initialPrompt: t(promptKey) });
+                            // Starter cards are guidance, not an implicit agent turn:
+                            // let people tailor the brief and add files before they send.
+                            setDraft(t(promptKey));
+                            setSlashOpen(false);
+                            focusComposer();
                           }}
                         >
                           <strong>{t(titleKey)}</strong>
