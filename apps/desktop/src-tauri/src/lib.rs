@@ -102,6 +102,7 @@ pub fn run() {
             agent_bridge::agent_list,
             agent_bridge::grok_status,
             agent_bridge::kernel_doctor,
+            agent_bridge::kernel_doctor_fix,
             git_panel::git_snapshot,
             git_panel::git_file_diff,
             git_panel::git_stage,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   runKernelDoctor,
+  runKernelDoctorFix,
   type AcpClient,
   type GrokStatus,
   type HooksSnapshot,
@@ -290,6 +291,7 @@ export function SettingsPanel({
   });
   const [kernelDoctor, setKernelDoctor] = useState<KernelDoctor | null>(null);
   const [doctorBusy, setDoctorBusy] = useState(false);
+  const [doctorFixBusy, setDoctorFixBusy] = useState<string | null>(null);
   const [github, setGithub] = useState<GithubStatus | null>(null);
   const [githubToken, setGithubToken] = useState('');
   const [githubPrs, setGithubPrs] = useState<GithubPullRequest[]>([]);
@@ -382,6 +384,20 @@ export function SettingsPanel({
       setMsg(error instanceof Error ? error.message : String(error));
     } finally {
       setDoctorBusy(false);
+    }
+  };
+
+  const applyKernelDoctorFix = async (fixId: string) => {
+    if (!window.confirm(t('kernelDoctorFixConfirm'))) return;
+    setDoctorFixBusy(fixId);
+    try {
+      const result = await runKernelDoctorFix(fixId, grokCmd || undefined);
+      setMsg(result.success ? t('kernelDoctorFixSuccess') : `${t('kernelDoctorFixFailed')}: ${result.output}`);
+      await checkKernelDoctor();
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDoctorFixBusy(null);
     }
   };
 
@@ -2072,6 +2088,30 @@ export function SettingsPanel({
                       {kernelDoctor.issues.map((issue) => <li key={issue}>{issue}</li>)}
                     </ul>
                   ) : <div className="settings-row-hint">{t('kernelDoctorClean')}</div>}
+                  {kernelDoctor.engineFindings.length ? (
+                    <div className="settings-list" style={{ marginTop: 12 }}>
+                      <div className="settings-row-title">{t('kernelDoctorEngineResults')}</div>
+                      {kernelDoctor.engineFindings.map((finding) => (
+                        <div key={finding.id} className="settings-card" style={{ marginTop: 8 }}>
+                          <div className="settings-row-title">{finding.message}</div>
+                          <div className="settings-row-hint">{finding.id} · {finding.disposition}</div>
+                          {finding.note ? <div className="settings-row-hint">{finding.note}</div> : null}
+                          {finding.remediation ? <div className="settings-row-hint">{finding.remediation}</div> : null}
+                          {finding.automaticFixId ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              disabled={doctorFixBusy !== null}
+                              onClick={() => void applyKernelDoctorFix(finding.automaticFixId!)}
+                              style={{ marginTop: 8 }}
+                            >
+                              {doctorFixBusy === finding.automaticFixId ? t('kernelDoctorFixRunning') : t('kernelDoctorFix')}
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </>

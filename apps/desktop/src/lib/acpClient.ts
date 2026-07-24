@@ -41,6 +41,22 @@ export interface KernelDoctor {
   grokHomeWritable: boolean;
   issues: string[];
   repairHint: string;
+  engineFindings: KernelDoctorFinding[];
+}
+
+export interface KernelDoctorFinding {
+  id: string;
+  disposition: string;
+  message: string;
+  note?: string | null;
+  remediation?: string | null;
+  automaticFixId?: string | null;
+}
+
+export interface KernelDoctorFix {
+  fixId: string;
+  success: boolean;
+  output: string;
 }
 
 export interface HookInfo {
@@ -1238,6 +1254,11 @@ export async function fetchGrokStatus(grokCmd?: string): Promise<GrokStatus> {
 
 export async function runKernelDoctor(grokCmd?: string): Promise<KernelDoctor> {
   return invoke<KernelDoctor>('kernel_doctor', { grokCmd: grokCmd ?? null });
+}
+
+/** Applies only a repair listed by the immediately preceding Grok Build doctor result. */
+export async function runKernelDoctorFix(fixId: string, grokCmd?: string): Promise<KernelDoctorFix> {
+  return invoke<KernelDoctorFix>('kernel_doctor_fix', { fixId, grokCmd: grokCmd ?? null });
 }
 
 export async function stopAllAgents(): Promise<number> {

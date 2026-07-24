@@ -102,3 +102,11 @@ using a system Grok installation:
 ```bash
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
+
+## Kernel diagnostics
+
+Settings → Environment → Run doctor combines gorkX's app-owned engine/data-home
+preflight with Grok Build's real `doctor --json` findings. An “Apply repair”
+button appears only when the running kernel itself advertises an automatic
+remediation; gorkX verifies that repair ID again before invoking
+`grok doctor fix <id>`. It never exposes an arbitrary CLI command field.

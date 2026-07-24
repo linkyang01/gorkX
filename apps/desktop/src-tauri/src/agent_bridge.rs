@@ -7,7 +7,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
@@ -340,6 +340,88 @@ pub struct KernelDoctor {
     pub grok_home_writable: bool,
     pub issues: Vec<String>,
     pub repair_hint: String,
+    /// Findings reported by the bundled Grok Build `doctor --json` command.
+    /// This keeps the desktop view aligned with kernel diagnostics instead of
+    /// pretending that gorkX's own preflight is the whole diagnosis.
+    pub engine_findings: Vec<KernelDoctorFinding>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelDoctorFinding {
+    pub id: String,
+    pub disposition: String,
+    pub message: String,
+    pub note: Option<String>,
+    pub remediation: Option<String>,
+    pub automatic_fix_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KernelDoctorFix {
+    pub fix_id: String,
+    pub success: bool,
+    pub output: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineDoctorDocument {
+    #[serde(default)]
+    findings: Vec<EngineDoctorFinding>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineDoctorFinding {
+    id: String,
+    disposition: String,
+    message: String,
+    #[serde(default)]
+    note: Option<String>,
+    #[serde(default)]
+    remediation: Option<serde_json::Value>,
+    #[serde(default)]
+    automatic_remediation: Option<EngineDoctorAutomaticRemediation>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineDoctorAutomaticRemediation {
+    fix_id: String,
+}
+
+fn engine_doctor_findings(bin: &Path) -> Result<Vec<KernelDoctorFinding>, String> {
+    let mut command = std::process::Command::new(bin);
+    command.args(["doctor", "--json"]);
+    paths::apply_engine_env(&mut command);
+    let output = command
+        .output()
+        .map_err(|error| format!("run Grok Build doctor: {error}"))?;
+    if !output.status.success() {
+        return Err(sanitize_engine_diagnostic(&String::from_utf8_lossy(&output.stderr)));
+    }
+    let document: EngineDoctorDocument = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("Grok Build returned invalid doctor data: {error}"))?;
+    Ok(document.findings.into_iter().map(|finding| KernelDoctorFinding {
+        id: finding.id,
+        disposition: finding.disposition,
+        message: finding.message,
+        note: finding.note,
+        remediation: finding.remediation.map(|value| match value {
+            serde_json::Value::String(value) => value,
+            value => value.to_string(),
+        }),
+        automatic_fix_id: finding.automatic_remediation.map(|fix| fix.fix_id),
+    }).collect())
+}
+
+fn safe_doctor_fix_id(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('-')
+        && value.len() <= 120
+        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[tauri::command]
@@ -385,10 +467,61 @@ pub async fn kernel_doctor(grok_cmd: Option<String>) -> Result<KernelDoctor, Str
         } else {
             "No repair is needed.".into()
         };
-        Ok(KernelDoctor { status, grok_home_writable, issues, repair_hint })
+        let engine_findings = if status.installed {
+            match engine_doctor_findings(Path::new(&status.grok_path)) {
+                Ok(findings) => findings,
+                Err(error) => {
+                    issues.push(format!("Grok Build doctor could not run: {error}"));
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
+        };
+        Ok(KernelDoctor { status, grok_home_writable, issues, repair_hint, engine_findings })
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Execute a remediation which the current Grok Build diagnostic explicitly
+/// advertised. The renderer cannot pass arbitrary `grok` subcommands here.
+#[tauri::command]
+pub async fn kernel_doctor_fix(fix_id: String, grok_cmd: Option<String>) -> Result<KernelDoctorFix, String> {
+    if !safe_doctor_fix_id(&fix_id) {
+        return Err("Invalid Grok Build doctor repair identifier.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = collect_grok_status(grok_cmd)?;
+        if !status.installed {
+            return Err("Grok Build is unavailable; cannot apply a repair.".into());
+        }
+        let bin = Path::new(&status.grok_path);
+        let advertised = engine_doctor_findings(bin)?
+            .into_iter()
+            .any(|finding| finding.automatic_fix_id.as_deref() == Some(fix_id.as_str()));
+        if !advertised {
+            return Err("This repair was not offered by the current Grok Build diagnosis.".into());
+        }
+        let mut command = std::process::Command::new(bin);
+        command.args(["doctor", "fix", &fix_id]);
+        paths::apply_engine_env(&mut command);
+        let output = command
+            .output()
+            .map_err(|error| format!("run Grok Build doctor repair: {error}"))?;
+        let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+        if !output.stderr.is_empty() {
+            if !text.is_empty() { text.push('\n'); }
+            text.push_str(&String::from_utf8_lossy(&output.stderr));
+        }
+        Ok(KernelDoctorFix {
+            fix_id,
+            success: output.status.success(),
+            output: sanitize_engine_diagnostic(&text),
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn channel_for(bin: &Path, override_set: bool) -> String {
@@ -544,7 +677,7 @@ fn dunce_canonicalize(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_agent_working_directory, sanitize_engine_diagnostic};
+    use super::{resolve_agent_working_directory, safe_doctor_fix_id, sanitize_engine_diagnostic};
 
     #[test]
     fn engine_stderr_never_exposes_credential_derived_fields() {
@@ -572,5 +705,13 @@ mod tests {
     fn agent_working_directory_rejects_a_missing_project() {
         let missing = std::env::temp_dir().join("gorkx-no-such-project-for-sandbox");
         assert!(resolve_agent_working_directory(Some(missing.display().to_string())).is_err());
+    }
+
+    #[test]
+    fn doctor_fix_id_is_a_bounded_identifier_not_cli_input() {
+        assert!(safe_doctor_fix_id("terminal.tmux-clipboard"));
+        assert!(!safe_doctor_fix_id("--all"));
+        assert!(!safe_doctor_fix_id("terminal.fix; rm -rf /"));
+        assert!(!safe_doctor_fix_id(""));
     }
 }
