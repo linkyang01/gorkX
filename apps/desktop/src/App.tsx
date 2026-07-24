@@ -41,7 +41,7 @@ import {
   type UserQuestionAnnotations,
   type UserQuestionRequest,
 } from './lib/acpClient';
-import type { ArchivedTaskRow } from './components/SettingsPanel';
+import type { ArchivedTaskRow, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { MessageList, type ChatLine } from './components/MessageList';
@@ -377,6 +377,7 @@ function App() {
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
   const [taskInfoOpen, setTaskInfoOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>();
   const [btwCard, setBtwCard] = useState<BtwCardState | null>(null);
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -5810,7 +5811,10 @@ function App() {
 
       {kernelOpen ? <Suspense fallback={<DeferredPanelFallback />}><SettingsPanel
         open={kernelOpen}
-        onClose={() => setKernelOpen(false)}
+        onClose={() => {
+          setKernelOpen(false);
+          setSettingsInitialSection(undefined);
+        }}
         grokCmd={grokCmd}
         onGrokCmd={setGrokCmd}
         status={status}
@@ -5837,6 +5841,7 @@ function App() {
           return path;
         }}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
+        initialSection={settingsInitialSection}
       /></Suspense> : null}
 
       {extOpen ? <Suspense fallback={<DeferredPanelFallback />}><ExtensionsPanel
@@ -5978,6 +5983,11 @@ function App() {
         client={active?.client ?? null}
         sessionId={active?.sessionId ?? null}
         onClose={() => setTaskInfoOpen(false)}
+        onManageAuth={(destination) => {
+          setTaskInfoOpen(false);
+          setSettingsInitialSection(destination === 'models' ? 'models' : 'account');
+          setKernelOpen(true);
+        }}
       /></Suspense> : null}
 
       {permReq ? (

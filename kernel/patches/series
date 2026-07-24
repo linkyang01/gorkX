@@ -3,3 +3,4 @@
 #
 0001-web-search-explicit-f32-literals.patch
 0002-acp-native-voice.patch
+0003-acp-session-auth-source.patch

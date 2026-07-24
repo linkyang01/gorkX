@@ -27,7 +27,7 @@ mock as the corresponding Grok Build capability.
 | Chat | Fork conversation | **Kernel-wired** — 0.2.110 stdio exposes the compatibility route `_x.ai/session/fork`; gorkX creates and loads the durable child session while preserving the source. The standard `x.ai/*` spelling is not accepted by this stdio runtime, so the client uses the tested runtime route. |
 | Chat | Rewind conversation | **Kernel-wired** — gorkX lists `_x.ai/rewind/points`, requires an explicit checkpoint and scope, and calls `_x.ai/rewind/execute` with `force: false`; successful rewind reloads the task from kernel history. The local ACP probe verifies route availability; full real-turn execution remains an account-credit acceptance gate. |
 | Chat | Ask aside | **Kernel-wired** — the active-task **Ask aside / 旁问** button and `+` menu open a native input dialog; while a main task is running, gorkX sends `x.ai/btw` rather than queueing a normal prompt. `/btw` remains only as a keyboard compatibility shortcut. Its answer appears in a dismissible Markdown card above the composer and is intentionally excluded from the main transcript. A full provider-answer acceptance run remains account-credit gated. |
-| Chat | Task info | **Kernel-wired** — the `+` menu opens a read-only **Task info / 任务信息** panel with the live model, agent, turns, working folder, tool calls and context-capacity meter. It calls the verified compatibility route `_x.ai/session/info` on bundled Grok Build 0.2.110; no model prompt is sent. |
+| Chat | Task info | **Kernel-wired** — the `+` menu opens a read-only **Task info / 任务信息** panel with the live model, agent, turns, working folder, tool calls, context-capacity meter, and the safe session authentication category (OAuth / API Key / external / not signed in). The maintained ACP adapter returns no credential material and offers the matching Account or Models & providers settings destination. It calls the verified compatibility route `_x.ai/session/info`; no model prompt is sent. |
 | Image / video generation | **Generate image** / **Generate video** buttons open natural-language forms, then pass the request to Grok Build; supported ACP raster output appears in the conversation as a local image card | **Engine-gated** — supported by the locked source, but the active Grok account and engine configuration decide whether a request can run. When the engine emits a PNG/JPEG/GIF/WebP ACP image block, gorkX validates it, saves bytes only under App data (not SQLite/logs/transcript text), persists path metadata for task restore, and renders it locally. Slash commands remain expert compatibility only. |
 | Goal | **Set goal** form, persisted banner, status/pause/resume/clear → agent; progress from plan / `update_goal` tool | **Real (shell)** — engine goal loop quality still varies; slash syntax is expert compatibility only. |
 | Projects / Tasks | Create, archive, delete, SQLite index | **Real** |
@@ -92,6 +92,20 @@ GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-home \
 GORKX_ACP_TEST_CWD=/private/tmp/gorkx-acp-project \
 node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok \
   --authenticated --custom-model
+```
+
+## Isolated task-authentication snapshot gate
+
+This creates a disposable live session in an explicitly supplied isolated
+authenticated App-owned home, and verifies that task information returns only
+a bounded authentication category plus a safe settings destination. It sends
+no model prompt and cannot expose a token:
+
+```bash
+GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-home \
+GORKX_ACP_TEST_CWD=/private/tmp/gorkx-acp-project \
+node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok \
+  --authenticated --session-info
 ```
 
 ## macOS bundle gate

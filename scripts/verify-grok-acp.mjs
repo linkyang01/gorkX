@@ -19,7 +19,8 @@
 // --btw sends one native side question. It is a billable model acceptance gate
 // and must return the exact isolated response, never a queued main prompt.
 // --session-info reads the active session's kernel snapshot. It sends no model
-// request and proves the desktop Task Info panel's ACP contract.
+// request and proves the desktop Task Info panel's ACP contract, including the
+// token-free authentication category and its safe settings destination.
 // --voice-controls verifies native voice ACP routes reach the session control
 // plane without starting capture, requesting microphone permission, or sending
 // audio to a provider.
@@ -253,7 +254,12 @@ try {
       if (!info || info.sessionId !== sessionId || typeof info.cwd !== 'string' || !info.context || typeof info.context !== 'object') {
         throw new Error(`${method} returned invalid payload: ${JSON.stringify(info)}`);
       }
-      console.log(`PASS: ACP ${method} (session and context snapshot)`);
+      const sources = new Set(['oauth', 'api_key', 'external', 'not_authenticated']);
+      const destinations = new Set(['account', 'models']);
+      if (!sources.has(info.authSource) || !destinations.has(info.authManagement)) {
+        throw new Error(`${method} returned unsafe or incomplete auth snapshot: ${JSON.stringify(info)}`);
+      }
+      console.log(`PASS: ACP ${method} (session, context, and token-free auth snapshot)`);
     }
 
     if (sessionControlsSmoke) {

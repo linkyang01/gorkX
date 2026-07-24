@@ -118,6 +118,10 @@ export interface BtwResult {
 export interface SessionSnapshot {
   sessionId: string;
   cwd: string;
+  /** Credential category supplied by the kernel; never contains token material. */
+  authSource?: 'oauth' | 'api_key' | 'external' | 'not_authenticated' | string;
+  /** The corresponding safe desktop destination: account or models. */
+  authManagement?: 'account' | 'models' | string;
   agentName?: string | null;
   model?: string | null;
   modelDisplayName?: string | null;

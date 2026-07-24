@@ -1,0 +1,66 @@
+diff --git a/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs b/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
+index b4293d7..de0190a 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
+@@ -28,6 +28,30 @@ fn backfill_session_summary(summary: &mut Summary) {
+     }
+ }
+ 
++/// Return only the session's authentication category and the safe desktop
++/// destination for managing it.  Never expose a token, token suffix, user id,
++/// or credential path through ACP.
++fn session_auth_summary(agent: &MvpAgent) -> (&'static str, &'static str) {
++    let selected = agent.auth_method_id.load();
++    let source = match selected.as_deref().map(|id| id.0.as_ref()) {
++        Some("xai.api_key") => "api_key",
++        Some("grok.com" | "oidc" | "cached_token") => "oauth",
++        Some(_) => "external",
++        None => match agent.auth_manager.current().as_ref().map(|auth| &auth.auth_mode) {
++            Some(crate::auth::AuthMode::ApiKey) => "api_key",
++            Some(crate::auth::AuthMode::WebLogin | crate::auth::AuthMode::Oidc) => "oauth",
++            Some(crate::auth::AuthMode::External) => "external",
++            None => "not_authenticated",
++        },
++    };
++    let management = match source {
++        "api_key" | "external" => "models",
++        "oauth" | "not_authenticated" => "account",
++        _ => "account",
++    };
++    (source, management)
++}
++
+ /// Router for x.ai/session/* and x.ai/session_summaries/* methods.
+ pub async fn handle(
+     agent: &MvpAgent,
+@@ -132,9 +157,12 @@ async fn handle_session_info(
+         .and_then(|entry| entry.info.name.clone());
+ 
+     // Construct `SessionInfoResponse`.
++    let (auth_source, auth_management) = session_auth_summary(agent);
+     let response = SessionInfoResponse {
+         session_id,
+         cwd: session.info.cwd.clone(),
++        auth_source: auth_source.to_owned(),
++        auth_management: auth_management.to_owned(),
+         data,
+     };
+ 
+diff --git a/crates/codegen/xai-grok-shell/src/session/acp_types.rs b/crates/codegen/xai-grok-shell/src/session/acp_types.rs
+index 5a1b7a6..d6134be 100644
+--- a/crates/codegen/xai-grok-shell/src/session/acp_types.rs
++++ b/crates/codegen/xai-grok-shell/src/session/acp_types.rs
+@@ -562,6 +562,13 @@ pub fn model_display_name(
+ pub struct SessionInfoResponse {
+     pub session_id: String,
+     pub cwd: String,
++    /// Authentication category only: oauth, api_key, external, or
++    /// not_authenticated.  This intentionally contains no credential data.
++    #[serde(default)]
++    pub auth_source: String,
++    /// Safe desktop management destination: account or models.
++    #[serde(default)]
++    pub auth_management: String,
+     #[serde(flatten)]
+     pub data: SessionInfoData,
+ }

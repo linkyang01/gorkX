@@ -7,6 +7,7 @@ interface Props {
   client: AcpClient | null;
   sessionId: string | null;
   onClose: () => void;
+  onManageAuth?: (destination: 'account' | 'models') => void;
 }
 
 function number(value: number | undefined) {
@@ -14,7 +15,17 @@ function number(value: number | undefined) {
 }
 
 /** A readable desktop surface for the engine's read-only session snapshot. */
-export function TaskInfoPanel({ open, client, sessionId, onClose }: Props) {
+function authSourceLabel(source: SessionSnapshot['authSource']) {
+  switch (source) {
+    case 'oauth': return t('taskInfoAuthOAuth');
+    case 'api_key': return t('taskInfoAuthApiKey');
+    case 'external': return t('taskInfoAuthExternal');
+    case 'not_authenticated': return t('taskInfoAuthNone');
+    default: return '—';
+  }
+}
+
+export function TaskInfoPanel({ open, client, sessionId, onClose, onManageAuth }: Props) {
   const [info, setInfo] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,7 +80,15 @@ export function TaskInfoPanel({ open, client, sessionId, onClose }: Props) {
             <div><span>{t('taskInfoModel')}</span><strong>{info.modelDisplayName || info.model || '—'}</strong></div>
             <div><span>{t('taskInfoAgent')}</span><strong>{info.agentName || '—'}</strong></div>
             <div><span>{t('taskInfoTurns')}</span><strong>{number(info.turns)}</strong></div>
+            <div><span>{t('taskInfoAuthSource')}</span><strong>{authSourceLabel(info.authSource)}</strong></div>
           </div>
+          {onManageAuth && (info.authManagement === 'account' || info.authManagement === 'models') ? (
+            <div className="task-info-auth-action">
+              <button type="button" className="btn btn-sm" onClick={() => onManageAuth(info.authManagement as 'account' | 'models')}>
+                {info.authManagement === 'models' ? t('taskInfoManageModels') : t('taskInfoManageAccount')}
+              </button>
+            </div>
+          ) : null}
           <section className="task-info-context">
             <div className="task-info-context-head"><strong>{t('taskInfoContext')}</strong><span>{usedPct}%</span></div>
             <div className="task-info-meter" aria-label={t('taskInfoContext')}><i style={{ width: `${usedPct}%` }} /></div>
