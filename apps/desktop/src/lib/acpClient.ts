@@ -448,6 +448,7 @@ export class AcpClient {
   private unlistenLine: UnlistenFn | null = null;
   private unlistenExit: UnlistenFn | null = null;
   private sessionCwd = '';
+  private readonly allowClientFileWrites: boolean;
 
   onSessionUpdate: ((update: SessionUpdate, sessionId?: string) => void) | null = null;
   onPermissionRequest: ((req: PermissionRequest) => void) | null = null;
@@ -476,8 +477,9 @@ export class AcpClient {
     { resolve: (v: { worktreePath?: string; sessionId?: string }) => void }
   >();
 
-  private constructor(agentId: string) {
+  private constructor(agentId: string, allowClientFileWrites: boolean) {
     this.agentId = agentId;
+    this.allowClientFileWrites = allowClientFileWrites;
   }
 
   static async start(
@@ -492,7 +494,7 @@ export class AcpClient {
       reasoningEffort: reasoningEffort ?? null,
       workingDirectory: workingDirectory ?? null,
     });
-    const client = new AcpClient(info.id);
+    const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();
     return client;
   }
@@ -698,8 +700,29 @@ export class AcpClient {
     }
 
     if (method === 'fs/write_text_file' || method === 'fs/writeTextFile') {
-      // Not implemented in P1 — reject so agent can fall back to its tools
-      await this.respondError(id, -32601, `Method not implemented: ${method}`);
+      if (!this.allowClientFileWrites) {
+        await this.respondError(id, -32001, 'Client file writes require Full permission mode');
+        return;
+      }
+      try {
+        const path = String(params.path ?? '');
+        const content = typeof params.content === 'string'
+          ? params.content
+          : typeof params.text === 'string'
+            ? params.text
+            : '';
+        if (!path || (typeof params.content !== 'string' && typeof params.text !== 'string')) {
+          throw new Error('fs/write_text_file requires a text path and content');
+        }
+        await invoke('workspace_write_client_text', {
+          cwd: this.sessionCwd,
+          path,
+          content,
+        });
+        await this.respond(id, {});
+      } catch (e) {
+        await this.respondError(id, -32000, e instanceof Error ? e.message : String(e));
+      }
       return;
     }
 
@@ -811,7 +834,7 @@ export class AcpClient {
         protocolVersion: 1,
         clientInfo: { name: 'gorkX', version: '0.1.0' },
         clientCapabilities: {
-          fs: { readTextFile: true, writeTextFile: false },
+          fs: { readTextFile: true, writeTextFile: this.allowClientFileWrites },
           terminal: true,
           meta: { 'x.ai/folderTrust': { interactive: true } },
         },

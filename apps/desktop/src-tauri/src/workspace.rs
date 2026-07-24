@@ -22,6 +22,9 @@ pub struct ProjectInstructionsSnapshot {
 
 const AGENTS_FILE: &str = "AGENTS.md";
 const MAX_AGENTS_BYTES: usize = 200_000;
+/// ACP client file writes are intentionally bounded. Larger output should use
+/// the engine's normal tools, which have their own streaming/audit surface.
+const MAX_CLIENT_WRITE_BYTES: usize = 1_000_000;
 
 fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(cwd.trim());
@@ -117,6 +120,99 @@ pub fn workspace_read_agents_md(cwd: String) -> Result<ProjectInstructionsSnapsh
 pub fn workspace_write_agents_md(cwd: String, content: String) -> Result<ProjectInstructionsSnapshot, String> {
     let root = workspace_root(&cwd)?;
     write_agents_file(&root, &content)
+}
+
+fn relative_write_target(root: &Path, raw_path: &str) -> Result<PathBuf, String> {
+    let rel = raw_path.trim().trim_start_matches("./");
+    if rel.is_empty() {
+        return Err("file path is required".into());
+    }
+    let path = Path::new(rel);
+    if path.is_absolute()
+        || path.components().any(|part| {
+            matches!(
+                part,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return Err("file path must stay inside the current project".into());
+    }
+    let target = root.join(path);
+    let parent = target
+        .parent()
+        .ok_or_else(|| "file path has no parent".to_string())?;
+    let parent = parent
+        .canonicalize()
+        .map_err(|e| format!("resolve target directory: {e}"))?;
+    if !parent.starts_with(root) {
+        return Err("file path resolves outside the current project".into());
+    }
+    Ok(parent.join(
+        path.file_name()
+            .ok_or_else(|| "file name is required".to_string())?,
+    ))
+}
+
+fn write_client_text_file(root: &Path, raw_path: &str, content: &str) -> Result<(), String> {
+    if content.len() > MAX_CLIENT_WRITE_BYTES || content.as_bytes().contains(&0) {
+        return Err(
+            "file content must be plain text up to 1 MB and cannot contain NUL bytes".into(),
+        );
+    }
+    let target = relative_write_target(root, raw_path)?;
+    if let Ok(meta) = fs::symlink_metadata(&target) {
+        if meta.file_type().is_symlink() {
+            return Err("refusing to write through a symlink".into());
+        }
+        if !meta.is_file() {
+            return Err("target is not a regular file".into());
+        }
+    }
+    let parent = target
+        .parent()
+        .ok_or_else(|| "file path has no parent".to_string())?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file");
+    let tmp = parent.join(format!(".{name}.gorkx-write-{nonce}.tmp"));
+    let write_result = (|| -> Result<(), String> {
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&tmp)
+            .map_err(|e| format!("create temporary file: {e}"))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("write temporary file: {e}"))?;
+        file.sync_all()
+            .map_err(|e| format!("sync temporary file: {e}"))?;
+        fs::rename(&tmp, &target).map_err(|e| format!("replace project file: {e}"))?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    write_result
+}
+
+/// ACP client-side text-file write. This is only called by the renderer when
+/// the user has explicitly started the task in Full permission mode; the
+/// backend still confines it to the selected project and rejects symlinks.
+#[tauri::command]
+pub fn workspace_write_client_text(
+    cwd: String,
+    path: String,
+    content: String,
+) -> Result<(), String> {
+    let root = workspace_root(&cwd)?;
+    write_client_text_file(&root, &path, &content)
 }
 
 const SKIP_DIRS: &[&str] = &[
@@ -273,7 +369,7 @@ pub fn read_workspace_file_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::{read_agents_file, walk, write_agents_file, FileHit};
+    use super::{read_agents_file, walk, write_agents_file, write_client_text_file, FileHit};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -319,6 +415,50 @@ mod tests {
         assert_eq!(read_agents_file(&project).unwrap().content, saved.content);
         assert!(!project.join(".AGENTS.md.gorkx-0.tmp").exists());
         fs::remove_dir_all(project).unwrap();
+    }
+
+    #[test]
+    fn client_file_write_stays_in_project_and_replaces_atomically() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-client-write-{nonce}"));
+        let project = base.join("project");
+        let outside = base.join("outside.txt");
+        fs::create_dir_all(project.join("src")).unwrap();
+        fs::write(project.join("src/main.txt"), "before").unwrap();
+        fs::write(&outside, "private").unwrap();
+        let root = project.canonicalize().unwrap();
+
+        write_client_text_file(&root, "src/main.txt", "after\n").unwrap();
+        assert_eq!(fs::read_to_string(project.join("src/main.txt")).unwrap(), "after\n");
+        assert!(write_client_text_file(&root, "../outside.txt", "unsafe").is_err());
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
+
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn client_file_write_refuses_symlink_targets() {
+        use std::os::unix::fs::symlink;
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-client-write-link-{nonce}"));
+        let project = base.join("project");
+        let outside = base.join("outside.txt");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(&outside, "private").unwrap();
+        symlink(&outside, project.join("linked.txt")).unwrap();
+        let root = project.canonicalize().unwrap();
+
+        assert!(write_client_text_file(&root, "linked.txt", "unsafe").is_err());
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[cfg(unix)]

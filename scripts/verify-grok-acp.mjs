@@ -24,6 +24,9 @@
 // --voice-controls verifies native voice ACP routes reach the session control
 // plane without starting capture, requesting microphone permission, or sending
 // audio to a provider.
+// --client-fs-write advertises the same bounded client file-write capability
+// used by a Full-permission desktop task. It only validates ACP initialize;
+// it does not create a session or write a file.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -32,7 +35,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -47,6 +50,7 @@ const hooksControlsSmoke = options.includes('--hooks-controls');
 const btwSmoke = options.includes('--btw');
 const sessionInfoSmoke = options.includes('--session-info');
 const voiceControlsSmoke = options.includes('--voice-controls');
+const clientFileWriteSmoke = options.includes('--client-fs-write');
 if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke) && !authenticated) {
   console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw and --session-info require --authenticated with an explicit disposable CWD');
   process.exit(2);
@@ -55,7 +59,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
@@ -165,9 +169,9 @@ try {
   await request('initialize', {
     protocolVersion: 1,
     clientInfo: { name: 'gorkX-kernel-smoke', version: '0' },
-    clientCapabilities: { fs: { readTextFile: true, writeTextFile: false }, terminal: true },
+    clientCapabilities: { fs: { readTextFile: true, writeTextFile: clientFileWriteSmoke }, terminal: true },
   }, 30_000);
-  console.log(`PASS: ACP initialize (${bin})`);
+  console.log(`PASS: ACP initialize (${bin})${clientFileWriteSmoke ? ' with client fs write capability' : ''}`);
 
   if (voiceControlsSmoke) {
     // Do not call voice/start on a real session: that would request macOS

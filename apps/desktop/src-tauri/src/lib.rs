@@ -120,6 +120,7 @@ pub fn run() {
             workspace::workspace_list_files,
             workspace::workspace_read_agents_md,
             workspace::workspace_write_agents_md,
+            workspace::workspace_write_client_text,
             workspace::read_workspace_file_preview,
             extensions::extensions_snapshot,
             extensions::extensions_open_skills_dir,
