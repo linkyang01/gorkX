@@ -635,8 +635,6 @@ const dict = {
     settingsGroupAbout: 'About',
     settingsGeneral: 'General',
     settingsAppearance: 'Appearance',
-    settingsAppearanceSoon:
-      'Theme and density options will appear here. Light theme is used today.',
     settingsAppearanceHint: 'Applied immediately and saved on this Mac. It does not change the agent or a project.',
     settingsTheme: 'Theme',
     settingsThemeSystem: 'Follow system',
@@ -1691,7 +1689,6 @@ const dict = {
     settingsGroupAbout: '关于',
     settingsGeneral: '常规',
     settingsAppearance: '外观',
-    settingsAppearanceSoon: '主题与显示密度将放在这里。当前为浅色界面。',
     settingsAppearanceHint: '立即生效，并保存在本机；不会改变 Agent 或项目内容。',
     settingsTheme: '主题',
     settingsThemeSystem: '跟随系统',
