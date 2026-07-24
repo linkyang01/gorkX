@@ -28,6 +28,7 @@ import {
   GROK_KERNEL_GITHUB,
   isVersionNewer,
   installAppUpdate,
+  openWebPreview,
   openUrlSafe,
   type AppUpdateInfo,
   type KernelUpdateInfo,
@@ -286,6 +287,7 @@ export function SettingsPanel({
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
+  const [browserPreviewUrl, setBrowserPreviewUrl] = useState('');
   const [browserAllowedOrigins, setBrowserAllowedOrigins] = useState(() => {
     try { return localStorage.getItem('gorkx.browserAllowedOrigins') || ''; } catch { return ''; }
   });
@@ -1505,6 +1507,39 @@ export function SettingsPanel({
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
                 {t('settingsBrowserHint')}
               </p>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('settingsBrowserPreviewTitle')}</div>
+                <div className="settings-row-hint">{t('settingsBrowserPreviewHint')}</div>
+                <div className="field-row" style={{ marginTop: 10 }}>
+                  <input
+                    value={browserPreviewUrl}
+                    onChange={(event) => setBrowserPreviewUrl(event.target.value)}
+                    placeholder={t('settingsBrowserPreviewPlaceholder')}
+                    spellCheck={false}
+                    inputMode="url"
+                    aria-label={t('settingsBrowserPreviewPlaceholder')}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' || !browserPreviewUrl.trim()) return;
+                      event.preventDefault();
+                      void openWebPreview(browserPreviewUrl).catch((error) =>
+                        setMsg(error instanceof Error ? error.message : String(error)),
+                      );
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!browserPreviewUrl.trim()}
+                    onClick={() => {
+                      void openWebPreview(browserPreviewUrl).catch((error) =>
+                        setMsg(error instanceof Error ? error.message : String(error)),
+                      );
+                    }}
+                  >
+                    {t('settingsBrowserPreviewOpen')}
+                  </button>
+                </div>
+              </div>
               <div className="settings-card">
                 <div className="settings-row">
                   <div>

@@ -194,6 +194,56 @@ export async function openUrlSafe(raw: string): Promise<void> {
   window.open(url, '_blank');
 }
 
+/**
+ * Open a user-requested HTTP(S) page in a separate native webview.
+ *
+ * This is deliberately a reading/verification surface, not the browser MCP
+ * that the agent uses. It shares neither the MCP's isolated Chrome profile nor
+ * any gorkX credentials, and it never accepts file:, data: or custom schemes.
+ */
+export async function openWebPreview(raw: string): Promise<void> {
+  const url = safeExternalUrl(raw);
+  if (!isTauri()) {
+    window.open(url, '_blank');
+    return;
+  }
+
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const existing = await WebviewWindow.getByLabel('browser-preview');
+  if (existing) {
+    await existing.setFocus();
+    return;
+  }
+
+  const preview = new WebviewWindow('browser-preview', {
+    url,
+    title: 'gorkX · Web preview',
+    width: 1120,
+    height: 760,
+    minWidth: 720,
+    minHeight: 520,
+    center: true,
+    resizable: true,
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const succeed = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const fail = (event: { payload?: unknown }) => {
+      if (settled) return;
+      settled = true;
+      const detail = typeof event.payload === 'string' ? event.payload : 'Could not open web preview';
+      reject(new Error(detail));
+    };
+    void preview.once('tauri://created', succeed).catch(reject);
+    void preview.once('tauri://error', fail).catch(reject);
+  });
+}
+
 export async function appVersion(): Promise<string> {
   if (!isTauri()) return '0.4.3';
   try {

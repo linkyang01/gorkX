@@ -751,7 +751,12 @@ const dict = {
     settingsIndepReady: 'Ready: app-managed engine and data folder.',
     settingsBrowser: 'Browser',
     settingsBrowserHint:
-      'Connects a version-pinned Playwright MCP to Chrome so the agent can use browser tools in a task. It does not add a fake in-app browser.',
+      'Connects a version-pinned Playwright MCP to Chrome so the agent can use browser tools in a task. Its isolated browser session is separate from the reading preview below.',
+    settingsBrowserPreviewTitle: 'Open a web page',
+    settingsBrowserPreviewHint:
+      'Open a link you choose in a separate gorkX reading window. This is for you to check sources; it is separate from the agent’s isolated Chrome tools.',
+    settingsBrowserPreviewPlaceholder: 'https://example.com',
+    settingsBrowserPreviewOpen: 'Open preview',
     settingsBrowserConfigured: 'Chrome browser tools configured',
     settingsBrowserNotConfigured: 'Chrome browser tools are not configured',
     settingsBrowserConnectionHint: 'This only confirms MCP configuration. Run Diagnose to verify the MCP runtime and Chrome availability.',
@@ -1799,7 +1804,12 @@ const dict = {
     settingsIndepReady: '已就绪：引擎与数据由本应用管理。',
     settingsBrowser: '浏览器',
     settingsBrowserHint:
-      '将固定版本的 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；不会伪造一个应用内浏览器。',
+      '将固定版本的 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；其隔离浏览器会话与下方阅读预览相互独立。',
+    settingsBrowserPreviewTitle: '打开网页资料',
+    settingsBrowserPreviewHint:
+      '在独立的 gorkX 阅读窗口中打开你选择的链接，用于核对资料；它与 Agent 使用的隔离 Chrome 工具相互独立。',
+    settingsBrowserPreviewPlaceholder: 'https://example.com',
+    settingsBrowserPreviewOpen: '打开预览',
     settingsBrowserConfigured: 'Chrome 浏览器工具已配置',
     settingsBrowserNotConfigured: 'Chrome 浏览器工具尚未配置',
     settingsBrowserConnectionHint: '这里只确认 MCP 配置存在；请运行「诊断」验证 MCP 运行时与 Chrome 是否可用。',
