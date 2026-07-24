@@ -2390,6 +2390,15 @@ button.pill:hover {
   white-space: nowrap;
 }
 
+.subagent-tree-label .btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.subagent-tree-label .btn + .btn {
+  margin-left: 0;
+}
+
 .process-item {
   margin-bottom: 10px;
   border: 1px solid var(--hairline);

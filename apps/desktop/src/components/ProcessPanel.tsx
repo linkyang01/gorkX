@@ -53,7 +53,11 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
         </button>
       </div>
       <div className="process-body">
-        <SubagentTree lines={processLines} />
+        <SubagentTree
+          lines={processLines}
+          onCancel={onCancelSubagent}
+          onInspect={onInspectSubagent}
+        />
         {processLines.length === 0 ? (
           <div className="hint">{t('processEmpty')}</div>
         ) : (
@@ -77,15 +81,6 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
                 clean &&
                 !/^call-[0-9a-f-]+/i.test(clean) &&
                 clean !== title;
-              const subagentId = line.toolKind === 'subagent'
-                ? line.toolKey?.replace(/^subagent:/, '')
-                : undefined;
-              const canCancel = Boolean(
-                subagentId && /^running\b/i.test(line.toolStatus || ''),
-              );
-              const canInspect = Boolean(
-                subagentId && /^(complete|done|success|fail|error|cancel)\b/i.test(line.toolStatus || ''),
-              );
               return (
                 <div key={line.id} className={`process-item tool${failed ? ' fail' : ''}`}>
                   <div className="process-item-label">
@@ -101,26 +96,6 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
                             ? '已完成'
                             : line.toolStatus}
                       </span>
-                    ) : null}
-                    {canCancel && onCancelSubagent ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        style={{ marginLeft: 8 }}
-                        onClick={() => onCancelSubagent(subagentId!)}
-                      >
-                        停止子任务
-                      </button>
-                    ) : null}
-                    {canInspect && onInspectSubagent ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        style={{ marginLeft: 8 }}
-                        onClick={() => onInspectSubagent(subagentId!)}
-                      >
-                        查看子任务结果
-                      </button>
                     ) : null}
                   </div>
                   {bodyUseful || failed ? (

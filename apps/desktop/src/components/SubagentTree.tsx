@@ -40,25 +40,64 @@ function statusLabel(raw: string | undefined): string {
   return raw;
 }
 
-function NodeRow({ node, depth }: { node: Node; depth: number }) {
+function NodeRow({
+  node,
+  depth,
+  onCancel,
+  onInspect,
+}: {
+  node: Node;
+  depth: number;
+  onCancel?: (subagentId: string) => void;
+  onInspect?: (subagentId: string) => void;
+}) {
   const label = node.line.text.replace(/^子任务\s*·\s*/, '').trim() || node.id.slice(0, 8);
+  const status = node.line.toolStatus || '';
+  const canCancel = /^running\b/i.test(status);
+  const canInspect = /^(complete|done|success|fail|error|cancel)\b/i.test(status);
   return (
     <li className="subagent-tree-row" style={{ paddingLeft: depth * 16 }}>
       <div className="subagent-tree-label">
         <IconTool size={13} />
         <span>{label}</span>
-        <span className="muted">· {statusLabel(node.line.toolStatus)}</span>
+        <span className="muted">· {statusLabel(status)}</span>
+        {canCancel && onCancel ? (
+          <button type="button" className="btn btn-sm" onClick={() => onCancel(node.id)}>
+            {t('subagentTreeStop')}
+          </button>
+        ) : null}
+        {canInspect && onInspect ? (
+          <button type="button" className="btn btn-sm" onClick={() => onInspect(node.id)}>
+            {t('subagentTreeInspect')}
+          </button>
+        ) : null}
       </div>
       {node.children.length ? (
         <ul className="subagent-tree-list">
-          {node.children.map((child) => <NodeRow key={child.id} node={child} depth={depth + 1} />)}
+          {node.children.map((child) => (
+            <NodeRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              onCancel={onCancel}
+              onInspect={onInspect}
+            />
+          ))}
         </ul>
       ) : null}
     </li>
   );
 }
 
-export function SubagentTree({ lines }: { lines: ChatLine[] }) {
+export function SubagentTree({
+  lines,
+  onCancel,
+  onInspect,
+}: {
+  lines: ChatLine[];
+  onCancel?: (subagentId: string) => void;
+  onInspect?: (subagentId: string) => void;
+}) {
   const roots = subagentTree(lines);
   if (!roots.length) return null;
   return (
@@ -69,7 +108,9 @@ export function SubagentTree({ lines }: { lines: ChatLine[] }) {
       </div>
       <p className="subagent-tree-hint">{t('subagentTreeHint')}</p>
       <ul className="subagent-tree-list">
-        {roots.map((node) => <NodeRow key={node.id} node={node} depth={0} />)}
+        {roots.map((node) => (
+          <NodeRow key={node.id} node={node} depth={0} onCancel={onCancel} onInspect={onInspect} />
+        ))}
       </ul>
     </section>
   );

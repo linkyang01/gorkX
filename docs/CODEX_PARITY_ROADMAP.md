@@ -29,7 +29,7 @@
 | 多模型 | API/兼容网关、Keychain、分组、连接测试及任务/会话切换可用；包内引擎已隔离验证自定义 `[model.*]` 经 ACP `session/set_model` 接受 | 缺订阅 OAuth、账号用量聚合；ChatGPT/Claude 网页订阅不冒充 API 登录 |
 | Hooks/MCP | MCP/插件入口与 Playwright MCP 配置、诊断可用；项目规则通过 `AGENTS.md` 真实管理 | 当前 0.2.111 的 Hooks 控制链路缺少本轮有余额账号的复验，因此不在产品设置中展示 Hook 控制；Hook 创作与连接器产品化仍待完成 |
 | Browser/Computer | Playwright MCP 已在 App `GROK_HOME` 实测启动、握手并发现工具；用户可主动截图附到消息 | 浏览器任务内的目标页/动作日志/域名许可、浏览器截图流与受控桌面自动化；需有效 Grok 登录才可验证 Agent 实际调用 |
-| 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；子 Agent 生命周期事件持久为父/子任务树，并有取消/快照 UI | `_x.ai/subagent/list_running/get/cancel` 已接入，重连可恢复引擎报告的运行中子任务；仍缺用户可控委派契约、显式 resume、隔离策略与退出后 worker |
+| 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；子 Agent 生命周期事件持久为父/子任务树，可在树中查看结果或停止运行任务 | 当前锁定内核的 ACP 仅提供 `list_running/get/cancel`，没有面向桌面端的创建/指定委派路由；内核仍自行决定协作、隔离和恢复策略。未来只有在该路由与真实仓库验收都具备后，才加入用户主动委派。 |
 | 远程工程协作 | 本地 Git Review | 缺 GitHub PR、CI、评论线程与授权连接器 |
 
 ## 3. 目标架构
