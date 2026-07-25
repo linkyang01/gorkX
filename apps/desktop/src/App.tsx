@@ -998,11 +998,12 @@ function App() {
   // First-run onboarding when engine/login/project incomplete
   useEffect(() => {
     if (isOnboardingDismissed()) return;
-    if (!status) return;
+    // `status.authenticated` only means Grok credential material was found on
+    // disk. The account summary verifies that a usable bearer token exists, so
+    // only it may unlock the signed-in product UI.
+    if (!status || !account) return;
     const kernelOk = Boolean(status.installed);
-    const authOk = Boolean(
-      status.authenticated || account?.authenticated || account?.email,
-    );
+    const authOk = account.authenticated === true;
     const projectOk = Boolean(project && project.trim());
     if (!kernelOk || !authOk || !projectOk) {
       setOnboardOpen(true);
@@ -1109,10 +1110,10 @@ function App() {
   }, [loadCustomModels]);
 
   useEffect(() => {
-    if (!status?.authenticated) return;
+    if (account?.authenticated !== true) return;
     void loadSubscriptionModels(false);
     void loadSubscriptionModels(true);
-  }, [status?.authenticated, loadSubscriptionModels]);
+  }, [account?.authenticated, loadSubscriptionModels]);
 
   useEffect(() => {
     const mid = active?.modelId || modelId || undefined;
@@ -3962,6 +3963,8 @@ function App() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [projectMenuPath, addProjectMenuOpen, plusMenuOpen, projectPickerOpen]);
 
+  const accountAuthenticated = account?.authenticated === true;
+
   return (
     <div
       className={`shell${reviewOpen ? ' with-review' : ''}${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}
@@ -4497,7 +4500,7 @@ function App() {
             <button
               type="button"
               className="account-chip"
-              title={account?.email || t('subBadgeFull')}
+              title={accountAuthenticated ? account?.email || t('subBadgeFull') : t('statusNeedLogin')}
               onClick={() => {
                 setAccountMenuOpen((v) => !v);
                 void refreshAccount();
@@ -4506,18 +4509,20 @@ function App() {
               <AccountAvatar
                 src={account?.avatarUrl}
                 label={
-                  uiDisplayName(account, nameOverride) ||
-                  account?.displayName ||
-                  account?.email ||
-                  '?'
+                  accountAuthenticated
+                    ? uiDisplayName(account, nameOverride) ||
+                      account?.displayName ||
+                      account?.email ||
+                      '?'
+                    : '?'
                 }
-                guest={!status?.authenticated && !account?.authenticated}
+                guest={!accountAuthenticated}
               />
               <span className="account-meta">
                 <span className="account-name">
                   {!status?.installed
                     ? t('statusMissing')
-                    : !status?.authenticated && !account?.authenticated
+                    : !accountAuthenticated
                       ? t('statusNeedLogin')
                       : (() => {
                           const name =
@@ -4528,18 +4533,17 @@ function App() {
                         })()}
                 </span>
                 <span className="account-quota">
-                  {account?.creditUsagePercent != null
+                  {accountAuthenticated && account?.creditUsagePercent != null
                     ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                    : account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') ||
-                      (status?.authenticated || account?.authenticated
-                        ? account?.membershipLabel || '—'
-                        : '—')}
+                    : accountAuthenticated
+                      ? account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') || account?.membershipLabel || '—'
+                      : '—'}
                 </span>
               </span>
             </button>
             {accountMenuOpen ? (
               <div className="account-menu" role="menu">
-                {status?.authenticated || account?.authenticated ? (
+                {accountAuthenticated ? (
                   <>
                     <div className="account-menu-head">
                       <AccountAvatar
