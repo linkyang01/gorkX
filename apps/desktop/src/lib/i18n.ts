@@ -1044,7 +1044,7 @@ const dict = {
     reviewRemoteTab: 'Remote',
     reviewRemoteTitle: 'GitHub review',
     reviewRemoteHint:
-      'Reads open pull requests for the current origin. Checks and comments load only when you request them. Creating a PR is always a separate confirmed action.',
+      'Reads open pull requests for the current origin. Checks and comments load only when you request them.',
     reviewRemoteRefresh: 'Load open PRs',
     reviewRemoteLoading: 'Loading…',
     reviewRemoteUnavailable: 'GitHub review is unavailable',
@@ -2102,7 +2102,7 @@ const dict = {
     reviewRemoteTab: '远端',
     reviewRemoteTitle: 'GitHub 审阅',
     reviewRemoteHint:
-      '读取当前 origin 的开放 PR；检查和评论只会在你点击后加载。创建 PR 始终需要单独确认。',
+      '读取当前 origin 的开放 PR；检查和评论只会在你点击后加载。',
     reviewRemoteRefresh: '读取开放 PR',
     reviewRemoteLoading: '读取中…',
     reviewRemoteUnavailable: '暂时无法读取 GitHub 审阅信息',

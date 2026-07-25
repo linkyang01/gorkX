@@ -4,14 +4,11 @@ import { fetchGitSnapshot, type GitSnapshot } from '../lib/git';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 import {
-  githubCreatePullRequest,
-  githubCreatePrComment,
   githubListOpenPrs,
   githubListPrChecks,
   githubListPrComments,
   type GithubCheckRun,
   type GithubComment,
-  type GithubCreatedPullRequest,
   type GithubPullRequest,
 } from '../lib/github';
 import { openUrlSafe } from '../lib/updates';
@@ -103,15 +100,6 @@ export function ReviewPanel({
   const [remoteChecks, setRemoteChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [remoteComments, setRemoteComments] = useState<Record<number, GithubComment[]>>({});
   const [remoteLoadedCwd, setRemoteLoadedCwd] = useState<string | null>(null);
-  const [prTitle, setPrTitle] = useState('');
-  const [prBody, setPrBody] = useState('');
-  const [prBase, setPrBase] = useState('main');
-  const [prDraft, setPrDraft] = useState(false);
-  const [prConfirmOpen, setPrConfirmOpen] = useState(false);
-  const [createdPr, setCreatedPr] = useState<GithubCreatedPullRequest | null>(null);
-  const [commentPrNumber, setCommentPrNumber] = useState<number | null>(null);
-  const [commentBody, setCommentBody] = useState('');
-  const [commentConfirmOpen, setCommentConfirmOpen] = useState(false);
 
   const refresh = () => {
     if (!cwd) {
@@ -166,46 +154,6 @@ export function ReviewPanel({
       .then((comments) =>
         setRemoteComments((current) => ({ ...current, [prNumber]: comments })),
       )
-      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
-      .finally(() => setRemoteBusy(false));
-  };
-
-  const createPullRequest = () => {
-    if (!cwd || !prTitle.trim() || !prBase.trim()) return;
-    setPrConfirmOpen(false);
-    setRemoteBusy(true);
-    setRemoteError(null);
-    void githubCreatePullRequest({
-      cwd,
-      title: prTitle.trim(),
-      body: prBody,
-      base: prBase.trim(),
-      draft: prDraft,
-    })
-      .then((created) => {
-        setCreatedPr(created);
-        setMsg(t('reviewPrCreated').replace('{number}', String(created.number)));
-        setPrTitle('');
-        setPrBody('');
-        setPrDraft(false);
-        refreshRemote();
-      })
-      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
-      .finally(() => setRemoteBusy(false));
-  };
-
-  const createPrComment = () => {
-    if (!cwd || !commentPrNumber || !commentBody.trim()) return;
-    setCommentConfirmOpen(false);
-    setRemoteBusy(true);
-    setRemoteError(null);
-    void githubCreatePrComment(cwd, commentPrNumber, commentBody)
-      .then(() => {
-        setMsg(t('reviewCommentCreated'));
-        setCommentBody('');
-        setCommentPrNumber(null);
-        void loadRemoteComments(commentPrNumber);
-      })
       .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
       .finally(() => setRemoteBusy(false));
   };
@@ -744,48 +692,6 @@ export function ReviewPanel({
             <strong>{t('reviewRemoteTitle')}</strong>
             <p>{t('reviewRemoteHint')}</p>
           </div>
-          <section className="settings-card" style={{ marginBottom: 12 }}>
-            <div className="settings-row-title">{t('reviewPrCreateTitle')}</div>
-            <p className="settings-row-hint">{t('reviewPrCreateHint')}</p>
-            <label className="field">
-              <span>{t('reviewPrTitle')}</span>
-              <input value={prTitle} onChange={(event) => setPrTitle(event.target.value)} maxLength={256} placeholder={t('reviewPrTitlePlaceholder')} />
-            </label>
-            <label className="field">
-              <span>{t('reviewPrBase')}</span>
-              <input value={prBase} onChange={(event) => setPrBase(event.target.value)} maxLength={255} placeholder="main" spellCheck={false} />
-            </label>
-            <label className="field">
-              <span>{t('reviewPrBody')}</span>
-              <textarea value={prBody} onChange={(event) => setPrBody(event.target.value)} maxLength={65536} placeholder={t('reviewPrBodyPlaceholder')} />
-            </label>
-            <label className="check-row" style={{ marginTop: 8 }}>
-              <input type="checkbox" checked={prDraft} onChange={(event) => setPrDraft(event.target.checked)} />
-              <span>{t('reviewPrDraft')}</span>
-            </label>
-            <div className="review-plan-actions" style={{ marginTop: 10 }}>
-              <button type="button" className="btn primary" disabled={!cwd || remoteBusy || !prTitle.trim() || !prBase.trim()} onClick={() => setPrConfirmOpen(true)}>
-                {t('reviewPrCreate')}
-              </button>
-            </div>
-          </section>
-          {prConfirmOpen ? (
-            <section className="review-explain" style={{ marginBottom: 12 }}>
-              <strong>{t('reviewPrConfirmTitle')}</strong>
-              <p>{t('reviewPrConfirmDetails').replace('{base}', prBase.trim())}</p>
-              <div className="review-plan-actions">
-                <button type="button" className="btn" onClick={() => setPrConfirmOpen(false)}>{t('cancel')}</button>
-                <button type="button" className="btn primary" disabled={remoteBusy} onClick={createPullRequest}>{t('reviewPrConfirm')}</button>
-              </div>
-            </section>
-          ) : null}
-          {createdPr ? (
-            <div className="review-explain" style={{ marginBottom: 12 }}>
-              <strong>{t('reviewPrCreated').replace('{number}', String(createdPr.number))}</strong>
-              <p>{createdPr.head} → {createdPr.base}</p>
-              {createdPr.url ? <button type="button" className="link-btn" onClick={() => void openUrlSafe(createdPr.url)}>{t('reviewPrOpen')}</button> : null}
-            </div>
-          ) : null}
           <div className="review-plan-actions">
             <button
               type="button"
@@ -801,7 +707,6 @@ export function ReviewPanel({
             <div className="review-empty" style={{ textAlign: 'left' }}>
               <strong>{t('reviewRemoteUnavailable')}</strong>
               <p className="hint">{remoteError}</p>
-              <p className="hint">{t('reviewRemoteTokenHint')}</p>
             </div>
           ) : null}
           {!remoteBusy && cwd && !remoteError && remoteLoadedCwd === cwd && remotePrs.length === 0 ? (
@@ -841,41 +746,7 @@ export function ReviewPanel({
                     >
                       {t('githubLoadComments')}
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      disabled={remoteBusy}
-                      onClick={() => {
-                        setCommentPrNumber((current) => current === pr.number ? null : pr.number);
-                        setCommentConfirmOpen(false);
-                      }}
-                    >
-                      {t('reviewCommentCreate')}
-                    </button>
                   </div>
-                  {commentPrNumber === pr.number ? (
-                    <div className="settings-card" style={{ marginTop: 10 }}>
-                      <div className="settings-row-title">{t('reviewCommentCreate')}</div>
-                      <label className="field">
-                        <span>{t('reviewCommentBody')}</span>
-                        <textarea value={commentBody} onChange={(event) => setCommentBody(event.target.value)} maxLength={65536} placeholder={t('reviewCommentPlaceholder')} />
-                      </label>
-                      <div className="review-plan-actions" style={{ marginTop: 8 }}>
-                        <button type="button" className="btn" onClick={() => { setCommentPrNumber(null); setCommentConfirmOpen(false); }}>{t('cancel')}</button>
-                        <button type="button" className="btn primary" disabled={remoteBusy || !commentBody.trim()} onClick={() => setCommentConfirmOpen(true)}>{t('reviewCommentCreate')}</button>
-                      </div>
-                      {commentConfirmOpen ? (
-                        <div className="review-explain" style={{ marginTop: 10 }}>
-                          <strong>{t('reviewCommentConfirmTitle')}</strong>
-                          <p>{t('reviewCommentConfirmDetails').replace('{number}', String(pr.number))}</p>
-                          <div className="review-plan-actions">
-                            <button type="button" className="btn" onClick={() => setCommentConfirmOpen(false)}>{t('cancel')}</button>
-                            <button type="button" className="btn primary" disabled={remoteBusy} onClick={createPrComment}>{t('reviewCommentConfirm')}</button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
                   {remoteChecks[pr.number] ? (
                     <ul className="settings-list" style={{ marginTop: 8 }}>
                       {remoteChecks[pr.number].map((check) => (
