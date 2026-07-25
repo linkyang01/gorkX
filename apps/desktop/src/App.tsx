@@ -418,6 +418,13 @@ function App() {
     }
   });
   const [grokCmd, setGrokCmd] = useState(() => localStorage.getItem('gorkx.grokCmd') ?? '');
+  const [webSearchEnabled, setWebSearchEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.webSearchEnabled') !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [kernelOpen, setKernelOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(() => {
     // Default closed on first launch (empty Review is noisy); remember preference.
@@ -1830,11 +1837,12 @@ function App() {
       grokCmd || undefined,
       effort,
       workingDirectory || project || undefined,
+      webSearchEnabled,
     );
     await client.initialize();
     await client.authenticate('cached_token');
     return client;
-  }, [perm, grokCmd, effort, project]);
+  }, [perm, grokCmd, effort, project, webSearchEnabled]);
 
   const rememberModels = useCallback(
     (session: { models?: { currentModelId?: string; availableModels?: ModelInfo[] } }) => {
@@ -3698,7 +3706,13 @@ function App() {
     });
     try {
       await active.client.stop();
-      const client = await AcpClient.start(perm, grokCmd || undefined, next, cwd || project || undefined);
+      const client = await AcpClient.start(
+        perm,
+        grokCmd || undefined,
+        next,
+        cwd || project || undefined,
+        webSearchEnabled,
+      );
       await client.initialize();
       await client.authenticate('cached_token');
       wireClient(threadId, client);
@@ -3800,6 +3814,7 @@ function App() {
         grokCmd || undefined,
         th.effort || effort,
         th.cwd || project || undefined,
+        webSearchEnabled,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -5893,6 +5908,15 @@ function App() {
         }}
         perm={perm}
         onPerm={setPerm}
+        webSearchEnabled={webSearchEnabled}
+        onWebSearchEnabled={(enabled) => {
+          setWebSearchEnabled(enabled);
+          try {
+            localStorage.setItem('gorkx.webSearchEnabled', enabled ? '1' : '0');
+          } catch {
+            /* browser preview */
+          }
+        }}
         onOpenMemory={() => setMemoryOpen(true)}
         onOpenExtensions={() => setExtOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}

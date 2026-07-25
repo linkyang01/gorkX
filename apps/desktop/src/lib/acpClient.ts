@@ -487,12 +487,14 @@ export class AcpClient {
     grokCmd?: string,
     reasoningEffort?: ReasoningEffort | string,
     workingDirectory?: string,
+    webSearchEnabled = true,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
       grokCmd: grokCmd ?? null,
       reasoningEffort: reasoningEffort ?? null,
       workingDirectory: workingDirectory ?? null,
+      webSearchEnabled,
     });
     const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();

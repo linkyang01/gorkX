@@ -85,9 +85,21 @@ fn sanitize_engine_diagnostic(raw: &str) -> String {
 /// - `default`  → ask (interactive ACP permissions)
 /// - `auto`     → workspace-friendly (still interactive for risky ops; no yolo)
 /// - `full`     → Full Access (`--always-approve`)
-/// Reasoning effort is a real CLI flag: `grok agent --reasoning-effort <level> stdio`
-fn agent_cli_args(permission_mode: &str, reasoning_effort: Option<&str>) -> Vec<String> {
-    let mut args = vec!["agent".into()];
+/// Reasoning effort and web research are real CLI flags. Keep them at process
+/// start: ACP opens a session inside an already running engine process.
+fn agent_cli_args(
+    permission_mode: &str,
+    reasoning_effort: Option<&str>,
+    web_search_enabled: bool,
+) -> Vec<String> {
+    // `--disable-web-search` is a root Grok flag (not an `agent` flag), so
+    // it must come before the subcommand. Keep the remaining agent flags
+    // after `agent`, where the bundled CLI documents them.
+    let mut args = Vec::new();
+    if !web_search_enabled {
+        args.push("--disable-web-search".into());
+    }
+    args.push("agent".into());
     match permission_mode {
         "full" => args.push("--always-approve".into()),
         _ => {}
@@ -127,6 +139,7 @@ pub async fn agent_start(
     grok_cmd: Option<String>,
     reasoning_effort: Option<String>,
     working_directory: Option<String>,
+    web_search_enabled: Option<bool>,
 ) -> Result<AgentInfo, String> {
     let mode = match permission_mode.as_str() {
         "auto" | "full" => permission_mode.clone(),
@@ -143,7 +156,11 @@ pub async fn agent_start(
     }
 
     let bin = resolve_grok_bin(grok_cmd.as_deref());
-    let args = agent_cli_args(&mode, reasoning_effort.as_deref());
+    let args = agent_cli_args(
+        &mode,
+        reasoning_effort.as_deref(),
+        web_search_enabled.unwrap_or(true),
+    );
     let _ = paths::ensure_dirs();
     let working_directory = resolve_agent_working_directory(working_directory)?;
 
@@ -677,7 +694,7 @@ fn dunce_canonicalize(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_agent_working_directory, safe_doctor_fix_id, sanitize_engine_diagnostic};
+    use super::{agent_cli_args, resolve_agent_working_directory, safe_doctor_fix_id, sanitize_engine_diagnostic};
 
     #[test]
     fn engine_stderr_never_exposes_credential_derived_fields() {
@@ -713,5 +730,14 @@ mod tests {
         assert!(!safe_doctor_fix_id("--all"));
         assert!(!safe_doctor_fix_id("terminal.fix; rm -rf /"));
         assert!(!safe_doctor_fix_id(""));
+    }
+
+    #[test]
+    fn agent_args_disable_web_search_only_when_user_turns_it_off() {
+        let enabled = agent_cli_args("default", Some("high"), true);
+        assert_eq!(enabled, vec!["agent", "--reasoning-effort", "high", "stdio"]);
+
+        let disabled = agent_cli_args("full", None, false);
+        assert_eq!(disabled, vec!["--disable-web-search", "agent", "--always-approve", "stdio"]);
     }
 }

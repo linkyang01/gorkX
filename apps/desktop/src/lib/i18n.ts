@@ -761,6 +761,9 @@ const dict = {
     settingsBrowser: 'Browser',
     settingsBrowserHint:
       'Connects a version-pinned Playwright MCP to Chrome so the agent can use browser tools in a task. Its isolated browser session is separate from the reading preview below.',
+    settingsWebSearch: 'Web research',
+    settingsWebSearchHint: 'Let Grok Build use its built-in web search and web fetch tools when a task needs current sources.',
+    settingsWebSearchRestartHint: 'This choice starts future or reconnected tasks with the matching kernel policy. A task already running keeps its current tools.',
     settingsBrowserPreviewTitle: 'Open a web page',
     settingsBrowserPreviewHint:
       'Open a link you choose in a separate gorkX reading window. This is for you to check sources; it is separate from the agent’s isolated Chrome tools.',
@@ -1821,6 +1824,9 @@ const dict = {
     settingsBrowser: '浏览器',
     settingsBrowserHint:
       '将固定版本的 Playwright MCP 接入 Chrome，让 Agent 在任务中使用浏览器工具；其隔离浏览器会话与下方阅读预览相互独立。',
+    settingsWebSearch: '网页研究',
+    settingsWebSearchHint: '允许 Grok Build 在任务需要最新资料时使用内置网页搜索和网页读取工具。',
+    settingsWebSearchRestartHint: '新建或重新连接的任务会按此设置启动内核；正在运行的任务保持当前工具状态。',
     settingsBrowserPreviewTitle: '打开网页资料',
     settingsBrowserPreviewHint:
       '在独立的 gorkX 阅读窗口中打开你选择的链接，用于核对资料；它与 Agent 使用的隔离 Chrome 工具相互独立。',

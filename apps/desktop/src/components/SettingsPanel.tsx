@@ -138,6 +138,8 @@ interface Props {
   onModelsRefreshed?: () => void;
   perm: PermissionMode;
   onPerm: (p: PermissionMode) => void;
+  webSearchEnabled: boolean;
+  onWebSearchEnabled: (enabled: boolean) => void;
   /** Jump out of settings into product surfaces */
   onOpenMemory?: () => void;
   onOpenExtensions?: () => void;
@@ -231,6 +233,8 @@ export function SettingsPanel({
   onModelsRefreshed,
   perm,
   onPerm,
+  webSearchEnabled,
+  onWebSearchEnabled,
   onOpenMemory,
   onOpenExtensions,
   onOpenShortcuts,
@@ -1473,6 +1477,22 @@ export function SettingsPanel({
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
                 {t('settingsBrowserHint')}
               </p>
+              <div className="settings-card">
+                <label className="settings-row toggle-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsWebSearch')}</div>
+                    <div className="settings-row-hint">{t('settingsWebSearchHint')}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={webSearchEnabled}
+                    onChange={(event) => onWebSearchEnabled(event.target.checked)}
+                  />
+                </label>
+                <p className="settings-row-hint" style={{ marginTop: 10 }}>
+                  {t('settingsWebSearchRestartHint')}
+                </p>
+              </div>
               <div className="settings-card">
                 <div className="settings-row-title">{t('settingsBrowserPreviewTitle')}</div>
                 <div className="settings-row-hint">{t('settingsBrowserPreviewHint')}</div>
