@@ -40,6 +40,7 @@ import {
   type ReasoningEffort,
   type RewindMode,
   type RewindPoint,
+  type RewindResult,
   type HooksSnapshot,
   type AvailableCommandInfo,
   type WorkflowRunUpdate,
@@ -526,6 +527,7 @@ function App() {
     points: RewindPoint[];
     error?: string | null;
     busy?: boolean;
+    preview?: RewindResult | null;
   } | null>(null);
   /** Optional Grok kernel sessions listed under a project (opt-in history). */
   const [projectSessions, setProjectSessions] = useState<Record<string, RecentSession[]>>({});
@@ -3463,7 +3465,7 @@ function App() {
     }
   };
 
-  /** Listing points is read-only; execution always calls the kernel with force=false. */
+  /** Listing points is read-only; the dialog previews before it ever commits. */
   const openRewindDialog = async () => {
     let source = threadsRef.current.find((thread) => thread.id === activeId);
     if (!source?.sessionId) {
@@ -3488,20 +3490,38 @@ function App() {
     }
   };
 
-  const executeRewind = async (point: RewindPoint, mode: RewindMode) => {
+  const executeRewind = async (point: RewindPoint, mode: RewindMode, force = false) => {
     const dialog = rewindDialog;
     const source = threadsRef.current.find((thread) => thread.id === dialog?.threadId);
     if (!dialog || !source?.client || !source.sessionId) return;
     setRewindDialog({ ...dialog, busy: true, error: null });
     patchThread(source.id, { busy: true, error: null });
     try {
-      const result = await source.client.rewind(source.sessionId, point.promptIndex, mode);
-      if (!result.success) {
-        const conflicts = result.conflicts.slice(0, 5).map((item) => item.path).join(', ');
+      const preview = await source.client.previewRewind(source.sessionId, point.promptIndex, mode);
+      const conflicts = preview.conflicts.slice(0, 5).map((item) => item.path).join(', ');
+      // The kernel defines force=false as a non-mutating preview, so a false
+      // success flag is expected here. Stop on any non-conflict preview error.
+      if (preview.conflicts.length && !force) {
         setRewindDialog({
           ...dialog,
           busy: false,
-          error: `${result.error || t('rewindFailed')}${conflicts ? `: ${conflicts}` : ''}`,
+          error: `${preview.error || t('rewindConflictFound')}${conflicts ? `: ${conflicts}` : ''}`,
+          preview,
+        });
+        return;
+      }
+      if (preview.error && !preview.conflicts.length) {
+        setRewindDialog({ ...dialog, busy: false, error: `${preview.error}${conflicts ? `: ${conflicts}` : ''}`, preview });
+        return;
+      }
+      const result = await source.client.commitRewind(source.sessionId, point.promptIndex, mode);
+      if (!result.success) {
+        const commitConflicts = result.conflicts.slice(0, 5).map((item) => item.path).join(', ');
+        setRewindDialog({
+          ...dialog,
+          busy: false,
+          error: `${result.error || t('rewindFailed')}${commitConflicts ? `: ${commitConflicts}` : ''}`,
+          preview: result,
         });
         return;
       }
@@ -6617,8 +6637,9 @@ function App() {
           points={rewindDialog.points}
           busy={rewindDialog.busy}
           error={rewindDialog.error}
+          preview={rewindDialog.preview}
           onClose={() => setRewindDialog(null)}
-          onConfirm={(point, mode) => void executeRewind(point, mode)}
+          onConfirm={(point, mode, force) => void executeRewind(point, mode, force)}
         />
       ) : null}
     </div>

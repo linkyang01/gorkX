@@ -1249,19 +1249,41 @@ export class AcpClient {
   }
 
   /**
-   * Execute an explicit, user-selected rollback. `force` stays false: callers
-   * must never silently overwrite a file conflict.
+   * Ask the kernel what a rollback would change. Grok Build intentionally
+   * returns `success: false` for this non-mutating `force: false` preview.
    */
-  async rewind(
+  async previewRewind(
     sessionId: string,
     targetPromptIndex: number,
     mode: RewindMode,
+  ): Promise<RewindResult> {
+    return this.rewindRequest(sessionId, targetPromptIndex, mode, false);
+  }
+
+  /**
+   * Commit a rollback that the user has already previewed and explicitly
+   * confirmed. Callers must never use this for a conflicting file restore
+   * until the person has seen and acknowledged those conflicts.
+   */
+  async commitRewind(
+    sessionId: string,
+    targetPromptIndex: number,
+    mode: RewindMode,
+  ): Promise<RewindResult> {
+    return this.rewindRequest(sessionId, targetPromptIndex, mode, true);
+  }
+
+  private async rewindRequest(
+    sessionId: string,
+    targetPromptIndex: number,
+    mode: RewindMode,
+    force: boolean,
   ): Promise<RewindResult> {
     const raw = (await this.request('_x.ai/rewind/execute', {
       sessionId,
       targetPromptIndex,
       mode,
-      force: false,
+      force,
     }, 30_000)) as Record<string, unknown>;
     const result = raw.result && typeof raw.result === 'object' ? raw.result as Record<string, unknown> : raw;
     const files = (value: unknown) => Array.isArray(value)

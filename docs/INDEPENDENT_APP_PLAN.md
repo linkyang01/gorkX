@@ -551,7 +551,7 @@ Grok Build 已支持自定义模型（`[model.*]`）：`base_url`、`api_key`/`e
 | 多模型自定义写入 config.toml | ✅ 设置 → 模型与提供商 |
 | 登录命令带 `GROK_HOME` | ✅ |
 | 锁定源码内核的本地 app-only bundle | ✅ 包内 `Resources/grok`、LICENSE / THIRD-PARTY-NOTICES 与 ACP `initialize` 已通过 bundle 门禁；不等同于发行 |
-| 受控内核来源、补丁与 ACP 回归 | ✅ lock、补丁序列、构建、隔离 `GROK_HOME`、认证/会话/Plan/worktree/custom-model 门禁已在仓库中 |
+| 受控内核来源、补丁与 ACP 回归 | ✅ lock、补丁序列、构建、隔离 `GROK_HOME`、认证/会话/Plan/worktree/custom-model 门禁已在仓库中；包内 `0.2.112 (47348d1)` 已完成真实资源附件、两轮对话和确认回退执行 |
 | 干净机只装包验收 | ⏳ 尚未在一台没有既有 Grok 数据的 Mac 上，完成「安装 → App 内登录 → 发真实消息 → 重开续聊」人工闭环 |
 | 自定义模型经 ACP `session/set_model` | ✅ 已以隔离配置验证引擎公告并接受配置；未用用户额度发送模型提示词 |
 | 多 Provider 的真实推理 | ⏳ 设置、Keychain、协议探测和任务级选择已具备；每个用户 endpoint 仍须由其凭据进行真实测试 |

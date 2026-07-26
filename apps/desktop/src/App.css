@@ -5128,6 +5128,37 @@ button.pill:hover {
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
+.rewind-conflicts {
+  margin: 14px 0;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--glass-border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+  font-size: 13px;
+}
+
+.rewind-conflicts ul {
+  max-height: 120px;
+  margin: 8px 0;
+  padding-left: 20px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.rewind-force-ack {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.rewind-force-ack input {
+  margin-top: 3px;
+  accent-color: var(--danger);
+}
+
 .rewind-actions {
   display: flex;
   justify-content: flex-end;

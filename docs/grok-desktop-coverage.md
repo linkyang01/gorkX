@@ -22,7 +22,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar / `+` menu file save; `/export` remains keyboard compatibility | ✅ |
 | Fork | Toolbar calls `_x.ai/session/fork`, creates a durable child task, then loads it while preserving the original task | ✅ isolated ACP gate verifies child load and unchanged parent |
-| Rewind | Desktop lists `_x.ai/rewind/points`, makes the user choose a checkpoint and scope, then calls `_x.ai/rewind/execute` with `force: false` before reloading the task | 🟡 the route and safe parameters are ACP-gated; full prompted execution awaits account-credit acceptance evidence |
+| Rewind | Desktop lists `_x.ai/rewind/points`, makes the user choose a checkpoint and scope, then performs a non-mutating `force: false` preview. It commits with `force: true` only after the existing explicit restore confirmation; conflicts are listed and require a second acknowledgement before a force commit. | ✅ package `0.2.112 (47348d1)` was verified with two real prompts, preview, commit and task reload in an isolated authenticated session; real file-conflict UX remains a release acceptance scenario |
 | Goal | Persistent goal console wired to `/goal`, plan and `update_goal` updates | ✅ shell; loop quality is engine-side |
 
 ## Worktree & review
@@ -73,4 +73,4 @@ scripts/verify-grok-kernel-patches.sh
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
 
-Updated: 2026-07-23
+Updated: 2026-07-26

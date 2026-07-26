@@ -120,11 +120,11 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Attachments / images | Drag-drop + preview | 🟡 | A |
 | Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
-| Rewind `/rewind` | Rewind UI | 🟡 路由与安全范围已接线；真实两轮会话执行待余额恢复后验收 | C |
+| Rewind `/rewind` | Rewind UI | ✅ 包内 `0.2.112 (47348d1)` 已在隔离认证会话完成真实两轮对话、无写入预览、明确确认执行与重载；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | 🟡 本地计划任务真实可用；不是内核原生 `/loop` 控制面 | C |
-| `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；真实模型回答待余额恢复后验收 | C |
+| `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；仍缺真实模型回答验收 | C |
 | `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
 ### 5.2 Worktree & git review
