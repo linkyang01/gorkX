@@ -53,6 +53,8 @@ interface Props {
   workflowActionDisabled?: boolean;
   onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
   scheduledTaskDeleteDisabled?: boolean;
+  /** Explicit click copies only the rendered assistant text to the local clipboard. */
+  onCopyAssistant?: (text: string) => void | Promise<void>;
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -127,6 +129,7 @@ function LineView({
   workflowActionDisabled,
   onScheduledTaskDelete,
   scheduledTaskDeleteDisabled,
+  onCopyAssistant,
 }: {
   line: ChatLine;
   onTogglePlanEntry: (lineId: string, entryId: string) => void;
@@ -138,7 +141,9 @@ function LineView({
   workflowActionDisabled?: boolean;
   onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
   scheduledTaskDeleteDisabled?: boolean;
+  onCopyAssistant?: (text: string) => void | Promise<void>;
 }) {
+  const [copied, setCopied] = useState(false);
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
     return (
       <div className="tl-row tl-assistant">
@@ -204,6 +209,20 @@ function LineView({
         ) : null}
         {response.text ? <MarkdownView text={response.text} /> : null}
         <ResponseChoices choices={response.choices} onSelect={onSelectChoice} disabled={choiceDisabled} />
+        {response.text && onCopyAssistant ? (
+          <button
+            type="button"
+            className="msg-copy-response"
+            onClick={() => {
+              void Promise.resolve(onCopyAssistant(response.text)).then(() => {
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              }).catch(() => setCopied(false));
+            }}
+          >
+            {copied ? t('copyDone') : t('copyResponse')}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -228,6 +247,7 @@ export function MessageList({
   workflowActionDisabled = false,
   onScheduledTaskDelete,
   scheduledTaskDeleteDisabled = false,
+  onCopyAssistant,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -292,6 +312,7 @@ export function MessageList({
                 workflowActionDisabled={workflowActionDisabled}
                 onScheduledTaskDelete={onScheduledTaskDelete}
                 scheduledTaskDeleteDisabled={scheduledTaskDeleteDisabled}
+                onCopyAssistant={onCopyAssistant}
               />
             </div>
           );

@@ -5850,6 +5850,21 @@ function App() {
               onTogglePlanEntry={togglePlanEntry}
               onToggleAllPlan={toggleAllPlanEntries}
               onOpenAttachment={setPreviewAtt}
+              onCopyAssistant={async (text) => {
+                try {
+                  await navigator.clipboard.writeText(text);
+                } catch {
+                  const area = document.createElement('textarea');
+                  area.value = text;
+                  area.style.position = 'fixed';
+                  area.style.opacity = '0';
+                  document.body.appendChild(area);
+                  area.select();
+                  const copied = document.execCommand('copy');
+                  area.remove();
+                  if (!copied) throw new Error(t('copyFailed'));
+                }
+              }}
               showProcessInChat={false}
               choiceDisabled={active.busy}
               onSelectChoice={(value) => void send(value)}

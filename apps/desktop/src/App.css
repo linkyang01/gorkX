@@ -1506,6 +1506,20 @@ button.pill:hover {
   line-height: inherit;
 }
 
+.msg-copy-response {
+  margin-top: 8px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.msg-copy-response:hover { color: var(--text); background: var(--glass-hover); }
+
 .tl-meta {
   display: flex;
   flex-direction: column;
