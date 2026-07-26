@@ -88,6 +88,12 @@ function localizeAccountNote(raw: string | null | undefined): string {
   if (/token expired|refresh failed|re-?login/i.test(note)) {
     return t('accountSignInAgain');
   }
+  // The billing endpoint can authenticate successfully while omitting a
+  // percentage for this subscription. That is not a login failure, and its
+  // wire-format diagnostic must never become product-facing copy.
+  if (/billing ok but no creditUsagePercent field/i.test(note)) {
+    return t('accountQuotaUnavailable');
+  }
   return note;
 }
 

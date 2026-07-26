@@ -5057,7 +5057,7 @@ function App() {
                           })();
                         }}
                       >
-                        {t('subLogin')}
+                        {accountAuthenticated ? t('accountRelogin') : t('subLogin')}
                       </button>
                     ) : null}
                     <button
