@@ -48,6 +48,10 @@ fn allowed_admin_args(args: &[String]) -> bool {
         ["sessions", "delete", id] => session_id(id),
         ["export", id, "--clipboard"] => session_id(id),
         ["export", id, output] => session_id(id) && output.ends_with(".md") && !output.is_empty(),
+        ["trace", id, "--local", "--output", output] => session_id(id)
+            && output.ends_with(".tar.gz")
+            && !output.starts_with('-')
+            && !output.is_empty(),
         ["worktree", "rm", "-f", ids @ ..] => !ids.is_empty() && ids.iter().all(|id| worktree_id(id)),
         ["worktree", "rm", ids @ ..] => !ids.is_empty() && ids.iter().all(|id| worktree_id(id)),
         ["memory", "clear", "--workspace", "-y"]
@@ -113,6 +117,7 @@ mod tests {
         assert!(allowed_admin_args(&args(&["inspect", "--json"])));
         assert!(allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--", "auth failure"])));
         assert!(allowed_admin_args(&args(&["export", "12345678-1234-1234-1234-123456789abc", "--clipboard"])));
+        assert!(allowed_admin_args(&args(&["trace", "12345678-1234-1234-1234-123456789abc", "--local", "--output", "/tmp/task.tar.gz"])));
         assert!(allowed_admin_args(&args(&["memory", "clear", "--workspace", "-y"])));
     }
 

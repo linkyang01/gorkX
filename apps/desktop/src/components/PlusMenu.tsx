@@ -23,6 +23,7 @@ export type PlusAction =
   | { type: 'task-info' }
   | { type: 'compact-session' }
   | { type: 'export-session' }
+  | { type: 'export-trace' }
   | { type: 'new-task' }
   | { type: 'set-goal' }
   | { type: 'deep-research' }
@@ -263,6 +264,13 @@ export function PlusMenu({
       title: t('plusExport'),
       desc: t('plusExportHint'),
       action: { type: 'export-session' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'export-trace',
+      title: t('plusExportTrace'),
+      desc: t('plusExportTraceHint'),
+      action: { type: 'export-trace' } as PlusAction,
     }] as Row[]) : []),
     {
       kind: 'action',

@@ -121,6 +121,7 @@ import {
 import {
   exportSessionClipboard,
   exportSessionMarkdown,
+  exportSessionTrace,
 } from './lib/grokAdmin';
 import {
   attachmentsPromptBlock,
@@ -2596,6 +2597,34 @@ function App() {
     }
   };
 
+  /** Local-only support archive, with a plain-language privacy gate. */
+  const exportActiveTrace = async () => {
+    if (!active?.sessionId || active.busy) return;
+    const proceed = await askAction({
+      title: t('traceExportTitle'),
+      message: t('traceExportHint'),
+      placeholder: t('traceExportPlaceholder'),
+      submitLabel: t('traceExportChoose'),
+      allowEmpty: true,
+    });
+    if (proceed === null) return;
+    try {
+      const path = await save({
+        defaultPath: `gorkx-trace-${active.sessionId.slice(0, 8)}.tar.gz`,
+        filters: [{ name: 'Grok diagnostic archive', extensions: ['tar.gz'] }],
+      });
+      if (typeof path !== 'string' || !path) return;
+      if (!path.endsWith('.tar.gz')) {
+        alert(t('traceExportExtension'));
+        return;
+      }
+      await exportSessionTrace(active.sessionId, path, grokCmd || undefined);
+      alert(`${t('traceExportDone')}: ${path}`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const handlePlusAction = async (action: PlusAction) => {
     switch (action.type) {
       case 'attach-files':
@@ -2656,6 +2685,9 @@ function App() {
         return;
       case 'export-session':
         await exportActiveSession();
+        return;
+      case 'export-trace':
+        await exportActiveTrace();
         return;
       case 'new-task':
         selectThread(null);

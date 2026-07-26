@@ -81,6 +81,12 @@ export async function exportSessionClipboard(sessionId: string, grokCmd?: string
   return requireSuccess(await admin(['export', sessionId, '--clipboard'], grokCmd), 'export clipboard') || 'copied';
 }
 
+/** Local-only Grok Build diagnostic archive. Upload is deliberately not exposed. */
+export async function exportSessionTrace(sessionId: string, outputPath: string, grokCmd?: string): Promise<string> {
+  requireSuccess(await admin(['trace', sessionId, '--local', '--output', outputPath], grokCmd), 'trace export');
+  return outputPath;
+}
+
 export async function worktreeListJson(grokCmd?: string, repo?: string): Promise<unknown[]> {
   const args = ['worktree', 'list', '--json'];
   if (repo) args.push('--repo', repo);

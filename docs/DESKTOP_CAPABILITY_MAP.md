@@ -7,6 +7,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | Grok Build capability | Desktop entry | Boundary |
 |---|---|---|
 | `compact`, `context`, `session-info` | Add menu: Compact; Task info panel | Reads live ACP state; no model prompt needed for task info. |
+| `trace --local` | Add menu: Export diagnostic archive | User sees a privacy notice and picks a `.tar.gz` location; gorkX permits only local archive creation and never exposes trace upload. |
 | `always-approve` | Composer permission selector | Explicit user-controlled task permission mode. |
 | `flush`, `dream`, `memory` | Memory panel | Local Hermes data plus kernel actions where advertised. |
 | `hooks-*` | Settings: Hooks & project instructions | Native file/folder picker; the engine validates paths and executes Hooks. |
