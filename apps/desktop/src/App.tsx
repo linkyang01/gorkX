@@ -6354,7 +6354,8 @@ function App() {
 
       {reviewOpen ? <Suspense fallback={<DeferredPanelFallback />}><ReviewPanel
         open={reviewOpen}
-        cwd={active?.cwd || project}
+        cwd={active && active.projectKey !== NO_PROJECT_KEY ? active.cwd || project : project || ''}
+        allowWorkspacePreview={Boolean(active && active.projectKey !== NO_PROJECT_KEY ? active.cwd || project : project)}
         tools={activeTools}
         planEntries={activePlanEntries}
         onClose={() => setReviewOpen(false)}

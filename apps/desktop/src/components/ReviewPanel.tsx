@@ -69,6 +69,8 @@ function humanRepoSubtitle(
 interface Props {
   open: boolean;
   cwd: string;
+  /** Set only when the user has explicitly selected this project folder. */
+  allowWorkspacePreview?: boolean;
   tools: ToolEvent[];
   planEntries: PlanEntry[];
   onClose: () => void;
@@ -80,6 +82,7 @@ interface Props {
 export function ReviewPanel({
   open,
   cwd,
+  allowWorkspacePreview = false,
   tools,
   planEntries,
   onClose,
@@ -107,7 +110,7 @@ export function ReviewPanel({
       return;
     }
     setLoading(true);
-    void fetchGitSnapshot(cwd)
+    void fetchGitSnapshot(cwd, allowWorkspacePreview)
       .then((s) => {
         setSnap(s);
         setSelected((current) =>
@@ -161,7 +164,7 @@ export function ReviewPanel({
   useEffect(() => {
     if (open && cwd) refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, cwd]);
+  }, [open, cwd, allowWorkspacePreview]);
 
   // PR data is scoped to the repository's origin. Never show a previous
   // project's anonymous/API error or review data after the user changes cwd.
@@ -178,7 +181,7 @@ export function ReviewPanel({
       setFileDiff('');
       return;
     }
-    const isWs = Boolean(snap?.ok && snap.isGit === false);
+    const isWs = Boolean(allowWorkspacePreview && snap?.ok && snap.isGit === false);
     if (isWs) {
       // Non-git: read-only file preview (first lines), not a fake diff
       void invoke<string>('read_workspace_file_preview', { cwd, path: selected, maxLines: 120 })
@@ -194,7 +197,7 @@ export function ReviewPanel({
     void invoke<string>('git_file_diff', { cwd, path: selected })
       .then(setFileDiff)
       .catch((e) => setFileDiff(String(e)));
-  }, [open, cwd, selected, snap?.diff, snap?.ok, snap?.isGit]);
+  }, [open, cwd, selected, snap?.diff, snap?.ok, snap?.isGit, allowWorkspacePreview]);
 
   const diffSrc = selected ? fileDiff : snap?.diff || '';
   const colored = useMemo(() => {
@@ -242,7 +245,7 @@ export function ReviewPanel({
   const doneCount = planEntries.filter((e) => e.checked).length;
   const toolsSorted = [...tools].reverse();
   const isGit = Boolean(snap?.ok && snap.isGit !== false);
-  const isWorkspace = Boolean(snap?.ok && snap.isGit === false);
+  const isWorkspace = Boolean(allowWorkspacePreview && snap?.ok && snap.isGit === false);
   const visibleFiles = (snap?.files ?? []).filter((f) =>
     f.path.toLocaleLowerCase().includes(fileQuery.trim().toLocaleLowerCase()),
   );

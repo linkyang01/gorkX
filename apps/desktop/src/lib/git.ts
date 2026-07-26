@@ -16,6 +16,10 @@ export interface GitSnapshot {
   error: string;
 }
 
-export async function fetchGitSnapshot(cwd: string): Promise<GitSnapshot> {
-  return invoke<GitSnapshot>('git_snapshot', { cwd });
+/** A non-Git preview is allowed only for an explicitly selected project. */
+export async function fetchGitSnapshot(
+  cwd: string,
+  allowWorkspacePreview = false,
+): Promise<GitSnapshot> {
+  return invoke<GitSnapshot>('git_snapshot', { cwd, allowWorkspacePreview });
 }

@@ -111,13 +111,18 @@ fn existing_project_child(root: &Path, rel: &str) -> Result<std::path::PathBuf, 
 }
 
 #[tauri::command]
-pub async fn git_snapshot(cwd: String) -> Result<GitSnapshot, String> {
-    tauri::async_runtime::spawn_blocking(move || git_snapshot_blocking(cwd))
+pub async fn git_snapshot(
+    cwd: String,
+    allow_workspace_preview: Option<bool>,
+) -> Result<GitSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        git_snapshot_blocking(cwd, allow_workspace_preview.unwrap_or(false))
+    })
         .await
         .map_err(|e| e.to_string())?
 }
 
-fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
+fn git_snapshot_blocking(cwd: String, allow_workspace_preview: bool) -> Result<GitSnapshot, String> {
     let root = Path::new(&cwd);
     if !root.is_dir() {
         return Ok(GitSnapshot {
@@ -131,9 +136,22 @@ fn git_snapshot_blocking(cwd: String) -> Result<GitSnapshot, String> {
         });
     }
 
-    // Not a git repo → still show a workspace file summary (not an empty dead panel)
+    // A non-Git preview is useful only for an explicitly chosen project. Do
+    // not turn the user's home directory (the inbox task fallback cwd) into a
+    // recent-file browser.
     if run_git(root, &["rev-parse", "--is-inside-work-tree"]).is_err() {
-        return Ok(workspace_snapshot(root));
+        if allow_workspace_preview {
+            return Ok(workspace_snapshot(root));
+        }
+        return Ok(GitSnapshot {
+            ok: true,
+            is_git: false,
+            branch: String::new(),
+            dirty: false,
+            files: vec![],
+            diff: String::new(),
+            error: "Select a project folder before previewing non-Git files.".into(),
+        });
     }
 
     let branch = run_git(root, &["rev-parse", "--abbrev-ref", "HEAD"])
@@ -439,7 +457,7 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
-    use super::{existing_project_child, git_file_diff, parse_status_entries, relative_project_path, workspace_snapshot};
+    use super::{existing_project_child, git_file_diff, git_snapshot_blocking, parse_status_entries, relative_project_path, workspace_snapshot};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -464,6 +482,25 @@ mod tests {
         assert_eq!(rows[1].status, "R");
         assert_eq!(rows[2].path, "quote\"name.txt");
         assert_eq!(rows[2].status, "??");
+    }
+
+    #[test]
+    fn non_git_snapshot_needs_explicit_project_preview_permission() {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("gorkx-review-selected-{suffix}"));
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("private-looking.txt"), "not for an inbox preview").unwrap();
+
+        let denied = git_snapshot_blocking(project.display().to_string(), false).unwrap();
+        assert!(!denied.is_git);
+        assert!(denied.files.is_empty());
+        let allowed = git_snapshot_blocking(project.display().to_string(), true).unwrap();
+        assert!(allowed.files.iter().any(|file| file.path == "private-looking.txt"));
+
+        fs::remove_dir_all(project).unwrap();
     }
 
     #[cfg(unix)]
