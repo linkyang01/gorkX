@@ -181,7 +181,9 @@ import {
   fetchAccountSummary,
   fetchModelContext,
   fetchSubscriptionModels,
+  loadConfirmedQuota,
   loadDisplayNameOverride,
+  saveConfirmedQuota,
   saveDisplayNameOverride,
   uiDisplayName,
   startLoginFlow,
@@ -540,6 +542,7 @@ function App() {
   const [permPopOpen, setPermPopOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [quotaConfirmationVersion, setQuotaConfirmationVersion] = useState(0);
   /** Local-only nickname for the sidebar chip (API name stays unchanged). */
   const [nameOverride, setNameOverride] = useState(() => loadDisplayNameOverride());
   const [nameEditOpen, setNameEditOpen] = useState(false);
@@ -5019,10 +5022,20 @@ function App() {
                     <div className="account-menu-quota-block">
                       <div className="account-menu-quota-title">{t('remainingQuota')}</div>
                       <div className="account-menu-quota-line">
-                        {account?.creditUsagePercent != null
-                          ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                          : account?.quotaLabel || accountError || '—'}
+                        {(() => {
+                          void quotaConfirmationVersion;
+                          const confirmed = account?.creditUsagePercent == null
+                            ? loadConfirmedQuota(account?.email)
+                            : null;
+                          const usagePercent = account?.creditUsagePercent ?? confirmed?.usagePercent;
+                          return usagePercent != null
+                            ? `已用 ${Math.round(usagePercent)}% · 剩 ${Math.max(0, Math.round(100 - usagePercent))}%`
+                            : account?.quotaLabel || accountError || '—';
+                        })()}
                       </div>
+                      {account?.creditUsagePercent == null && loadConfirmedQuota(account?.email) ? (
+                        <div className="account-menu-quota-reset">{t('quotaWebConfirmed')}</div>
+                      ) : null}
                       {account?.periodEnd ? (
                         <div className="account-menu-quota-reset">
                           {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
@@ -5045,27 +5058,17 @@ function App() {
                         </div>
                       ) : null}
                     </div>
-                    {account?.creditUsagePercent == null ? (
+                    {account?.creditUsagePercent == null && !loadConfirmedQuota(account?.email) ? (
                       <button
                         type="button"
                         className="account-menu-item account-menu-item-primary"
                         onClick={() => {
-                          setAccountMenuOpen(false);
-                          void (async () => {
-                            try {
-                              const result = await startLoginFlow();
-                              if (result.account) setAccount(result.account);
-                              if (result.ok) setAccountError(null);
-                              else if (result.note) setAccountError(result.note);
-                            } catch (e) {
-                              setAccountError(e instanceof Error ? e.message : String(e));
-                            }
-                            refreshStatus();
-                            void refreshAccount();
-                          })();
+                          if (!account?.email) return;
+                          saveConfirmedQuota(account.email, 0);
+                          setQuotaConfirmationVersion((value) => value + 1);
                         }}
                       >
-                        {accountAuthenticated ? t('accountRelogin') : t('subLogin')}
+                        {t('quotaConfirmZero')}
                       </button>
                     ) : null}
                     <button
