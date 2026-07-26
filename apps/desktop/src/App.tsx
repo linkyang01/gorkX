@@ -5052,7 +5052,7 @@ function App() {
                             .join(' · ')}
                         </div>
                       ) : null}
-                      {accountError && account?.creditUsagePercent == null ? (
+                      {accountError && account?.creditUsagePercent == null && !loadConfirmedQuota(account?.email) ? (
                         <div className="account-menu-quota-reset" title={accountError}>
                           {accountError.slice(0, 80)}
                         </div>
