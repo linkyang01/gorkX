@@ -3,6 +3,14 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-07-26 · 受控内核 0.2.112 与成果中心回归
+
+| 范围 | 命令 | 结果 | 边界 |
+|---|---|---|---|
+| 当前受控内核 | `apps/desktop/src-tauri/resources/grok --version` | 通过：当前应用资源为 `grok 0.2.112 (47348d1)` | 版本号不替代登录、实际模型回复或 macOS 安装验收 |
+| 无认证 ACP / 安全启动选项 / 原生语音路由 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --voice-controls --client-fs-write --disable-web-search` | 通过：ACP initialize 接受 Full 任务才会声明的客户端受限文件写能力和关闭网页研究标志；`_x.ai/voice/start`、`stop`、`shutdown` 都抵达原生会话守卫 | 使用保证不存在的会话，因此不申请麦克风权限、不采集/上传音频、不发送模型提示词，也不验证真实听写 |
+| 本次成果中心 | `cd apps/desktop && ./node_modules/.bin/tsc --noEmit && npm run verify:web-bundle`；`cd src-tauri && cargo check && cargo test` | 通过：任务明确回传且经工作区校验的成果按文档、图片、音视频和其他文件分组为可打开卡片；前端生产包通过，Rust 56 项测试通过 | 不扫描项目推测成果；不证明模型必然回传附件，且不替代实际任务的人工验收 |
+
 ## 2026-07-23 · 桌面端本地构建与浏览器链路
 
 | 范围 | 命令 | 结果 | 边界 |
