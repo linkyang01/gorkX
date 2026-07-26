@@ -2611,6 +2611,27 @@ function App() {
     await runDesktopAction(command, `${t('workflowRunStarted').replace('{name}', safeName)}${context ? `: ${context}` : ''}`);
   };
 
+  /** A newly advertised engine action gets a desktop form until it earns a
+   * dedicated UI. This is gated by the live command catalogue, not a guessed
+   * slash name, and keeps the implementation syntax out of the transcript. */
+  const openEngineAction = async (name: string, title: string, description?: string) => {
+    const safeName = name.replace(/^\//, '');
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const advertised = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '') === safeName,
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !advertised) return;
+    const request = await askAction({
+      title,
+      message: description || t('plusWorkflowHint'),
+      placeholder: t('skillDialogPlaceholder'),
+      submitLabel: t('skillDialogSubmit'),
+      allowEmpty: true,
+    });
+    if (request === null) return;
+    await runDesktopAction(`/${safeName}${request ? ` ${request}` : ''}`, `${title}${request ? `: ${request}` : ''}`);
+  };
+
   const openBtwQuestion = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
     if (!agent?.client || !agent.sessionId) return;
@@ -2823,6 +2844,9 @@ function App() {
         return;
       case 'workflow':
         await openWorkflowAction(action.name);
+        return;
+      case 'engine-action':
+        await openEngineAction(action.name, action.title, action.description);
         return;
       default:
         return;
@@ -6114,6 +6138,7 @@ function App() {
                           c.name.replace(/^\//, ''),
                         )}
                         workflows={activeSavedWorkflows}
+                        engineActions={active.commands}
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
                       />

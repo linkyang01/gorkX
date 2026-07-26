@@ -33,12 +33,14 @@ export type PlusAction =
   | { type: 'start-kernel-loop' }
   | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'workflow'; name: string }
+  | { type: 'engine-action'; name: string; title: string; description?: string }
   | { type: 'skill'; skill: SkillInfo };
 
 export interface WorkflowMenuItem {
   name: string;
   description?: string;
   source?: string;
+  workflowSource?: string;
 }
 
 type Row =
@@ -55,6 +57,8 @@ interface Props {
   availableCommandNames?: string[];
   /** Saved workflows announced by this exact live ACP session. */
   workflows?: WorkflowMenuItem[];
+  /** Other live commands, retained only as guided desktop actions. */
+  engineActions?: WorkflowMenuItem[];
   onClose: () => void;
   onAction: (action: PlusAction) => void;
 }
@@ -78,6 +82,7 @@ export function PlusMenu({
   hasActiveSession,
   availableCommandNames,
   workflows = [],
+  engineActions = [],
   onClose,
   onAction,
 }: Props) {
@@ -100,6 +105,35 @@ export function PlusMenu({
         action: { type: 'workflow', name: workflow.name },
       }),
     );
+  // Known commands already have focused desktop controls above. The remaining
+  // live catalogue is still useful after kernel upgrades, but must never be
+  // shown as a raw slash-command list to ordinary users.
+  const handled = new Set([
+    'btw', 'compact', 'clear', 'new', 'worktree', 'fork', 'rewind', 'recap',
+    'share', 'feedback', 'loop', 'deep-research', 'imagine', 'imagine-video',
+    'goal', 'plan', 'memory', 'flush', 'dream', 'export', 'model', 'effort',
+    'context', 'review', 'diff', 'skills', 'mcp', 'plugins', 'sessions', 'resume',
+  ]);
+  const engineRows = engineActions
+    .filter((command) => {
+      const name = command.name.replace(/^\//, '').toLowerCase();
+      return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(name)
+        && !handled.has(name)
+        && !command.workflowSource;
+    })
+    .slice(0, 12)
+    .map((command): Row => ({
+      kind: 'action',
+      id: `engine-${command.name}`,
+      title: command.description?.trim() || command.name.replace(/^\//, ''),
+      desc: command.description?.trim() || t('plusWorkflowHint'),
+      action: {
+        type: 'engine-action',
+        name: command.name.replace(/^\//, ''),
+        title: command.description?.trim() || command.name.replace(/^\//, ''),
+        description: command.description,
+      },
+    }));
 
   const rawRows: Row[] = [
     { kind: 'label', id: 'l-add', title: t('plusCatAdd') },
@@ -201,6 +235,12 @@ export function PlusMenu({
       ? ([
           { kind: 'label' as const, id: 'l-workflows', title: t('plusCatWorkflows') },
           ...workflowRows,
+        ] as Row[])
+      : []),
+    ...(engineRows.length
+      ? ([
+          { kind: 'label' as const, id: 'l-engine', title: t('plusCatWorkflows') },
+          ...engineRows,
         ] as Row[])
       : []),
 
