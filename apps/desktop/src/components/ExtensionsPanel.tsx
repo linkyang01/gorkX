@@ -46,6 +46,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [remoteMcpName, setRemoteMcpName] = useState('');
   const [remoteMcpUrl, setRemoteMcpUrl] = useState('');
   const [remoteMcpTransport, setRemoteMcpTransport] = useState<'http' | 'sse'>('http');
+  const [remoteMcpScope, setRemoteMcpScope] = useState<'user' | 'project'>('user');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -285,9 +286,12 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                 <select value={remoteMcpTransport} onChange={(e) => setRemoteMcpTransport(e.target.value === 'sse' ? 'sse' : 'http')} aria-label={t('extMcpRemoteTransport')}>
                   <option value="http">HTTP</option><option value="sse">SSE</option>
                 </select>
+                <select value={remoteMcpScope} onChange={(e) => setRemoteMcpScope(e.target.value === 'project' ? 'project' : 'user')} aria-label={t('extMcpRemoteScope')}>
+                  <option value="user">{t('extMcpRemoteScopeUser')}</option><option value="project" disabled={!project}>{t('extMcpRemoteScopeProject')}</option>
+                </select>
                 <button type="button" className="btn btn-sm primary-sm" disabled={busy || !remoteMcpName.trim() || !remoteMcpUrl.trim()} onClick={() => {
                   setBusy(true);
-                  void addRemoteMcp(remoteMcpName, remoteMcpUrl, remoteMcpTransport, grokCmd || undefined)
+                  void addRemoteMcp(remoteMcpName, remoteMcpUrl, remoteMcpTransport, remoteMcpScope, project || undefined, grokCmd || undefined)
                     .then((s) => { setMsg(s || t('extMcpRemoteAdded')); setRemoteMcpName(''); setRemoteMcpUrl(''); return refresh(); })
                     .catch((e) => setMsg(String(e)))
                     .finally(() => setBusy(false));

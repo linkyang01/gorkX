@@ -93,6 +93,7 @@ pub struct RemoteMcpInput {
     pub name: String,
     pub url: String,
     pub transport: String,
+    pub scope: String,
 }
 
 fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
@@ -121,9 +122,13 @@ fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
     if !matches!(transport.as_str(), "http" | "sse") {
         return Err("Remote MCP transport must be HTTP or SSE.".into());
     }
+    let scope = input.scope.trim().to_ascii_lowercase();
+    if !matches!(scope.as_str(), "user" | "project") {
+        return Err("MCP scope must be user or project.".into());
+    }
     Ok(vec![
         "mcp".into(), "add".into(), "--transport".into(), transport,
-        name.into(), url.into(),
+        "--scope".into(), scope, name.into(), url.into(),
     ])
 }
 
@@ -781,11 +786,13 @@ mod tests {
             name: "notion".into(),
             url: "https://mcp.example.com/connect".into(),
             transport: "http".into(),
+            scope: "user".into(),
         }).unwrap();
-        assert_eq!(valid, vec!["mcp", "add", "--transport", "http", "notion", "https://mcp.example.com/connect"]);
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "bad name".into(), url: "https://mcp.example.com".into(), transport: "http".into() }).is_err());
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "http://localhost:3000".into(), transport: "http".into() }).is_err());
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://token@example.com/mcp".into(), transport: "sse".into() }).is_err());
+        assert_eq!(valid, vec!["mcp", "add", "--transport", "http", "--scope", "user", "notion", "https://mcp.example.com/connect"]);
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "bad name".into(), url: "https://mcp.example.com".into(), transport: "http".into(), scope: "user".into() }).is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "http://localhost:3000".into(), transport: "http".into(), scope: "user".into() }).is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://token@example.com/mcp".into(), transport: "sse".into(), scope: "user".into() }).is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://mcp.example.com".into(), transport: "http".into(), scope: "shared".into() }).is_err());
     }
 }
 
@@ -811,13 +818,37 @@ pub async fn extensions_mcp_add_playwright_chrome(
 #[tauri::command]
 pub async fn extensions_mcp_add_remote(
     input: RemoteMcpInput,
+    project: Option<String>,
     grok_cmd: Option<String>,
 ) -> Result<String, String> {
     let args = remote_mcp_args(&input)?;
+    let project_dir = if input.scope.trim().eq_ignore_ascii_case("project") {
+        let raw = project.ok_or_else(|| "Select a project folder before adding a project MCP connection.".to_string())?;
+        let path = fs::canonicalize(raw.trim()).map_err(|_| "Selected project folder is unavailable.".to_string())?;
+        if !path.is_dir() {
+            return Err("Selected project folder is unavailable.".into());
+        }
+        Some(path)
+    } else {
+        None
+    };
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-        run_grok_text(&bin, &refs)
+        if let Some(cwd) = project_dir {
+            let _ = crate::paths::ensure_dirs();
+            let mut cmd = Command::new(&bin);
+            cmd.args(&refs).current_dir(cwd);
+            crate::paths::apply_engine_env(&mut cmd);
+            let out = cmd.output().map_err(|e| format!("spawn {}: {e}", bin.display()))?;
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+            } else {
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
+            }
+        } else {
+            run_grok_text(&bin, &refs)
+        }
     })
     .await
     .map_err(|e| e.to_string())?

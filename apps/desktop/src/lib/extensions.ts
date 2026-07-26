@@ -119,10 +119,13 @@ export async function addRemoteMcp(
   name: string,
   url: string,
   transport: 'http' | 'sse',
+  scope: 'user' | 'project',
+  project?: string,
   grokCmd?: string,
 ): Promise<string> {
   return invoke('extensions_mcp_add_remote', {
-    input: { name, url, transport },
+    input: { name, url, transport, scope },
+    project: project?.trim() || null,
     grokCmd: grokCmd || null,
   });
 }
