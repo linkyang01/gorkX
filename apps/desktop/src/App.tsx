@@ -6215,6 +6215,8 @@ function App() {
         project={project}
         grokCmd={grokCmd}
         onRunSkill={runSkill}
+        liveClient={active?.client}
+        liveSessionId={active?.sessionId}
       /></Suspense> : null}
 
       <TextPromptModal

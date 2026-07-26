@@ -16,6 +16,7 @@ import {
   type SkillInfo,
 } from '../lib/extensions';
 import { t } from '../lib/i18n';
+import type { AcpClient, LiveMcpServer } from '../lib/acpClient';
 
 type Tab = 'skills' | 'mcp' | 'plugins' | 'market';
 
@@ -25,9 +26,11 @@ interface Props {
   project: string;
   grokCmd: string;
   onRunSkill: (skill: SkillInfo) => void;
+  liveClient?: AcpClient | null;
+  liveSessionId?: string | null;
 }
 
-export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }: Props) {
+export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, liveClient, liveSessionId }: Props) {
   const [tab, setTab] = useState<Tab>('skills');
   const [snap, setSnap] = useState<ExtensionsSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,6 +40,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
   const [busy, setBusy] = useState(false);
   const [marketRaw, setMarketRaw] = useState('');
   const [marketSources, setMarketSources] = useState<unknown[]>([]);
+  const [liveMcp, setLiveMcp] = useState<LiveMcpServer[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -65,6 +69,11 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
       })
       .catch((e) => setMsg(String(e)));
   }, [open, tab, grokCmd]);
+  const refreshLiveMcp = useCallback(async (fresh = false) => {
+    if (!liveClient || !liveSessionId) { setLiveMcp([]); return; }
+    setLiveMcp(await liveClient.listLiveMcp(liveSessionId, fresh));
+  }, [liveClient, liveSessionId]);
+  useEffect(() => { if (open && tab === 'mcp') void refreshLiveMcp().catch((e) => setMsg(String(e))); }, [open, tab, refreshLiveMcp]);
 
   const skills = useMemo(() => {
     const list = snap?.skills ?? [];
@@ -165,6 +174,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
           ) : null}
           {tab === 'mcp' ? (
             <>
+              {liveClient && liveSessionId ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void refreshLiveMcp(true).catch((e) => setMsg(String(e)))}>{t('extMcpRefreshLive')}</button> : null}
               <button
                 type="button"
                 className="btn btn-sm"
@@ -260,6 +270,17 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
           ) : null}
 
           {tab === 'mcp' ? (
+            liveMcp.length > 0 ? (
+              liveMcp.map((server) => (
+                <div key={`live:${server.name}`} className="ext-row">
+                  <div className="ext-row-main"><div className="ext-row-title"><strong>{server.displayName || server.name}</strong><span className="pill">{server.session?.status || 'configured'}</span></div><div className="ext-row-desc">{server.session?.tools?.length ?? 0} tools</div></div>
+                  <div className="ext-row-actions">
+                    {server.session?.authRequired ? <button type="button" className="btn btn-sm primary-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.triggerLiveMcpAuth(liveSessionId!, server.name).then((r) => { setMsg(r.error || r.status || t('extMcpAuthStarted')); return refreshLiveMcp(true); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{t('extMcpAuthenticate')}</button> : null}
+                    {server.session ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcp(liveSessionId!, server.name, !server.session!.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{server.session.enabled ? t('extMcpDisableLive') : t('extMcpEnableLive')}</button> : null}
+                  </div>
+                </div>
+              ))
+            ) : (
             mcp.length === 0 ? (
               <div className="hint">{t('extNoMcp')}</div>
             ) : (
@@ -301,7 +322,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
                   </div>
                 </div>
               ))
-            )
+            ))
           ) : null}
 
           {tab === 'plugins' ? (

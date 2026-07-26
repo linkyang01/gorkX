@@ -71,6 +71,13 @@ export interface HookInfo {
   disabled: boolean;
 }
 
+/** Bounded live MCP inventory supplied by the active Grok Build session. */
+export interface LiveMcpTool { name: string; displayName?: string | null; description?: string | null; enabled: boolean }
+export interface LiveMcpServer {
+  name: string; displayName?: string | null; source: 'managed' | 'local' | string;
+  session?: { enabled: boolean; status?: string | null; tools?: LiveMcpTool[]; authRequired?: boolean; setupRequired?: boolean } | null;
+}
+
 /**
  * A bounded command descriptor advertised by the live ACP session.  Workflow
  * metadata is deliberately retained because Grok Build exposes saved
@@ -1383,6 +1390,24 @@ export class AcpClient {
       }
     }
     return this.listHooks(sessionId);
+  }
+
+  async listLiveMcp(sessionId: string, refresh = false): Promise<LiveMcpServer[]> {
+    const raw = await this.request('x.ai/mcp/list', { sessionId, cache: !refresh }, 20_000) as { servers?: LiveMcpServer[]; result?: { servers?: LiveMcpServer[] } };
+    return raw.result?.servers ?? raw.servers ?? [];
+  }
+
+  async toggleLiveMcp(sessionId: string, serverName: string, enabled: boolean): Promise<void> {
+    await this.request('x.ai/mcp/toggle', { sessionId, serverName, enabled }, 20_000);
+  }
+
+  async toggleLiveMcpTool(sessionId: string, serverName: string, toolName: string, enabled: boolean): Promise<void> {
+    await this.request('x.ai/mcp/toggle_tool', { sessionId, serverName, toolName, enabled }, 20_000);
+  }
+
+  async triggerLiveMcpAuth(sessionId: string, serverName: string): Promise<{ status?: string; error?: string }> {
+    const raw = await this.request('x.ai/mcp/auth_trigger', { sessionId, serverName }, 30_000) as { status?: string; error?: string; result?: { status?: string; error?: string } };
+    return raw.result ?? raw;
   }
 
   /** Delete a real Grok Build scheduler task by its server-provided ID. */
