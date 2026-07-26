@@ -3251,6 +3251,7 @@ button.pill:hover {
 .workflow-objective, .workflow-note, .workflow-result { margin: 9px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .workflow-result { padding: 9px 10px; border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--glass); color: var(--text); }
 .workflow-note { color: #a65b00; }
+.workflow-actions { display: flex; justify-content: flex-end; margin-top: 11px; }
 .workflow-metrics { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; color: var(--text-3); font-size: 12px; }
 .workflow-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
 .workflow-phases li { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-3); font-size: 12px; }

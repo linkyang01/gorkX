@@ -38,6 +38,7 @@ import {
   type RewindMode,
   type RewindPoint,
   type HooksSnapshot,
+  type WorkflowRunUpdate,
   type SessionUpdate,
   type UserQuestionAnswers,
   type UserQuestionAnnotations,
@@ -679,6 +680,9 @@ function App() {
   const activeBtwAvailable = Boolean(
     active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
   );
+  const workflowManagementAvailable = Boolean(
+    active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'workflow'),
+  );
   threadsRef.current = threads;
   activeIdRef.current = activeId;
 
@@ -697,6 +701,18 @@ function App() {
     const live = requireLiveHooksTask();
     return live.client!.manageHooks(live.sessionId!, action);
   }, [requireLiveHooksTask]);
+
+  const manageWorkflow = useCallback(async (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => {
+    const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+    const available = live?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'workflow');
+    if (!live?.client || !live.sessionId || !available) throw new Error(t('workflowManagementUnavailable'));
+    // The name comes from the bounded ACP workflow event; reject anything that
+    // cannot be represented as the documented workflow handle argument.
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name)) {
+      throw new Error(t('workflowManagementUnavailable'));
+    }
+    await live.client.prompt(live.sessionId, `/workflow ${action} ${workflow.name}`);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('gorkx.project', project);
@@ -5490,6 +5506,14 @@ function App() {
               choiceDisabled={active.busy}
               onSelectChoice={(value) => void send(value)}
               followUps={followUps[active.id]?.suggestions}
+              onWorkflowAction={(workflow, action) => void manageWorkflow(workflow, action).catch((error) => {
+                appendLine(active.id, {
+                  id: nid(),
+                  role: 'system',
+                  text: error instanceof Error ? error.message : String(error),
+                });
+              })}
+              workflowActionDisabled={!workflowManagementAvailable || active.busy}
               footer={
                 userQuestionReq && userQuestionAgentId === active.id ? (
                   <UserQuestionPrompt

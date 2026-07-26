@@ -46,6 +46,8 @@ interface Props {
   footer?: ReactNode;
   /** Server-suggested next questions from the current Grok Build response. */
   followUps?: string[];
+  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
+  workflowActionDisabled?: boolean;
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -116,6 +118,8 @@ function LineView({
   onOpenAttachment,
   onSelectChoice,
   choiceDisabled,
+  onWorkflowAction,
+  workflowActionDisabled,
 }: {
   line: ChatLine;
   onTogglePlanEntry: (lineId: string, entryId: string) => void;
@@ -123,6 +127,8 @@ function LineView({
   onOpenAttachment?: (a: ComposerAttachment) => void;
   onSelectChoice?: (value: string) => void;
   choiceDisabled?: boolean;
+  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
+  workflowActionDisabled?: boolean;
 }) {
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
     return (
@@ -138,7 +144,12 @@ function LineView({
   if (line.role === 'workflow') {
     return (
       <div className="tl-row tl-assistant">
-        <WorkflowCard workflow={line.workflow} fallback={line.text} />
+        <WorkflowCard
+          workflow={line.workflow}
+          fallback={line.text}
+          onAction={line.workflow ? (action) => onWorkflowAction?.(line.workflow!, action) : undefined}
+          actionDisabled={workflowActionDisabled}
+        />
       </div>
     );
   }
@@ -193,6 +204,8 @@ export function MessageList({
   choiceDisabled = false,
   footer,
   followUps = [],
+  onWorkflowAction,
+  workflowActionDisabled = false,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -253,6 +266,8 @@ export function MessageList({
                 onOpenAttachment={onOpenAttachment}
                 onSelectChoice={onSelectChoice}
                 choiceDisabled={choiceDisabled}
+                onWorkflowAction={onWorkflowAction}
+                workflowActionDisabled={workflowActionDisabled}
               />
             </div>
           );

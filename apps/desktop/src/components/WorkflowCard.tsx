@@ -16,7 +16,17 @@ function statusClass(status: string) {
 }
 
 /** Live, read-only view of a Grok Build workflow update. */
-export function WorkflowCard({ workflow, fallback }: { workflow?: WorkflowRunUpdate; fallback?: string }) {
+export function WorkflowCard({
+  workflow,
+  fallback,
+  onAction,
+  actionDisabled = false,
+}: {
+  workflow?: WorkflowRunUpdate;
+  fallback?: string;
+  onAction?: (action: 'pause' | 'resume') => void;
+  actionDisabled?: boolean;
+}) {
   if (!workflow) {
     return <div className="workflow-card workflow-card-restored">{fallback || t('workflowTitle')}</div>;
   }
@@ -26,6 +36,8 @@ export function WorkflowCard({ workflow, fallback }: { workflow?: WorkflowRunUpd
   const budget = workflow.agentBudget != null
     ? `${workflow.agentsUsed}/${workflow.agentBudget}`
     : String(workflow.agentsUsed);
+  const canManage = Boolean(onAction) && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name);
+  const canResume = /paused|failed|interrupted/.test(workflow.status);
   return (
     <section className={`workflow-card workflow-${statusClass(workflow.status)}`} aria-label={t('workflowTitle')}>
       <div className="workflow-card-head">
@@ -65,6 +77,18 @@ export function WorkflowCard({ workflow, fallback }: { workflow?: WorkflowRunUpd
       ) : null}
       {workflow.pauseMessage ? <p className="workflow-note">{workflow.pauseMessage}</p> : null}
       {workflow.resultSummary ? <p className="workflow-result">{workflow.resultSummary}</p> : null}
+      {canManage ? (
+        <div className="workflow-actions">
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={actionDisabled || /complete|success|done|cancelled/.test(workflow.status)}
+            onClick={() => onAction?.(canResume ? 'resume' : 'pause')}
+          >
+            {canResume ? t('workflowResume') : t('workflowPause')}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
