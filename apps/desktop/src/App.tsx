@@ -6259,26 +6259,13 @@ function App() {
         onClose={() => setMemoryOpen(false)}
         project={project || undefined}
         grokCmd={grokCmd}
-        onSendSlash={(cmd) => {
+        canCaptureSessionMemory={Boolean(active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'flush'))}
+        canOrganizeSessionMemory={Boolean(active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'dream'))}
+        onRunKernelMemoryAction={(action) => {
+          const command = action === 'capture' ? '/flush' : '/dream';
+          const visible = action === 'capture' ? t('memoryFlushVisible') : t('memoryDreamVisible');
           setMemoryOpen(false);
-          if (!active?.client || !active.sessionId) {
-            setDraft(cmd.startsWith('/') ? cmd : `/${cmd}`);
-            return;
-          }
-          void (async () => {
-            const line = cmd.startsWith('/') ? cmd : `/${cmd}`;
-            appendLine(active.id, { id: nid(), role: 'user', text: line });
-            patchThread(active.id, { busy: true, error: null });
-            try {
-              await active.client!.prompt(active.sessionId!, line);
-            } catch (e) {
-              patchThread(active.id, {
-                error: e instanceof Error ? e.message : String(e),
-              });
-            } finally {
-              patchThread(active.id, { busy: false });
-            }
-          })();
+          void runDesktopAction(command, visible);
         }}
       /></Suspense> : null}
 

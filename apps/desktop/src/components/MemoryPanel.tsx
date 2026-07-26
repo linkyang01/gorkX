@@ -22,11 +22,21 @@ interface Props {
   onClose: () => void;
   project?: string;
   grokCmd?: string;
-  /** Send a slash line into the active agent session when possible */
-  onSendSlash?: (cmd: string) => void;
+  /** Runs an engine-backed memory action without exposing command syntax. */
+  onRunKernelMemoryAction?: (action: 'capture' | 'organize') => void;
+  canCaptureSessionMemory?: boolean;
+  canOrganizeSessionMemory?: boolean;
 }
 
-export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Props) {
+export function MemoryPanel({
+  open,
+  onClose,
+  project,
+  grokCmd,
+  onRunKernelMemoryAction,
+  canCaptureSessionMemory = false,
+  canOrganizeSessionMemory = false,
+}: Props) {
   const [st, setSt] = useState<MemoryStatus | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
@@ -159,24 +169,28 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
           {st?.note}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-          <button
-            type="button"
-            className="btn btn-sm"
-            title={t('memoryFlushHint')}
-            onClick={() => onSendSlash?.('/flush')}
-            disabled={!onSendSlash}
-          >
-            {t('memoryFlush')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            title={t('memoryDreamHint')}
-            onClick={() => onSendSlash?.('/dream')}
-            disabled={!onSendSlash}
-          >
-            {t('memoryDream')}
-          </button>
+          {canCaptureSessionMemory ? (
+            <button
+              type="button"
+              className="btn btn-sm"
+              title={t('memoryFlushHint')}
+              onClick={() => onRunKernelMemoryAction?.('capture')}
+              disabled={!onRunKernelMemoryAction}
+            >
+              {t('memoryFlush')}
+            </button>
+          ) : null}
+          {canOrganizeSessionMemory ? (
+            <button
+              type="button"
+              className="btn btn-sm"
+              title={t('memoryDreamHint')}
+              onClick={() => onRunKernelMemoryAction?.('organize')}
+              disabled={!onRunKernelMemoryAction}
+            >
+              {t('memoryDream')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn-sm"
@@ -322,7 +336,6 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
                       setRememberDraft('');
                       setRememberOpen(false);
                       setMsg(t('memoryRememberOk'));
-                      onSendSlash?.(`/remember ${note}`);
                     })
                     .catch((e) => setErr(String(e)))
                     .finally(() => setBusy(false));
@@ -348,7 +361,6 @@ export function MemoryPanel({ open, onClose, project, grokCmd, onSendSlash }: Pr
                       setRememberDraft('');
                       setRememberOpen(false);
                       setMsg(t('memoryRememberOk'));
-                      onSendSlash?.(`/remember ${note}`);
                     })
                     .catch((e) => setErr(String(e)))
                     .finally(() => setBusy(false));
