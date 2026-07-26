@@ -517,6 +517,25 @@ function App() {
     prefix: string;
     label: string;
   } | null>(null);
+  // A composer draft and staged files belong to the project the user was
+  // working in. Never carry them into a different project/home workspace:
+  // that is confusing at best and can send the wrong material at worst.
+  const composerProjectRef = useRef(project);
+  useEffect(() => {
+    if (composerProjectRef.current === project) return;
+    composerProjectRef.current = project;
+    setDraft('');
+    setCapabilityArm(null);
+    setComposerAtts((items) => {
+      items.forEach(revokeAttachment);
+      return [];
+    });
+    setPreviewAtt(null);
+    setPlusMenuOpen(false);
+    setSlashOpen(false);
+    setAtOpen(false);
+    setAtQuery('');
+  }, [project]);
   /** Outstanding, live ACP decisions across every connected task. */
   const [approvalQueue, setApprovalQueue] = useState<PendingApproval[]>([]);
   const [activeApprovalKey, setActiveApprovalKey] = useState<string | null>(null);
