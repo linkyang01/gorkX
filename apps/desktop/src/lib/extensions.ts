@@ -130,6 +130,22 @@ export async function addRemoteMcp(
   });
 }
 
+/** Add a user-selected local stdio MCP with already-separated arguments. */
+export async function addLocalMcp(
+  name: string,
+  command: string,
+  args: string[],
+  scope: 'user' | 'project',
+  project?: string,
+  grokCmd?: string,
+): Promise<string> {
+  return invoke('extensions_mcp_add_local', {
+    input: { name, command, args, scope },
+    project: project?.trim() || null,
+    grokCmd: grokCmd || null,
+  });
+}
+
 export async function removeMcp(name: string, grokCmd?: string): Promise<string> {
   return invoke('extensions_mcp_remove', { name, grokCmd: grokCmd || null });
 }

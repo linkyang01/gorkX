@@ -96,8 +96,19 @@ pub struct RemoteMcpInput {
     pub scope: String,
 }
 
-fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
-    let name = input.name.trim();
+/// Local stdio servers are explicitly user-selected executables. Arguments
+/// are kept as an array, never parsed by a shell.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMcpInput {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub scope: String,
+}
+
+fn mcp_name_and_scope(name_raw: &str, scope_raw: &str) -> Result<(String, String), String> {
+    let name = name_raw.trim();
     if name.is_empty()
         || name.len() > 64
         || !name.chars().enumerate().all(|(index, c)| {
@@ -108,6 +119,15 @@ fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
     {
         return Err("MCP name must start with a letter or number and contain only letters, numbers, hyphens, or underscores.".into());
     }
+    let scope = scope_raw.trim().to_ascii_lowercase();
+    if !matches!(scope.as_str(), "user" | "project") {
+        return Err("MCP scope must be user or project.".into());
+    }
+    Ok((name.into(), scope))
+}
+
+fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
+    let (name, scope) = mcp_name_and_scope(&input.name, &input.scope)?;
     let url = input.url.trim();
     // Remote MCP credentials belong to the provider's OAuth flow. Refuse
     // credential-bearing URLs, non-HTTPS endpoints and whitespace rather than
@@ -122,14 +142,26 @@ fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
     if !matches!(transport.as_str(), "http" | "sse") {
         return Err("Remote MCP transport must be HTTP or SSE.".into());
     }
-    let scope = input.scope.trim().to_ascii_lowercase();
-    if !matches!(scope.as_str(), "user" | "project") {
-        return Err("MCP scope must be user or project.".into());
-    }
     Ok(vec![
         "mcp".into(), "add".into(), "--transport".into(), transport,
-        "--scope".into(), scope, name.into(), url.into(),
+        "--scope".into(), scope, name, url.into(),
     ])
+}
+
+fn local_mcp_args(input: &LocalMcpInput) -> Result<Vec<String>, String> {
+    let (name, scope) = mcp_name_and_scope(&input.name, &input.scope)?;
+    let command = fs::canonicalize(input.command.trim())
+        .map_err(|_| "Select an available local executable.".to_string())?;
+    if !command.is_file() {
+        return Err("Select a regular local executable file.".into());
+    }
+    let args = input.args.iter().map(|arg| arg.trim()).filter(|arg| !arg.is_empty()).collect::<Vec<_>>();
+    if args.len() > 48 || args.iter().any(|arg| arg.len() > 1024 || arg.contains('\0')) {
+        return Err("Local MCP arguments are invalid or too long.".into());
+    }
+    let mut out = vec!["mcp".into(), "add".into(), "--scope".into(), scope, name, "--".into(), command.display().to_string()];
+    out.extend(args.into_iter().map(str::to_string));
+    Ok(out)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -732,7 +764,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{local_mcp_args, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -794,6 +826,16 @@ mod tests {
         assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://token@example.com/mcp".into(), transport: "sse".into(), scope: "user".into() }).is_err());
         assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://mcp.example.com".into(), transport: "http".into(), scope: "shared".into() }).is_err());
     }
+
+    #[test]
+    fn local_mcp_uses_an_executable_and_separate_arguments() {
+        let args = local_mcp_args(&LocalMcpInput {
+            name: "local-smoke".into(), command: "/usr/bin/true".into(),
+            args: vec!["--flag".into(), "value with spaces".into()], scope: "user".into(),
+        }).unwrap();
+        assert_eq!(args, vec!["mcp", "add", "--scope", "user", "local-smoke", "--", "/usr/bin/true", "--flag", "value with spaces"]);
+        assert!(local_mcp_args(&LocalMcpInput { name: "local".into(), command: "/missing".into(), args: vec![], scope: "user".into() }).is_err());
+    }
 }
 
 /// Configure the supported Playwright MCP against the user's visible Chrome.
@@ -852,6 +894,37 @@ pub async fn extensions_mcp_add_remote(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Register a user-selected local stdio MCP without turning the desktop UI
+/// into a shell. The server is not launched here; Grok Build launches it only
+/// for a later task after the user confirmed this persistent configuration.
+#[tauri::command]
+pub async fn extensions_mcp_add_local(
+    input: LocalMcpInput,
+    project: Option<String>,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let args = local_mcp_args(&input)?;
+    let project_dir = if input.scope.trim().eq_ignore_ascii_case("project") {
+        let raw = project.ok_or_else(|| "Select a project folder before adding a project MCP connection.".to_string())?;
+        let path = fs::canonicalize(raw.trim()).map_err(|_| "Selected project folder is unavailable.".to_string())?;
+        if !path.is_dir() { return Err("Selected project folder is unavailable.".into()); }
+        Some(path)
+    } else { None };
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || {
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        if let Some(cwd) = project_dir {
+            let _ = crate::paths::ensure_dirs();
+            let mut cmd = Command::new(&bin);
+            cmd.args(&refs).current_dir(cwd);
+            crate::paths::apply_engine_env(&mut cmd);
+            let out = cmd.output().map_err(|e| format!("spawn {}: {e}", bin.display()))?;
+            if out.status.success() { Ok(String::from_utf8_lossy(&out.stdout).to_string()) }
+            else { Err(String::from_utf8_lossy(&out.stderr).to_string()) }
+        } else { run_grok_text(&bin, &refs) }
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

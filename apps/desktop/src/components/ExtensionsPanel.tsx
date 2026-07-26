@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { open as openFile } from '@tauri-apps/plugin-dialog';
 import {
   fetchExtensionsSnapshot,
   fetchMarketplace,
   addRemoteMcp,
+  addLocalMcp,
   installPlugin,
   openExtensionPath,
   openGrokConfig,
@@ -47,6 +49,10 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [remoteMcpUrl, setRemoteMcpUrl] = useState('');
   const [remoteMcpTransport, setRemoteMcpTransport] = useState<'http' | 'sse'>('http');
   const [remoteMcpScope, setRemoteMcpScope] = useState<'user' | 'project'>('user');
+  const [localMcpName, setLocalMcpName] = useState('');
+  const [localMcpCommand, setLocalMcpCommand] = useState('');
+  const [localMcpArgs, setLocalMcpArgs] = useState('');
+  const [localMcpScope, setLocalMcpScope] = useState<'user' | 'project'>('user');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -295,6 +301,30 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                     .then((s) => { setMsg(s || t('extMcpRemoteAdded')); setRemoteMcpName(''); setRemoteMcpUrl(''); return refresh(); })
                     .catch((e) => setMsg(String(e)))
                     .finally(() => setBusy(false));
+                }}>{t('extInstall')}</button>
+              </div>
+            </div>
+            <div className="ext-install ext-mcp-add" aria-label={t('extMcpAddLocal')}>
+              <div className="ext-row-title">{t('extMcpAddLocal')}</div>
+              <p className="hint" style={{ margin: '5px 0 8px' }}>{t('extMcpLocalHint')}</p>
+              <div className="field-row" style={{ flexWrap: 'wrap' }}>
+                <input className="ext-search" value={localMcpName} onChange={(e) => setLocalMcpName(e.target.value)} placeholder={t('extMcpRemoteName')} aria-label={t('extMcpRemoteName')} />
+                <input className="ext-search" value={localMcpCommand} readOnly placeholder={t('extMcpLocalExecutable')} aria-label={t('extMcpLocalExecutable')} />
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void openFile({ multiple: false, directory: false }).then((selected) => { if (typeof selected === 'string') setLocalMcpCommand(selected); }).catch((e) => setMsg(String(e)))}>{t('extMcpChooseExecutable')}</button>
+                <select value={localMcpScope} onChange={(e) => setLocalMcpScope(e.target.value === 'project' ? 'project' : 'user')} aria-label={t('extMcpRemoteScope')}>
+                  <option value="user">{t('extMcpRemoteScopeUser')}</option><option value="project" disabled={!project}>{t('extMcpRemoteScopeProject')}</option>
+                </select>
+              </div>
+              <textarea className="ext-search" value={localMcpArgs} onChange={(e) => setLocalMcpArgs(e.target.value)} placeholder={t('extMcpLocalArgs')} aria-label={t('extMcpLocalArgs')} rows={2} style={{ marginTop: 8, width: '100%' }} />
+              <div className="field-row" style={{ marginTop: 8 }}>
+                <button type="button" className="btn btn-sm primary-sm" disabled={busy || !localMcpName.trim() || !localMcpCommand.trim()} onClick={() => {
+                  const args = localMcpArgs.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+                  const scopeLabel = localMcpScope === 'project' ? t('extMcpRemoteScopeProject') : t('extMcpRemoteScopeUser');
+                  if (!window.confirm(t('extMcpLocalConfirm').replace('{name}', localMcpName.trim()).replace('{command}', localMcpCommand).replace('{scope}', scopeLabel))) return;
+                  setBusy(true);
+                  void addLocalMcp(localMcpName, localMcpCommand, args, localMcpScope, project || undefined, grokCmd || undefined)
+                    .then((s) => { setMsg(s || t('extMcpLocalAdded')); setLocalMcpName(''); setLocalMcpCommand(''); setLocalMcpArgs(''); return refresh(); })
+                    .catch((e) => setMsg(String(e))).finally(() => setBusy(false));
                 }}>{t('extInstall')}</button>
               </div>
             </div>
