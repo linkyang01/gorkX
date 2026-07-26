@@ -12,7 +12,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 |---|---|---|
 | New session | New task → ACP `session/new` + App index | ✅ |
 | Resume / search | App task restore; isolated Kernel Sessions search for recovery | ✅ |
-| Rename | Sidebar task rename | ✅ |
+| Rename | Sidebar task rename; a live task also calls native `x.ai/session/rename` so Grok recovery/search stays aligned, while the App title persists as an offline fallback | ✅ |
 | Archive / delete | App archive; confirmed ACP session delete + local-index removal | ✅ |
 | Model / effort | Subscription and custom-model picker; effort is applied at engine spawn | ✅ |
 | Permission modes | Default / Auto / Full chooser + permission cards | ✅ |

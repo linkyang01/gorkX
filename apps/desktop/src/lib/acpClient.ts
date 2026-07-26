@@ -1076,6 +1076,23 @@ export class AcpClient {
   }
 
   /**
+   * Persist a user-chosen title in Grok Build's session store as well as the
+   * desktop task index. The standard route is preferred; older stdio bundles
+   * may expose the compatible underscored spelling instead.
+   */
+  async renameSession(sessionId: string, title: string, cwd?: string): Promise<void> {
+    const cleanTitle = title.trim().slice(0, 160);
+    if (!sessionId || !cleanTitle) throw new Error('A session title is required');
+    const params = cwd ? { sessionId, title: cleanTitle, cwd } : { sessionId, title: cleanTitle };
+    try {
+      await this.request('x.ai/session/rename', params, 15_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      await this.request('_x.ai/session/rename', params, 15_000);
+    }
+  }
+
+  /**
    * List recent sessions for a cwd (Grok extension).
    * Method: `_x.ai/sessions/list`
    * Note: without cwd this can return a large global list — always prefer cwd when possible.

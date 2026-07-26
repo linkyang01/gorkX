@@ -3011,7 +3011,7 @@ function App() {
     void clearProjectStore(path);
   };
 
-  /** Rename session title (UI + SQLite meta only). */
+  /** Rename the desktop task and, while live, the corresponding Grok session. */
   const renameThread = async (id: string) => {
     const th = threads.find((x) => x.id === id);
     if (!th) return;
@@ -3028,7 +3028,15 @@ function App() {
       (x) =>
         projectScopeKey(x.projectKey) === projectScopeKey(th.projectKey) && !x.archived,
     );
-    patchThread(id, { title: uniquifyThreadTitle(raw, siblings, id) });
+    const title = uniquifyThreadTitle(raw, siblings, id);
+    patchThread(id, { title });
+    // The App-owned title remains immediately durable offline. A live session
+    // also receives the native rename so Grok recovery/search stays aligned.
+    if (th.client && th.sessionId) {
+      void th.client.renameSession(th.sessionId, title, th.cwd).catch(() => {
+        appendLine(id, { id: nid(), role: 'system', text: t('renameThreadEngineSyncFailed') });
+      });
+    }
   };
 
   /**

@@ -281,6 +281,24 @@ try {
     }
 
     if (sessionControlsSmoke) {
+      // Rename a disposable session through the same native endpoint used by
+      // the sidebar action. This writes only inside the explicit test home.
+      const renameTitle = `gorkx-acp-rename-${Date.now().toString(36)}`;
+      const verifyRename = async (method) => {
+        const renamed = unwrapResult(await request(method, { sessionId, title: renameTitle, cwd }, 15_000));
+        if (renamed?.success !== true) {
+          throw new Error(`${method} returned invalid rename result: ${JSON.stringify(renamed)}`);
+        }
+        console.log(`PASS: ACP ${method} (durable session title)`);
+      };
+      try {
+        await verifyRename('x.ai/session/rename');
+      } catch (error) {
+        if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+        await verifyRename('_x.ai/session/rename');
+        console.log('NOTE: session rename is available only through the legacy underscored ACP route');
+      }
+
       // Forking copies only kernel-owned session data into the explicitly
       // disposable test home. It sends no prompt and leaves the parent active.
       // ACP extensions are not baseline methods; record an unavailable method
