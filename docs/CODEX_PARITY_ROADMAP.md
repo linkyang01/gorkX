@@ -77,7 +77,7 @@ Local worker or hosted worker
 
 **工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。gorkX 已提供官方 GitHub Device Flow 主路径：打开系统浏览器、显示可复制的一次性代码、仅在内存轮询授权，成功后将令牌保存到 macOS Keychain；细粒度 Token 是高级兼容入口。两种路径都不读取 `gh` 凭据、不自动推送分支或修改本地文件。创建 PR 和发布评论都要求独立确认；仍须在测试账号完成授权、断开、远端读取与写入确认的完整人工验收。
 
-**P3.1 — 一键网页授权（已接线，待人工验收）**：主路径已是“连接 GitHub”→ 系统浏览器官方 Device Flow → 回到 gorkX 自动完成连接；Token 输入已降为高级/兼容方式。当前公开 OAuth App 采用 `read:user public_repo`，不含 client secret；`public_repo` 的范围宽于最小只读权限，因此授权前必须如实展示，远端写入仍逐次确认。下一阶段目标是迁移到可选择仓库、最小只读权限的 GitHub App。安全边界：
+**P3.1 — 一键网页授权（浏览器闭环已验收）**：主路径是“连接 GitHub”→ 系统浏览器官方 Device Flow → 回到 gorkX 自动完成连接；用户已在 GitHub 网页确认并由 gorkX 成功完成 API 连接验证，授权仅保存到 macOS Keychain。Token 输入已降为高级/兼容方式。当前公开 OAuth App 采用 `read:user public_repo`，不含 client secret；`public_repo` 的范围宽于最小只读权限，因此授权前必须如实展示，远端写入仍逐次确认。PR / Checks / 评论读取、远端写入确认、断开与 GitHub 侧撤销仍须在公开测试仓库独立验收。下一阶段目标是迁移到可选择仓库、最小只读权限的 GitHub App。安全边界：
 
 1. 下一阶段注册 GitHub App，明确仅申请只读权限；用户在 GitHub 中自行选择安装账号/组织和仓库。
 2. 纯桌面包不得包含 GitHub App private key、OAuth client secret 或长期服务凭据。当前 Device Flow 只包含公开 client ID，并打开 GitHub 网页显示一次性验证码。
