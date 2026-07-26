@@ -13,26 +13,32 @@ pub fn app_support_dir() -> PathBuf {
 
 /// Engine data home (sessions, auth, memory, config). Official Grok uses GROK_HOME.
 /// Default: Application Support/gorkX/grok-home
-/// Escape hatch for debug only: GORKX_USE_SYSTEM_GROK_HOME=1 → ~/.grok
+/// Debug-only escape hatches can override this for isolated development tests.
+/// A production bundle must never silently inherit a user's CLI home or an
+/// externally supplied data directory: its authentication and sessions belong
+/// to this application install.
 pub fn grok_home() -> PathBuf {
-    if std::env::var("GORKX_USE_SYSTEM_GROK_HOME")
-        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes"))
-        .unwrap_or(false)
+    #[cfg(debug_assertions)]
     {
-        return dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/"))
-            .join(".grok");
-    }
-    if let Ok(v) = std::env::var("GROK_HOME") {
-        let t = v.trim();
-        if !t.is_empty() {
-            return PathBuf::from(t);
+        if std::env::var("GORKX_USE_SYSTEM_GROK_HOME")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes"))
+            .unwrap_or(false)
+        {
+            return dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("/"))
+                .join(".grok");
         }
-    }
-    if let Ok(v) = std::env::var("GORKX_GROK_HOME") {
-        let t = v.trim();
-        if !t.is_empty() {
-            return PathBuf::from(t);
+        if let Ok(v) = std::env::var("GROK_HOME") {
+            let t = v.trim();
+            if !t.is_empty() {
+                return PathBuf::from(t);
+            }
+        }
+        if let Ok(v) = std::env::var("GORKX_GROK_HOME") {
+            let t = v.trim();
+            if !t.is_empty() {
+                return PathBuf::from(t);
+            }
         }
     }
     app_support_dir().join("grok-home")

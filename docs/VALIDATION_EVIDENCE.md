@@ -8,6 +8,7 @@
 | 范围 | 命令 | 结果 | 边界 |
 |---|---|---|---|
 | 当前受控内核 | `apps/desktop/src-tauri/resources/grok --version` | 通过：当前应用资源为 `grok 0.2.112 (47348d1)` | 版本号不替代登录、实际模型回复或 macOS 安装验收 |
+| 正式安装的数据隔离 | `paths::grok_home` 仅在 debug 构建接受 `GROK_HOME` / `GORKX_GROK_HOME` / 系统 CLI home 覆盖；`cargo test && cargo check --release`；`npm run build:app` 后运行 `verify-macos-app-bundle.sh` | 通过：正式构建始终将 Grok 认证、会话与配置置于 `~/Library/Application Support/gorkX/grok-home`，不会继承用户 CLI 的 `~/.grok` 或启动环境指定的外部数据目录；重建 App 的包内内核、许可证和隔离 `GROK_HOME` 也通过，版本 `0.2.112 (47348d1)`。 | 证明发行包的数据归属与包结构，不替代全新 macOS 的网页登录、真实对话和退出重开人工闭环。 |
 | GitHub 浏览器授权与连接测试 | 设置 → Git → “连接 GitHub” → GitHub 官方 Device Flow → “验证连接” | 通过：用户在 GitHub 网页确认后，gorkX 自动完成 Device Flow、将授权保存到 macOS Keychain，并以账号 `linkyang01` 成功完成 GitHub API 连接验证。 | 未读取或写入任何仓库；公开仓库的 PR / Checks / 评论读取、远端写入逐次确认、断开和 GitHub 侧撤销仍是独立验收项。 |
 | GitHub 当前仓库 PR 只读 | 选择 `/Users/link/projects/gorkX` → Review → 远端 → “读取开放 PR” | 通过：gorkX 从当前 `origin` 解析 GitHub 仓库并实际读取开放 PR，返回“没有开放的 PR”。未发起任何远端写操作。 | 当前仓库没有 PR，故 Checks 与评论详情未被调用；需在有开放 PR 的公开测试仓库继续验证详情读取和逐次确认的写操作。 |
 | GitHub 公开 PR 详情只读 | 一次性 Git fixture 的 `origin=https://github.com/microsoft/vscode.git` → Review → 远端 → “读取开放 PR” → 对同一开放 PR 分别点“读取检查”和“读取评论” | 通过：实际读取到开放 PR 列表；Checks 返回具体 CI 状态（含 success、in_progress 与 failure）；评论读取成功并如实显示该 PR“没有返回讨论或审阅评论”。未创建评论、PR 或远端分支。fixture 已删除。 | 证明公开仓库 PR、Checks 与评论详情的按需只读链路；断开本地 Keychain 凭据、GitHub 侧撤销和每次远端写入的确认闭环仍未验收。 |
