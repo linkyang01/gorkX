@@ -95,6 +95,12 @@ import {
   type SandboxProfile,
 } from '../lib/sandboxConfig';
 import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
+import {
+  computerWorkspaceControl,
+  computerWorkspaceStart,
+  computerWorkspaceStatus,
+  type ComputerWorkspaceAction,
+} from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
 
 const APP_VERSION = '0.4.4'; // keep in sync with package.json
@@ -323,6 +329,8 @@ export function SettingsPanel({
   const [hooksSnap, setHooksSnap] = useState<HooksSnapshot | null>(null);
   const [hooksBusy, setHooksBusy] = useState(false);
   const [todayTokenUsage, setTodayTokenUsage] = useState<DailyTokenUsage | null>(null);
+  const [computerHubStatus, setComputerHubStatus] = useState<string | null>(null);
+  const [computerHubBusy, setComputerHubBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -408,6 +416,37 @@ export function SettingsPanel({
     const snap = await fetchExtensionsSnapshot(project, grokCmd);
     setBrowserSnap(snap);
     return snap;
+  };
+
+  const refreshComputerHub = async () => {
+    setComputerHubBusy(true);
+    try {
+      setComputerHubStatus(await computerWorkspaceStatus(grokCmd || undefined));
+    } catch (error) {
+      setComputerHubStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerHubBusy(false);
+    }
+  };
+
+  const controlComputerHub = async (action: 'start' | ComputerWorkspaceAction) => {
+    if (!project && action === 'start') return;
+    const warning = action === 'start'
+      ? t('settingsComputerHubStartConfirm').replace('{project}', project || '')
+      : t('settingsComputerHubControlConfirm').replace('{action}', action);
+    if (!window.confirm(warning)) return;
+    setComputerHubBusy(true);
+    try {
+      const raw = action === 'start'
+        ? await computerWorkspaceStart(project!, grokCmd || undefined)
+        : await computerWorkspaceControl(action, grokCmd || undefined);
+      setComputerHubStatus(raw || t('settingsComputerHubDone'));
+      await refreshComputerHub();
+    } catch (error) {
+      setComputerHubStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerHubBusy(false);
+    }
   };
 
   const checkKernelDoctor = async () => {
@@ -1140,6 +1179,33 @@ export function SettingsPanel({
                 >
                   {t('settingsOpenShortcuts')}
                 </button>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsComputerHubTitle')}</div>
+                    <div className="settings-row-hint">{t('settingsComputerHubHint')}</div>
+                  </div>
+                </div>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn" disabled={computerHubBusy} onClick={() => void refreshComputerHub()}>
+                    {t('settingsComputerHubStatus')}
+                  </button>
+                  <button type="button" className="btn primary" disabled={computerHubBusy || !project} onClick={() => void controlComputerHub('start')}>
+                    {t('settingsComputerHubStart')}
+                  </button>
+                  {(['pause', 'resume', 'stop'] as ComputerWorkspaceAction[]).map((action) => (
+                    <button key={action} type="button" className="btn" disabled={computerHubBusy} onClick={() => void controlComputerHub(action)}>
+                      {action === 'pause'
+                        ? t('settingsComputerHubPause')
+                        : action === 'resume'
+                          ? t('settingsComputerHubResume')
+                          : t('settingsComputerHubStop')}
+                    </button>
+                  ))}
+                </div>
+                {!project ? <p className="hint">{t('settingsComputerHubProjectRequired')}</p> : null}
+                {computerHubStatus ? <pre className="ext-msg" style={{ marginTop: 10 }}>{computerHubStatus}</pre> : null}
               </div>
             </>
           ) : null}

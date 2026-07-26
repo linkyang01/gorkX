@@ -146,3 +146,18 @@ export async function memoryClear(scope: 'workspace' | 'global' | 'all', grokCmd
 export async function modelsList(grokCmd?: string): Promise<string> {
   return output(await admin(['models'], grokCmd));
 }
+
+export type ComputerWorkspaceAction = 'pause' | 'resume' | 'stop' | 'restart';
+
+/** Computer Hub is server-gated. These are fixed Grok Build subcommands, not shell text. */
+export async function computerWorkspaceStatus(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['workspace', 'status', '--json'], grokCmd), 'Computer Hub status');
+}
+
+export async function computerWorkspaceStart(cwd: string, grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['workspace', 'start', '--cwd', cwd, '--json'], grokCmd), 'Computer Hub start');
+}
+
+export async function computerWorkspaceControl(action: ComputerWorkspaceAction, grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['workspace', action, '--json'], grokCmd), `Computer Hub ${action}`);
+}

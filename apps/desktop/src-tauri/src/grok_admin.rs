@@ -35,6 +35,10 @@ fn worktree_id(value: &str) -> bool {
         && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
+fn existing_dir(value: &str) -> bool {
+    !value.is_empty() && !value.starts_with('-') && Path::new(value).is_dir()
+}
+
 /// `grok_admin_exec` backs fixed UI actions, not a second terminal. Keep its
 /// grammar deliberately small so a compromised renderer cannot invoke `grok
 /// update`, change auth, or pass arbitrary subcommands through this bridge.
@@ -64,6 +68,12 @@ fn allowed_admin_args(args: &[String]) -> bool {
         ["memory", "clear", "--workspace", "-y"]
         | ["memory", "clear", "--global", "-y"]
         | ["memory", "clear", "--all", "-y"] => true,
+        ["workspace", "status", "--json"]
+        | ["workspace", "pause", "--json"]
+        | ["workspace", "resume", "--json"]
+        | ["workspace", "stop", "--json"]
+        | ["workspace", "restart", "--json"] => true,
+        ["workspace", "start", "--cwd", cwd, "--json"] => existing_dir(cwd),
         _ => false,
     }
 }
@@ -97,6 +107,12 @@ pub async fn grok_admin_exec(
             cmd.current_dir(dir);
         }
         crate::paths::apply_engine_env(&mut cmd);
+        // Grok Build keeps Computer Hub workspace exposure behind this local
+        // feature switch in addition to its server-side account gate. The UI
+        // exposes only fixed actions and requires an explicit confirmation.
+        if args.first().is_some_and(|arg| arg == "workspace") {
+            cmd.env("GROK_WORKSPACE_COMMAND", "1");
+        }
         let output = cmd
             .output()
             .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
@@ -128,6 +144,7 @@ mod tests {
         assert!(allowed_admin_args(&args(&["memory", "clear", "--workspace", "-y"])));
         assert!(allowed_admin_args(&args(&["worktree", "db", "stats"])));
         assert!(allowed_admin_args(&args(&["worktree", "db", "rebuild"])));
+        assert!(allowed_admin_args(&args(&["workspace", "status", "--json"])));
     }
 
     #[test]
@@ -136,5 +153,6 @@ mod tests {
         assert!(!allowed_admin_args(&args(&["logout"])));
         assert!(!allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--dangerous", "query"])));
         assert!(!allowed_admin_args(&args(&["worktree", "rm", "--all"])));
+        assert!(!allowed_admin_args(&args(&["workspace", "start", "--cwd", "-", "--json"])));
     }
 }
