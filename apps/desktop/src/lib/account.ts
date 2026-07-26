@@ -22,36 +22,6 @@ export interface AccountSummary {
 
 /** Local display nickname only — does not change account / API name. */
 const DISPLAY_NAME_KEY = 'gorkx.displayNameOverride';
-const CONFIRMED_QUOTA_KEY = 'gorkx.confirmedSubscriptionQuota.v1';
-
-export interface ConfirmedQuota {
-  email: string;
-  usagePercent: number;
-  confirmedAt: number;
-}
-
-/** A website value is local, per-account, and never presented as API data. */
-export function loadConfirmedQuota(email?: string | null): ConfirmedQuota | null {
-  const normalized = (email || '').trim().toLowerCase();
-  if (!normalized) return null;
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(CONFIRMED_QUOTA_KEY) || 'null');
-    if (!raw || typeof raw !== 'object') return null;
-    const value = raw as Partial<ConfirmedQuota>;
-    if (typeof value.email !== 'string' || value.email.toLowerCase() !== normalized ||
-      typeof value.usagePercent !== 'number' || !Number.isFinite(value.usagePercent) ||
-      value.usagePercent < 0 || value.usagePercent > 100 || typeof value.confirmedAt !== 'number') return null;
-    return { email: value.email, usagePercent: value.usagePercent, confirmedAt: value.confirmedAt };
-  } catch { return null; }
-}
-
-export function saveConfirmedQuota(email: string, usagePercent: number): ConfirmedQuota | null {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized || !Number.isFinite(usagePercent) || usagePercent < 0 || usagePercent > 100) return null;
-  const value: ConfirmedQuota = { email: normalized, usagePercent, confirmedAt: Date.now() };
-  try { localStorage.setItem(CONFIRMED_QUOTA_KEY, JSON.stringify(value)); } catch { return null; }
-  return value;
-}
 
 export function loadDisplayNameOverride(): string {
   try {

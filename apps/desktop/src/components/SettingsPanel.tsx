@@ -9,7 +9,7 @@ import {
   type PermissionMode,
 } from '../lib/acpClient';
 import type { AccountSummary, SubscriptionModelsSnapshot } from '../lib/account';
-import { fetchAccountSummary, fetchSubscriptionModelsSnapshot, loadConfirmedQuota, logoutAccount, startLoginFlow } from '../lib/account';
+import { fetchAccountSummary, fetchSubscriptionModelsSnapshot, logoutAccount, startLoginFlow } from '../lib/account';
 import {
   clearChatCache,
   loadThreadMetas,
@@ -1177,18 +1177,24 @@ export function SettingsPanel({
                     <div className="settings-row-hint">
                       {account?.creditUsagePercent != null
                         ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                        : (() => {
-                          const confirmed = loadConfirmedQuota(account?.email);
-                          return confirmed
-                            ? `已用 ${Math.round(confirmed.usagePercent)}% · 剩 ${Math.max(0, Math.round(100 - confirmed.usagePercent))}%（${t('quotaWebConfirmed')}）`
-                            : account?.quotaLabel || t('quotaUnknown');
-                        })()}
+                        : account?.quotaLabel || t('quotaUnknown')}
                     </div>
                   </div>
                   <button type="button" className="btn" onClick={() => void fetchAccountSummary().then(setAccount)}>
                     {t('refreshQuota')}
                   </button>
                 </div>
+                {account?.creditUsagePercent == null ? (
+                  <div className="settings-row">
+                    <div>
+                      <div className="settings-row-title">{t('quotaOpenWebsite')}</div>
+                      <div className="settings-row-hint">{t('quotaOpenWebsiteHint')}</div>
+                    </div>
+                    <button type="button" className="btn" onClick={() => void openUrlSafe('https://grok.com/imagine?_s=usage')}>
+                      {t('quotaOpenWebsite')}
+                    </button>
+                  </div>
+                ) : null}
                 <div className="settings-row">
                   <div>
                     <div className="settings-row-title">{t('settingsUsageModels')}</div>

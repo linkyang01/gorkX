@@ -181,9 +181,7 @@ import {
   fetchAccountSummary,
   fetchModelContext,
   fetchSubscriptionModels,
-  loadConfirmedQuota,
   loadDisplayNameOverride,
-  saveConfirmedQuota,
   saveDisplayNameOverride,
   uiDisplayName,
   startLoginFlow,
@@ -193,6 +191,7 @@ import type { AccountSummary } from './lib/account';
 import {
   checkAppUpdate,
   installAppUpdate,
+  openUrlSafe,
   openWebPreview,
   type AppUpdateInfo,
 } from './lib/updates';
@@ -542,7 +541,6 @@ function App() {
   const [permPopOpen, setPermPopOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
-  const [quotaConfirmationVersion, setQuotaConfirmationVersion] = useState(0);
   /** Local-only nickname for the sidebar chip (API name stays unchanged). */
   const [nameOverride, setNameOverride] = useState(() => loadDisplayNameOverride());
   const [nameEditOpen, setNameEditOpen] = useState(false);
@@ -4964,16 +4962,11 @@ function App() {
                         })()}
                 </span>
                 <span className="account-quota">
-                  {(() => {
-                    const usagePercent = account?.creditUsagePercent ?? (
-                      accountAuthenticated ? loadConfirmedQuota(account?.email)?.usagePercent : null
-                    );
-                    return usagePercent != null
-                      ? `已用 ${Math.round(usagePercent)}% · 剩 ${Math.max(0, Math.round(100 - usagePercent))}%`
-                      : accountAuthenticated
-                        ? account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') || account?.membershipLabel || '—'
-                        : '—';
-                  })()}
+                  {accountAuthenticated && account?.creditUsagePercent != null
+                    ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                    : accountAuthenticated
+                      ? account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') || account?.membershipLabel || '—'
+                      : '—'}
                 </span>
               </span>
             </button>
@@ -5074,20 +5067,10 @@ function App() {
                     <div className="account-menu-quota-block">
                       <div className="account-menu-quota-title">{t('remainingQuota')}</div>
                       <div className="account-menu-quota-line">
-                        {(() => {
-                          void quotaConfirmationVersion;
-                          const confirmed = account?.creditUsagePercent == null
-                            ? loadConfirmedQuota(account?.email)
-                            : null;
-                          const usagePercent = account?.creditUsagePercent ?? confirmed?.usagePercent;
-                          return usagePercent != null
-                            ? `已用 ${Math.round(usagePercent)}% · 剩 ${Math.max(0, Math.round(100 - usagePercent))}%`
-                            : account?.quotaLabel || accountError || '—';
-                        })()}
+                        {account?.creditUsagePercent != null
+                          ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                          : account?.quotaLabel || accountError || t('accountQuotaUnavailable')}
                       </div>
-                      {account?.creditUsagePercent == null && loadConfirmedQuota(account?.email) ? (
-                        <div className="account-menu-quota-reset">{t('quotaWebConfirmed')}</div>
-                      ) : null}
                       {account?.periodEnd ? (
                         <div className="account-menu-quota-reset">
                           {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
@@ -5104,23 +5087,19 @@ function App() {
                             .join(' · ')}
                         </div>
                       ) : null}
-                      {accountError && account?.creditUsagePercent == null && !loadConfirmedQuota(account?.email) ? (
+                      {accountError && account?.creditUsagePercent == null ? (
                         <div className="account-menu-quota-reset" title={accountError}>
                           {accountError.slice(0, 80)}
                         </div>
                       ) : null}
                     </div>
-                    {account?.creditUsagePercent == null && !loadConfirmedQuota(account?.email) ? (
+                    {account?.creditUsagePercent == null ? (
                       <button
                         type="button"
                         className="account-menu-item account-menu-item-primary"
-                        onClick={() => {
-                          if (!account?.email) return;
-                          saveConfirmedQuota(account.email, 0);
-                          setQuotaConfirmationVersion((value) => value + 1);
-                        }}
+                        onClick={() => void openUrlSafe('https://grok.com/imagine?_s=usage')}
                       >
-                        {t('quotaConfirmZero')}
+                        {t('quotaOpenWebsite')}
                       </button>
                     ) : null}
                     <button
