@@ -41,7 +41,14 @@ fn worktree_id(value: &str) -> bool {
 fn allowed_admin_args(args: &[String]) -> bool {
     let words = args.iter().map(String::as_str).collect::<Vec<_>>();
     match words.as_slice() {
-        ["--version"] | ["models"] | ["inspect", "--json"] | ["worktree", "list", "--json"] | ["worktree", "gc"] => true,
+        ["--version"]
+        | ["models"]
+        | ["inspect", "--json"]
+        | ["worktree", "list", "--json"]
+        | ["worktree", "gc"]
+        | ["worktree", "db", "stats"]
+        | ["worktree", "db", "path"]
+        | ["worktree", "db", "rebuild"] => true,
         ["worktree", "list", "--json", "--repo", repo] => !repo.is_empty() && !repo.starts_with('-'),
         ["sessions", "list", "-n", limit] => positive_limit(limit),
         ["sessions", "search", "-n", limit, "--", query] => positive_limit(limit) && !query.is_empty(),
@@ -119,6 +126,8 @@ mod tests {
         assert!(allowed_admin_args(&args(&["export", "12345678-1234-1234-1234-123456789abc", "--clipboard"])));
         assert!(allowed_admin_args(&args(&["trace", "12345678-1234-1234-1234-123456789abc", "--local", "--output", "/tmp/task.tar.gz"])));
         assert!(allowed_admin_args(&args(&["memory", "clear", "--workspace", "-y"])));
+        assert!(allowed_admin_args(&args(&["worktree", "db", "stats"])));
+        assert!(allowed_admin_args(&args(&["worktree", "db", "rebuild"])));
     }
 
     #[test]

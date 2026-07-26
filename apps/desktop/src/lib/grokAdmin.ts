@@ -117,6 +117,18 @@ export async function worktreeGc(grokCmd?: string): Promise<string> {
   return requireSuccess(await admin(['worktree', 'gc'], grokCmd), 'worktree gc') || 'gc done';
 }
 
+export async function worktreeDbStats(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['worktree', 'db', 'stats'], grokCmd), 'worktree database stats');
+}
+
+export async function worktreeDbPath(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['worktree', 'db', 'path'], grokCmd), 'worktree database path');
+}
+
+export async function worktreeDbRebuild(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['worktree', 'db', 'rebuild'], grokCmd), 'worktree database rebuild') || 'rebuilt';
+}
+
 export async function inspectProject(cwd: string, grokCmd?: string): Promise<string> {
   const result = await admin(['inspect', '--json'], grokCmd, cwd);
   const raw = output(result);

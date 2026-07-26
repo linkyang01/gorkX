@@ -5511,6 +5511,24 @@ button.pill:hover {
   border-top: 1px solid var(--glass-border-dim);
 }
 
+.worktree-maintenance {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--glass-border-dim);
+  border-radius: 10px;
+  background: var(--glass-soft);
+}
+
+.worktree-maintenance summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.worktree-maintenance .hint {
+  margin: 6px 0 8px;
+}
+
 .ext-install {
   display: flex;
   gap: 8px;

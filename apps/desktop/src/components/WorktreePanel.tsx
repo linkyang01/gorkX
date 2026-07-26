@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { worktreeGc, worktreeListJson, worktreeRemove } from '../lib/grokAdmin';
+import { worktreeDbPath, worktreeDbRebuild, worktreeDbStats, worktreeGc, worktreeListJson, worktreeRemove } from '../lib/grokAdmin';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 
@@ -155,6 +155,58 @@ export function WorktreePanel({
             {t('worktreeGc')}
           </button>
         </div>
+        <details className="worktree-maintenance">
+          <summary>{t('worktreeMaintenance')}</summary>
+          <p className="hint">{t('worktreeMaintenanceHint')}</p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                void worktreeDbStats(grokCmd || undefined)
+                  .then(setMsg)
+                  .catch((e) => setMsg(String(e)))
+                  .finally(() => setLoading(false));
+              }}
+            >
+              {t('worktreeDbStats')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={loading}
+              onClick={() => {
+                setLoading(true);
+                void worktreeDbPath(grokCmd || undefined)
+                  .then(setMsg)
+                  .catch((e) => setMsg(String(e)))
+                  .finally(() => setLoading(false));
+              }}
+            >
+              {t('worktreeDbPath')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={loading}
+              onClick={() => {
+                if (!confirm(t('worktreeDbRebuildConfirm'))) return;
+                setLoading(true);
+                void worktreeDbRebuild(grokCmd || undefined)
+                  .then((result) => {
+                    setMsg(result);
+                    return refresh();
+                  })
+                  .catch((e) => setMsg(String(e)))
+                  .finally(() => setLoading(false));
+              }}
+            >
+              {t('worktreeDbRebuild')}
+            </button>
+          </div>
+        </details>
         {msg ? <pre className="ext-msg">{msg}</pre> : null}
         <div className="ext-list" style={{ maxHeight: 400, overflow: 'auto' }}>
           {rows.length === 0 ? (

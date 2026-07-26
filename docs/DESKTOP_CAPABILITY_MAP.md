@@ -11,7 +11,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | `sessions list/search/delete` | Other sessions panel; local task search | Kernel history is searched/restored through its bounded CLI adapter; gorkX-owned task search stays local and separate. |
 | `export` | Add menu: Export transcript | Native Markdown save picker with clipboard fallback. |
 | `inspect` | Add menu: Project inspection | Read-only normalized project configuration view. |
-| `worktree list/show/rm/gc` | Worktrees panel | Creation and task association use the live kernel ACP path; removal and GC remain explicit user actions. |
+| `worktree list/show/rm/gc/db` | Worktrees panel | Creation and task association use the live kernel ACP path; removal and GC remain explicit user actions. A collapsed Maintenance area shows local index status/location and asks for confirmation before rebuilding the index from a filesystem scan. |
 | `compact`, `context`, `session-info` | Add menu: Compact; Task info panel | Reads live ACP state; no model prompt needed for task info. |
 | `trace --local` | Add menu: Export diagnostic archive | User sees a privacy notice and picks a `.tar.gz` location; gorkX permits only local archive creation and never exposes trace upload. |
 | `always-approve` | Composer permission selector | Explicit user-controlled task permission mode. |
