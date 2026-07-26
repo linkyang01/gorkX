@@ -2342,6 +2342,23 @@ function App() {
     await runDesktopAction(command, visible);
   };
 
+  /** Launch the kernel-owned evidence workflow only when ACP advertises it. */
+  const openDeepResearchAction = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const available = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '').toLowerCase() === 'deep-research',
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
+    const query = await askAction({
+      title: t('deepResearchDialogTitle'),
+      message: t('deepResearchDialogHint'),
+      placeholder: t('deepResearchDialogPlaceholder'),
+      submitLabel: t('deepResearchDialogSubmit'),
+    });
+    if (!query) return;
+    await runDesktopAction(`/deep-research ${query}`, `${t('deepResearchStarted')}: ${query}`);
+  };
+
   const openWebSourceAction = async () => {
     const url = await askAction({
       title: t('plusWebSource'),
@@ -2505,6 +2522,9 @@ function App() {
       case 'set-goal':
         setPlusMenuOpen(false);
         await openGoalAction();
+        return;
+      case 'deep-research':
+        await openDeepResearchAction();
         return;
       case 'generate-media':
         setPlusMenuOpen(false);

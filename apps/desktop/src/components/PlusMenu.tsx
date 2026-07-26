@@ -25,6 +25,7 @@ export type PlusAction =
   | { type: 'export-session' }
   | { type: 'new-task' }
   | { type: 'set-goal' }
+  | { type: 'deep-research' }
   | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'workflow'; name: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -164,6 +165,13 @@ export function PlusMenu({
       desc: t('plusGoalHint'),
       action: { type: 'set-goal' },
     },
+    ...(hasActiveSession && slashAllowed('/deep-research', availableCommandNames) ? ([{
+      kind: 'action' as const,
+      id: 'deep-research',
+      title: t('plusDeepResearch'),
+      desc: t('plusDeepResearchHint'),
+      action: { type: 'deep-research' } as PlusAction,
+    }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,
       id: 'compact',
