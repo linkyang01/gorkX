@@ -11,6 +11,7 @@ import {
   runMcpDoctor,
   setPluginEnabled,
   uninstallPlugin,
+  updatePlugin,
   type ExtensionsSnapshot,
   type SkillInfo,
 } from '../lib/extensions';
@@ -205,6 +206,12 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
               </button>
             </>
           ) : null}
+          {tab === 'plugins' ? (
+            <button type="button" className="btn btn-sm" disabled={busy || !(snap?.plugins.length)} onClick={() => {
+              setBusy(true);
+              void updatePlugin(undefined, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false));
+            }}>{t('extPluginUpdateAll')}</button>
+          ) : null}
         </div>
 
         {msg ? <pre className="ext-msg">{msg}</pre> : null}
@@ -364,6 +371,10 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill }:
                       >
                         {p.enabled ? t('pluginDisable') : t('pluginEnable')}
                       </button>
+                      <button type="button" className="btn btn-sm" disabled={busy} onClick={() => {
+                        setBusy(true);
+                        void updatePlugin(p.name, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false));
+                      }}>{t('extPluginUpdate')}</button>
                       {p.path ? (
                         <button
                           type="button"

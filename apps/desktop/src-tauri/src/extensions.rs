@@ -848,6 +848,21 @@ pub async fn extensions_plugin_uninstall(
         .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+pub async fn extensions_plugin_update(
+    name: Option<String>,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let selected = name.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || match selected {
+        Some(plugin) => run_grok_text(&bin, &["plugin", "update", &plugin]),
+        None => run_grok_text(&bin, &["plugin", "update"]),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplaceInfo {

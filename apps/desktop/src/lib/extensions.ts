@@ -92,6 +92,10 @@ export async function uninstallPlugin(name: string, grokCmd?: string): Promise<s
   });
 }
 
+export async function updatePlugin(name?: string, grokCmd?: string): Promise<string> {
+  return invoke('extensions_plugin_update', { name: name || null, grokCmd: grokCmd || null });
+}
+
 export async function fetchMarketplace(grokCmd?: string): Promise<{
   sources: unknown[];
   raw: string;

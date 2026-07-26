@@ -131,6 +131,7 @@ pub fn run() {
             extensions::extensions_plugin_install,
             extensions::extensions_plugin_set_enabled,
             extensions::extensions_plugin_uninstall,
+            extensions::extensions_plugin_update,
             extensions::extensions_marketplace,
             extensions::extensions_mcp_remove,
             terminal::terminal_create,
