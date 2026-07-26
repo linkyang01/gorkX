@@ -28,6 +28,16 @@ export function isNoiseSystem(text: string): boolean {
   return false;
 }
 
+/**
+ * ACP can replay the full first-turn envelope while loading or creating a
+ * session. That envelope includes memory plus the user request, but is not a
+ * new user message and must never appear in the transcript.
+ */
+export function isInjectedUserPromptEcho(text: string): boolean {
+  const s = sanitizeText(text);
+  return s.includes('—— 记忆上下文结束 ——') && s.includes('用户请求：');
+}
+
 /** One-line tool title for cards. */
 export function toolTitle(text: string, kind?: string, status?: string): string {
   const clean = sanitizeText(text);

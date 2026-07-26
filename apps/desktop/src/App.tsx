@@ -137,6 +137,7 @@ import {
 } from './lib/attachments';
 import { captureScreenRegion } from './lib/host';
 import { withConversationPresentation } from './lib/conversationPresentation';
+import { isInjectedUserPromptEcho } from './lib/chatFormat';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -1694,7 +1695,7 @@ function App() {
         const { kind, text } = extractUpdateText(update);
         if (kind === 'text') appendOrMerge(threadId, 'assistant', text);
         else if (kind === 'thought') appendOrMerge(threadId, 'thought', text);
-        else if (kind === 'user' && text) {
+        else if (kind === 'user' && text && !isInjectedUserPromptEcho(text)) {
           // session/load history or rare echoes — skip if same as last user line
           setThreads((prev) => {
             const th = prev.find((x) => x.id === threadId);
