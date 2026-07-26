@@ -87,6 +87,11 @@ export async function exportSessionTrace(sessionId: string, outputPath: string, 
   return outputPath;
 }
 
+/** Upload a diagnostic trace only after the desktop privacy confirmation. */
+export async function uploadSessionTrace(sessionId: string, grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['trace', sessionId, '--json'], grokCmd), 'trace upload');
+}
+
 export async function worktreeListJson(grokCmd?: string, repo?: string): Promise<unknown[]> {
   const args = ['worktree', 'list', '--json'];
   if (repo) args.push('--repo', repo);

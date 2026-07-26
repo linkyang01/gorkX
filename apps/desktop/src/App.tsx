@@ -123,6 +123,7 @@ import {
   exportSessionClipboard,
   exportSessionMarkdown,
   exportSessionTrace,
+  uploadSessionTrace,
 } from './lib/grokAdmin';
 import {
   attachmentsPromptBlock,
@@ -2747,6 +2748,26 @@ function App() {
     }
   };
 
+  /** The only remote diagnostic-transfer path: a dedicated warning and explicit user confirmation. */
+  const uploadActiveTrace = async () => {
+    if (!active?.sessionId || active.busy) return;
+    const proceed = await askAction({
+      title: t('traceUploadTitle'),
+      message: t('traceUploadHint'),
+      placeholder: t('traceUploadPlaceholder'),
+      submitLabel: t('traceUploadConfirm'),
+      allowEmpty: true,
+    });
+    if (proceed === null) return;
+    try {
+      const result = await uploadSessionTrace(active.sessionId, grokCmd || undefined);
+      appendLine(active.id, { id: nid(), role: 'system', text: `${t('traceUploadDone')}${result ? `: ${result}` : ''}` });
+      alert(t('traceUploadDone'));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const handlePlusAction = async (action: PlusAction) => {
     switch (action.type) {
       case 'attach-files':
@@ -2816,6 +2837,9 @@ function App() {
         return;
       case 'export-trace':
         await exportActiveTrace();
+        return;
+      case 'upload-trace':
+        await uploadActiveTrace();
         return;
       case 'new-task':
         selectThread(null);

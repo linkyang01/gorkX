@@ -26,6 +26,7 @@ export type PlusAction =
   | { type: 'share-session' }
   | { type: 'export-session' }
   | { type: 'export-trace' }
+  | { type: 'upload-trace' }
   | { type: 'new-task' }
   | { type: 'set-goal' }
   | { type: 'deep-research' }
@@ -325,6 +326,13 @@ export function PlusMenu({
       title: t('plusExportTrace'),
       desc: t('plusExportTraceHint'),
       action: { type: 'export-trace' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'upload-trace',
+      title: t('plusUploadTrace'),
+      desc: t('plusUploadTraceHint'),
+      action: { type: 'upload-trace' } as PlusAction,
     }] as Row[]) : []),
     {
       kind: 'action',
