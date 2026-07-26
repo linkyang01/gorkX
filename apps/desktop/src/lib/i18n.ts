@@ -205,10 +205,22 @@ const dict = {
     starterReportHint: 'Create a structured, ready-to-share document',
     starterReportPrompt:
       'Help me prepare a professional report from the material I provide. First confirm the audience, purpose, and source files. Then propose a clear outline and draft the report in Chinese, using tables where they make the result easier to scan.',
+    starterMeeting: 'Turn notes into meeting minutes',
+    starterMeetingHint: 'Extract decisions, owners, dates, and follow-ups',
+    starterMeetingPrompt:
+      'Help me turn the notes or recording transcript I provide into clear meeting minutes. First identify any missing context. Then present: key decisions, action items in a table (owner, due date, next step), risks or open questions, and a short follow-up message I can send. Do not invent people, commitments, or dates.',
+    starterEmail: 'Draft an email',
+    starterEmailHint: 'Create a ready-to-review professional draft',
+    starterEmailPrompt:
+      'Help me draft a professional email from the context and files I provide. First ask for any missing recipient, goal, tone, and constraints. Then give a subject line and a concise draft. Clearly separate facts from assumptions, and do not send anything for me.',
     starterResearch: 'Research & compare',
     starterResearchHint: 'Compare options and make a grounded recommendation',
     starterResearchPrompt:
       'Help me research and compare options for a decision. First ask what I need to decide, my constraints, and whether there are source links or files. Then present the result as a concise comparison table followed by a recommendation and its trade-offs.',
+    starterDecision: 'Prepare a decision brief',
+    starterDecisionHint: 'Compare options, risks, and a recommended next step',
+    starterDecisionPrompt:
+      'Help me prepare a decision brief from the context and files I provide. First confirm the decision owner, deadline, and evaluation criteria. Then show options in a comparison table, distinguish evidence from assumptions, identify risks and unknowns, and recommend a next step with trade-offs. Do not make the decision or take external action for me.',
     starterPlanWork: 'Plan a project',
     starterPlanWorkHint: 'Turn a goal into milestones and next actions',
     starterPlanWorkPrompt:
@@ -1394,10 +1406,22 @@ const dict = {
     starterReportHint: '生成结构清晰、可直接分享的文稿',
     starterReportPrompt:
       '请根据我提供的材料，帮我准备一份专业报告。先确认读者、用途和源文件；再给出清晰大纲并起草中文报告，在能让结果更易读时使用表格。',
+    starterMeeting: '整理会议纪要',
+    starterMeetingHint: '提取决定、负责人、日期与后续事项',
+    starterMeetingPrompt:
+      '请把我提供的会议笔记或录音转写整理为清晰的会议纪要。先指出缺失的关键信息；然后输出：关键决定、行动事项表（负责人、截止日期、下一步）、风险或待确认问题，以及一段可直接发送的会后跟进消息。不要编造人员、承诺或日期。',
+    starterEmail: '起草邮件',
+    starterEmailHint: '生成可审阅的专业邮件草稿',
+    starterEmailPrompt:
+      '请根据我提供的背景和文件起草一封专业邮件。先询问缺失的收件人、目标、语气和约束；然后给出邮件主题和简洁正文。请明确区分事实与假设，并且不要替我发送任何邮件。',
     starterResearch: '调研与对比',
     starterResearchHint: '比较选项，给出有依据的建议',
     starterResearchPrompt:
       '请帮我为一个决策调研并比较不同方案。先问清我要决定什么、有哪些限制、是否有链接或材料；再用简洁对比表呈现结果，并给出建议及其取舍。',
+    starterDecision: '准备决策简报',
+    starterDecisionHint: '比较方案、风险与建议的下一步',
+    starterDecisionPrompt:
+      '请根据我提供的背景和文件准备一份决策简报。先确认决策人、截止时间和评估标准；然后用对比表呈现方案，区分证据与假设，列出风险和未知项，并给出包含取舍的下一步建议。不要替我作决定，也不要执行外部操作。',
     starterPlanWork: '制定项目计划',
     starterPlanWorkHint: '把目标拆成里程碑与下一步',
     starterPlanWorkPrompt:

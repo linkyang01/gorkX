@@ -5116,7 +5116,10 @@ function App() {
                       [
                         ['starterSummarize', 'starterSummarizeHint', 'starterSummarizePrompt'],
                         ['starterReport', 'starterReportHint', 'starterReportPrompt'],
+                        ['starterMeeting', 'starterMeetingHint', 'starterMeetingPrompt'],
+                        ['starterEmail', 'starterEmailHint', 'starterEmailPrompt'],
                         ['starterResearch', 'starterResearchHint', 'starterResearchPrompt'],
+                        ['starterDecision', 'starterDecisionHint', 'starterDecisionPrompt'],
                         ['starterPlanWork', 'starterPlanWorkHint', 'starterPlanWorkPrompt'],
                       ],
                     ],
