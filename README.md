@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.4.4/gorkX_0.4.4_aarch64.dmg"><strong>↓ Download gorkX 0.4.4 for macOS Apple Silicon</strong></a><br />
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.5.0/gorkX_0.5.0_aarch64.dmg"><strong>↓ Download gorkX 0.5.0 Beta for macOS Apple Silicon</strong></a><br />
   <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a></sub>
 </p>
 
@@ -73,7 +73,7 @@ gorkX is useful when the output is a report, research brief, operations checklis
 
 ### Get the app
 
-**[Download gorkX 0.4.4 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v0.4.4/gorkX_0.4.4_aarch64.dmg)**, open the DMG, drag **gorkX** to Applications, then open it.
+**[Download gorkX 0.5.0 Beta for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v0.5.0/gorkX_0.5.0_aarch64.dmg)**, open the DMG, drag **gorkX** to Applications, then open it.
 
 On first launch, macOS may ask you to approve an unrecognized developer in **System Settings → Privacy & Security**. gorkX then guides you through Grok sign-in in the browser. API and compatible providers can also be configured in Settings when you have a provider key.
 
@@ -154,7 +154,7 @@ If gorkX helps, please **star the repository** and share it with someone ready t
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.4.4/gorkX_0.4.4_aarch64.dmg"><strong>↓ 下载 gorkX 0.4.4（macOS Apple Silicon）</strong></a><br />
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.5.0/gorkX_0.5.0_aarch64.dmg"><strong>↓ 下载 gorkX 0.5.0 Beta（macOS Apple Silicon）</strong></a><br />
   <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
@@ -204,7 +204,7 @@ Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目�
 
 ### 下载应用
 
-**[下载 gorkX 0.4.4（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v0.4.4/gorkX_0.4.4_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
+**[下载 gorkX 0.5.0 Beta（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v0.5.0/gorkX_0.5.0_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
 
 首次打开时，macOS 如提示开发者未被识别，可在“**系统设置 → 隐私与安全性**”中允许打开。随后应用会引导你在浏览器中登录 Grok；如你持有提供商密钥，也可以在“设置”中配置 API 或兼容提供商。
 

@@ -105,7 +105,7 @@ import {
 } from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
 
-const APP_VERSION = '0.4.4'; // keep in sync with package.json
+const APP_VERSION = '0.5.0'; // keep in sync with package.json
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
 export type SettingsSection =
