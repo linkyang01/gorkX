@@ -75,17 +75,17 @@ Local worker or hosted worker
 
 ### P3 — GitHub 与工程协作（3–4 周）
 
-**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。当前只提供用户手动输入、先验证再存入 macOS Keychain 的细粒度**只读** Token 入口，可读取当前 `origin` 的开放 PR、其 head commit 的 check-runs，以及讨论/逐行审阅评论。gorkX 不读取 `gh` 凭据、不自动推送分支，也不创建远端 PR 或发布评论；所有远端写入待官方授权与逐次确认的完整闭环后再进入产品。
+**工作**：GitHub OAuth/App 授权、仓库/PR/Checks/评论线程读取，创建分支与 PR 前的明确确认；把本地 Review 与远端 PR 关联。gorkX 已提供官方 GitHub Device Flow 主路径：打开系统浏览器、显示可复制的一次性代码、仅在内存轮询授权，成功后将令牌保存到 macOS Keychain；细粒度 Token 是高级兼容入口。两种路径都不读取 `gh` 凭据、不自动推送分支或修改本地文件。创建 PR 和发布评论都要求独立确认；仍须在测试账号完成授权、断开、远端读取与写入确认的完整人工验收。
 
-**P3.1 — 一键网页授权（已排期）**：把 Token 输入降为“高级/兼容方式”，主路径改为“连接 GitHub”→ 系统浏览器授权 → 回到 gorkX 完成连接。目标采用 **GitHub App 的最小只读权限**（Metadata、Pull requests、Checks、Issues）和仓库选择，而不是把用户的 PAT 交给 Agent。实现前置条件与安全边界：
+**P3.1 — 一键网页授权（已接线，待人工验收）**：主路径已是“连接 GitHub”→ 系统浏览器官方 Device Flow → 回到 gorkX 自动完成连接；Token 输入已降为高级/兼容方式。当前公开 OAuth App 采用 `read:user public_repo`，不含 client secret；`public_repo` 的范围宽于最小只读权限，因此授权前必须如实展示，远端写入仍逐次确认。下一阶段目标是迁移到可选择仓库、最小只读权限的 GitHub App。安全边界：
 
-1. 开发方注册公开的 GitHub App，明确仅申请只读权限；用户在 GitHub 中自行选择安装账号/组织和仓库。
-2. 纯桌面包不得包含 GitHub App private key、OAuth client secret 或长期服务凭据。无服务端时只提供 GitHub 官方 Device Flow 作为兼容回退；它会打开 GitHub 网页并显示一次性验证码。
-3. 完整“点击即浏览器授权、自动回到 App”的体验需要受控的授权回调/令牌交换服务；该服务只保存 App 凭据，不保存用户项目内容，并以短期/可刷新的用户令牌工作。桌面端只把用户令牌存入 macOS Keychain。
-4. UI 在授权前展示开发方、仓库范围和只读权限；连接后展示 GitHub 身份、授权仓库范围、最后验证时间，并支持从 gorkX 删除本地凭据与跳转 GitHub 撤销授权。
-5. 在 GitHub App 注册、隐私说明、回调服务和真实测试组织准备好之前，不能把“OAuth 连接”显示成可用，也不能把 Client ID/Secret 用占位值写入发行包。
+1. 下一阶段注册 GitHub App，明确仅申请只读权限；用户在 GitHub 中自行选择安装账号/组织和仓库。
+2. 纯桌面包不得包含 GitHub App private key、OAuth client secret 或长期服务凭据。当前 Device Flow 只包含公开 client ID，并打开 GitHub 网页显示一次性验证码。
+3. Device Flow 已实现“点击即浏览器授权、完成后自动连接”；若未来需要 GitHub App 的精细仓库安装与刷新令牌，再评估受控回调/令牌交换服务。该服务不得保存用户项目内容，桌面端令牌仍只入 macOS Keychain。
+4. UI 在授权前展示开发方、OAuth scope 与远端写入边界；连接后展示 GitHub 身份与验证状态，并支持从 gorkX 删除本地凭据。仓库选择、最后验证时间与跳转 GitHub 撤销授权属于下一阶段 GitHub App 集成，不提前伪装为已有功能。
+5. 在真实测试组织完成读取、写入确认、断开与撤销验收前，不能将 GitHub 授权写入稳定版的“已完整验证”宣传；不得将 client secret 或长期服务凭据写入发行包。
 
-**出口**：在测试仓库中，用户可通过浏览器授权并仅选择一个仓库；gorkX 可读取 PR、定位失败 CI 和评论；断开会清除 Keychain 本地令牌。授权后仍无远端写入。后续创建评论/PR 必须单独获得用户逐次确认并留下审计记录。
+**出口**：在测试公开仓库中，用户可通过浏览器授权并完成读取 PR、定位失败 CI 和评论；断开会清除 Keychain 本地令牌。创建评论/PR 必须单独获得用户逐次确认并留下审计记录。仅选择一个仓库和 GitHub 端撤销入口是下一阶段 GitHub App 的验收项。
 
 ### P4 — Browser 与 Computer（4 周）
 
