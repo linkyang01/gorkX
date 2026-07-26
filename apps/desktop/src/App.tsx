@@ -1225,29 +1225,6 @@ function App() {
     void openSkillAction(skill);
   };
 
-  /**
-   * Arm a Grok capability in the composer: user finishes the request in chat
-   * (no modal). Next Enter sends the real slash/tool line to the agent.
-   */
-  const stageCapability = useCallback((prefix: string, label: string) => {
-    const p = prefix.startsWith('/') ? prefix : `/${prefix}`;
-    const staged = p.endsWith(' ') ? p : `${p} `;
-    setPlusMenuOpen(false);
-    setSlashOpen(false);
-    setAtOpen(false);
-    setDraft(staged);
-    setCapabilityArm({ prefix: staged.trim(), label });
-    // Focus active composer textarea after paint
-    window.setTimeout(() => {
-      const el = document.querySelector(
-        '.composer textarea',
-      ) as HTMLTextAreaElement | null;
-      el?.focus();
-      const len = staged.length;
-      el?.setSelectionRange(len, len);
-    }, 30);
-  }, []);
-
   const diskSkillCommands = useMemo(() => {
     return (extSnap?.skills ?? [])
       .filter((s) => s.userInvocable)
@@ -2250,10 +2227,8 @@ function App() {
   };
 
   /**
-   * Real plan mode:
-   * 1) session/set_mode plan|default when a session exists
-   * 2) Grok TUI path: arm /plan in composer so the next chat turn enters plan mode
-   * Without a live session, only (2)+preference — createThread will set_mode on new.
+   * Plan mode is an ACP session state, not a composer command. New tasks inherit
+   * the selected default and live tasks switch through `session/set_mode`.
    */
   const changeChatMode = async (next: ChatMode) => {
     setChatMode(next);
@@ -2287,17 +2262,18 @@ function App() {
     }
 
     if (next === 'plan') {
-      // Always arm /plan in chat — Grok activates plan on the next prompt
-      stageCapability('/plan', t('modePlan'));
       if (active) {
+        if (!setModeOk) {
+          setChatMode(active.chatMode === 'plan' ? 'plan' : 'agent');
+        }
         appendLine(active.id, {
           id: nid(),
           role: 'system',
           text: setModeOk
             ? t('planModeOnHint')
             : setModeErr
-              ? `${t('planModeOnSlashFallback')} (${setModeErr})`
-              : t('planModeOnSlashFallback'),
+              ? `${t('planModeFail')}: ${setModeErr}`
+              : t('planModeFail'),
         });
       }
       return;
@@ -2305,8 +2281,10 @@ function App() {
 
     // Leave plan mode
     setCapabilityArm(null);
-    if (draft.startsWith('/plan')) setDraft('');
     if (active) {
+      if (!setModeOk) {
+        setChatMode(active.chatMode === 'plan' ? 'plan' : 'agent');
+      }
       appendLine(active.id, {
         id: nid(),
         role: 'system',
