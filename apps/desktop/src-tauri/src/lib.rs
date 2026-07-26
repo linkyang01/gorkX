@@ -134,6 +134,8 @@ pub fn run() {
             extensions::extensions_mcp_add_remote,
             extensions::extensions_mcp_add_local,
             extensions::extensions_plugin_install,
+            extensions::extensions_plugin_details,
+            extensions::extensions_plugin_validate,
             extensions::extensions_plugin_set_enabled,
             extensions::extensions_plugin_uninstall,
             extensions::extensions_plugin_update,

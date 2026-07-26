@@ -5504,6 +5504,13 @@ button.pill:hover {
   flex-shrink: 0;
 }
 
+.ext-plugin-readout {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border-dim);
+}
+
 .ext-install {
   display: flex;
   gap: 8px;

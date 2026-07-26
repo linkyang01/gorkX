@@ -9,6 +9,8 @@ import {
   addRemoteMcp,
   addLocalMcp,
   installPlugin,
+  pluginDetails,
+  validatePlugin,
   openExtensionPath,
   openGrokConfig,
   openSkillsDir,
@@ -43,6 +45,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [q, setQ] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [pluginSrc, setPluginSrc] = useState('');
+  const [pluginReadout, setPluginReadout] = useState<{ name: string; text: string; kind: 'details' | 'validate' } | null>(null);
   const [busy, setBusy] = useState(false);
   const [marketRaw, setMarketRaw] = useState('');
   const [marketSources, setMarketSources] = useState<unknown[]>([]);
@@ -444,8 +447,47 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                           {p.path}
                         </div>
                       ) : null}
+                      {pluginReadout?.name === p.name ? (
+                        <div className="ext-plugin-readout">
+                          <div className="ext-row-title">
+                            <strong>{pluginReadout.kind === 'details' ? t('extPluginDetails') : t('extPluginValidate')}</strong>
+                            <button type="button" className="btn btn-sm" onClick={() => setPluginReadout(null)}>{t('extCloseReadout')}</button>
+                          </div>
+                          <pre className="ext-msg">{pluginReadout.text}</pre>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="ext-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          void pluginDetails(p.name, grokCmd || undefined)
+                            .then((text) => setPluginReadout({ name: p.name, text, kind: 'details' }))
+                            .catch((e) => setMsg(String(e)))
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        {t('extPluginDetails')}
+                      </button>
+                      {p.path ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          disabled={busy}
+                          onClick={() => {
+                            setBusy(true);
+                            void validatePlugin(p.path!, grokCmd || undefined)
+                              .then((text) => setPluginReadout({ name: p.name, text, kind: 'validate' }))
+                              .catch((e) => setMsg(String(e)))
+                              .finally(() => setBusy(false));
+                          }}
+                        >
+                          {t('extPluginValidate')}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="btn btn-sm primary-sm"

@@ -73,6 +73,14 @@ export async function installPlugin(source: string, grokCmd?: string): Promise<s
   });
 }
 
+export async function pluginDetails(name: string, grokCmd?: string): Promise<string> {
+  return invoke('extensions_plugin_details', { name, grokCmd: grokCmd || null });
+}
+
+export async function validatePlugin(path: string, grokCmd?: string): Promise<string> {
+  return invoke('extensions_plugin_validate', { path, grokCmd: grokCmd || null });
+}
+
 export async function setPluginEnabled(
   name: string,
   enabled: boolean,

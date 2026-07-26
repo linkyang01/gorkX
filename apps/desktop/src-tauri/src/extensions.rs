@@ -764,7 +764,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{local_mcp_args, marketplace_source, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{local_mcp_args, marketplace_source, plugin_name, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -842,6 +842,13 @@ mod tests {
         assert_eq!(marketplace_source(" linkyang01/gorkX ").unwrap(), "linkyang01/gorkX");
         assert!(marketplace_source("\nhttps://example.com/market.git").is_err());
         assert!(marketplace_source("\0").is_err());
+    }
+
+    #[test]
+    fn plugin_name_is_a_bounded_single_cli_argument() {
+        assert_eq!(plugin_name(" report-tools ").unwrap(), "report-tools");
+        assert!(plugin_name("bad\nname").is_err());
+        assert!(plugin_name("-unexpected-option").is_err());
     }
 }
 
@@ -999,16 +1006,73 @@ fn run_grok_text(bin: &Path, args: &[&str]) -> Result<String, String> {
     Ok(s)
 }
 
+fn plugin_name(raw: &str) -> Result<String, String> {
+    let name = raw.trim();
+    if name.is_empty()
+        || name.len() > 160
+        || name.starts_with('-')
+        || name.contains('\0')
+        || name.contains(['\n', '\r'])
+    {
+        return Err("Enter a valid plugin name.".into());
+    }
+    Ok(name.into())
+}
+
+fn plugin_readout(raw: String) -> String {
+    const MAX_PLUGIN_READOUT: usize = 64 * 1024;
+    let clean = strip_terminal_escapes(&raw);
+    if clean.len() <= MAX_PLUGIN_READOUT {
+        clean
+    } else {
+        format!("{}\n… plugin output truncated", &clean[..MAX_PLUGIN_READOUT])
+    }
+}
+
+#[tauri::command]
+pub async fn extensions_plugin_details(
+    name: String,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let name = plugin_name(&name)?;
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || {
+        run_grok_text(&bin, &["plugin", "details", &name])
+            .map(plugin_readout)
+            .map_err(|error| plugin_readout(error))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn extensions_plugin_validate(
+    path: String,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let path = fs::canonicalize(path.trim())
+        .map_err(|_| "Plugin folder is unavailable.".to_string())?;
+    if !path.is_dir() {
+        return Err("Plugin folder is unavailable.".into());
+    }
+    let path = path.display().to_string();
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || {
+        run_grok_text(&bin, &["plugin", "validate", &path])
+            .map(plugin_readout)
+            .map_err(|error| plugin_readout(error))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn extensions_plugin_set_enabled(
     name: String,
     enabled: bool,
     grok_cmd: Option<String>,
 ) -> Result<String, String> {
-    let n = name.trim().to_string();
-    if n.is_empty() {
-        return Err("empty plugin name".into());
-    }
+    let n = plugin_name(&name)?;
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
         let sub = if enabled { "enable" } else { "disable" };
@@ -1023,10 +1087,7 @@ pub async fn extensions_plugin_uninstall(
     name: String,
     grok_cmd: Option<String>,
 ) -> Result<String, String> {
-    let n = name.trim().to_string();
-    if n.is_empty() {
-        return Err("empty plugin name".into());
-    }
+    let n = plugin_name(&name)?;
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["plugin", "uninstall", &n]))
         .await
@@ -1038,7 +1099,7 @@ pub async fn extensions_plugin_update(
     name: Option<String>,
     grok_cmd: Option<String>,
 ) -> Result<String, String> {
-    let selected = name.map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+    let selected = name.map(|value| plugin_name(&value)).transpose()?;
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || match selected {
         Some(plugin) => run_grok_text(&bin, &["plugin", "update", &plugin]),
