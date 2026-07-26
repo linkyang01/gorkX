@@ -239,7 +239,7 @@ export function PlusMenu({
       : []),
     ...(engineRows.length
       ? ([
-          { kind: 'label' as const, id: 'l-engine', title: t('plusCatWorkflows') },
+          { kind: 'label' as const, id: 'l-engine', title: t('plusCatEngine') },
           ...engineRows,
         ] as Row[])
       : []),
