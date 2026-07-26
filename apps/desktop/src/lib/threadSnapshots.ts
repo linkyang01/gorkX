@@ -1,5 +1,6 @@
 import type { ChatLine } from '../components/MessageList';
 import { attachmentFromStored, type AttachKind } from './attachments';
+import { visibleUserPrompt } from './chatFormat';
 
 export type StoredChatLine = {
   id: string;
@@ -48,7 +49,9 @@ export function snapToLines(snaps: StoredChatLine[]): ChatLine[] {
     role: (['user', 'assistant', 'thought', 'tool', 'system', 'plan', 'workflow', 'scheduled'].includes(s.role)
       ? s.role
       : 'system') as ChatLine['role'],
-    text: s.text,
+    // Historical snapshots may contain an engine-only memory/presentation
+    // envelope from older versions. Restore only the human request.
+    text: s.role === 'user' ? visibleUserPrompt(s.text) : s.text,
     toolKey: s.toolKey ?? undefined,
     parentSubagentId: s.parentSubagentId ?? undefined,
     toolStatus: s.toolStatus ?? undefined,

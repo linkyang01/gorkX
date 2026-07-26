@@ -12,6 +12,7 @@ import {
   sanitizeText,
   summarizeError,
   toolKindLabel,
+  visibleUserPrompt,
 } from '../lib/chatFormat';
 import { humanToolTitle } from '../lib/toolHuman';
 import { t } from '../lib/i18n';
@@ -183,7 +184,9 @@ function LineView({
     return <ToolRow text={line.text} status={line.toolStatus} kind={line.toolKind} />;
   }
   if (line.role === 'user') {
-    const text = sanitizeText(line.text);
+    // Also clean an already-mounted historical task; snapshot cleanup covers
+    // reloads, this path covers a task that stayed open across an upgrade.
+    const text = visibleUserPrompt(line.text);
     const atts = line.attachments || [];
     return (
       <div className="tl-row tl-user">

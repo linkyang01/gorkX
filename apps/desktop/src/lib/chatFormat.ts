@@ -38,6 +38,27 @@ export function isInjectedUserPromptEcho(text: string): boolean {
   return s.includes('—— 记忆上下文结束 ——') && s.includes('用户请求：');
 }
 
+/**
+ * Older gorkX builds persisted the complete engine-only first-turn envelope
+ * as a user line. Keep the person's request, but never render the memory or
+ * desktop presentation instructions as if they had typed them.
+ */
+export function visibleUserPrompt(text: string): string {
+  const s = sanitizeText(text);
+  if (!isInjectedUserPromptEcho(s)) return s;
+
+  const marker = '用户请求：';
+  const start = s.indexOf(marker);
+  if (start < 0) return '';
+  const afterRequest = s.slice(start + marker.length).trimStart();
+  // This exact prefix is added by withConversationPresentation(). It is
+  // engine guidance, not part of the user's message. The visible request may
+  // itself contain Markdown separators, so only cut at the known guide.
+  const guide = '\n\n---\n\ngorkX 会把回答直接呈现为可阅读的桌面结果。';
+  const guideAt = afterRequest.indexOf(guide);
+  return sanitizeText(guideAt >= 0 ? afterRequest.slice(0, guideAt) : afterRequest);
+}
+
 /** One-line tool title for cards. */
 export function toolTitle(text: string, kind?: string, status?: string): string {
   const clean = sanitizeText(text);

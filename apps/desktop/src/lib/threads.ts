@@ -2,6 +2,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { ReasoningEffort } from './acpClient';
+import { visibleUserPrompt } from './chatFormat';
 
 const LS_KEY = 'gorkx.threadMeta.v1';
 const MAX_PER_PROJECT = 48;
@@ -192,7 +193,9 @@ export async function searchThreadHistory(query: string, limit = 36): Promise<Th
       ...rowToMeta(row),
       project: row.project,
       archived: Boolean(row.archived),
-      excerpt: row.excerpt || '',
+      // Search may hit a legacy first-turn envelope. Never show its injected
+      // memory or presentation guide in a task-search result.
+      excerpt: visibleUserPrompt(row.excerpt || ''),
     }));
   } catch {
     return [];
@@ -298,7 +301,10 @@ export async function saveChatSnapshot(
       lines: lines.map((l) => ({
         id: l.id,
         role: l.role,
-        text: l.text,
+        // Do not retain an engine-only first-turn envelope once a task is
+        // saved again. This preserves the user's request while removing the
+        // old memory/presentation payload from local task history.
+        text: l.role === 'user' ? visibleUserPrompt(l.text) : l.text,
         toolKey: l.toolKey ?? null,
         parentSubagentId: l.parentSubagentId ?? null,
         toolStatus: l.toolStatus ?? null,
