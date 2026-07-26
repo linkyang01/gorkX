@@ -321,6 +321,53 @@ fn strip_seed_noise(s: &str) -> String {
         .join("\n")
 }
 
+/// Older gorkX builds wrote an internal answer-mode instruction into USER.md.
+/// It taught the engine to expose `/回答` / `/answer-mode`, which is now the
+/// opposite of the desktop-first result experience. Keep the user's file
+/// untouched, but do not inject that exact legacy scaffold into new tasks.
+///
+/// This deliberately requires both the old state-file path and command name,
+/// so a user-authored preference that merely mentions answers is retained.
+fn strip_legacy_answer_mode_template(s: &str) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    let mut kept: Vec<&str> = Vec::new();
+    let mut index = 0usize;
+    while index < lines.len() {
+        let line = lines[index];
+        let indent = line.len().saturating_sub(line.trim_start().len());
+        let starts_mode = line.trim_start().starts_with("- 回答模式")
+            || line.trim_start().starts_with("- Answer mode");
+        if !starts_mode {
+            kept.push(line);
+            index += 1;
+            continue;
+        }
+
+        let start = index;
+        index += 1;
+        while index < lines.len() {
+            let next = lines[index];
+            if next.trim().is_empty() {
+                index += 1;
+                continue;
+            }
+            let next_indent = next.len().saturating_sub(next.trim_start().len());
+            if next_indent <= indent {
+                break;
+            }
+            index += 1;
+        }
+        let block = lines[start..index].join("\n");
+        let lower = block.to_lowercase();
+        let is_legacy = lower.contains("~/.grok/answer-mode")
+            && (block.contains("/回答") || lower.contains("/answer-mode"));
+        if !is_legacy {
+            kept.extend_from_slice(&lines[start..index]);
+        }
+    }
+    kept.join("\n")
+}
+
 #[tauri::command]
 pub fn memory_status(project: Option<String>) -> Result<MemoryStatus, String> {
     let _ = ensure_memory_layout(project.as_deref())?;
@@ -469,8 +516,8 @@ pub fn memory_injection_context(project: Option<String>) -> Result<String, Strin
     let mut parts: Vec<String> = Vec::new();
     let user = std::fs::read_to_string(root.join("USER.md")).unwrap_or_default();
     let agent = std::fs::read_to_string(root.join("AGENT.md")).unwrap_or_default();
-    let u = strip_seed_noise(&user);
-    let a = strip_seed_noise(&agent);
+    let u = strip_legacy_answer_mode_template(&strip_seed_noise(&user));
+    let a = strip_legacy_answer_mode_template(&strip_seed_noise(&agent));
     // Tail-prefer: append-heavy memory keeps newest preferences in context
     if !u.is_empty() {
         parts.push(format!("【用户画像】\n{}", truncate_tail(&u, 1200)));
@@ -1055,4 +1102,25 @@ fn compact_markdown_lines(raw: &str) -> String {
         body.push('\n');
     }
     body
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_legacy_answer_mode_template;
+
+    #[test]
+    fn injection_omits_only_the_legacy_answer_mode_scaffold() {
+        let raw = "- 语言：中文\n- 回答模式：自动\n  - 切换：/回答、/answer-mode\n  - 状态文件：~/.grok/answer-mode\n  - 自动：按问题性质选择\n- 输出：优先给表格\n";
+        let cleaned = strip_legacy_answer_mode_template(raw);
+        assert!(cleaned.contains("- 语言：中文"));
+        assert!(cleaned.contains("- 输出：优先给表格"));
+        assert!(!cleaned.contains("answer-mode"));
+        assert!(!cleaned.contains("回答模式"));
+    }
+
+    #[test]
+    fn injection_keeps_an_ordinary_answer_preference() {
+        let raw = "- 回答模式：简洁\n- 输出：优先给结论\n";
+        assert_eq!(strip_legacy_answer_mode_template(raw), raw.trim_end());
+    }
 }
