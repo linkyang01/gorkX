@@ -307,6 +307,8 @@ const dict = {
     schedBackgroundRecent: 'Recent background runs',
     schedBackgroundSuccess: 'completed',
     schedBackgroundFailed: 'failed',
+    schedBackgroundContinue: 'Review and continue in a task',
+    schedBackgroundJobUnavailable: 'The original schedule is no longer available, so this result cannot be continued.',
     extNote:
       'Skills, connections, and plugins installed for this app appear here. You can browse, enable, or open them from this panel.',
     extSkills: 'Skills',
@@ -1512,6 +1514,8 @@ const dict = {
     schedBackgroundRecent: '最近后台执行',
     schedBackgroundSuccess: '已完成',
     schedBackgroundFailed: '失败',
+    schedBackgroundContinue: '审阅结果并继续处理',
+    schedBackgroundJobUnavailable: '原安排已不存在，无法在新任务中继续此结果。',
     extNote: '这里可以查看、启用或打开本机已安装的技能、连接与插件。',
     extSkills: 'Skills',
     extMcp: 'MCP',

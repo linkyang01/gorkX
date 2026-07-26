@@ -1424,6 +1424,27 @@ function App() {
     };
   };
 
+  /**
+   * Background jobs deliberately do not retain an interactive ACP session.
+   * A user may explicitly move their local result into a fresh normal task,
+   * where all usual permissions and approval cards apply again.
+   */
+  const continueBackgroundScheduledRun = (job: ScheduledJob, output: string) => {
+    if (job.projectPath) {
+      setProject(job.projectPath);
+      setRecentProjects(pushRecentProject(job.projectPath));
+      localStorage.setItem('gorkx.project', job.projectPath);
+    } else {
+      setProject('');
+      localStorage.removeItem('gorkx.project');
+    }
+    const boundedOutput = output.slice(0, 8_000);
+    const initialPrompt = `${job.prompt}\n\n[Background plan result — review it, then continue only with actions that need your confirmation]\n${boundedOutput}`;
+    window.setTimeout(() => {
+      void createThreadRef.current?.({ initialPrompt });
+    }, 150);
+  };
+
   useEffect(() => {
     const shutdown = () => {
       void stopAllAgents();
@@ -6379,6 +6400,7 @@ function App() {
         aliases={projectAliases}
         currentProject={project || undefined}
         onRunJob={runScheduledJob}
+        onContinueBackgroundRun={continueBackgroundScheduledRun}
       /></Suspense> : null}
 
       {memoryOpen ? <Suspense fallback={<DeferredPanelFallback />}><MemoryPanel

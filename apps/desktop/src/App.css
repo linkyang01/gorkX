@@ -4671,6 +4671,17 @@ button.pill:hover {
   flex-shrink: 0;
 }
 
+.sched-background-runs { display: grid; gap: 8px; margin-top: 10px; }
+.sched-background-run { padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); }
+.sched-background-run-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sched-background-run-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 12px; }
+.sched-background-run-head span { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.sched-background-run-head .ok { color: #18794e; background: rgba(24, 121, 78, .12); }
+.sched-background-run-head .failed { color: #b42318; background: rgba(180, 35, 24, .1); }
+.sched-background-run small { display: block; margin-top: 2px; color: var(--text-3); font-size: 11px; }
+.sched-background-run pre { max-height: 120px; margin: 7px 0; overflow: auto; color: var(--text-2); font: 11px/1.45 var(--mono, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sched-background-run .muted { margin: 7px 0 0; font-size: 11px; }
+
 /* Footer account chip (subscription) */
 .account-chip {
   display: flex;

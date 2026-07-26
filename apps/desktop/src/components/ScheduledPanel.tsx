@@ -28,6 +28,8 @@ interface Props {
   currentProject?: string;
   /** Called when a job should run: parent creates a task and sends the prompt */
   onRunJob: (job: ScheduledJob) => Promise<{ ok: boolean; error?: string }>;
+  /** Opens a normal, attended task from a locally stored background result. */
+  onContinueBackgroundRun: (job: ScheduledJob, output: string) => void;
 }
 
 export function ScheduledPanel({
@@ -37,6 +39,7 @@ export function ScheduledPanel({
   aliases = {},
   currentProject,
   onRunJob,
+  onContinueBackgroundRun,
 }: Props) {
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [creating, setCreating] = useState(false);
@@ -210,14 +213,26 @@ export function ScheduledPanel({
           </div>
           {backgroundMsg ? <div className="settings-row-hint" style={{ marginTop: 6 }}>{backgroundMsg}</div> : null}
           {backgroundRuns.length ? (
-            <div className="settings-row-hint" style={{ marginTop: 8 }}>
-              <div>{t('schedBackgroundRecent')}</div>
-              {backgroundRuns.slice(0, 3).map((run) => (
-                <details key={`${run.jobId}-${run.startedAt}`} style={{ marginTop: 4 }}>
-                  <summary>{`${run.title} · ${run.ok ? t('schedBackgroundSuccess') : t('schedBackgroundFailed')} · ${formatNextRun(run.startedAt)}`}</summary>
-                  <pre style={{ maxHeight: 120, overflow: 'auto', whiteSpace: 'pre-wrap', margin: '4px 0 0' }}>{run.output || '—'}</pre>
-                </details>
-              ))}
+            <div className="sched-background-runs">
+              <div className="settings-row-hint">{t('schedBackgroundRecent')}</div>
+              {backgroundRuns.slice(0, 3).map((run) => {
+                const job = jobs.find((item) => item.id === run.jobId);
+                return (
+                  <article key={`${run.jobId}-${run.startedAt}`} className="sched-background-run">
+                    <div className="sched-background-run-head">
+                      <strong>{run.title}</strong>
+                      <span className={run.ok ? 'ok' : 'failed'}>{run.ok ? t('schedBackgroundSuccess') : t('schedBackgroundFailed')}</span>
+                    </div>
+                    <small>{formatNextRun(run.startedAt)}</small>
+                    <pre>{run.output || '—'}</pre>
+                    {job ? (
+                      <button type="button" className="btn btn-sm" onClick={() => onContinueBackgroundRun(job, run.output)}>
+                        {t('schedBackgroundContinue')}
+                      </button>
+                    ) : <p className="muted">{t('schedBackgroundJobUnavailable')}</p>}
+                  </article>
+                );
+              })}
             </div>
           ) : null}
         </div>
