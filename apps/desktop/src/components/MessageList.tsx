@@ -3,8 +3,9 @@ import { MarkdownView } from './MarkdownView';
 import { extractResponseChoices, ResponseChoices } from './ResponseChoices';
 import { PlanCard } from './PlanCard';
 import { WorkflowCard } from './WorkflowCard';
+import { KernelScheduleCard } from './KernelScheduleCard';
 import { AttachmentStrip } from './AttachmentStrip';
-import type { PlanEntry, WorkflowRunUpdate } from '../lib/acpClient';
+import type { KernelScheduledTaskUpdate, PlanEntry, WorkflowRunUpdate } from '../lib/acpClient';
 import type { ComposerAttachment } from '../lib/attachments';
 import {
   isNoiseSystem,
@@ -18,7 +19,7 @@ import { IconThought, IconTool, IconSystem, IconWarning } from './UiIcons';
 
 export interface ChatLine {
   id: string;
-  role: 'user' | 'assistant' | 'thought' | 'tool' | 'system' | 'plan' | 'workflow';
+  role: 'user' | 'assistant' | 'thought' | 'tool' | 'system' | 'plan' | 'workflow' | 'scheduled';
   text: string;
   toolKey?: string;
   /** Native parent task id when Grok Build reports nested subagent work. */
@@ -29,6 +30,8 @@ export interface ChatLine {
   attachments?: ComposerAttachment[];
   /** Live workflow projection; restored snapshots retain the plain summary. */
   workflow?: WorkflowRunUpdate;
+  /** Live scheduler projection; restored snapshots retain plain text only. */
+  scheduledTask?: KernelScheduledTaskUpdate;
 }
 
 interface Props {
@@ -48,6 +51,8 @@ interface Props {
   followUps?: string[];
   onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
   workflowActionDisabled?: boolean;
+  onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
+  scheduledTaskDeleteDisabled?: boolean;
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -120,6 +125,8 @@ function LineView({
   choiceDisabled,
   onWorkflowAction,
   workflowActionDisabled,
+  onScheduledTaskDelete,
+  scheduledTaskDeleteDisabled,
 }: {
   line: ChatLine;
   onTogglePlanEntry: (lineId: string, entryId: string) => void;
@@ -129,6 +136,8 @@ function LineView({
   choiceDisabled?: boolean;
   onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
   workflowActionDisabled?: boolean;
+  onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
+  scheduledTaskDeleteDisabled?: boolean;
 }) {
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
     return (
@@ -149,6 +158,17 @@ function LineView({
           fallback={line.text}
           onAction={line.workflow ? (action) => onWorkflowAction?.(line.workflow!, action) : undefined}
           actionDisabled={workflowActionDisabled}
+        />
+      </div>
+    );
+  }
+  if (line.role === 'scheduled') {
+    return (
+      <div className="tl-row tl-assistant">
+        <KernelScheduleCard
+          task={line.scheduledTask}
+          onDelete={line.scheduledTask ? onScheduledTaskDelete : undefined}
+          deleteDisabled={scheduledTaskDeleteDisabled}
         />
       </div>
     );
@@ -206,6 +226,8 @@ export function MessageList({
   followUps = [],
   onWorkflowAction,
   workflowActionDisabled = false,
+  onScheduledTaskDelete,
+  scheduledTaskDeleteDisabled = false,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -214,7 +236,7 @@ export function MessageList({
   const visible = showProcessInChat
     ? lines
     : lines.filter(
-        (l) => l.role === 'user' || l.role === 'assistant' || l.role === 'plan' || l.role === 'workflow',
+        (l) => l.role === 'user' || l.role === 'assistant' || l.role === 'plan' || l.role === 'workflow' || l.role === 'scheduled',
       );
 
   const onScroll = () => {
@@ -268,6 +290,8 @@ export function MessageList({
                 choiceDisabled={choiceDisabled}
                 onWorkflowAction={onWorkflowAction}
                 workflowActionDisabled={workflowActionDisabled}
+                onScheduledTaskDelete={onScheduledTaskDelete}
+                scheduledTaskDeleteDisabled={scheduledTaskDeleteDisabled}
               />
             </div>
           );

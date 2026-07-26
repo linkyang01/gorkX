@@ -45,7 +45,7 @@ function attachmentsFromJson(raw: string | null | undefined) {
 export function snapToLines(snaps: StoredChatLine[]): ChatLine[] {
   return snaps.map((s) => ({
     id: s.id,
-    role: (['user', 'assistant', 'thought', 'tool', 'system', 'plan', 'workflow'].includes(s.role)
+    role: (['user', 'assistant', 'thought', 'tool', 'system', 'plan', 'workflow', 'scheduled'].includes(s.role)
       ? s.role
       : 'system') as ChatLine['role'],
     text: s.text,

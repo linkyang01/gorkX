@@ -19,6 +19,8 @@ import {
   parsePlanUpdate,
   parseSubagentUpdate,
   parseWorkflowUpdate,
+  parseKernelScheduledTaskDeletion,
+  parseKernelScheduledTaskUpdate,
   isToolCallIdLike,
   parseToolUpdate,
   permissionResult,
@@ -40,6 +42,7 @@ import {
   type HooksSnapshot,
   type AvailableCommandInfo,
   type WorkflowRunUpdate,
+  type KernelScheduledTaskUpdate,
   type SessionUpdate,
   type UserQuestionAnswers,
   type UserQuestionAnnotations,
@@ -723,6 +726,17 @@ function App() {
       throw new Error(t('workflowManagementUnavailable'));
     }
     await live.client.prompt(live.sessionId, `/workflow ${action} ${workflow.name}`);
+  }, []);
+
+  const deleteKernelScheduledTask = useCallback(async (task: KernelScheduledTaskUpdate) => {
+    const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+    if (!live?.client || !live.sessionId) return;
+    const deleted = await live.client.deleteScheduledTask(live.sessionId, task.taskId);
+    if (deleted) {
+      setThreads((previous) => previous.map((thread) => thread.id === live.id
+        ? { ...thread, lines: thread.lines.filter((line) => line.toolKey !== `scheduled:${task.taskId}`) }
+        : thread));
+    }
   }, []);
 
   useEffect(() => {
@@ -1724,6 +1738,37 @@ function App() {
       };
 
       client.onNotification = (method, rawParams) => {
+        if (method === 'x.ai/scheduled_task_created' || method === '_x.ai/scheduled_task_created' || method === 'x.ai/scheduled_task_fired' || method === '_x.ai/scheduled_task_fired') {
+          const task = parseKernelScheduledTaskUpdate(rawParams);
+          if (!task) return;
+          setThreads((previous) => previous.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            const key = `scheduled:${task.taskId}`;
+            const summary = `${task.humanSchedule} · ${task.prompt}`;
+            const existing = thread.lines.findIndex((line) => line.toolKey === key);
+            const next: ChatLine = {
+              id: existing >= 0 ? thread.lines[existing].id : nid(),
+              role: 'scheduled',
+              text: summary,
+              toolKey: key,
+              toolStatus: task.status,
+              scheduledTask: task,
+            };
+            const lines = [...thread.lines];
+            if (existing >= 0) lines[existing] = next;
+            else lines.push(next);
+            return { ...thread, lines };
+          }));
+          return;
+        }
+        if (method === 'x.ai/scheduled_task_deleted' || method === '_x.ai/scheduled_task_deleted') {
+          const taskId = parseKernelScheduledTaskDeletion(rawParams);
+          if (!taskId) return;
+          setThreads((previous) => previous.map((thread) => thread.id === threadId
+            ? { ...thread, lines: thread.lines.filter((line) => line.toolKey !== `scheduled:${taskId}`) }
+            : thread));
+          return;
+        }
         if (method === 'x.ai/follow_ups' || method === '_x.ai/follow_ups') {
           const next = readFollowUps(rawParams);
           if (next) {
@@ -5611,6 +5656,14 @@ function App() {
                 });
               })}
               workflowActionDisabled={!workflowManagementAvailable || active.busy}
+              onScheduledTaskDelete={(task) => void deleteKernelScheduledTask(task).catch((error) => {
+                appendLine(active.id, {
+                  id: nid(),
+                  role: 'system',
+                  text: error instanceof Error ? error.message : String(error),
+                });
+              })}
+              scheduledTaskDeleteDisabled={active.busy}
               footer={
                 userQuestionReq && userQuestionAgentId === active.id ? (
                   <UserQuestionPrompt

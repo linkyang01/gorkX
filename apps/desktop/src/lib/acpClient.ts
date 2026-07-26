@@ -83,6 +83,16 @@ export interface AvailableCommandInfo {
   workflowPath?: string;
 }
 
+/** A kernel-owned recurring task announced through its scheduler extension. */
+export interface KernelScheduledTaskUpdate {
+  taskId: string;
+  prompt: string;
+  humanSchedule: string;
+  nextFireAt?: string;
+  status: 'created' | 'fired';
+  subagentId?: string;
+}
+
 /** A real kernel-level copy of a local session, returned by `_x.ai/session/fork`. */
 export interface ForkSessionResult {
   newSessionId: string;
@@ -224,6 +234,42 @@ function parseAvailableCommands(raw: unknown): AvailableCommandInfo[] {
       ...(workflowPath ? { workflowPath } : {}),
     }];
   }).slice(0, 128);
+}
+
+/** Normalize the documented scheduler notification before rendering it. */
+export function parseKernelScheduledTaskUpdate(raw: unknown): KernelScheduledTaskUpdate | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const outer = raw as Record<string, unknown>;
+  const update = outer.update && typeof outer.update === 'object'
+    ? outer.update as Record<string, unknown>
+    : outer;
+  const event = commandText(update.sessionUpdate, 64);
+  if (event !== 'scheduled_task_created' && event !== 'scheduled_task_fired') return null;
+  const taskId = commandText(update.taskId ?? update.task_id, 160);
+  const prompt = commandText(update.prompt, 2_000);
+  const humanSchedule = commandText(update.humanSchedule ?? update.human_schedule, 160);
+  if (!taskId || !prompt || !humanSchedule) return null;
+  const nextFireAt = commandText(update.nextFireAt ?? update.next_fire_at, 128);
+  const subagentId = commandText(update.subagentId ?? update.subagent_id, 160);
+  return {
+    taskId,
+    prompt,
+    humanSchedule,
+    ...(nextFireAt ? { nextFireAt } : {}),
+    status: event === 'scheduled_task_created' ? 'created' : 'fired',
+    ...(subagentId ? { subagentId } : {}),
+  };
+}
+
+/** Extract the bounded task ID from a scheduler deletion notification. */
+export function parseKernelScheduledTaskDeletion(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const outer = raw as Record<string, unknown>;
+  const update = outer.update && typeof outer.update === 'object'
+    ? outer.update as Record<string, unknown>
+    : outer;
+  if (commandText(update.sessionUpdate, 64) !== 'scheduled_task_deleted') return null;
+  return commandText(update.taskId ?? update.task_id, 160) || null;
 }
 
 const workflowText = (value: unknown, max: number) =>
@@ -1324,6 +1370,22 @@ export class AcpClient {
       | HooksSnapshot
       | { result?: HooksSnapshot };
     return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
+  }
+
+  /** Delete a real Grok Build scheduler task by its server-provided ID. */
+  async deleteScheduledTask(sessionId: string, taskId: string): Promise<boolean> {
+    const params = { sessionId, taskId };
+    let raw: unknown;
+    try {
+      raw = await this.request('x.ai/scheduler/delete', params, 15_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('_x.ai/scheduler/delete', params, 15_000);
+    }
+    const value = raw && typeof raw === 'object' && 'result' in raw && (raw as { result?: unknown }).result
+      ? (raw as { result: unknown }).result
+      : raw;
+    return Boolean(value && typeof value === 'object' && (value as { deleted?: unknown }).deleted);
   }
 
   /**
