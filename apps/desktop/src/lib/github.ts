@@ -6,7 +6,23 @@ export interface GithubStatus {
   connected: boolean;
   login: string | null;
   error: string | null;
+  authMethod: 'oauth' | 'token' | null;
   note: string;
+}
+
+export interface GithubOAuthStart {
+  attemptId: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string | null;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface GithubOAuthPoll {
+  status: 'pending' | 'connected' | 'cancelled' | 'expired' | 'error';
+  github: GithubStatus | null;
+  message: string | null;
 }
 
 export interface GithubPullRequest {
@@ -61,6 +77,9 @@ export interface GithubCreatedIssueComment {
 }
 
 export const githubStatus = () => invoke<GithubStatus>('github_status');
+export const githubStartOauth = () => invoke<GithubOAuthStart>('github_start_oauth');
+export const githubPollOauth = (attemptId: string) =>
+  invoke<GithubOAuthPoll>('github_poll_oauth', { attemptId });
 export const githubConnectReadonly = (token: string) =>
   invoke<GithubStatus>('github_connect_readonly', { token });
 export const githubTestConnection = () => invoke<GithubStatus>('github_test_connection');

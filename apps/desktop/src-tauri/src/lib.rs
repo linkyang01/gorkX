@@ -108,6 +108,8 @@ pub fn run() {
             git_panel::git_stage,
             git_panel::git_unstage,
             github::github_status,
+            github::github_start_oauth,
+            github::github_poll_oauth,
             github::github_connect_readonly,
             github::github_test_connection,
             github::github_disconnect,

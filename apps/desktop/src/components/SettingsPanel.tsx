@@ -72,11 +72,14 @@ import {
   githubListPrComments,
   githubListOpenPrs,
   githubStatus as fetchGithubStatus,
+  githubPollOauth,
+  githubStartOauth,
   githubTestConnection,
   type GithubCheckRun,
   type GithubComment,
   type GithubPullRequest,
   type GithubStatus,
+  type GithubOAuthStart,
 } from '../lib/github';
 import {
   fetchSubagentsConfig,
@@ -311,6 +314,7 @@ export function SettingsPanel({
   const [githubChecks, setGithubChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [githubComments, setGithubComments] = useState<Record<number, GithubComment[]>>({});
   const [githubBusy, setGithubBusy] = useState(false);
+  const [githubOauth, setGithubOauth] = useState<GithubOAuthStart | null>(null);
   const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
   const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
@@ -445,6 +449,63 @@ export function SettingsPanel({
   const connectGithub = async () => {
     const next = await withGithub(() => githubConnectReadonly(githubToken));
     if (next?.connected) setGithubToken('');
+  };
+
+  const pollGithubOauth = async (flow: GithubOAuthStart) => {
+    try {
+      const maxAttempts = Math.max(1, Math.ceil(flow.expiresIn / flow.interval));
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, flow.interval * 1000));
+        const result = await githubPollOauth(flow.attemptId);
+        if (result.status === 'pending') continue;
+        if (result.status === 'connected' && result.github) {
+          setGithub(result.github);
+          setMsg(result.github.note);
+        } else {
+          setMsg(result.message || t('githubOauthFailed'));
+        }
+        setGithubOauth(null);
+        return;
+      }
+      setGithubOauth(null);
+      setMsg(t('githubOauthExpired'));
+    } catch (error) {
+      setGithubOauth(null);
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  const connectGithubWithBrowser = async () => {
+    setGithubBusy(true);
+    try {
+      const flow = await githubStartOauth();
+      setGithubOauth(flow);
+      await openUrlSafe(flow.verificationUriComplete || flow.verificationUri);
+      setMsg(t('githubOauthOpened'));
+      void pollGithubOauth(flow);
+    } catch (error) {
+      setGithubBusy(false);
+      setMsg(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const copyGithubOauthCode = async () => {
+    if (!githubOauth) return;
+    try {
+      await navigator.clipboard.writeText(githubOauth.userCode);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = githubOauth.userCode;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    setMsg(t('githubOauthCopied'));
   };
 
   const loadGithubPrs = async () => {
@@ -1947,6 +2008,24 @@ export function SettingsPanel({
                 </div>
                 {!github?.configured ? (
                   <>
+                    <div className="settings-card muted-block" style={{ marginTop: 10 }}>
+                      <div className="settings-row-title">{t('githubOauthTitle')}</div>
+                      <p className="settings-row-hint" style={{ marginTop: 6 }}>{t('githubOauthHint')}</p>
+                      {githubOauth ? (
+                        <div className="settings-row-hint" style={{ marginTop: 9 }}>
+                          {t('githubOauthCode')}: <strong>{githubOauth.userCode}</strong>
+                          <br />
+                          {t('githubOauthWaiting')}
+                        </div>
+                      ) : null}
+                      <div className="field-row" style={{ marginTop: 9 }}>
+                        <button type="button" className="btn primary" disabled={githubBusy} onClick={() => void connectGithubWithBrowser()}>
+                          {githubBusy ? t('githubOauthWaiting') : t('githubOauthConnect')}
+                        </button>
+                        {githubOauth ? <button type="button" className="btn" onClick={() => void openUrlSafe(githubOauth.verificationUriComplete || githubOauth.verificationUri)}>{t('githubOauthOpen')}</button> : null}
+                        {githubOauth ? <button type="button" className="btn" onClick={() => void copyGithubOauthCode()}>{t('githubOauthCopy')}</button> : null}
+                      </div>
+                    </div>
                     <div className="settings-card muted-block" style={{ marginTop: 10 }}>
                       <div className="settings-row-title">{t('githubTokenGuideTitle')}</div>
                       <ol className="settings-list" style={{ marginTop: 7 }}>

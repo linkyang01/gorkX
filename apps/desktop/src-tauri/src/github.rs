@@ -6,12 +6,31 @@
 //! confirmed actions in the UI.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 const KEYCHAIN_SERVICE: &str = "com.gorkx.github";
 const KEYCHAIN_ACCOUNT: &str = "read-token";
 const API: &str = "https://api.github.com";
+const GITHUB_OAUTH_CLIENT_ID: &str = "Ov23livbHzJdiRnxlavV";
+const GITHUB_OAUTH_SCOPES: &str = "read:user public_repo";
+const DEVICE_FLOW_URL: &str = "https://github.com/login/device/code";
+const DEVICE_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+
+#[derive(Debug)]
+struct PendingOAuth {
+    device_code: String,
+    expires_at: Instant,
+    next_poll_at: Instant,
+}
+
+static PENDING_OAUTH: LazyLock<Mutex<HashMap<String, PendingOAuth>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static OAUTH_ATTEMPT_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +39,51 @@ pub struct GithubStatus {
     pub connected: bool,
     pub login: Option<String>,
     pub error: Option<String>,
+    pub auth_method: Option<String>,
     pub note: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubOAuthStart {
+    pub attempt_id: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub verification_uri_complete: Option<String>,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubOAuthPoll {
+    pub status: String,
+    pub github: Option<GithubStatus>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubDeviceCodeResponse {
+    device_code: String,
+    user_code: String,
+    verification_uri: String,
+    #[serde(default)]
+    verification_uri_complete: Option<String>,
+    expires_in: u64,
+    #[serde(default)]
+    interval: u64,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubDeviceTokenResponse {
+    #[serde(default)]
+    access_token: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
+    error_description: Option<String>,
+    #[serde(default)]
+    interval: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -231,11 +294,142 @@ fn whoami(token: &str) -> Result<String, String> {
         .ok_or_else(|| "GitHub response has no login".into())
 }
 
+fn auth_method(token: &str) -> String {
+    if token.starts_with("gho_") {
+        "oauth".into()
+    } else {
+        "token".into()
+    }
+}
+
+fn connected_status(token: &str, login: String, note: impl Into<String>) -> GithubStatus {
+    GithubStatus {
+        configured: true,
+        connected: true,
+        login: Some(login),
+        error: None,
+        auth_method: Some(auth_method(token)),
+        note: note.into(),
+    }
+}
+
+fn oauth_error(response: &GithubDeviceTokenResponse) -> String {
+    response
+        .error_description
+        .clone()
+        .or_else(|| response.error.clone())
+        .unwrap_or_else(|| "GitHub did not return an access token.".into())
+}
+
+#[tauri::command]
+pub fn github_start_oauth() -> Result<GithubOAuthStart, String> {
+    let response = client()?
+        .post(DEVICE_FLOW_URL)
+        .header("Accept", "application/json")
+        .form(&[("client_id", GITHUB_OAUTH_CLIENT_ID), ("scope", GITHUB_OAUTH_SCOPES)])
+        .send()
+        .map_err(|e| format!("GitHub authorization could not start: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("GitHub authorization could not start (HTTP {}).", response.status()));
+    }
+    let body: GithubDeviceCodeResponse = response
+        .json()
+        .map_err(|e| format!("GitHub authorization response: {e}"))?;
+    if body.device_code.is_empty() || body.user_code.is_empty() || body.verification_uri.is_empty() {
+        return Err("GitHub authorization response is incomplete.".into());
+    }
+    let interval = body.interval.max(5);
+    let nonce = OAUTH_ATTEMPT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let attempt_id = format!("{}-{nonce}", chrono::Utc::now().timestamp_millis());
+    let now = Instant::now();
+    let mut pending = PENDING_OAUTH
+        .lock()
+        .map_err(|_| "GitHub authorization state is unavailable.".to_string())?;
+    pending.retain(|_, value| value.expires_at > now);
+    pending.insert(
+        attempt_id.clone(),
+        PendingOAuth {
+            device_code: body.device_code,
+            expires_at: now + Duration::from_secs(body.expires_in),
+            next_poll_at: now + Duration::from_secs(interval),
+        },
+    );
+    Ok(GithubOAuthStart {
+        attempt_id,
+        user_code: body.user_code,
+        verification_uri: body.verification_uri,
+        verification_uri_complete: body.verification_uri_complete,
+        expires_in: body.expires_in,
+        interval,
+    })
+}
+
+#[tauri::command]
+pub fn github_poll_oauth(attempt_id: String) -> Result<GithubOAuthPoll, String> {
+    let now = Instant::now();
+    let device_code = {
+        let mut pending = PENDING_OAUTH
+            .lock()
+            .map_err(|_| "GitHub authorization state is unavailable.".to_string())?;
+        let Some(flow) = pending.get_mut(&attempt_id) else {
+            return Ok(GithubOAuthPoll { status: "expired".into(), github: None, message: Some("This GitHub authorization request has expired. Start again.".into()) });
+        };
+        if flow.expires_at <= now {
+            pending.remove(&attempt_id);
+            return Ok(GithubOAuthPoll { status: "expired".into(), github: None, message: Some("This GitHub authorization request has expired. Start again.".into()) });
+        }
+        if flow.next_poll_at > now {
+            return Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None });
+        }
+        flow.next_poll_at = now + Duration::from_secs(5);
+        flow.device_code.clone()
+    };
+    let response = client()?
+        .post(DEVICE_TOKEN_URL)
+        .header("Accept", "application/json")
+        .form(&[
+            ("client_id", GITHUB_OAUTH_CLIENT_ID),
+            ("device_code", device_code.as_str()),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+        ])
+        .send()
+        .map_err(|e| format!("GitHub authorization check failed: {e}"))?;
+    let body: GithubDeviceTokenResponse = response
+        .json()
+        .map_err(|e| format!("GitHub authorization response: {e}"))?;
+    if let Some(token) = body.access_token.as_deref().filter(|token| !token.trim().is_empty()) {
+        let login = whoami(&token)?;
+        token_store(&token)?;
+        PENDING_OAUTH.lock().ok().and_then(|mut pending| pending.remove(&attempt_id));
+        return Ok(GithubOAuthPoll {
+            status: "connected".into(),
+            github: Some(connected_status(&token, login, "GitHub connected with browser authorization.")),
+            message: None,
+        });
+    }
+    match body.error.as_deref() {
+        Some("authorization_pending") => Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None }),
+        Some("slow_down") => {
+            if let Ok(mut pending) = PENDING_OAUTH.lock() {
+                if let Some(flow) = pending.get_mut(&attempt_id) {
+                    flow.next_poll_at = Instant::now() + Duration::from_secs(body.interval.unwrap_or(10).max(10));
+                }
+            }
+            Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None })
+        }
+        Some("expired_token") | Some("access_denied") => {
+            PENDING_OAUTH.lock().ok().and_then(|mut pending| pending.remove(&attempt_id));
+            Ok(GithubOAuthPoll { status: "cancelled".into(), github: None, message: Some(oauth_error(&body)) })
+        }
+        _ => Ok(GithubOAuthPoll { status: "error".into(), github: None, message: Some(oauth_error(&body)) }),
+    }
+}
+
 #[tauri::command]
 pub fn github_status() -> GithubStatus {
     match token_read() {
-        Some(_) => GithubStatus { configured: true, connected: false, login: None, error: None, note: "A GitHub token is stored in macOS Keychain. Test it before reading repository data.".into() },
-        None => GithubStatus { configured: false, connected: false, login: None, error: None, note: "No GitHub token configured. Public repository reads are available anonymously; private repositories require a read-only token.".into() },
+        Some(token) => GithubStatus { configured: true, connected: false, login: None, error: None, auth_method: Some(auth_method(&token)), note: "GitHub authorization is stored in macOS Keychain. Test it before reading repository data.".into() },
+        None => GithubStatus { configured: false, connected: false, login: None, error: None, auth_method: None, note: "No GitHub authorization configured. Public repository reads are available anonymously; private repositories require a fine-grained token.".into() },
     }
 }
 
@@ -247,7 +441,7 @@ pub fn github_connect_readonly(token: String) -> Result<GithubStatus, String> {
     }
     let login = whoami(token)?;
     token_store(token)?;
-    Ok(GithubStatus { configured: true, connected: true, login: Some(login), error: None, note: "Connected with a user-provided token. gorkX currently performs read-only GitHub requests.".into() })
+    Ok(connected_status(token, login, "Connected with a user-provided token."))
 }
 
 #[tauri::command]
@@ -256,18 +450,13 @@ pub fn github_test_connection() -> GithubStatus {
         return github_status();
     };
     match whoami(&token) {
-        Ok(login) => GithubStatus {
-            configured: true,
-            connected: true,
-            login: Some(login),
-            error: None,
-            note: "GitHub read-only connection verified.".into(),
-        },
+        Ok(login) => connected_status(&token, login, "GitHub connection verified."),
         Err(error) => GithubStatus {
             configured: true,
             connected: false,
             login: None,
             error: Some(error),
+            auth_method: Some(auth_method(&token)),
             note: "Stored token could not be verified. Replace or disconnect it.".into(),
         },
     }
