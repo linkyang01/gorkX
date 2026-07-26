@@ -1364,12 +1364,25 @@ export class AcpClient {
 
   async manageHooks(
     sessionId: string,
-    action: { type: 'reload' | 'trust' | 'untrust' } | { type: 'enable' | 'disable'; hookName: string },
+    action:
+      | { type: 'reload' | 'trust' | 'untrust' }
+      | { type: 'enable' | 'disable'; hookName: string }
+      | { type: 'add' | 'remove'; path: string },
   ): Promise<HooksSnapshot> {
-    const raw = (await this.request('_x.ai/hooks/action', { sessionId, action }, 15_000)) as
-      | HooksSnapshot
-      | { result?: HooksSnapshot };
-    return ('result' in raw && raw.result ? raw.result : raw) as HooksSnapshot;
+    // The extension returns an ActionOutcome, not a HooksSnapshot. Refresh the
+    // actual kernel inventory after a successful action rather than treating a
+    // success message as hook data.
+    const raw = await this.request('_x.ai/hooks/action', { sessionId, action }, 15_000);
+    const outcome = raw && typeof raw === 'object' && 'result' in raw && (raw as { result?: unknown }).result
+      ? (raw as { result: unknown }).result
+      : raw;
+    if (outcome && typeof outcome === 'object' && 'status' in outcome) {
+      const value = outcome as { status?: unknown; message?: unknown };
+      if (String(value.status || '').toLowerCase() !== 'success') {
+        throw new Error(typeof value.message === 'string' ? value.message : 'Hook action was not accepted by Grok Build.');
+      }
+    }
+    return this.listHooks(sessionId);
   }
 
   /** Delete a real Grok Build scheduler task by its server-provided ID. */

@@ -128,7 +128,8 @@ export interface ArchivedTaskRow {
 
 export type HookManagementAction =
   | { type: 'reload' | 'trust' | 'untrust' }
-  | { type: 'enable' | 'disable'; hookName: string };
+  | { type: 'enable' | 'disable'; hookName: string }
+  | { type: 'add' | 'remove'; path: string };
 
 interface Props {
   open: boolean;
@@ -383,6 +384,16 @@ export function SettingsPanel({
       .then(setHooksSnap)
       .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
       .finally(() => setHooksBusy(false));
+  };
+
+  const addHookPath = async (directory: boolean) => {
+    if (!onManageHooks) return;
+    const selected = await open({
+      multiple: false,
+      directory,
+      filters: directory ? undefined : [{ name: 'Hook definition', extensions: ['json'] }],
+    });
+    if (typeof selected === 'string' && selected.trim()) manageHooks({ type: 'add', path: selected });
   };
 
   const refreshBrowser = async () => {
@@ -1826,6 +1837,11 @@ export function SettingsPanel({
                       </button>
                       <button type="button" className="btn" disabled={hooksBusy || !hooksSnap} onClick={() => manageHooks({ type: 'reload' })}>{t('settingsHooksReload')}</button>
                     </div>
+                    <div className="field-row" style={{ marginTop: 10 }}>
+                      <button type="button" className="btn" disabled={hooksBusy} onClick={() => void addHookPath(false)}>{t('settingsHooksAddFile')}</button>
+                      <button type="button" className="btn" disabled={hooksBusy} onClick={() => void addHookPath(true)}>{t('settingsHooksAddFolder')}</button>
+                    </div>
+                    <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsHooksAddHint')}</p>
                     {hooksSnap ? (
                       <>
                         <p className="settings-row-hint" style={{ marginTop: 10 }}>
@@ -1843,15 +1859,28 @@ export function SettingsPanel({
                                   <div className="settings-row-hint">
                                     {hook.event}{hook.matcher ? ` · ${hook.matcher}` : ''}
                                   </div>
+                                  <div className="settings-row-hint">{hook.sourceDir}</div>
                                 </div>
-                                <button
-                                  type="button"
-                                  className={`btn${hook.disabled ? '' : ' primary'}`}
-                                  disabled={hooksBusy}
-                                  onClick={() => manageHooks({ type: hook.disabled ? 'enable' : 'disable', hookName: hook.name })}
-                                >
-                                  {hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}
-                                </button>
+                                <div className="field-row">
+                                  <button
+                                    type="button"
+                                    className={`btn${hook.disabled ? '' : ' primary'}`}
+                                    disabled={hooksBusy}
+                                    onClick={() => manageHooks({ type: hook.disabled ? 'enable' : 'disable', hookName: hook.name })}
+                                  >
+                                    {hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn danger"
+                                    disabled={hooksBusy || !hook.sourceDir}
+                                    onClick={() => {
+                                      if (window.confirm(t('settingsHooksRemoveConfirm').replace('{path}', hook.sourceDir))) manageHooks({ type: 'remove', path: hook.sourceDir });
+                                    }}
+                                  >
+                                    {t('settingsHooksRemove')}
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
