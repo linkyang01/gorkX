@@ -164,6 +164,10 @@ import { PermissionPrompt } from './components/PermissionPrompt';
 import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
 import { FolderTrustPrompt } from './components/FolderTrustPrompt';
+import {
+  ApprovalInboxPanel,
+  type ApprovalInboxRow,
+} from './components/ApprovalInboxPanel';
 import { RewindDialog } from './components/RewindDialog';
 import { BtwCard, type BtwCardState } from './components/BtwCard';
 import { AppBanners } from './components/AppBanners';
@@ -276,6 +280,12 @@ interface Thread {
   /** Active /goal for this task (banner + persist; agent owns execution) */
   sessionGoal?: SessionGoal | null;
 }
+
+type PendingApproval =
+  | { key: string; kind: 'permission'; threadId: string; createdAt: number; request: PermissionRequest }
+  | { key: string; kind: 'question'; threadId: string; createdAt: number; request: UserQuestionRequest }
+  | { key: string; kind: 'plan'; threadId: string; createdAt: number; request: PlanApprovalRequest }
+  | { key: string; kind: 'trust'; threadId: string; createdAt: number; request: FolderTrustRequest };
 
 /** Bounded, server-provided follow-up chips for one task's latest response. */
 type FollowUpState = {
@@ -497,17 +507,10 @@ function App() {
     prefix: string;
     label: string;
   } | null>(null);
-  const [permReq, setPermReq] = useState<PermissionRequest | null>(null);
-  const [permAgentId, setPermAgentId] = useState<string | null>(null);
-  const [userQuestionReq, setUserQuestionReq] = useState<UserQuestionRequest | null>(null);
-  const [userQuestionAgentId, setUserQuestionAgentId] = useState<string | null>(null);
-  const userQuestionAgentRef = useRef<string | null>(null);
-  const [planApprovalReq, setPlanApprovalReq] = useState<PlanApprovalRequest | null>(null);
-  const [planApprovalAgentId, setPlanApprovalAgentId] = useState<string | null>(null);
-  const planApprovalAgentRef = useRef<string | null>(null);
-  const [folderTrustReq, setFolderTrustReq] = useState<FolderTrustRequest | null>(null);
-  const [folderTrustAgentId, setFolderTrustAgentId] = useState<string | null>(null);
-  const folderTrustAgentRef = useRef<string | null>(null);
+  /** Outstanding, live ACP decisions across every connected task. */
+  const [approvalQueue, setApprovalQueue] = useState<PendingApproval[]>([]);
+  const [activeApprovalKey, setActiveApprovalKey] = useState<string | null>(null);
+  const [approvalInboxOpen, setApprovalInboxOpen] = useState(false);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -681,6 +684,58 @@ function App() {
     if (th.projectKey !== projectScopeKey(project) || th.archived) return null;
     return th;
   }, [threads, activeId, project]);
+  /** The selected decision remains live in the original ACP session. */
+  const activeApproval = useMemo(
+    () => approvalQueue.find((entry) => entry.key === activeApprovalKey) ?? approvalQueue[0] ?? null,
+    [activeApprovalKey, approvalQueue],
+  );
+  const approvalInboxRows = useMemo<ApprovalInboxRow[]>(() => approvalQueue.map((entry) => {
+    const thread = threads.find((item) => item.id === entry.threadId);
+    const projectLabel = thread?.cwd
+      ? projectDisplayName(thread.cwd, projectAliases)
+      : undefined;
+    const trimPreview = (text: string | undefined, fallback: string) => {
+      const clean = (text ?? '').replace(/\s+/g, ' ').trim();
+      return (clean || fallback).slice(0, 180);
+    };
+    switch (entry.kind) {
+      case 'permission':
+        return {
+          key: entry.key, kind: entry.kind, threadId: entry.threadId, createdAt: entry.createdAt,
+          threadTitle: thread?.title ?? t('approvalInboxUnknownTask'), projectLabel,
+          title: t('approvalInboxPermissionTitle'), detail: t('approvalInboxPermissionHint'),
+        };
+      case 'question':
+        return {
+          key: entry.key, kind: entry.kind, threadId: entry.threadId, createdAt: entry.createdAt,
+          threadTitle: thread?.title ?? t('approvalInboxUnknownTask'), projectLabel,
+          title: trimPreview(entry.request.questions[0]?.question, t('approvalInboxQuestionTitle')),
+          detail: entry.request.questions.length > 1
+            ? t('approvalInboxQuestionCount').replace('{count}', String(entry.request.questions.length))
+            : t('approvalInboxQuestionHint'),
+        };
+      case 'plan':
+        return {
+          key: entry.key, kind: entry.kind, threadId: entry.threadId, createdAt: entry.createdAt,
+          threadTitle: thread?.title ?? t('approvalInboxUnknownTask'), projectLabel,
+          title: t('approvalInboxPlanTitle'), detail: trimPreview(entry.request.planContent, t('approvalInboxPlanHint')),
+        };
+      case 'trust':
+        return {
+          key: entry.key, kind: entry.kind, threadId: entry.threadId, createdAt: entry.createdAt,
+          threadTitle: thread?.title ?? t('approvalInboxUnknownTask'), projectLabel,
+          title: t('approvalInboxTrustTitle'), detail: trimPreview(entry.request.workspace, t('approvalInboxTrustHint')),
+        };
+    }
+  }), [approvalQueue, projectAliases, threads]);
+  const enqueueApproval = useCallback((entry: PendingApproval) => {
+    setApprovalQueue((previous) => previous.some((item) => item.key === entry.key) ? previous : [...previous, entry]);
+    setActiveApprovalKey((previous) => previous ?? entry.key);
+  }, []);
+  const removeApproval = useCallback((key: string) => {
+    setApprovalQueue((previous) => previous.filter((item) => item.key !== key));
+    setActiveApprovalKey((previous) => previous === key ? null : previous);
+  }, []);
   const activeBtwAvailable = Boolean(
     active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
   );
@@ -1661,8 +1716,10 @@ function App() {
           });
           return;
         }
-        setPermAgentId(threadId);
-        setPermReq(req);
+        enqueueApproval({
+          key: `permission:${threadId}:${String(req.jsonrpcId)}`,
+          kind: 'permission', threadId, createdAt: Date.now(), request: req,
+        });
         void notifyPermission(
           'gorkX',
           'Permission required — open the app to approve or reject.',
@@ -1670,9 +1727,10 @@ function App() {
       };
 
       client.onUserQuestionRequest = (req) => {
-        userQuestionAgentRef.current = threadId;
-        setUserQuestionAgentId(threadId);
-        setUserQuestionReq(req);
+        enqueueApproval({
+          key: `question:${threadId}:${String(req.jsonrpcId)}`,
+          kind: 'question', threadId, createdAt: Date.now(), request: req,
+        });
         void notifyPermission(
           'gorkX',
           req.mode === 'plan' ? 'Plan needs your decisions — open gorkX to continue.' : 'Grok needs your decision — open gorkX to continue.',
@@ -1680,9 +1738,10 @@ function App() {
       };
 
       client.onPlanApprovalRequest = (req) => {
-        planApprovalAgentRef.current = threadId;
-        setPlanApprovalAgentId(threadId);
-        setPlanApprovalReq(req);
+        enqueueApproval({
+          key: `plan:${threadId}:${String(req.jsonrpcId)}`,
+          kind: 'plan', threadId, createdAt: Date.now(), request: req,
+        });
         void notifyPermission(
           'gorkX',
           'Plan is ready for your review — open gorkX to approve or request changes.',
@@ -1690,9 +1749,10 @@ function App() {
       };
 
       client.onFolderTrustRequest = (req) => {
-        folderTrustAgentRef.current = threadId;
-        setFolderTrustAgentId(threadId);
-        setFolderTrustReq(req);
+        enqueueApproval({
+          key: `trust:${threadId}:${String(req.jsonrpcId)}`,
+          kind: 'trust', threadId, createdAt: Date.now(), request: req,
+        });
         void notifyPermission('gorkX', 'Project configuration needs your trust decision — open gorkX to continue.');
       };
 
@@ -1793,21 +1853,10 @@ function App() {
       };
 
       client.onExit = () => {
-        if (userQuestionAgentRef.current === threadId) {
-          userQuestionAgentRef.current = null;
-          setUserQuestionReq(null);
-          setUserQuestionAgentId(null);
-        }
-        if (planApprovalAgentRef.current === threadId) {
-          planApprovalAgentRef.current = null;
-          setPlanApprovalReq(null);
-          setPlanApprovalAgentId(null);
-        }
-        if (folderTrustAgentRef.current === threadId) {
-          folderTrustAgentRef.current = null;
-          setFolderTrustReq(null);
-          setFolderTrustAgentId(null);
-        }
+        // The request cannot be answered once its ACP process is gone. Do not
+        // leave a stale approval that looks actionable in another task.
+        setApprovalQueue((previous) => previous.filter((item) => item.threadId !== threadId));
+        setActiveApprovalKey(null);
         patchThread(threadId, {
           busy: false,
           client: null,
@@ -1838,7 +1887,7 @@ function App() {
         }
       };
     },
-    [appendLine, appendOrMerge, patchThread],
+    [appendLine, appendOrMerge, enqueueApproval, patchThread],
   );
 
   /**
@@ -4083,17 +4132,19 @@ function App() {
   reconnectRef.current = reconnectThread;
 
   const answerPermission = async (prefer: 'allow' | 'reject' | string) => {
-    if (!permReq || !permAgentId) return;
-    const th = threads.find((x) => x.id === permAgentId);
-    const optionId =
-      prefer === 'allow' || prefer === 'reject'
-        ? pickPermissionOption(permReq.options, prefer)
-        : prefer;
-    if (th?.client) {
-      await th.client.respond(permReq.jsonrpcId, permissionResult(optionId));
+    if (!activeApproval || activeApproval.kind !== 'permission') return;
+    try {
+      const th = threadsRef.current.find((x) => x.id === activeApproval.threadId);
+      const optionId =
+        prefer === 'allow' || prefer === 'reject'
+          ? pickPermissionOption(activeApproval.request.options, prefer)
+          : prefer;
+      if (!th?.client) throw new Error(t('approvalInboxUnavailable'));
+      await th.client.respond(activeApproval.request.jsonrpcId, permissionResult(optionId));
+      removeApproval(activeApproval.key);
+    } catch {
+      appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
     }
-    setPermReq(null);
-    setPermAgentId(null);
   };
 
   const answerUserQuestion = async (
@@ -4102,35 +4153,42 @@ function App() {
       | ReturnType<typeof userQuestionCancelledResult>
       | ReturnType<typeof userQuestionPlanResult>,
   ) => {
-    if (!userQuestionReq || !userQuestionAgentId) return;
-    const thread = threads.find((item) => item.id === userQuestionAgentId);
-    if (thread?.client) await thread.client.respond(userQuestionReq.jsonrpcId, result);
-    userQuestionAgentRef.current = null;
-    setUserQuestionReq(null);
-    setUserQuestionAgentId(null);
+    if (!activeApproval || activeApproval.kind !== 'question') return;
+    try {
+      const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
+      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
+      await thread.client.respond(activeApproval.request.jsonrpcId, result);
+      removeApproval(activeApproval.key);
+    } catch {
+      appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
+    }
   };
 
   const answerPlanApproval = async (
     outcome: 'approved' | 'cancelled' | 'abandoned',
     feedback?: string,
   ) => {
-    if (!planApprovalReq || !planApprovalAgentId) return;
-    const thread = threads.find((item) => item.id === planApprovalAgentId);
-    if (thread?.client) {
-      await thread.client.respond(planApprovalReq.jsonrpcId, planApprovalResult(outcome, feedback));
+    if (!activeApproval || activeApproval.kind !== 'plan') return;
+    try {
+      const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
+      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
+      await thread.client.respond(activeApproval.request.jsonrpcId, planApprovalResult(outcome, feedback));
+      removeApproval(activeApproval.key);
+    } catch {
+      appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
     }
-    planApprovalAgentRef.current = null;
-    setPlanApprovalReq(null);
-    setPlanApprovalAgentId(null);
   };
 
   const answerFolderTrust = async (outcome: 'trust' | 'reject') => {
-    if (!folderTrustReq || !folderTrustAgentId) return;
-    const thread = threads.find((item) => item.id === folderTrustAgentId);
-    if (thread?.client) await thread.client.respond(folderTrustReq.jsonrpcId, folderTrustResult(outcome));
-    folderTrustAgentRef.current = null;
-    setFolderTrustReq(null);
-    setFolderTrustAgentId(null);
+    if (!activeApproval || activeApproval.kind !== 'trust') return;
+    try {
+      const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
+      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
+      await thread.client.respond(activeApproval.request.jsonrpcId, folderTrustResult(outcome));
+      removeApproval(activeApproval.key);
+    } catch {
+      appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
+    }
   };
 
   // Close composer popovers on outside click / Escape
@@ -5321,6 +5379,17 @@ function App() {
                 </button>
               ) : null}
               <div className="main-bar-spacer" />
+              {approvalQueue.length ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('approvalInboxOpenHint')}
+                  onClick={() => setApprovalInboxOpen(true)}
+                >
+                  {t('approvalInboxOpen')}
+                  <span className="approval-inbox-count">{approvalQueue.length}</span>
+                </button>
+              ) : null}
               {/* 有可执行的计划步骤时显示「执行/重试」 */}
               {activePlanEntries.length > 0 && !active.busy ? (
                 <button
@@ -5643,10 +5712,10 @@ function App() {
               })}
               scheduledTaskDeleteDisabled={active.busy}
               footer={
-                userQuestionReq && userQuestionAgentId === active.id ? (
+                activeApproval?.kind === 'question' && activeApproval.threadId === active.id ? (
                   <UserQuestionPrompt
                     presentation="inline"
-                    request={userQuestionReq}
+                    request={activeApproval.request}
                     onAccept={(answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) =>
                       void answerUserQuestion(userQuestionAcceptedResult(answers, annotations))
                     }
@@ -6319,12 +6388,12 @@ function App() {
         }}
       /></Suspense> : null}
 
-      {permReq ? (
-        <PermissionPrompt request={permReq} onAnswer={(optionId) => void answerPermission(optionId)} />
+      {activeApproval?.kind === 'permission' ? (
+        <PermissionPrompt request={activeApproval.request} onAnswer={(optionId) => void answerPermission(optionId)} />
       ) : null}
-      {userQuestionReq && userQuestionAgentId !== active?.id ? (
+      {activeApproval?.kind === 'question' && activeApproval.threadId !== active?.id ? (
         <UserQuestionPrompt
-          request={userQuestionReq}
+          request={activeApproval.request}
           onAccept={(answers: UserQuestionAnswers, annotations: UserQuestionAnnotations) =>
             void answerUserQuestion(userQuestionAcceptedResult(answers, annotations))
           }
@@ -6334,15 +6403,25 @@ function App() {
           onCancel={() => void answerUserQuestion(userQuestionCancelledResult())}
         />
       ) : null}
-      {planApprovalReq ? (
+      {activeApproval?.kind === 'plan' ? (
         <PlanApprovalPrompt
-          request={planApprovalReq}
+          request={activeApproval.request}
           onAnswer={(outcome, feedback) => void answerPlanApproval(outcome, feedback)}
         />
       ) : null}
-      {folderTrustReq ? (
-        <FolderTrustPrompt request={folderTrustReq} onAnswer={(outcome) => void answerFolderTrust(outcome)} />
+      {activeApproval?.kind === 'trust' ? (
+        <FolderTrustPrompt request={activeApproval.request} onAnswer={(outcome) => void answerFolderTrust(outcome)} />
       ) : null}
+      <ApprovalInboxPanel
+        open={approvalInboxOpen}
+        rows={approvalInboxRows}
+        activeKey={activeApproval?.key ?? null}
+        onClose={() => setApprovalInboxOpen(false)}
+        onSelect={(key) => {
+          setActiveApprovalKey(key);
+          setApprovalInboxOpen(false);
+        }}
+      />
       {rewindDialog ? (
         <RewindDialog
           points={rewindDialog.points}

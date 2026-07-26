@@ -3200,6 +3200,17 @@ button.pill:hover {
 .plan-approval-feedback { display: grid; gap: 6px; margin: 14px 24px 0; color: var(--text-2); font-size: 12px; font-weight: 600; }
 .plan-approval-feedback textarea { width: 100%; min-height: 70px; resize: vertical; padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 9px; color: var(--text); background: var(--glass); font: inherit; font-size: 13px; line-height: 1.45; }
 .plan-approval-feedback textarea:focus { outline: 2px solid color-mix(in srgb, var(--plan) 58%, transparent); border-color: var(--plan); }
+
+/* ── Cross-task approval inbox ───────────────────────── */
+.approval-inbox { width: min(620px, calc(100vw - 32px)); }
+.approval-inbox-list { display: grid; gap: 8px; margin-top: 14px; max-height: min(60vh, 540px); overflow: auto; }
+.approval-inbox-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 9px; width: 100%; padding: 11px 12px; border: 1px solid var(--hairline); border-radius: 10px; color: var(--text); background: var(--glass); text-align: left; cursor: pointer; }
+.approval-inbox-row:hover, .approval-inbox-row.active { border-color: color-mix(in srgb, var(--accent) 48%, var(--hairline)); background: color-mix(in srgb, var(--accent) 8%, var(--glass)); }
+.approval-inbox-row strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.approval-inbox-kind { grid-row: span 2; align-self: center; padding: 3px 6px; border-radius: 999px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.approval-inbox-detail, .approval-inbox-task { grid-column: 2; overflow: hidden; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.approval-inbox-task { color: var(--text-3); font-size: 11px; }
+.approval-inbox-count { min-width: 17px; margin-left: 4px; padding: 1px 5px; border-radius: 999px; color: white; background: var(--accent); font-size: 11px; font-weight: 750; text-align: center; }
 .plan-approval-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 14px 24px 18px; border-top: 1px solid var(--hairline); background: var(--panel); }
 @media (max-width: 620px) {
   .plan-approval-backdrop { padding: 12px; }
