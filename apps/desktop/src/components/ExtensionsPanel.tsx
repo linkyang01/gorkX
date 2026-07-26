@@ -338,6 +338,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                       className="btn btn-sm"
                       disabled={busy}
                       onClick={() => {
+                        if (!window.confirm(t('mcpRemoveConfirm').replace('{name}', m.name))) return;
                         setBusy(true);
                         void removeMcp(m.name, grokCmd || undefined)
                           .then((s) => {
@@ -412,6 +413,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                         className="btn btn-sm primary-sm"
                         disabled={busy}
                         onClick={() => {
+                          if (!window.confirm(t('pluginUninstallConfirm').replace('{name}', p.name))) return;
                           setBusy(true);
                           void setPluginEnabled(p.name, !p.enabled, grokCmd || undefined)
                             .then((s) => {
