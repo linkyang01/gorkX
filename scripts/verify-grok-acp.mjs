@@ -103,6 +103,11 @@ let nextId = 1;
 const pending = new Map();
 let resourceFixture = '';
 child.stderr.on('data', (chunk) => { stderr += chunk; });
+child.on('exit', (code, signal) => {
+  const reason = `Grok ACP process exited before the request completed (code=${code ?? 'none'}, signal=${signal ?? 'none'})`;
+  for (const waiter of pending.values()) waiter.reject(new Error(reason));
+  pending.clear();
+});
 
 // The engine's tracing is not an API contract. In particular, an auth refresh
 // failure can include credential-derived debug fields. Keep ACP smoke failure
@@ -228,8 +233,14 @@ try {
     }
     console.log('PASS: ACP session/load');
 
-    await request('session/set_mode', { sessionId, modeId: 'plan' });
-    console.log('PASS: ACP session/set_mode(plan)');
+    // A real prompt must remain in the ordinary conversation mode. On 0.2.112
+    // switching a fresh session to Plan before the first prompt can close the
+    // ACP actor without returning the later prompt result. Keep Plan-mode
+    // coverage for control-plane-only gates, where no inference is expected.
+    if (!resourceSmoke && !btwSmoke) {
+      await request('session/set_mode', { sessionId, modeId: 'plan' });
+      console.log('PASS: ACP session/set_mode(plan)');
+    }
 
     if (btwSmoke) {
       // `/btw` is deliberately a separate side turn. Do not accept an empty
@@ -440,7 +451,7 @@ try {
             size,
           },
         ],
-      }, 120_000);
+      }, 240_000);
       console.log('PASS: ACP session/prompt resource_link');
 
       if (rewindExecuteSmoke) {
@@ -450,7 +461,7 @@ try {
         await request('session/prompt', {
           sessionId,
           prompt: [{ type: 'text', text: 'Reply with exactly: REWIND_SECOND_TURN_OK' }],
-        }, 120_000);
+        }, 240_000);
         console.log('PASS: ACP session/prompt rewind second turn');
         // `session/prompt` acknowledges dispatch before the actor has written
         // its history/checkpoint. Wait for the bounded actor flush before
@@ -465,21 +476,34 @@ try {
         if (targetPromptIndex === null) {
           throw new Error(`_x.ai/rewind/points did not produce two checkpoints after prompts: ${JSON.stringify(rewindPoints)}`);
         }
-        const rewind = unwrapResult(await request('_x.ai/rewind/execute', {
+        // Grok Build deliberately uses `force: false` as a non-mutating
+        // preview. A successful preview is therefore `success: false` with
+        // no error or conflicts; it must be followed by an explicit commit.
+        const preview = unwrapResult(await request('_x.ai/rewind/execute', {
           sessionId,
           targetPromptIndex,
           mode: 'conversation_only',
           force: false,
         }, 30_000));
+        if (preview?.success !== false || preview?.mode !== 'conversation_only' || preview?.error || (preview?.conflicts?.length ?? 0) !== 0) {
+          throw new Error(`_x.ai/rewind/execute preview was not safe: ${JSON.stringify(preview)}`);
+        }
+        console.log('PASS: ACP _x.ai/rewind/execute preview (conversation_only, force=false)');
+        const rewind = unwrapResult(await request('_x.ai/rewind/execute', {
+          sessionId,
+          targetPromptIndex,
+          mode: 'conversation_only',
+          force: true,
+        }, 30_000));
         if (rewind?.success !== true || rewind?.mode !== 'conversation_only') {
-          throw new Error(`_x.ai/rewind/execute did not safely rewind: ${JSON.stringify(rewind)}`);
+          throw new Error(`_x.ai/rewind/execute commit did not succeed: ${JSON.stringify(rewind)}`);
         }
         const rewoundLoaded = await request('session/load', { sessionId, cwd, mcpServers: [] }, 15_000);
         const rewoundId = rewoundLoaded?.sessionId ?? rewoundLoaded?._meta?.sessionId;
         if (rewoundId !== sessionId) {
           throw new Error(`rewound session could not be loaded: ${JSON.stringify(rewoundLoaded)}`);
         }
-        console.log('PASS: ACP _x.ai/rewind/execute (conversation_only, force=false, reloadable)');
+        console.log('PASS: ACP _x.ai/rewind/execute commit (conversation_only, force=true, reloadable)');
       }
     }
 
