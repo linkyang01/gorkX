@@ -1,4 +1,4 @@
-import type { ComposerAttachment } from '../lib/attachments';
+import type { AttachKind, ComposerAttachment } from '../lib/attachments';
 import { AttachmentStrip } from './AttachmentStrip';
 import { IconClose } from './UiIcons';
 import { t } from '../lib/i18n';
@@ -10,6 +10,26 @@ interface Props {
   onOpen: (item: ComposerAttachment) => void;
 }
 
+type DeliverableGroup = 'document' | 'image' | 'media' | 'other';
+
+function groupOf(kind: AttachKind): DeliverableGroup {
+  if (kind === 'text' || kind === 'pdf') return 'document';
+  if (kind === 'image') return 'image';
+  if (kind === 'video' || kind === 'audio') return 'media';
+  return 'other';
+}
+
+const groupOrder: DeliverableGroup[] = ['document', 'image', 'media', 'other'];
+
+function groupLabel(group: DeliverableGroup) {
+  switch (group) {
+    case 'document': return t('deliverablesDocuments');
+    case 'image': return t('deliverablesImages');
+    case 'media': return t('deliverablesMedia');
+    case 'other': return t('deliverablesFiles');
+  }
+}
+
 /**
  * A conservative deliverables view: it lists only media/files explicitly
  * delivered by the agent in this task. It never scans the project to infer
@@ -17,6 +37,10 @@ interface Props {
  */
 export function DeliverablesPanel({ open, items, onClose, onOpen }: Props) {
   if (!open) return null;
+  const groups = groupOrder.flatMap((group) => {
+    const groupItems = items.filter((item) => groupOf(item.kind) === group);
+    return groupItems.length ? [{ group, items: groupItems }] : [];
+  });
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section className="modal ext-modal deliverables-panel" role="dialog" aria-modal="true" aria-label={t('deliverablesTitle')} onClick={(event) => event.stopPropagation()}>
@@ -29,7 +53,12 @@ export function DeliverablesPanel({ open, items, onClose, onOpen }: Props) {
         </header>
         {items.length ? (
           <div className="deliverables-list">
-            <AttachmentStrip items={items} onOpen={onOpen} variant="gallery" />
+            {groups.map(({ group, items: groupItems }) => (
+              <section className="deliverables-group" key={group} aria-label={groupLabel(group)}>
+                <h3>{groupLabel(group)} <span>{groupItems.length}</span></h3>
+                <AttachmentStrip items={groupItems} onOpen={onOpen} variant="gallery" />
+              </section>
+            ))}
           </div>
         ) : <p className="muted" style={{ margin: '18px 0 4px' }}>{t('deliverablesEmpty')}</p>}
       </section>
