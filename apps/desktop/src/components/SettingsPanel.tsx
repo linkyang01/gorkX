@@ -96,6 +96,7 @@ import {
 } from '../lib/sandboxConfig';
 import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
 import {
+  applyManagedSetup,
   computerWorkspaceControl,
   computerWorkspaceStart,
   computerWorkspaceStatus,
@@ -334,6 +335,7 @@ export function SettingsPanel({
   const [computerHubBusy, setComputerHubBusy] = useState(false);
   const [managedSetup, setManagedSetup] = useState<string | null>(null);
   const [managedSetupBusy, setManagedSetupBusy] = useState(false);
+  const [managedSetupReady, setManagedSetupReady] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -2267,13 +2269,40 @@ export function SettingsPanel({
                   onClick={() => {
                     setManagedSetupBusy(true);
                     void previewManagedSetup(grokCmd || undefined)
-                      .then(setManagedSetup)
-                      .catch((error) => setManagedSetup(error instanceof Error ? error.message : String(error)))
+                      .then((result) => {
+                        setManagedSetup(result);
+                        setManagedSetupReady(true);
+                      })
+                      .catch((error) => {
+                        setManagedSetup(error instanceof Error ? error.message : String(error));
+                        setManagedSetupReady(false);
+                      })
                       .finally(() => setManagedSetupBusy(false));
                   }}
                 >
                   {t('settingsManagedConfigPreview')}
                 </button>
+                <button
+                  type="button"
+                  className="btn primary"
+                  style={{ marginLeft: 8 }}
+                  disabled={managedSetupBusy || !managedSetupReady}
+                  onClick={() => {
+                    if (!window.confirm(t('settingsManagedConfigApplyConfirm'))) return;
+                    setManagedSetupBusy(true);
+                    void applyManagedSetup(grokCmd || undefined)
+                      .then((result) => {
+                        setManagedSetup(result || t('settingsManagedConfigApplied'));
+                        setManagedSetupReady(false);
+                        setMsg(t('settingsManagedConfigApplied'));
+                      })
+                      .catch((error) => setManagedSetup(error instanceof Error ? error.message : String(error)))
+                      .finally(() => setManagedSetupBusy(false));
+                  }}
+                >
+                  {managedSetupBusy ? t('settingsManagedConfigApplying') : t('settingsManagedConfigApply')}
+                </button>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsManagedConfigApplyHint')}</p>
                 {managedSetup ? <pre className="ext-msg" style={{ marginTop: 10 }}>{managedSetup}</pre> : null}
               </div>
               <h3 className="subhead">{t('settingsSandboxTitle')}</h3>

@@ -47,6 +47,7 @@ fn allowed_admin_args(args: &[String]) -> bool {
     match words.as_slice() {
         ["--version"]
         | ["models"]
+        | ["setup"]
         | ["setup", "--json"]
         | ["inspect", "--json"]
         | ["worktree", "list", "--json"]
@@ -138,6 +139,7 @@ mod tests {
     #[test]
     fn permits_only_ui_backed_admin_commands() {
         assert!(allowed_admin_args(&args(&["--version"])));
+        assert!(allowed_admin_args(&args(&["setup"])));
         assert!(allowed_admin_args(&args(&["setup", "--json"])));
         assert!(allowed_admin_args(&args(&["inspect", "--json"])));
         assert!(allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--", "auth failure"])));

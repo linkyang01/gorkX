@@ -152,6 +152,11 @@ export async function previewManagedSetup(grokCmd?: string): Promise<string> {
   return requireSuccess(await admin(['setup', '--json'], grokCmd), 'managed configuration preview');
 }
 
+/** Installs only the configuration previously shown by Grok Build's setup preview. */
+export async function applyManagedSetup(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['setup'], grokCmd), 'managed configuration install');
+}
+
 export type ComputerWorkspaceAction = 'pause' | 'resume' | 'stop' | 'restart';
 
 /** Computer Hub is server-gated. These are fixed Grok Build subcommands, not shell text. */
