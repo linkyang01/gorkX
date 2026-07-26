@@ -26,6 +26,7 @@ export type PlusAction =
   | { type: 'new-task' }
   | { type: 'set-goal' }
   | { type: 'deep-research' }
+  | { type: 'send-feedback' }
   | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'workflow'; name: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -241,6 +242,13 @@ export function PlusMenu({
       desc: t('btwHint'),
       action: { type: 'ask-btw' },
     },
+    ...(hasActiveSession && slashAllowed('/feedback', availableCommandNames) ? ([{
+      kind: 'action' as const,
+      id: 'feedback',
+      title: t('plusSendFeedback'),
+      desc: t('plusSendFeedbackHint'),
+      action: { type: 'send-feedback' } as PlusAction,
+    }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,
       id: 'export',

@@ -2359,6 +2359,23 @@ function App() {
     await runDesktopAction(`/deep-research ${query}`, `${t('deepResearchStarted')}: ${query}`);
   };
 
+  /** Send feedback through the kernel route, never through an invented endpoint. */
+  const openFeedbackAction = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const available = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '').toLowerCase() === 'feedback',
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
+    const feedback = await askAction({
+      title: t('feedbackDialogTitle'),
+      message: t('feedbackDialogHint'),
+      placeholder: t('feedbackDialogPlaceholder'),
+      submitLabel: t('feedbackDialogSubmit'),
+    });
+    if (!feedback) return;
+    await runDesktopAction(`/feedback ${feedback}`, `${t('feedbackSent')}: ${feedback}`);
+  };
+
   const openWebSourceAction = async () => {
     const url = await askAction({
       title: t('plusWebSource'),
@@ -2525,6 +2542,9 @@ function App() {
         return;
       case 'deep-research':
         await openDeepResearchAction();
+        return;
+      case 'send-feedback':
+        await openFeedbackAction();
         return;
       case 'generate-media':
         setPlusMenuOpen(false);
