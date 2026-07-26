@@ -2,7 +2,7 @@
 //! Runtime is still the Grok kernel — all kernel-backed data is surfaced from
 //! gorkX's app-owned `GROK_HOME`, never the user's `~/.grok` by default.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -81,6 +81,50 @@ pub struct McpServerInfo {
     /// Redacted env keys only (values never returned).
     pub env_keys: Vec<String>,
     pub detail: String,
+}
+
+/// A deliberately small desktop-safe MCP setup surface. It covers remote
+/// HTTPS servers, whose OAuth setup can then remain in the provider browser
+/// flow. Commands, headers and environment secrets stay in the advanced
+/// configuration path rather than becoming everyday text fields.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteMcpInput {
+    pub name: String,
+    pub url: String,
+    pub transport: String,
+}
+
+fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
+    let name = input.name.trim();
+    if name.is_empty()
+        || name.len() > 64
+        || !name.chars().enumerate().all(|(index, c)| {
+            (index == 0 && c.is_ascii_alphanumeric())
+                || c.is_ascii_alphanumeric()
+                || matches!(c, '_' | '-')
+        })
+    {
+        return Err("MCP name must start with a letter or number and contain only letters, numbers, hyphens, or underscores.".into());
+    }
+    let url = input.url.trim();
+    // Remote MCP credentials belong to the provider's OAuth flow. Refuse
+    // credential-bearing URLs, non-HTTPS endpoints and whitespace rather than
+    // making a convenient UI become a secret transport mechanism.
+    let rest = url
+        .strip_prefix("https://")
+        .ok_or_else(|| "Remote MCP addresses must use https://".to_string())?;
+    if rest.is_empty() || rest.contains('@') || rest.chars().any(char::is_whitespace) || url.len() > 2048 {
+        return Err("Enter a valid HTTPS MCP address without embedded credentials.".into());
+    }
+    let transport = input.transport.trim().to_ascii_lowercase();
+    if !matches!(transport.as_str(), "http" | "sse") {
+        return Err("Remote MCP transport must be HTTP or SSE.".into());
+    }
+    Ok(vec![
+        "mcp".into(), "add".into(), "--transport".into(), transport,
+        name.into(), url.into(),
+    ])
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -683,7 +727,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{playwright_mcp_args, redact_mcp_doctor_output, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -730,6 +774,19 @@ mod tests {
         assert!(playwright_mcp_args(Some("https://example.com/path".into())).is_err());
         assert!(playwright_mcp_args(Some("*".into())).is_err());
     }
+
+    #[test]
+    fn remote_mcp_accepts_only_safe_https_setup() {
+        let valid = remote_mcp_args(&RemoteMcpInput {
+            name: "notion".into(),
+            url: "https://mcp.example.com/connect".into(),
+            transport: "http".into(),
+        }).unwrap();
+        assert_eq!(valid, vec!["mcp", "add", "--transport", "http", "notion", "https://mcp.example.com/connect"]);
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "bad name".into(), url: "https://mcp.example.com".into(), transport: "http".into() }).is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "http://localhost:3000".into(), transport: "http".into() }).is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://token@example.com/mcp".into(), transport: "sse".into() }).is_err());
+    }
 }
 
 /// Configure the supported Playwright MCP against the user's visible Chrome.
@@ -742,6 +799,23 @@ pub async fn extensions_mcp_add_playwright_chrome(
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
         let args = playwright_mcp_args(allowed_origins)?;
+        let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        run_grok_text(&bin, &refs)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Add an HTTPS MCP without asking an ordinary user to compose a CLI command.
+/// Any provider OAuth is intentionally started later by the live MCP session.
+#[tauri::command]
+pub async fn extensions_mcp_add_remote(
+    input: RemoteMcpInput,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
+    let args = remote_mcp_args(&input)?;
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || {
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         run_grok_text(&bin, &refs)
     })

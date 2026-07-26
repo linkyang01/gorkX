@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   fetchExtensionsSnapshot,
   fetchMarketplace,
+  addRemoteMcp,
   installPlugin,
   openExtensionPath,
   openGrokConfig,
@@ -42,6 +43,9 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [marketSources, setMarketSources] = useState<unknown[]>([]);
   const [liveMcp, setLiveMcp] = useState<LiveMcpServer[]>([]);
   const [mcpSetupChoices, setMcpSetupChoices] = useState<Record<string, string>>({});
+  const [remoteMcpName, setRemoteMcpName] = useState('');
+  const [remoteMcpUrl, setRemoteMcpUrl] = useState('');
+  const [remoteMcpTransport, setRemoteMcpTransport] = useState<'http' | 'sse'>('http');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -271,7 +275,26 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
           ) : null}
 
           {tab === 'mcp' ? (
-            liveMcp.length > 0 ? (
+            <>
+            <div className="ext-install ext-mcp-add" aria-label={t('extMcpAddRemote')}>
+              <div className="ext-row-title">{t('extMcpAddRemote')}</div>
+              <p className="hint" style={{ margin: '5px 0 8px' }}>{t('extMcpRemoteHint')}</p>
+              <div className="field-row" style={{ flexWrap: 'wrap' }}>
+                <input className="ext-search" value={remoteMcpName} onChange={(e) => setRemoteMcpName(e.target.value)} placeholder={t('extMcpRemoteName')} aria-label={t('extMcpRemoteName')} />
+                <input className="ext-search" value={remoteMcpUrl} onChange={(e) => setRemoteMcpUrl(e.target.value)} placeholder={t('extMcpRemoteUrl')} aria-label={t('extMcpRemoteUrl')} />
+                <select value={remoteMcpTransport} onChange={(e) => setRemoteMcpTransport(e.target.value === 'sse' ? 'sse' : 'http')} aria-label={t('extMcpRemoteTransport')}>
+                  <option value="http">HTTP</option><option value="sse">SSE</option>
+                </select>
+                <button type="button" className="btn btn-sm primary-sm" disabled={busy || !remoteMcpName.trim() || !remoteMcpUrl.trim()} onClick={() => {
+                  setBusy(true);
+                  void addRemoteMcp(remoteMcpName, remoteMcpUrl, remoteMcpTransport, grokCmd || undefined)
+                    .then((s) => { setMsg(s || t('extMcpRemoteAdded')); setRemoteMcpName(''); setRemoteMcpUrl(''); return refresh(); })
+                    .catch((e) => setMsg(String(e)))
+                    .finally(() => setBusy(false));
+                }}>{t('extInstall')}</button>
+              </div>
+            </div>
+            {liveMcp.length > 0 ? (
               liveMcp.map((server) => (
                 <div key={`live:${server.name}`} className="ext-row">
                   <div className="ext-row-main"><div className="ext-row-title"><strong>{server.displayName || server.name}</strong><span className="pill">{server.session?.status || 'configured'}</span></div><div className="ext-row-desc">{server.session?.tools?.length ?? 0} tools</div>
@@ -326,7 +349,8 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                   </div>
                 </div>
               ))
-            ))
+            ))}
+            </>
           ) : null}
 
           {tab === 'plugins' ? (

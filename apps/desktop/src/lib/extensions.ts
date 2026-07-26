@@ -114,6 +114,19 @@ export async function enablePlaywrightChromeMcp(
   });
 }
 
+/** Add a remote HTTPS MCP. Provider authentication stays in its browser flow. */
+export async function addRemoteMcp(
+  name: string,
+  url: string,
+  transport: 'http' | 'sse',
+  grokCmd?: string,
+): Promise<string> {
+  return invoke('extensions_mcp_add_remote', {
+    input: { name, url, transport },
+    grokCmd: grokCmd || null,
+  });
+}
+
 export async function removeMcp(name: string, grokCmd?: string): Promise<string> {
   return invoke('extensions_mcp_remove', { name, grokCmd: grokCmd || null });
 }
