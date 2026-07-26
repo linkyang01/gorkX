@@ -4,6 +4,7 @@ import {
   runKernelDoctor,
   runKernelDoctorFix,
   type GrokStatus,
+  type HooksSnapshot,
   type KernelDoctor,
   type PermissionMode,
 } from '../lib/acpClient';
@@ -125,6 +126,10 @@ export interface ArchivedTaskRow {
   sessionId?: string | null;
 }
 
+export type HookManagementAction =
+  | { type: 'reload' | 'trust' | 'untrust' }
+  | { type: 'enable' | 'disable'; hookName: string };
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -148,6 +153,10 @@ interface Props {
   onOpenReview?: () => void;
   onCaptureDesktop?: () => Promise<string>;
   onRestoreArchived?: (row: ArchivedTaskRow) => void | Promise<void>;
+  /** Active-task ACP Hooks controls. Omitted when there is no live task. */
+  hooksAvailable?: boolean;
+  onRefreshHooks?: () => Promise<HooksSnapshot>;
+  onManageHooks?: (action: HookManagementAction) => Promise<HooksSnapshot>;
   initialSection?: SettingsSection;
 }
 
@@ -242,6 +251,9 @@ export function SettingsPanel({
   onOpenReview,
   onCaptureDesktop,
   onRestoreArchived,
+  hooksAvailable,
+  onRefreshHooks,
+  onManageHooks,
   initialSection,
 }: Props) {
   const [section, setSection] = useState<SettingsSection>(initialSection || 'general');
@@ -301,6 +313,8 @@ export function SettingsPanel({
   const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
   const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
+  const [hooksSnap, setHooksSnap] = useState<HooksSnapshot | null>(null);
+  const [hooksBusy, setHooksBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -337,10 +351,39 @@ export function SettingsPanel({
   };
 
   useEffect(() => {
-    if (isOpen && section === 'hooks') loadProjectInstructions();
+    if (isOpen && section === 'hooks') {
+      loadProjectInstructions();
+      if (onRefreshHooks) {
+        setHooksBusy(true);
+        void onRefreshHooks()
+          .then(setHooksSnap)
+          .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+          .finally(() => setHooksBusy(false));
+      } else {
+        setHooksSnap(null);
+      }
+    }
     // Reload only when this project-instructions surface becomes relevant.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, section, project]);
+  }, [isOpen, section, project, onRefreshHooks]);
+
+  const refreshHooks = () => {
+    if (!onRefreshHooks) return;
+    setHooksBusy(true);
+    void onRefreshHooks()
+      .then(setHooksSnap)
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setHooksBusy(false));
+  };
+
+  const manageHooks = (action: HookManagementAction) => {
+    if (!onManageHooks) return;
+    setHooksBusy(true);
+    void onManageHooks(action)
+      .then(setHooksSnap)
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setHooksBusy(false));
+  };
 
   const refreshBrowser = async () => {
     const snap = await fetchExtensionsSnapshot(project, grokCmd);
@@ -517,7 +560,7 @@ export function SettingsPanel({
       {
         title: t('settingsGroupCoding'),
         items: [
-          { id: 'hooks', label: t('settingsInstructionsTitle'), keywords: '项目指令 agents 规则 约定' },
+          { id: 'hooks', label: t('settingsHooksTitle'), keywords: 'hooks 钩子 项目指令 agents 规则 约定' },
           { id: 'subagents', label: t('settingsSubagents'), keywords: 'subagent 子任务 委派 worktree 隔离' },
           { id: 'mcp', label: t('settingsMcp'), keywords: 'mcp connect 连接' },
           { id: 'git', label: t('settingsGit'), keywords: 'git' },
@@ -1714,7 +1757,7 @@ export function SettingsPanel({
 
           {section === 'hooks' ? (
             <>
-              <h2>{t('settingsInstructionsTitle')}</h2>
+              <h2>{t('settingsHooksTitle')}</h2>
               <div className="settings-card">
                 <div className="settings-row-title">{t('settingsInstructionsTitle')}</div>
                 <p className="settings-row-hint">{t('settingsInstructionsHint')}</p>
@@ -1761,6 +1804,62 @@ export function SettingsPanel({
                     <p className="settings-row-hint" style={{ marginTop: 10 }}>
                       {projectInstructions?.exists ? t('settingsInstructionsExists') : t('settingsInstructionsNew')}
                     </p>
+                  </>
+                )}
+              </div>
+              <h3 className="subhead">{t('settingsHooksTitle')}</h3>
+              <div className="settings-card">
+                <p className="settings-row-hint">{t('settingsHooksHint')}</p>
+                {!hooksAvailable ? (
+                  <p className="hint">{t('settingsHooksNeedTask')}</p>
+                ) : (
+                  <>
+                    <div className="field-row">
+                      <button type="button" className="btn" disabled={hooksBusy} onClick={refreshHooks}>{t('refresh')}</button>
+                      <button
+                        type="button"
+                        className={`btn${hooksSnap?.projectTrusted ? '' : ' primary'}`}
+                        disabled={hooksBusy || !hooksSnap}
+                        onClick={() => manageHooks({ type: hooksSnap?.projectTrusted ? 'untrust' : 'trust' })}
+                      >
+                        {hooksSnap?.projectTrusted ? t('settingsHooksUntrust') : t('settingsHooksTrust')}
+                      </button>
+                      <button type="button" className="btn" disabled={hooksBusy || !hooksSnap} onClick={() => manageHooks({ type: 'reload' })}>{t('settingsHooksReload')}</button>
+                    </div>
+                    {hooksSnap ? (
+                      <>
+                        <p className="settings-row-hint" style={{ marginTop: 10 }}>
+                          {hooksSnap.projectTrusted ? t('settingsHooksTrusted') : t('settingsHooksUntrusted')}
+                        </p>
+                        {hooksSnap.loadErrors?.length ? (
+                          <p className="settings-row-hint">{t('settingsHooksLoadError')}</p>
+                        ) : null}
+                        {hooksSnap.hooks.length ? (
+                          <div className="settings-list" style={{ marginTop: 10 }}>
+                            {hooksSnap.hooks.map((hook) => (
+                              <div className="settings-row" key={`${hook.name}-${hook.event}-${hook.sourceDir}`}>
+                                <div>
+                                  <div className="settings-row-title">{hook.name}</div>
+                                  <div className="settings-row-hint">
+                                    {hook.event}{hook.matcher ? ` · ${hook.matcher}` : ''}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className={`btn${hook.disabled ? '' : ' primary'}`}
+                                  disabled={hooksBusy}
+                                  onClick={() => manageHooks({ type: hook.disabled ? 'enable' : 'disable', hookName: hook.name })}
+                                >
+                                  {hook.disabled ? t('settingsHooksEnable') : t('settingsHooksDisable')}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="settings-row-hint" style={{ marginTop: 10 }}>{t('settingsHooksEmpty')}</p>
+                        )}
+                      </>
+                    ) : null}
                   </>
                 )}
               </div>

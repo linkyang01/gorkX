@@ -36,12 +36,13 @@ import {
   type ReasoningEffort,
   type RewindMode,
   type RewindPoint,
+  type HooksSnapshot,
   type SessionUpdate,
   type UserQuestionAnswers,
   type UserQuestionAnnotations,
   type UserQuestionRequest,
 } from './lib/acpClient';
-import type { ArchivedTaskRow, SettingsSection } from './components/SettingsPanel';
+import type { ArchivedTaskRow, HookManagementAction, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { TaskSearchDialog } from './components/TaskSearchDialog';
@@ -679,6 +680,22 @@ function App() {
   );
   threadsRef.current = threads;
   activeIdRef.current = activeId;
+
+  const requireLiveHooksTask = useCallback(() => {
+    const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+    if (!live?.client || !live.sessionId) throw new Error(t('settingsHooksNeedTask'));
+    return live;
+  }, []);
+
+  const refreshLiveHooks = useCallback(async (): Promise<HooksSnapshot> => {
+    const live = requireLiveHooksTask();
+    return live.client!.listHooks(live.sessionId!);
+  }, [requireLiveHooksTask]);
+
+  const manageLiveHooks = useCallback(async (action: HookManagementAction): Promise<HooksSnapshot> => {
+    const live = requireLiveHooksTask();
+    return live.client!.manageHooks(live.sessionId!, action);
+  }, [requireLiveHooksTask]);
 
   useEffect(() => {
     localStorage.setItem('gorkx.project', project);
@@ -5981,6 +5998,9 @@ function App() {
           return path;
         }}
         onRestoreArchived={(row) => void restoreArchivedTask(row)}
+        hooksAvailable={Boolean(active?.client && active?.sessionId)}
+        onRefreshHooks={active?.client && active?.sessionId ? refreshLiveHooks : undefined}
+        onManageHooks={active?.client && active?.sessionId ? manageLiveHooks : undefined}
         initialSection={settingsInitialSection}
       /></Suspense> : null}
 
