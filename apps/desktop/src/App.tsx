@@ -2620,6 +2620,35 @@ function App() {
     await runDesktopAction('/recap', t('recapStarted'));
   };
 
+  /** Sharing may publish conversation content, so explicit confirmation is
+   * required before calling the real Grok Build share endpoint. */
+  const shareActiveSession = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const available = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '').toLowerCase() === 'share',
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
+    const confirmed = await askAction({
+      title: t('shareSessionTitle'),
+      message: t('shareSessionConfirm'),
+      placeholder: '',
+      submitLabel: t('shareSessionSubmit'),
+      allowEmpty: true,
+    });
+    if (confirmed === null) return;
+    patchThread(agent.id, { busy: true, error: null });
+    try {
+      const url = await agent.client.shareSession(agent.sessionId);
+      try { await navigator.clipboard.writeText(url); } catch { /* link remains in the local task */ }
+      appendLine(agent.id, { id: nid(), role: 'system', text: `${t('shareSessionDone')}: ${url}` });
+      alert(t('shareSessionCopied'));
+    } catch (error) {
+      patchThread(agent.id, { error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      patchThread(agent.id, { busy: false });
+    }
+  };
+
   /** Native file-picker export; `/export` remains keyboard compatibility only. */
   const exportActiveSession = async () => {
     if (!active?.sessionId || active.busy) return;
@@ -2729,6 +2758,9 @@ function App() {
         return;
       case 'recap-session':
         await recapActiveSession();
+        return;
+      case 'share-session':
+        await shareActiveSession();
         return;
       case 'export-session':
         await exportActiveSession();

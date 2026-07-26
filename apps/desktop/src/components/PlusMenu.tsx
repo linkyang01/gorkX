@@ -23,6 +23,7 @@ export type PlusAction =
   | { type: 'task-info' }
   | { type: 'compact-session' }
   | { type: 'recap-session' }
+  | { type: 'share-session' }
   | { type: 'export-session' }
   | { type: 'export-trace' }
   | { type: 'new-task' }
@@ -272,6 +273,13 @@ export function PlusMenu({
       title: t('plusExport'),
       desc: t('plusExportHint'),
       action: { type: 'export-session' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && slashAllowed('/share', availableCommandNames) ? ([{
+      kind: 'action' as const,
+      id: 'share',
+      title: t('plusShareSession'),
+      desc: t('plusShareSessionHint'),
+      action: { type: 'share-session' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,

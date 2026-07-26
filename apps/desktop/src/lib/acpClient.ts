@@ -1192,6 +1192,20 @@ export class AcpClient {
     return info;
   }
 
+  /** Create a kernel-managed share link. Callers must confirm with the user
+   * immediately before this consequential operation. */
+  async shareSession(sessionId: string): Promise<string> {
+    const raw = await this.request('x.ai/share_session', { sessionId }, 30_000) as {
+      url?: unknown;
+      result?: { url?: unknown };
+    };
+    const url = typeof raw.result?.url === 'string' ? raw.result.url : raw.url;
+    if (typeof url !== 'string' || !/^https:\/\//i.test(url)) {
+      throw new Error('share link was not returned by Grok Build');
+    }
+    return url;
+  }
+
   /**
    * Start Grok Build's native, low-memory voice capture for this ACP session.
    * This is deliberately not Web Speech: the bundled macOS engine owns the
