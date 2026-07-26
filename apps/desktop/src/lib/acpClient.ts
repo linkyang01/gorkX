@@ -75,6 +75,7 @@ export interface HookInfo {
 export interface LiveMcpTool { name: string; displayName?: string | null; description?: string | null; enabled: boolean }
 export interface LiveMcpServer {
   name: string; displayName?: string | null; source: 'managed' | 'local' | string;
+  setup?: { fields?: Array<{ id: string; label: string; type: string; default?: string | null; options?: Array<{ label: string; value: string }> }> } | null;
   session?: { enabled: boolean; status?: string | null; tools?: LiveMcpTool[]; authRequired?: boolean; setupRequired?: boolean } | null;
 }
 
@@ -1408,6 +1409,10 @@ export class AcpClient {
   async triggerLiveMcpAuth(sessionId: string, serverName: string): Promise<{ status?: string; error?: string }> {
     const raw = await this.request('x.ai/mcp/auth_trigger', { sessionId, serverName }, 30_000) as { status?: string; error?: string; result?: { status?: string; error?: string } };
     return raw.result ?? raw;
+  }
+
+  async setupLiveMcp(sessionId: string, serverName: string, values: Record<string, string>): Promise<void> {
+    await this.request('x.ai/mcp/setup', { sessionId, serverName, values }, 20_000);
   }
 
   /** Delete a real Grok Build scheduler task by its server-provided ID. */

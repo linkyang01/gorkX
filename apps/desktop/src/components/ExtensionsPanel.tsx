@@ -41,6 +41,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [marketRaw, setMarketRaw] = useState('');
   const [marketSources, setMarketSources] = useState<unknown[]>([]);
   const [liveMcp, setLiveMcp] = useState<LiveMcpServer[]>([]);
+  const [mcpSetupChoices, setMcpSetupChoices] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -274,6 +275,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
               liveMcp.map((server) => (
                 <div key={`live:${server.name}`} className="ext-row">
                   <div className="ext-row-main"><div className="ext-row-title"><strong>{server.displayName || server.name}</strong><span className="pill">{server.session?.status || 'configured'}</span></div><div className="ext-row-desc">{server.session?.tools?.length ?? 0} tools</div>
+                    {server.session?.setupRequired && server.setup?.fields?.length === 1 && server.setup.fields[0].type === 'select' ? (() => { const field = server.setup!.fields![0]; const selected = mcpSetupChoices[server.name] ?? field.default ?? field.options?.[0]?.value ?? ''; return <div className="field-row" style={{ marginTop: 8 }}><select value={selected} onChange={(e) => setMcpSetupChoices((old) => ({ ...old, [server.name]: e.target.value }))} aria-label={field.label}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button type="button" className="btn btn-sm primary-sm" disabled={busy || !selected} onClick={() => { setBusy(true); void liveClient!.setupLiveMcp(liveSessionId!, server.name, { [field.id]: selected }).then(() => refreshLiveMcp(true)).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{t('extMcpApplySetup')}</button></div>; })() : null}
                     {server.session?.tools?.length ? <div className="field-row" style={{ marginTop: 7, flexWrap: 'wrap' }}>{server.session.tools.slice(0, 16).map((tool) => <button key={tool.name} type="button" className={`btn btn-sm${tool.enabled ? '' : ' danger'}`} disabled={busy} title={tool.description || tool.name} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcpTool(liveSessionId!, server.name, tool.name, !tool.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{tool.displayName || tool.name}{tool.enabled ? ` · ${t('extMcpToolOn')}` : ` · ${t('extMcpToolOff')}`}</button>)}</div> : null}
                   </div>
                   <div className="ext-row-actions">
