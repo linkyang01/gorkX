@@ -147,6 +147,11 @@ export async function modelsList(grokCmd?: string): Promise<string> {
   return output(await admin(['models'], grokCmd));
 }
 
+/** Fetch managed Grok Build configuration without installing or changing it. */
+export async function previewManagedSetup(grokCmd?: string): Promise<string> {
+  return requireSuccess(await admin(['setup', '--json'], grokCmd), 'managed configuration preview');
+}
+
 export type ComputerWorkspaceAction = 'pause' | 'resume' | 'stop' | 'restart';
 
 /** Computer Hub is server-gated. These are fixed Grok Build subcommands, not shell text. */

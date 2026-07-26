@@ -99,6 +99,7 @@ import {
   computerWorkspaceControl,
   computerWorkspaceStart,
   computerWorkspaceStatus,
+  previewManagedSetup,
   type ComputerWorkspaceAction,
 } from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
@@ -331,6 +332,8 @@ export function SettingsPanel({
   const [todayTokenUsage, setTodayTokenUsage] = useState<DailyTokenUsage | null>(null);
   const [computerHubStatus, setComputerHubStatus] = useState<string | null>(null);
   const [computerHubBusy, setComputerHubBusy] = useState(false);
+  const [managedSetup, setManagedSetup] = useState<string | null>(null);
+  const [managedSetupBusy, setManagedSetupBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -2249,6 +2252,29 @@ export function SettingsPanel({
                     {t('clearChatCache')}
                   </button>
                 </div>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsManagedConfigTitle')}</div>
+                    <div className="settings-row-hint">{t('settingsManagedConfigHint')}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={managedSetupBusy}
+                  onClick={() => {
+                    setManagedSetupBusy(true);
+                    void previewManagedSetup(grokCmd || undefined)
+                      .then(setManagedSetup)
+                      .catch((error) => setManagedSetup(error instanceof Error ? error.message : String(error)))
+                      .finally(() => setManagedSetupBusy(false));
+                  }}
+                >
+                  {t('settingsManagedConfigPreview')}
+                </button>
+                {managedSetup ? <pre className="ext-msg" style={{ marginTop: 10 }}>{managedSetup}</pre> : null}
               </div>
               <h3 className="subhead">{t('settingsSandboxTitle')}</h3>
               <div className="settings-card">
