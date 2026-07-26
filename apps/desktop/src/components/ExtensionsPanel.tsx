@@ -3,6 +3,9 @@ import { open as openFile } from '@tauri-apps/plugin-dialog';
 import {
   fetchExtensionsSnapshot,
   fetchMarketplace,
+  addMarketplace,
+  updateMarketplace,
+  removeMarketplace,
   addRemoteMcp,
   addLocalMcp,
   installPlugin,
@@ -43,6 +46,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
   const [busy, setBusy] = useState(false);
   const [marketRaw, setMarketRaw] = useState('');
   const [marketSources, setMarketSources] = useState<unknown[]>([]);
+  const [marketSourceDraft, setMarketSourceDraft] = useState('');
   const [liveMcp, setLiveMcp] = useState<LiveMcpServer[]>([]);
   const [mcpSetupChoices, setMcpSetupChoices] = useState<Record<string, string>>({});
   const [remoteMcpName, setRemoteMcpName] = useState('');
@@ -72,15 +76,19 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
     if (open) void refresh();
   }, [open, refresh]);
 
+  const refreshMarketplace = useCallback(async () => {
+    try {
+      const m = await fetchMarketplace(grokCmd || undefined);
+      setMarketSources(m.sources ?? []);
+      setMarketRaw(m.raw ?? '');
+    } catch (e) {
+      setMsg(String(e));
+    }
+  }, [grokCmd]);
+
   useEffect(() => {
-    if (!open || tab !== 'market') return;
-    void fetchMarketplace(grokCmd || undefined)
-      .then((m) => {
-        setMarketSources(m.sources ?? []);
-        setMarketRaw(m.raw ?? '');
-      })
-      .catch((e) => setMsg(String(e)));
-  }, [open, tab, grokCmd]);
+    if (open && tab === 'market') void refreshMarketplace();
+  }, [open, tab, refreshMarketplace]);
   const refreshLiveMcp = useCallback(async (fresh = false) => {
     if (!liveClient || !liveSessionId) { setLiveMcp([]); return; }
     setLiveMcp(await liveClient.listLiveMcp(liveSessionId, fresh));
@@ -497,8 +505,52 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
 
           {tab === 'market' ? (
             <>
+              <div className="ext-install" aria-label={t('marketAdd')}>
+                <input
+                  value={marketSourceDraft}
+                  onChange={(e) => setMarketSourceDraft(e.target.value)}
+                  placeholder={t('marketSourcePlaceholder')}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy || !marketSourceDraft.trim()}
+                  onClick={() => {
+                    const source = marketSourceDraft.trim();
+                    if (!source) return;
+                    setBusy(true);
+                    void addMarketplace(source, grokCmd || undefined)
+                      .then((s) => {
+                        setMarketSourceDraft('');
+                        setMsg(s || t('marketAddDone'));
+                        return refreshMarketplace();
+                      })
+                      .catch((e) => setMsg(String(e)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {t('marketAdd')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void updateMarketplace(undefined, grokCmd || undefined)
+                      .then((s) => {
+                        setMsg(s || t('marketUpdateDone'));
+                        return refreshMarketplace();
+                      })
+                      .catch((e) => setMsg(String(e)))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  {t('marketUpdateAll')}
+                </button>
+              </div>
               {marketSources.length === 0 && !marketRaw ? (
-                <div className="hint">{t('extNoPlugins')}</div>
+                <div className="hint">{t('marketNoSources')}</div>
               ) : null}
               {marketSources.map((src, i) => {
                 const o = (src && typeof src === 'object' ? src : {}) as Record<string, unknown>;
@@ -515,6 +567,43 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                         <span className="pill">{String(o.kind ?? 'git')}</span>
                       </div>
                       <div className="ext-row-desc mono">{url || JSON.stringify(src).slice(0, 200)}</div>
+                    </div>
+                    <div className="ext-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          void updateMarketplace(url || name, grokCmd || undefined)
+                            .then((s) => {
+                              setMsg(s || t('marketUpdateDone'));
+                              return refreshMarketplace();
+                            })
+                            .catch((e) => setMsg(String(e)))
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        {t('marketUpdate')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => {
+                          if (!window.confirm(t('marketRemoveConfirm').replace('{name}', name))) return;
+                          setBusy(true);
+                          void removeMarketplace(url || name, grokCmd || undefined)
+                            .then((s) => {
+                              setMsg(s || t('marketRemoveDone'));
+                              return refreshMarketplace();
+                            })
+                            .catch((e) => setMsg(String(e)))
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        {t('marketRemove')}
+                      </button>
                     </div>
                   </div>
                 );

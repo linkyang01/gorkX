@@ -103,6 +103,13 @@ export async function fetchMarketplace(grokCmd?: string): Promise<{
   return invoke('extensions_marketplace', { grokCmd: grokCmd || null });
 }
 
+export const addMarketplace = (source: string, grokCmd?: string) =>
+  invoke<string>('extensions_marketplace_add', { source, grokCmd: grokCmd || null });
+export const updateMarketplace = (source?: string, grokCmd?: string) =>
+  invoke<string>('extensions_marketplace_update', { source: source?.trim() || null, grokCmd: grokCmd || null });
+export const removeMarketplace = (source: string, grokCmd?: string) =>
+  invoke<string>('extensions_marketplace_remove', { source, grokCmd: grokCmd || null });
+
 /** Enable an isolated Playwright MCP pointed at Chrome (agent browser control). */
 export async function enablePlaywrightChromeMcp(
   grokCmd?: string,

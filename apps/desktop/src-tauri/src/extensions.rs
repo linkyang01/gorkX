@@ -764,7 +764,7 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{local_mcp_args, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{local_mcp_args, marketplace_source, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -835,6 +835,13 @@ mod tests {
         }).unwrap();
         assert_eq!(args, vec!["mcp", "add", "--scope", "user", "local-smoke", "--", "/usr/bin/true", "--flag", "value with spaces"]);
         assert!(local_mcp_args(&LocalMcpInput { name: "local".into(), command: "/missing".into(), args: vec![], scope: "user".into() }).is_err());
+    }
+
+    #[test]
+    fn marketplace_source_accepts_a_single_safe_reference() {
+        assert_eq!(marketplace_source(" linkyang01/gorkX ").unwrap(), "linkyang01/gorkX");
+        assert!(marketplace_source("\nhttps://example.com/market.git").is_err());
+        assert!(marketplace_source("\0").is_err());
     }
 }
 
@@ -1075,6 +1082,44 @@ pub async fn extensions_marketplace(grok_cmd: Option<String>) -> Result<Marketpl
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+fn marketplace_source(raw: &str) -> Result<String, String> {
+    let value = raw.trim();
+    if value.is_empty()
+        || value.len() > 2048
+        || raw.contains('\0')
+        || raw.contains(['\n', '\r'])
+    {
+        return Err("Enter a valid marketplace git URL, GitHub shorthand, or local path.".into());
+    }
+    Ok(value.into())
+}
+
+#[tauri::command]
+pub async fn extensions_marketplace_add(source: String, grok_cmd: Option<String>) -> Result<String, String> {
+    let source = marketplace_source(&source)?;
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["plugin", "marketplace", "add", &source]))
+        .await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn extensions_marketplace_update(source: Option<String>, grok_cmd: Option<String>) -> Result<String, String> {
+    let source = source.map(|value| marketplace_source(&value)).transpose()?;
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || match source {
+        Some(value) => run_grok_text(&bin, &["plugin", "marketplace", "update", &value]),
+        None => run_grok_text(&bin, &["plugin", "marketplace", "update"]),
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn extensions_marketplace_remove(source: String, grok_cmd: Option<String>) -> Result<String, String> {
+    let source = marketplace_source(&source)?;
+    let bin = grok_bin(grok_cmd.as_deref());
+    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["plugin", "marketplace", "remove", &source]))
+        .await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
