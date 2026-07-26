@@ -136,6 +136,7 @@ import {
   type ComposerAttachment,
 } from './lib/attachments';
 import { captureScreenRegion } from './lib/host';
+import { withConversationPresentation } from './lib/conversationPresentation';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -3250,9 +3251,12 @@ function App() {
           text: userVisible,
           attachments: initialAttachments.length ? initialAttachments : undefined,
         });
+        const ordinaryPrompt = initialPrompt.startsWith('/')
+          ? initialPrompt
+          : withConversationPresentation(initialPrompt);
         const enginePrompt = memInject
-          ? `${memInject}\n\n---\n\n用户请求：\n${initialPrompt}`
-          : initialPrompt;
+          ? `${memInject}\n\n---\n\n用户请求：\n${ordinaryPrompt}`
+          : ordinaryPrompt;
         try {
           const result = await client.prompt(
             sessionId,
@@ -3761,7 +3765,9 @@ function App() {
     }
     patchThread(agent.id, { busy: true, error: null });
     // Hermes: inject long-term memory once on first real user turn
-    let engineBody = promptBody;
+    let engineBody = !text.startsWith('/') && !choiceSubmission
+      ? withConversationPresentation(promptBody)
+      : promptBody;
     let markInjected = false;
     if (!agent.memoryInjected && !text.startsWith('/')) {
       let inject = agent.memoryInject || '';
@@ -3775,7 +3781,7 @@ function App() {
         }
       }
       if (inject) {
-        engineBody = `${inject}\n\n---\n\n用户请求：\n${promptBody}`;
+        engineBody = `${inject}\n\n---\n\n用户请求：\n${engineBody}`;
         markInjected = true;
       }
     }
