@@ -4964,11 +4964,16 @@ function App() {
                         })()}
                 </span>
                 <span className="account-quota">
-                  {accountAuthenticated && account?.creditUsagePercent != null
-                    ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
-                    : accountAuthenticated
-                      ? account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') || account?.membershipLabel || '—'
-                      : '—'}
+                  {(() => {
+                    const usagePercent = account?.creditUsagePercent ?? (
+                      accountAuthenticated ? loadConfirmedQuota(account?.email)?.usagePercent : null
+                    );
+                    return usagePercent != null
+                      ? `已用 ${Math.round(usagePercent)}% · 剩 ${Math.max(0, Math.round(100 - usagePercent))}%`
+                      : accountAuthenticated
+                        ? account?.quotaLabel?.replace(/\s*·\s*重置.*$/, '') || account?.membershipLabel || '—'
+                        : '—';
+                  })()}
                 </span>
               </span>
             </button>
