@@ -270,6 +270,36 @@ interface Thread {
   sessionGoal?: SessionGoal | null;
 }
 
+/** Bounded, server-provided follow-up chips for one task's latest response. */
+type FollowUpState = {
+  responseId: string;
+  suggestions: string[];
+};
+
+function readFollowUps(raw: unknown): FollowUpState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const responseId = typeof value.response_id === 'string' ? value.response_id.trim() : '';
+  if (!responseId || responseId.length > 128 || !Array.isArray(value.suggestions)) return null;
+  const seen = new Set<string>();
+  const suggestions = value.suggestions.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const rawLabel = (item as Record<string, unknown>).label;
+    const label = typeof rawLabel === 'string' ? rawLabel : '';
+    // ACP extension payloads are untrusted. Keep visible text printable and
+    // bounded before it becomes a clickable send action.
+    const clean = label
+      .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 256);
+    if (!clean || seen.has(clean)) return [];
+    seen.add(clean);
+    return [clean];
+  }).slice(0, 6);
+  return suggestions.length ? { responseId, suggestions } : null;
+}
+
 interface RecentSession {
   sessionId: string;
   title?: string | null;
@@ -447,6 +477,7 @@ function App() {
   /** Always auto-compact near context limit — no user-facing toggle. */
   const compactingRef = useRef(false);
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [followUps, setFollowUps] = useState<Record<string, FollowUpState>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   /** Session currently holding Grok Build's native microphone pipeline. */
@@ -1622,6 +1653,13 @@ function App() {
       };
 
       client.onNotification = (method, rawParams) => {
+        if (method === 'x.ai/follow_ups' || method === '_x.ai/follow_ups') {
+          const next = readFollowUps(rawParams);
+          if (next) {
+            setFollowUps((previous) => ({ ...previous, [threadId]: next }));
+          }
+          return;
+        }
         if (method !== 'x.ai/voice/transcript' && method !== '_x.ai/voice/transcript') return;
         const params = rawParams && typeof rawParams === 'object'
           ? rawParams as { sessionId?: unknown; kind?: unknown; text?: unknown; message?: unknown; hint?: unknown }
@@ -3147,6 +3185,16 @@ function App() {
     const agent = live;
     const client = agent.client!;
     const sessionId = agent.sessionId!;
+
+    // Suggestions belong to the prior response. A user-authored send (or a
+    // clicked suggestion) starts the next turn, so they must not linger.
+    if (!/^\/btw(?:\s|$)/i.test(text)) {
+      setFollowUps((previous) => {
+        if (!(agent.id in previous)) return previous;
+        const { [agent.id]: _consumed, ...rest } = previous;
+        return rest;
+      });
+    }
 
     // Silent auto-compact near model threshold (always on; no UI toggle)
     if (!text.startsWith('/') && !compactingRef.current) {
@@ -5397,6 +5445,7 @@ function App() {
               showProcessInChat={false}
               choiceDisabled={active.busy}
               onSelectChoice={(value) => void send(value)}
+              followUps={followUps[active.id]?.suggestions}
               footer={
                 userQuestionReq && userQuestionAgentId === active.id ? (
                   <UserQuestionPrompt

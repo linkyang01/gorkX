@@ -41,6 +41,8 @@ interface Props {
   choiceDisabled?: boolean;
   /** Native, current-session action requested by the kernel. */
   footer?: ReactNode;
+  /** Server-suggested next questions from the current Grok Build response. */
+  followUps?: string[];
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -180,6 +182,7 @@ export function MessageList({
   onSelectChoice,
   choiceDisabled = false,
   footer,
+  followUps = [],
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -245,6 +248,15 @@ export function MessageList({
           );
         })}
         {footer}
+        {followUps.length ? (
+          <div className="msg-flow-item">
+            <ResponseChoices
+              choices={followUps.map((value) => ({ label: value, value }))}
+              onSelect={onSelectChoice}
+              disabled={choiceDisabled}
+            />
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
     </div>
