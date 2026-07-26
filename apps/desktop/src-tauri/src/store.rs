@@ -140,15 +140,9 @@ impl AppStore {
               reasoning_tokens INTEGER NOT NULL DEFAULT 0,
               updated_at INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE IF NOT EXISTS token_usage_samples (
-              thread_id TEXT NOT NULL,
-              model_id TEXT NOT NULL DEFAULT '',
-              total_tokens INTEGER,
-              input_tokens INTEGER,
-              output_tokens INTEGER,
-              cached_read_tokens INTEGER,
-              reasoning_tokens INTEGER,
-              PRIMARY KEY (thread_id, model_id)
+            CREATE TABLE IF NOT EXISTS token_usage_events (
+              event_key TEXT PRIMARY KEY,
+              recorded_at INTEGER NOT NULL
             );
             "#,
         )
@@ -203,19 +197,8 @@ pub struct DailyTokenUsageRow {
     pub updated_at: i64,
 }
 
-fn nonnegative(value: Option<i64>) -> Option<i64> {
-    value.filter(|value| *value >= 0)
-}
-
-/// Counters normally grow across a session. If the kernel starts a fresh
-/// segment (or compacts a context) and the reported counter drops, the new
-/// counter itself is the next actual segment rather than a negative delta.
-fn token_delta(next: Option<i64>, previous: Option<i64>) -> i64 {
-    match (nonnegative(next), nonnegative(previous)) {
-        (Some(next), Some(previous)) if next >= previous => next - previous,
-        (Some(next), _) => next,
-        _ => 0,
-    }
+fn nonnegative(value: Option<i64>) -> i64 {
+    value.unwrap_or(0).max(0)
 }
 
 fn valid_usage_day(day: &str) -> bool {
@@ -245,61 +228,42 @@ fn read_daily_usage(conn: &Connection, day: &str) -> Result<DailyTokenUsageRow, 
     .map_err(|e| e.to_string())
 }
 
-/// Record a de-duplicated increment from an ACP token counter. All data stays
-/// in gorkX's local SQLite database; there is no token estimate or network call.
+/// Record a de-duplicated completed ACP prompt. Each item is the kernel's
+/// per-turn PromptResponse usage, never a context/snapshot estimate.
 #[tauri::command]
 pub fn store_record_daily_token_usage(
     store: State<'_, AppStore>,
     day: String,
-    thread_id: String,
-    model_id: Option<String>,
+    event_key: String,
     usage: TokenUsageInput,
 ) -> Result<DailyTokenUsageRow, String> {
     if !valid_usage_day(&day) {
         return Err("invalid local usage day".into());
     }
-    let thread_id = thread_id.trim();
-    if thread_id.is_empty() {
-        return Err("thread id is empty".into());
+    let event_key = event_key.trim();
+    if event_key.is_empty() || event_key.len() > 384 {
+        return Err("invalid usage event key".into());
     }
-    // A session can switch models while keeping one cumulative token counter.
-    // Keep one checkpoint per task so a model change cannot re-count all prior
-    // context as fresh usage. The parameter remains for forward compatibility
-    // with future per-model reporting, but is deliberately not used today.
-    let _model_id = model_id;
-    let sample_model_id = "";
     let conn = store.conn.lock().map_err(|e| e.to_string())?;
-    let previous = conn
-        .query_row(
-            "SELECT total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens FROM token_usage_samples WHERE thread_id = ?1 AND model_id = ?2",
-            params![thread_id, sample_model_id],
-            |row| Ok((
-                row.get::<_, Option<i64>>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, Option<i64>>(2)?,
-                row.get::<_, Option<i64>>(3)?, row.get::<_, Option<i64>>(4)?,
-            )),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
-    let (prev_total, prev_input, prev_output, prev_cached, prev_reasoning) =
-        previous.unwrap_or((None, None, None, None, None));
-    let input_delta = token_delta(usage.input_tokens, prev_input);
-    let output_delta = token_delta(usage.output_tokens, prev_output);
-    let cached_delta = token_delta(usage.cached_read_tokens, prev_cached);
-    let reasoning_delta = token_delta(usage.reasoning_tokens, prev_reasoning);
-    // Prefer the kernel's own total counter. When it is absent, input + output
-    // is the only non-overlapping fallback we can state honestly.
-    let total_delta = match usage.total_tokens {
-        Some(_) => token_delta(usage.total_tokens, prev_total),
-        None => input_delta + output_delta,
-    };
     let now = chrono_like_now().parse::<i64>().unwrap_or(0);
+    let inserted = conn.execute(
+        "INSERT OR IGNORE INTO token_usage_events (event_key, recorded_at) VALUES (?1, ?2)",
+        params![event_key, now],
+    ).map_err(|e| e.to_string())?;
+    if inserted == 0 {
+        return read_daily_usage(&conn, &day);
+    }
+    let input = nonnegative(usage.input_tokens);
+    let output = nonnegative(usage.output_tokens);
+    let cached = nonnegative(usage.cached_read_tokens);
+    let reasoning = nonnegative(usage.reasoning_tokens);
+    // `totalTokens` is the kernel's full prompt sum (including cache). If an
+    // older response omits it, input + output is the only non-overlapping
+    // fallback available; cache/reasoning remain separately displayed.
+    let total = usage.total_tokens.map(|value| value.max(0)).unwrap_or(input + output);
     conn.execute(
         "INSERT INTO daily_token_usage (day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(day) DO UPDATE SET total_tokens = total_tokens + excluded.total_tokens, input_tokens = input_tokens + excluded.input_tokens, output_tokens = output_tokens + excluded.output_tokens, cached_read_tokens = cached_read_tokens + excluded.cached_read_tokens, reasoning_tokens = reasoning_tokens + excluded.reasoning_tokens, updated_at = excluded.updated_at",
-        params![day, total_delta, input_delta, output_delta, cached_delta, reasoning_delta, now],
-    ).map_err(|e| e.to_string())?;
-    conn.execute(
-        "INSERT INTO token_usage_samples (thread_id, model_id, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(thread_id, model_id) DO UPDATE SET total_tokens = excluded.total_tokens, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, cached_read_tokens = excluded.cached_read_tokens, reasoning_tokens = excluded.reasoning_tokens",
-        params![thread_id, sample_model_id, nonnegative(usage.total_tokens), nonnegative(usage.input_tokens), nonnegative(usage.output_tokens), nonnegative(usage.cached_read_tokens), nonnegative(usage.reasoning_tokens)],
+        params![day, total, input, output, cached, reasoning, now],
     ).map_err(|e| e.to_string())?;
     read_daily_usage(&conn, &day)
 }
@@ -1246,7 +1210,7 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{search_thread_history, token_delta, valid_usage_day, visible_models_from_cache};
+    use super::{search_thread_history, valid_usage_day, visible_models_from_cache};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1305,13 +1269,7 @@ mod model_cache_tests {
     }
 
     #[test]
-    fn daily_token_counter_uses_only_new_kernel_counter_values() {
-        assert_eq!(token_delta(Some(140), Some(100)), 40);
-        assert_eq!(token_delta(Some(140), Some(140)), 0);
-        // A reset/compaction starts the next reported segment, never a
-        // negative adjustment that would erase earlier local usage.
-        assert_eq!(token_delta(Some(25), Some(140)), 25);
-        assert_eq!(token_delta(None, Some(140)), 0);
+    fn daily_token_usage_requires_a_local_calendar_day() {
         assert!(valid_usage_day("2026-07-26"));
         assert!(!valid_usage_day("2026/07/26"));
     }

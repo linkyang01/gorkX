@@ -40,15 +40,14 @@ function usagePayload(usage: UsageSnapshot) {
  * that its temporary data is durable desktop usage history.
  */
 export async function recordDailyTokenUsage(
-  threadId: string,
+  eventKey: string,
   usage: UsageSnapshot,
 ): Promise<DailyTokenUsage | null> {
-  if (!isTauri() || !threadId.trim()) return null;
+  if (!isTauri() || !eventKey.trim()) return null;
   if (usage.totalTokens == null && usage.inputTokens == null && usage.outputTokens == null) return null;
   return invoke<DailyTokenUsage>('store_record_daily_token_usage', {
     day: localUsageDay(),
-    threadId,
-    modelId: usage.modelId ?? null,
+    eventKey,
     usage: usagePayload(usage),
   });
 }

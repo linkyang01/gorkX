@@ -562,6 +562,7 @@ export function parseUserQuestionRequest(
 
 export interface PromptResult {
   stopReason?: string;
+  userMessageId?: string;
   _meta?: Record<string, unknown>;
 }
 
@@ -672,7 +673,7 @@ export class AcpClient {
   onAvailableCommands:
     | ((commands: AvailableCommandInfo[]) => void)
     | null = null;
-  onUsageMeta: ((meta: unknown) => void) | null = null;
+  onUsageMeta: ((meta: unknown, source: 'snapshot' | 'prompt-result', eventKey?: string) => void) | null = null;
 
   private worktreeWaiters = new Map<
     string,
@@ -773,9 +774,9 @@ export class AcpClient {
           parseAvailableCommands((update as { availableCommands?: unknown }).availableCommands),
         );
       }
-      if (params._meta) this.onUsageMeta?.(params);
+      if (params._meta) this.onUsageMeta?.(params, 'snapshot');
       else if ((update as { _meta?: unknown })._meta) {
-        this.onUsageMeta?.(update);
+        this.onUsageMeta?.(update, 'snapshot');
       }
       this.onSessionUpdate?.(update, params.sessionId ?? params.session_id);
       return;
@@ -799,8 +800,8 @@ export class AcpClient {
         _meta?: unknown;
       };
       const update = (params.update ?? params) as SessionUpdate;
-      if (params._meta) this.onUsageMeta?.(params);
-      else if ((update as { _meta?: unknown })._meta) this.onUsageMeta?.(update);
+      if (params._meta) this.onUsageMeta?.(params, 'snapshot');
+      else if ((update as { _meta?: unknown })._meta) this.onUsageMeta?.(update, 'snapshot');
       this.onSessionUpdate?.(update, params.sessionId ?? params.session_id);
       return;
     }
@@ -809,7 +810,7 @@ export class AcpClient {
       method === '_x.ai/session/prompt_complete' ||
       method === '_x.ai/session_notification'
     ) {
-      this.onUsageMeta?.(msg.params);
+      this.onUsageMeta?.(msg.params, 'snapshot');
     }
 
     if (
@@ -1300,11 +1301,21 @@ export class AcpClient {
         ...(typeof resource.size === 'number' ? { size: resource.size } : {}),
       });
     }
+    // The server returns one usage object per accepted prompt. Supplying our
+    // own message id makes that completed turn durable/deduplicable in the
+    // desktop's local daily usage history.
+    const messageId = crypto.randomUUID();
     const result = (await this.request('session/prompt', {
       sessionId,
+      messageId,
       prompt,
     })) as PromptResult;
-    if (result) this.onUsageMeta?.(result);
+    if (result) {
+      const resultId = result.userMessageId
+        ?? (result._meta?.userMessageId as string | undefined)
+        ?? messageId;
+      this.onUsageMeta?.(result, 'prompt-result', `${sessionId}:${resultId}`);
+    }
     return result;
   }
 

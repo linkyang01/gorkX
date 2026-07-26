@@ -43,8 +43,8 @@ export function usageFromUnknown(raw: unknown): UsageSnapshot | null {
       num(usage, 'cachedReadTokens', 'cached_read_tokens') ??
       num(meta, 'cachedReadTokens', 'cached_read_tokens'),
     reasoningTokens:
-      num(usage, 'reasoningTokens', 'reasoning_tokens') ??
-      num(meta, 'reasoningTokens', 'reasoning_tokens'),
+      num(usage, 'reasoningTokens', 'reasoning_tokens', 'thoughtTokens', 'thought_tokens') ??
+      num(meta, 'reasoningTokens', 'reasoning_tokens', 'thoughtTokens', 'thought_tokens'),
     contextUsed:
       num(usage, 'contextUsed', 'context_used', 'promptTokens', 'prompt_tokens') ??
       num(meta, 'contextUsed', 'context_used'),
