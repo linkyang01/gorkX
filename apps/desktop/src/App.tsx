@@ -18,6 +18,7 @@ import {
   stopAllAgents,
   parsePlanUpdate,
   parseSubagentUpdate,
+  parseWorkflowUpdate,
   isToolCallIdLike,
   parseToolUpdate,
   permissionResult,
@@ -1500,6 +1501,32 @@ function App() {
             parentSubagentId: subagent.parentSubagentId,
           });
           persistImages();
+          return;
+        }
+
+        const workflow = parseWorkflowUpdate(update);
+        if (workflow) {
+          setThreads((previous) => previous.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            const key = `workflow:${workflow.runId}`;
+            if (workflow.status === 'cleared') {
+              return { ...thread, lines: thread.lines.filter((line) => line.toolKey !== key) };
+            }
+            const summary = `${workflow.name} · ${workflow.status}${workflow.currentPhase ? ` · ${workflow.currentPhase}` : ''}`;
+            const existing = thread.lines.findIndex((line) => line.toolKey === key);
+            const next: ChatLine = {
+              id: existing >= 0 ? thread.lines[existing].id : nid(),
+              role: 'workflow',
+              text: summary,
+              toolKey: key,
+              toolStatus: workflow.status,
+              workflow,
+            };
+            const lines = [...thread.lines];
+            if (existing >= 0) lines[existing] = next;
+            else lines.push(next);
+            return { ...thread, lines };
+          }));
           return;
         }
 

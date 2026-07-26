@@ -3232,6 +3232,40 @@ button.pill:hover {
   padding: 0;
 }
 
+/* ── Kernel workflow progress ─────────────────────────── */
+.workflow-card {
+  margin: 4px 0 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--hairline));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.workflow-card-restored { color: var(--text-2); font-size: 13px; }
+.workflow-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.workflow-card-kicker { margin-bottom: 2px; color: var(--text-3); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.workflow-card-head strong { font-size: 14px; overflow-wrap: anywhere; }
+.workflow-status { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; background: var(--glass); color: var(--text-2); font-size: 11px; font-weight: 650; text-transform: capitalize; }
+.workflow-done .workflow-status { color: #248a3d; background: rgba(52, 199, 89, .13); }
+.workflow-failed .workflow-status { color: #c0342b; background: rgba(255, 69, 58, .12); }
+.workflow-paused .workflow-status { color: #a65b00; background: rgba(255, 159, 10, .13); }
+.workflow-objective, .workflow-note, .workflow-result { margin: 9px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-result { padding: 9px 10px; border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; background: var(--glass); color: var(--text); }
+.workflow-note { color: #a65b00; }
+.workflow-metrics { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; color: var(--text-3); font-size: 12px; }
+.workflow-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.workflow-phases li { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-3); font-size: 12px; }
+.workflow-phases li span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-phase-dot, .workflow-agent-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--hairline-strong); }
+.workflow-phases li.running .workflow-phase-dot, .workflow-agent.running .workflow-agent-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.workflow-phases li.complete .workflow-phase-dot, .workflow-phases li.done .workflow-phase-dot { background: #34c759; }
+.workflow-phases li.failed .workflow-phase-dot { background: #ff453a; }
+.workflow-progress { height: 4px; margin-top: 11px; overflow: hidden; border-radius: 999px; background: var(--hairline); }
+.workflow-progress i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--plan)); transition: width .25s ease; }
+.workflow-agents { display: grid; gap: 5px; margin-top: 11px; }
+.workflow-agent { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 7px; color: var(--text-2); font-size: 12px; }
+.workflow-agent > span:nth-child(2), .workflow-agent small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-agent small { color: var(--text-3); font-size: 11px; }
+
 .plan-card {
   border: 1px solid rgba(175, 82, 222, 0.22);
   border-radius: 14px;

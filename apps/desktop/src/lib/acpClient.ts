@@ -148,6 +148,32 @@ export interface HooksSnapshot {
   loadErrors?: string[];
 }
 
+/** A live Grok Build background-workflow update. The kernel owns execution. */
+export interface WorkflowRunUpdate {
+  runId: string;
+  revision: number;
+  name: string;
+  objective: string;
+  status: string;
+  phases: Array<{ title: string; state: string }>;
+  currentPhase?: string | null;
+  agentBudget?: number | null;
+  agentsUsed: number;
+  agentsRemaining?: number | null;
+  activeAgents: number;
+  elapsedMs: number;
+  agents: Array<{
+    id: string;
+    label: string;
+    phase?: string | null;
+    state: string;
+    model?: string | null;
+    tokensUsed?: number | null;
+  }>;
+  resultSummary?: string | null;
+  pauseMessage?: string | null;
+}
+
 export type SessionUpdate = {
   sessionUpdate: string;
   content?: { type?: string; text?: string } | string;
@@ -157,6 +183,86 @@ export type SessionUpdate = {
   kind?: string;
   [k: string]: unknown;
 };
+
+const workflowText = (value: unknown, max: number) =>
+  typeof value === 'string'
+    ? value.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F]/g, '').trim().slice(0, max)
+    : '';
+
+const workflowNumber = (value: unknown, fallback = 0) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
+
+/**
+ * Normalize a server-sent workflow update before the desktop renders it. The
+ * run is never started or managed here; this only projects a bounded status
+ * card from Grok Build's ACP event.
+ */
+export function parseWorkflowUpdate(update: SessionUpdate): WorkflowRunUpdate | null {
+  const raw = update as Record<string, unknown>;
+  const event = String(update.sessionUpdate ?? '');
+  if (event !== 'workflow_updated' && event !== 'workflowUpdated') return null;
+  const runId = workflowText(raw.runId ?? raw.run_id, 128);
+  const name = workflowText(raw.name, 160);
+  const objective = workflowText(raw.objective, 1_000);
+  const status = workflowText(raw.status, 64).toLowerCase();
+  if (!runId || !name || !status) return null;
+  const phases = Array.isArray(raw.phases)
+    ? raw.phases.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const title = workflowText(row.title, 180);
+        const state = workflowText(row.state, 64).toLowerCase();
+        return title && state ? [{ title, state }] : [];
+      }).slice(0, 24)
+    : [];
+  const agents = Array.isArray(raw.agents)
+    ? raw.agents.flatMap((entry) => {
+        if (!entry || typeof entry !== 'object') return [];
+        const row = entry as Record<string, unknown>;
+        const id = workflowText(row.agentId ?? row.agent_id, 128);
+        const label = workflowText(row.label, 180);
+        const state = workflowText(row.state, 64).toLowerCase();
+        if (!id || !label || !state) return [];
+        return [{
+          id,
+          label,
+          state,
+          phase: workflowText(row.phase, 160) || null,
+          model: workflowText(row.model, 160) || null,
+          tokensUsed: typeof row.tokensUsed === 'number'
+            ? workflowNumber(row.tokensUsed)
+            : typeof row.tokens_used === 'number'
+              ? workflowNumber(row.tokens_used)
+              : null,
+        }];
+      }).slice(0, 48)
+    : [];
+  return {
+    runId,
+    revision: workflowNumber(raw.revision),
+    name,
+    objective,
+    status,
+    phases,
+    currentPhase: workflowText(raw.currentPhase ?? raw.current_phase, 180) || null,
+    agentBudget: typeof raw.agentBudget === 'number'
+      ? workflowNumber(raw.agentBudget)
+      : typeof raw.agent_budget === 'number'
+        ? workflowNumber(raw.agent_budget)
+        : null,
+    agentsUsed: workflowNumber(raw.agentsUsed ?? raw.agents_used),
+    agentsRemaining: typeof raw.agentsRemaining === 'number'
+      ? workflowNumber(raw.agentsRemaining)
+      : typeof raw.agents_remaining === 'number'
+        ? workflowNumber(raw.agents_remaining)
+        : null,
+    activeAgents: workflowNumber(raw.activeAgents ?? raw.active_agents),
+    elapsedMs: workflowNumber(raw.elapsedMs ?? raw.elapsed_ms),
+    agents,
+    resultSummary: workflowText(raw.resultSummary ?? raw.result_summary, 2_000) || null,
+    pauseMessage: workflowText(raw.pauseMessage ?? raw.pause_message, 800) || null,
+  };
+}
 
 export interface PermissionRequest {
   jsonrpcId: number | string;

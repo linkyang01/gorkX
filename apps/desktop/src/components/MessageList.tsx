@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { MarkdownView } from './MarkdownView';
 import { extractResponseChoices, ResponseChoices } from './ResponseChoices';
 import { PlanCard } from './PlanCard';
+import { WorkflowCard } from './WorkflowCard';
 import { AttachmentStrip } from './AttachmentStrip';
-import type { PlanEntry } from '../lib/acpClient';
+import type { PlanEntry, WorkflowRunUpdate } from '../lib/acpClient';
 import type { ComposerAttachment } from '../lib/attachments';
 import {
   isNoiseSystem,
@@ -17,7 +18,7 @@ import { IconThought, IconTool, IconSystem, IconWarning } from './UiIcons';
 
 export interface ChatLine {
   id: string;
-  role: 'user' | 'assistant' | 'thought' | 'tool' | 'system' | 'plan';
+  role: 'user' | 'assistant' | 'thought' | 'tool' | 'system' | 'plan' | 'workflow';
   text: string;
   toolKey?: string;
   /** Native parent task id when Grok Build reports nested subagent work. */
@@ -26,6 +27,8 @@ export interface ChatLine {
   toolStatus?: string;
   toolKind?: string;
   attachments?: ComposerAttachment[];
+  /** Live workflow projection; restored snapshots retain the plain summary. */
+  workflow?: WorkflowRunUpdate;
 }
 
 interface Props {
@@ -132,6 +135,13 @@ function LineView({
       </div>
     );
   }
+  if (line.role === 'workflow') {
+    return (
+      <div className="tl-row tl-assistant">
+        <WorkflowCard workflow={line.workflow} fallback={line.text} />
+      </div>
+    );
+  }
   if (line.role === 'thought') return <ThoughtBlock text={line.text} />;
   if (line.role === 'tool') {
     return <ToolRow text={line.text} status={line.toolStatus} kind={line.toolKind} />;
@@ -191,7 +201,7 @@ export function MessageList({
   const visible = showProcessInChat
     ? lines
     : lines.filter(
-        (l) => l.role === 'user' || l.role === 'assistant' || l.role === 'plan',
+        (l) => l.role === 'user' || l.role === 'assistant' || l.role === 'plan' || l.role === 'workflow',
       );
 
   const onScroll = () => {
