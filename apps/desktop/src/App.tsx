@@ -164,6 +164,7 @@ import { PermissionPrompt } from './components/PermissionPrompt';
 import { UserQuestionPrompt } from './components/UserQuestionPrompt';
 import { PlanApprovalPrompt } from './components/PlanApprovalPrompt';
 import { FolderTrustPrompt } from './components/FolderTrustPrompt';
+import { DeliverablesPanel } from './components/DeliverablesPanel';
 import {
   ApprovalInboxPanel,
   type ApprovalInboxRow,
@@ -511,6 +512,7 @@ function App() {
   const [approvalQueue, setApprovalQueue] = useState<PendingApproval[]>([]);
   const [activeApprovalKey, setActiveApprovalKey] = useState<string | null>(null);
   const [approvalInboxOpen, setApprovalInboxOpen] = useState(false);
+  const [deliverablesOpen, setDeliverablesOpen] = useState(false);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -728,6 +730,17 @@ function App() {
         };
     }
   }), [approvalQueue, projectAliases, threads]);
+  const activeDeliverables = useMemo(() => {
+    if (!active) return [];
+    const seen = new Set<string>();
+    return active.lines.flatMap((line) => line.role === 'assistant' ? (line.attachments ?? []) : [])
+      .filter((item) => {
+        const key = `${item.path}\u0000${item.name}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [active]);
   const enqueueApproval = useCallback((entry: PendingApproval) => {
     setApprovalQueue((previous) => previous.some((item) => item.key === entry.key) ? previous : [...previous, entry]);
     setActiveApprovalKey((previous) => previous ?? entry.key);
@@ -5379,6 +5392,17 @@ function App() {
                 </button>
               ) : null}
               <div className="main-bar-spacer" />
+              {activeDeliverables.length ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('deliverablesOpenHint')}
+                  onClick={() => setDeliverablesOpen(true)}
+                >
+                  {t('deliverablesOpen')}
+                  <span className="approval-inbox-count">{activeDeliverables.length}</span>
+                </button>
+              ) : null}
               {approvalQueue.length ? (
                 <button
                   type="button"
@@ -6420,6 +6444,15 @@ function App() {
         onSelect={(key) => {
           setActiveApprovalKey(key);
           setApprovalInboxOpen(false);
+        }}
+      />
+      <DeliverablesPanel
+        open={deliverablesOpen}
+        items={activeDeliverables}
+        onClose={() => setDeliverablesOpen(false)}
+        onOpen={(item) => {
+          setDeliverablesOpen(false);
+          setPreviewAtt(item);
         }}
       />
       {rewindDialog ? (

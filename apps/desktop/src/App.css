@@ -3211,6 +3211,8 @@ button.pill:hover {
 .approval-inbox-detail, .approval-inbox-task { grid-column: 2; overflow: hidden; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .approval-inbox-task { color: var(--text-3); font-size: 11px; }
 .approval-inbox-count { min-width: 17px; margin-left: 4px; padding: 1px 5px; border-radius: 999px; color: white; background: var(--accent); font-size: 11px; font-weight: 750; text-align: center; }
+.deliverables-panel { width: min(620px, calc(100vw - 32px)); }
+.deliverables-list { margin-top: 14px; max-height: min(60vh, 540px); overflow: auto; }
 .plan-approval-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 14px 24px 18px; border-top: 1px solid var(--hairline); background: var(--panel); }
 @media (max-width: 620px) {
   .plan-approval-backdrop { padding: 12px; }
