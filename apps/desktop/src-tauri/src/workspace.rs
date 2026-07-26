@@ -14,6 +14,14 @@ pub struct FileHit {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceResourceAttachment {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectInstructionsSnapshot {
     pub path: String,
     pub exists: bool,
@@ -25,6 +33,7 @@ const MAX_AGENTS_BYTES: usize = 200_000;
 /// ACP client file writes are intentionally bounded. Larger output should use
 /// the engine's normal tools, which have their own streaming/audit surface.
 const MAX_CLIENT_WRITE_BYTES: usize = 1_000_000;
+const MAX_RESOURCE_ATTACHMENT_BYTES: u64 = 100 * 1024 * 1024;
 
 fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(cwd.trim());
@@ -215,6 +224,50 @@ pub fn workspace_write_client_text(
     write_client_text_file(&root, &path, &content)
 }
 
+/// Validates an ACP-returned file as a workspace-local deliverable.  This is
+/// intentionally stricter than a generic file picker: an agent cannot cause
+/// the renderer to preview arbitrary files from the user's machine.
+#[tauri::command]
+pub fn workspace_validate_resource_attachment(
+    cwd: String,
+    path: String,
+) -> Result<WorkspaceResourceAttachment, String> {
+    let root = workspace_root(&cwd)?;
+    let requested = PathBuf::from(path.trim());
+    if !requested.is_absolute() {
+        return Err("resource path must be absolute".into());
+    }
+    let original_meta = fs::symlink_metadata(&requested)
+        .map_err(|e| format!("read resource metadata: {e}"))?;
+    if original_meta.file_type().is_symlink() {
+        return Err("resource attachment cannot be a symlink".into());
+    }
+    let resolved = requested
+        .canonicalize()
+        .map_err(|e| format!("resolve resource path: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("resource attachment is outside the current project".into());
+    }
+    let meta = fs::metadata(&resolved).map_err(|e| format!("read resource metadata: {e}"))?;
+    if !meta.is_file() {
+        return Err("resource attachment is not a regular file".into());
+    }
+    if meta.len() > MAX_RESOURCE_ATTACHMENT_BYTES {
+        return Err("resource attachment is too large to open in gorkX".into());
+    }
+    let name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "resource attachment has no usable file name".to_string())?
+        .to_string();
+    Ok(WorkspaceResourceAttachment {
+        path: resolved.display().to_string(),
+        name,
+        size: meta.len(),
+    })
+}
+
 const SKIP_DIRS: &[&str] = &[
     "node_modules",
     "target",
@@ -369,7 +422,7 @@ pub fn read_workspace_file_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::{read_agents_file, walk, write_agents_file, write_client_text_file, FileHit};
+    use super::{read_agents_file, walk, workspace_validate_resource_attachment, write_agents_file, write_client_text_file, FileHit};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -437,6 +490,59 @@ mod tests {
         assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
 
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn resource_attachment_must_be_a_regular_file_inside_workspace() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-resource-{nonce}"));
+        let project = base.join("project");
+        let outside = base.join("outside.txt");
+        fs::create_dir_all(&project).unwrap();
+        let delivered = project.join("report.md");
+        fs::write(&delivered, "# Done\n").unwrap();
+        fs::write(&outside, "private").unwrap();
+
+        let item = workspace_validate_resource_attachment(
+            project.display().to_string(),
+            delivered.display().to_string(),
+        ).unwrap();
+        assert_eq!(item.name, "report.md");
+        assert_eq!(item.size, 7);
+        assert!(workspace_validate_resource_attachment(
+            project.display().to_string(),
+            outside.display().to_string(),
+        ).is_err());
+        assert!(workspace_validate_resource_attachment(
+            project.display().to_string(),
+            "report.md".into(),
+        ).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resource_attachment_refuses_symlink_even_when_target_is_inside_workspace() {
+        use std::os::unix::fs::symlink;
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("gorkx-resource-link-{nonce}"));
+        fs::create_dir_all(&project).unwrap();
+        let actual = project.join("actual.txt");
+        let linked = project.join("linked.txt");
+        fs::write(&actual, "ok").unwrap();
+        symlink(&actual, &linked).unwrap();
+        assert!(workspace_validate_resource_attachment(
+            project.display().to_string(),
+            linked.display().to_string(),
+        ).is_err());
+        fs::remove_dir_all(project).unwrap();
     }
 
     #[cfg(unix)]

@@ -1593,6 +1593,14 @@ export type AcpImageBlock = {
   mimeType: string;
 };
 
+/** A file explicitly returned by an ACP content block (never inferred from text). */
+export type AcpResourceLinkBlock = {
+  uri: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+};
+
 /**
  * ACP image blocks can arrive as a streamed message or as tool-call content.
  * Keep the parser data-only: only a bounded base64 raster payload may reach
@@ -1624,6 +1632,41 @@ export function extractUpdateImages(update: SessionUpdate): AcpImageBlock[] {
   const raw = update as Record<string, unknown>;
   visit(raw.content);
   return images;
+}
+
+/**
+ * Extract only bounded standard ACP resource-link blocks. The caller must
+ * still validate a file URI against its workspace before it becomes a local
+ * attachment; an agent-provided URI is untrusted input.
+ */
+export function extractUpdateResourceLinks(update: SessionUpdate): AcpResourceLinkBlock[] {
+  const links: AcpResourceLinkBlock[] = [];
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 3 || links.length >= 16 || !value) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    const row = value as Record<string, unknown>;
+    if (row.type === 'resource_link' && typeof row.uri === 'string') {
+      const uri = row.uri.trim();
+      if (uri.length > 0 && uri.length <= 4_096) {
+        const name = typeof row.name === 'string' ? row.name.trim().slice(0, 256) : undefined;
+        const mimeType = typeof row.mimeType === 'string'
+          ? row.mimeType.trim().slice(0, 128)
+          : typeof row.mime_type === 'string' ? row.mime_type.trim().slice(0, 128) : undefined;
+        const size = typeof row.size === 'number' && Number.isFinite(row.size) && row.size >= 0
+          ? Math.floor(row.size)
+          : undefined;
+        links.push({ uri, name, mimeType, size });
+      }
+      return;
+    }
+    if ('content' in row) visit(row.content, depth + 1);
+  };
+  visit((update as Record<string, unknown>).content);
+  return links;
 }
 
 /** True if string is a protocol call id (not for humans). */

@@ -14,6 +14,7 @@ import {
   AcpClient,
   extractUpdateText,
   extractUpdateImages,
+  extractUpdateResourceLinks,
   fetchGrokStatus,
   stopAllAgents,
   parsePlanUpdate,
@@ -125,6 +126,8 @@ import {
   attachmentsPromptBlock,
   attachmentResourceLinks,
   buildAttachment,
+  buildWorkspaceResourceAttachment,
+  resourceLinkFilePath,
   saveAgentImage,
   createNamedProject,
   projectsRoot,
@@ -1559,6 +1562,17 @@ function App() {
     (threadId: string, client: AcpClient) => {
       client.onSessionUpdate = (update: SessionUpdate) => {
         const imageBlocks = extractUpdateImages(update);
+        const resourceLinks = extractUpdateResourceLinks(update);
+        const appendDeliveredAttachment = (attachment: ComposerAttachment) => {
+          setThreads((previous) => previous.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            if (thread.lines.some((line) => line.attachments?.some((item) => item.path === attachment.path))) return thread;
+            return {
+              ...thread,
+              lines: [...thread.lines, { id: nid(), role: 'assistant', text: '', attachments: [attachment] }],
+            };
+          }));
+        };
         const persistImages = () => {
           if (
             update.sessionUpdate !== 'agent_message_chunk' &&
@@ -1567,15 +1581,22 @@ function App() {
           ) return;
           for (const image of imageBlocks) {
             void saveAgentImage(threadId, image.data, image.mimeType)
-              .then((attachment) => appendLine(threadId, {
-                id: nid(),
-                role: 'assistant',
-                text: '',
-                attachments: [attachment],
-              }))
+              .then(appendDeliveredAttachment)
               .catch(() => {
                 // The media command deliberately rejects malformed, oversized,
                 // or unsupported content without leaking bytes into the chat.
+              });
+          }
+          const cwd = threadsRef.current.find((thread) => thread.id === threadId)?.cwd;
+          if (!cwd) return;
+          for (const resource of resourceLinks) {
+            const path = resourceLinkFilePath(resource.uri);
+            if (!path) continue;
+            void buildWorkspaceResourceAttachment(cwd, path)
+              .then(appendDeliveredAttachment)
+              .catch(() => {
+                // Ignore untrusted, missing, remote, oversized or outside-workspace
+                // resource links. They are never made visible as local files.
               });
           }
         };

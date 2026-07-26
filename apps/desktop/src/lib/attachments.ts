@@ -90,6 +90,20 @@ export function basename(path: string): string {
   return path.split('/').filter(Boolean).pop() || path;
 }
 
+/** Return a local absolute path from a standard ACP file URI, or null. */
+export function resourceLinkFilePath(uri: string): string | null {
+  try {
+    const value = new URL(uri);
+    if (value.protocol !== 'file:' || (value.hostname && value.hostname !== 'localhost')) return null;
+    if (value.search || value.hash) return null;
+    const path = decodeURIComponent(value.pathname);
+    if (!path.startsWith('/') || path.length > 4_096 || /[\u0000-\u001F\u007F]/.test(path)) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
 let seq = 1;
 export function newAttachId(): string {
   return `att-${Date.now()}-${seq++}`;
@@ -130,6 +144,22 @@ export async function buildAttachment(path: string): Promise<ComposerAttachment>
   }
 
   return { id, path, name, kind, previewUrl };
+}
+
+/**
+ * Turn an agent-returned file path into an attachment only after native code
+ * has proven it is a regular file contained by the current workspace.
+ */
+export async function buildWorkspaceResourceAttachment(
+  cwd: string,
+  path: string,
+): Promise<ComposerAttachment> {
+  const validated = await invoke<{ path: string; name: string; size: number }>('workspace_validate_resource_attachment', {
+    cwd,
+    path,
+  });
+  const attachment = await buildAttachment(validated.path);
+  return { ...attachment, name: validated.name, size: validated.size };
 }
 
 /** Persisted media uses app-local paths; never restore an expired blob URL. */
