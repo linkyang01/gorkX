@@ -27,6 +27,7 @@ export type PlusAction =
   | { type: 'set-goal' }
   | { type: 'deep-research' }
   | { type: 'send-feedback' }
+  | { type: 'start-kernel-loop' }
   | { type: 'generate-media'; media: 'image' | 'video' }
   | { type: 'workflow'; name: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -172,6 +173,13 @@ export function PlusMenu({
       title: t('plusDeepResearch'),
       desc: t('plusDeepResearchHint'),
       action: { type: 'deep-research' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && slashAllowed('/loop', availableCommandNames) ? ([{
+      kind: 'action' as const,
+      id: 'kernel-loop',
+      title: t('plusKernelLoop'),
+      desc: t('plusKernelLoopHint'),
+      action: { type: 'start-kernel-loop' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,

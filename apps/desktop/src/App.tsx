@@ -2376,6 +2376,26 @@ function App() {
     await runDesktopAction(`/feedback ${feedback}`, `${t('feedbackSent')}: ${feedback}`);
   };
 
+  /**
+   * Grok Build owns this recurring task, including its cadence parsing and
+   * seven-day expiry. Keep it distinct from gorkX's durable scheduled jobs.
+   */
+  const openKernelLoopAction = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const available = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '').toLowerCase() === 'loop',
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
+    const request = await askAction({
+      title: t('kernelLoopDialogTitle'),
+      message: t('kernelLoopDialogHint'),
+      placeholder: t('kernelLoopDialogPlaceholder'),
+      submitLabel: t('kernelLoopDialogSubmit'),
+    });
+    if (!request) return;
+    await runDesktopAction(`/loop ${request}`, `${t('kernelLoopStarted')}: ${request}`);
+  };
+
   const openWebSourceAction = async () => {
     const url = await askAction({
       title: t('plusWebSource'),
@@ -2545,6 +2565,9 @@ function App() {
         return;
       case 'send-feedback':
         await openFeedbackAction();
+        return;
+      case 'start-kernel-loop':
+        await openKernelLoopAction();
         return;
       case 'generate-media':
         setPlusMenuOpen(false);
