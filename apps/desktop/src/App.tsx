@@ -1693,7 +1693,11 @@ function App() {
         }
 
         const { kind, text } = extractUpdateText(update);
-        if (kind === 'text') appendOrMerge(threadId, 'assistant', text);
+        // Some older kernels replay their internal first-turn envelope as an
+        // assistant text update during session restore. It contains memory
+        // and presentation guidance, not a model answer, so never add it to
+        // the visible conversation.
+        if (kind === 'text' && !isInjectedUserPromptEcho(text)) appendOrMerge(threadId, 'assistant', text);
         else if (kind === 'thought') appendOrMerge(threadId, 'thought', text);
         else if (kind === 'user' && text && !isInjectedUserPromptEcho(text)) {
           // session/load history or rare echoes — skip if same as last user line

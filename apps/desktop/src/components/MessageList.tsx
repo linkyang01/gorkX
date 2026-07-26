@@ -8,6 +8,7 @@ import { AttachmentStrip } from './AttachmentStrip';
 import type { KernelScheduledTaskUpdate, PlanEntry, WorkflowRunUpdate } from '../lib/acpClient';
 import type { ComposerAttachment } from '../lib/attachments';
 import {
+  isInjectedUserPromptEcho,
   isNoiseSystem,
   sanitizeText,
   summarizeError,
@@ -200,6 +201,10 @@ function LineView({
     );
   }
   if (line.role === 'system') return <SystemRow text={line.text} />;
+  // A legacy ACP restore can expose the engine-only first-turn envelope as
+  // assistant text. Hide it even for a task that remained mounted across an
+  // application upgrade; restored snapshots are cleaned separately.
+  if (line.role === 'assistant' && isInjectedUserPromptEcho(line.text)) return null;
   const body = sanitizeText(line.text);
   const attachments = line.attachments || [];
   if (!body && !attachments.length) return null;

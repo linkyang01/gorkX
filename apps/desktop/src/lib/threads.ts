@@ -2,7 +2,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { ReasoningEffort } from './acpClient';
-import { visibleUserPrompt } from './chatFormat';
+import { isInjectedUserPromptEcho, visibleUserPrompt } from './chatFormat';
 
 const LS_KEY = 'gorkx.threadMeta.v1';
 const MAX_PER_PROJECT = 48;
@@ -298,7 +298,7 @@ export async function saveChatSnapshot(
     await invoke('store_save_chat', {
       project: scope,
       threadId,
-      lines: lines.map((l) => ({
+      lines: lines.filter((l) => !(l.role === 'assistant' && isInjectedUserPromptEcho(l.text))).map((l) => ({
         id: l.id,
         role: l.role,
         // Do not retain an engine-only first-turn envelope once a task is

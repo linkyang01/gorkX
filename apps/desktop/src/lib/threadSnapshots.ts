@@ -1,6 +1,6 @@
 import type { ChatLine } from '../components/MessageList';
 import { attachmentFromStored, type AttachKind } from './attachments';
-import { visibleUserPrompt } from './chatFormat';
+import { isInjectedUserPromptEcho, visibleUserPrompt } from './chatFormat';
 
 export type StoredChatLine = {
   id: string;
@@ -44,18 +44,24 @@ function attachmentsFromJson(raw: string | null | undefined) {
 
 /** Normalize persisted chat lines before rendering them in a restored task. */
 export function snapToLines(snaps: StoredChatLine[]): ChatLine[] {
-  return snaps.map((s) => ({
-    id: s.id,
-    role: (['user', 'assistant', 'thought', 'tool', 'system', 'plan', 'workflow', 'scheduled'].includes(s.role)
+  return snaps.flatMap((s) => {
+    const role = (['user', 'assistant', 'thought', 'tool', 'system', 'plan', 'workflow', 'scheduled'].includes(s.role)
       ? s.role
-      : 'system') as ChatLine['role'],
+      : 'system') as ChatLine['role'];
+    // Legacy ACP replay can mislabel the internal first-turn envelope as an
+    // assistant response. It is neither a user turn nor an answer.
+    if (role === 'assistant' && isInjectedUserPromptEcho(s.text)) return [];
+    return [{
+      id: s.id,
+      role,
     // Historical snapshots may contain an engine-only memory/presentation
     // envelope from older versions. Restore only the human request.
-    text: s.role === 'user' ? visibleUserPrompt(s.text) : s.text,
-    toolKey: s.toolKey ?? undefined,
-    parentSubagentId: s.parentSubagentId ?? undefined,
-    toolStatus: s.toolStatus ?? undefined,
-    toolKind: s.toolKind ?? undefined,
-    attachments: attachmentsFromJson(s.attachmentsJson),
-  }));
+      text: role === 'user' ? visibleUserPrompt(s.text) : s.text,
+      toolKey: s.toolKey ?? undefined,
+      parentSubagentId: s.parentSubagentId ?? undefined,
+      toolStatus: s.toolStatus ?? undefined,
+      toolKind: s.toolKind ?? undefined,
+      attachments: attachmentsFromJson(s.attachmentsJson),
+    }];
+  });
 }

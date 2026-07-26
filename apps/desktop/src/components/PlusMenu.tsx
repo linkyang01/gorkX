@@ -83,12 +83,10 @@ export function PlusMenu({
 }: Props) {
   if (!open) return null;
 
-  // Keep compatibility-only presentation helpers out of the everyday menu.
-  // Rich replies are rendered by the app; users should not have to discover
-  // an internal `/answer-mode` command to get a readable result.
-  const expertOnlySkillNames = new Set(['answer-mode']);
+  // Rich replies are rendered by the app. Do not surface retired internal
+  // presentation helpers as a workflow for ordinary users.
   const invocable = skills
-    .filter((s) => s.userInvocable && !expertOnlySkillNames.has(s.name.toLowerCase()))
+    .filter((s) => s.userInvocable && s.name.toLowerCase() !== 'answer-mode')
     .slice(0, 10);
   const workflowRows = workflows
     .filter((workflow) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name))
