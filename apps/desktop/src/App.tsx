@@ -2610,6 +2610,16 @@ function App() {
     }
   };
 
+  /** Kernel-owned conversation recap behind a plain desktop action. */
+  const recapActiveSession = async () => {
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const available = agent?.commands?.some(
+      (command) => command.name.replace(/^\//, '').toLowerCase() === 'recap',
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
+    await runDesktopAction('/recap', t('recapStarted'));
+  };
+
   /** Native file-picker export; `/export` remains keyboard compatibility only. */
   const exportActiveSession = async () => {
     if (!active?.sessionId || active.busy) return;
@@ -2716,6 +2726,9 @@ function App() {
         return;
       case 'compact-session':
         await compactActiveSession();
+        return;
+      case 'recap-session':
+        await recapActiveSession();
         return;
       case 'export-session':
         await exportActiveSession();

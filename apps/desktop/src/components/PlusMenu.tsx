@@ -22,6 +22,7 @@ export type PlusAction =
   | { type: 'ask-btw' }
   | { type: 'task-info' }
   | { type: 'compact-session' }
+  | { type: 'recap-session' }
   | { type: 'export-session' }
   | { type: 'export-trace' }
   | { type: 'new-task' }
@@ -188,6 +189,13 @@ export function PlusMenu({
       title: t('plusCompact'),
       desc: t('plusCompactHint'),
       action: { type: 'compact-session' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && slashAllowed('/recap', availableCommandNames) ? ([{
+      kind: 'action' as const,
+      id: 'recap',
+      title: t('plusRecap'),
+      desc: t('plusRecapHint'),
+      action: { type: 'recap-session' } as PlusAction,
     }] as Row[]) : []),
 
     ...(workflowRows.length
