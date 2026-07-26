@@ -1,6 +1,6 @@
 //! Local SQLite store for thread metadata + recent chat snapshots.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -126,6 +126,30 @@ impl AppStore {
               key TEXT PRIMARY KEY,
               value TEXT NOT NULL
             );
+
+            -- Local accounting for token counters reported by ACP.  This is
+            -- intentionally separate from subscription billing: ACP reports
+            -- per-session counters while the provider billing API reports a
+            -- quota percentage.
+            CREATE TABLE IF NOT EXISTS daily_token_usage (
+              day TEXT PRIMARY KEY,
+              total_tokens INTEGER NOT NULL DEFAULT 0,
+              input_tokens INTEGER NOT NULL DEFAULT 0,
+              output_tokens INTEGER NOT NULL DEFAULT 0,
+              cached_read_tokens INTEGER NOT NULL DEFAULT 0,
+              reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+              updated_at INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS token_usage_samples (
+              thread_id TEXT NOT NULL,
+              model_id TEXT NOT NULL DEFAULT '',
+              total_tokens INTEGER,
+              input_tokens INTEGER,
+              output_tokens INTEGER,
+              cached_read_tokens INTEGER,
+              reasoning_tokens INTEGER,
+              PRIMARY KEY (thread_id, model_id)
+            );
             "#,
         )
         .map_err(|e| format!("sqlite migrate: {e}"))?;
@@ -155,6 +179,165 @@ impl AppStore {
             conn: Mutex::new(conn),
         })
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageInput {
+    pub total_tokens: Option<i64>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub cached_read_tokens: Option<i64>,
+    pub reasoning_tokens: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyTokenUsageRow {
+    pub day: String,
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cached_read_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub updated_at: i64,
+}
+
+fn nonnegative(value: Option<i64>) -> Option<i64> {
+    value.filter(|value| *value >= 0)
+}
+
+/// Counters normally grow across a session. If the kernel starts a fresh
+/// segment (or compacts a context) and the reported counter drops, the new
+/// counter itself is the next actual segment rather than a negative delta.
+fn token_delta(next: Option<i64>, previous: Option<i64>) -> i64 {
+    match (nonnegative(next), nonnegative(previous)) {
+        (Some(next), Some(previous)) if next >= previous => next - previous,
+        (Some(next), _) => next,
+        _ => 0,
+    }
+}
+
+fn valid_usage_day(day: &str) -> bool {
+    day.len() == 10
+        && day.as_bytes().get(4) == Some(&b'-')
+        && day.as_bytes().get(7) == Some(&b'-')
+        && day.chars().enumerate().all(|(index, c)| match index {
+            4 | 7 => c == '-',
+            _ => c.is_ascii_digit(),
+        })
+}
+
+fn read_daily_usage(conn: &Connection, day: &str) -> Result<DailyTokenUsageRow, String> {
+    conn.query_row(
+        "SELECT day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at FROM daily_token_usage WHERE day = ?1",
+        params![day],
+        |row| Ok(DailyTokenUsageRow {
+            day: row.get(0)?,
+            total_tokens: row.get(1)?,
+            input_tokens: row.get(2)?,
+            output_tokens: row.get(3)?,
+            cached_read_tokens: row.get(4)?,
+            reasoning_tokens: row.get(5)?,
+            updated_at: row.get(6)?,
+        }),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Record a de-duplicated increment from an ACP token counter. All data stays
+/// in gorkX's local SQLite database; there is no token estimate or network call.
+#[tauri::command]
+pub fn store_record_daily_token_usage(
+    store: State<'_, AppStore>,
+    day: String,
+    thread_id: String,
+    model_id: Option<String>,
+    usage: TokenUsageInput,
+) -> Result<DailyTokenUsageRow, String> {
+    if !valid_usage_day(&day) {
+        return Err("invalid local usage day".into());
+    }
+    let thread_id = thread_id.trim();
+    if thread_id.is_empty() {
+        return Err("thread id is empty".into());
+    }
+    // A session can switch models while keeping one cumulative token counter.
+    // Keep one checkpoint per task so a model change cannot re-count all prior
+    // context as fresh usage. The parameter remains for forward compatibility
+    // with future per-model reporting, but is deliberately not used today.
+    let _model_id = model_id;
+    let sample_model_id = "";
+    let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    let previous = conn
+        .query_row(
+            "SELECT total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens FROM token_usage_samples WHERE thread_id = ?1 AND model_id = ?2",
+            params![thread_id, sample_model_id],
+            |row| Ok((
+                row.get::<_, Option<i64>>(0)?, row.get::<_, Option<i64>>(1)?, row.get::<_, Option<i64>>(2)?,
+                row.get::<_, Option<i64>>(3)?, row.get::<_, Option<i64>>(4)?,
+            )),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let (prev_total, prev_input, prev_output, prev_cached, prev_reasoning) =
+        previous.unwrap_or((None, None, None, None, None));
+    let input_delta = token_delta(usage.input_tokens, prev_input);
+    let output_delta = token_delta(usage.output_tokens, prev_output);
+    let cached_delta = token_delta(usage.cached_read_tokens, prev_cached);
+    let reasoning_delta = token_delta(usage.reasoning_tokens, prev_reasoning);
+    // Prefer the kernel's own total counter. When it is absent, input + output
+    // is the only non-overlapping fallback we can state honestly.
+    let total_delta = match usage.total_tokens {
+        Some(_) => token_delta(usage.total_tokens, prev_total),
+        None => input_delta + output_delta,
+    };
+    let now = chrono_like_now().parse::<i64>().unwrap_or(0);
+    conn.execute(
+        "INSERT INTO daily_token_usage (day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(day) DO UPDATE SET total_tokens = total_tokens + excluded.total_tokens, input_tokens = input_tokens + excluded.input_tokens, output_tokens = output_tokens + excluded.output_tokens, cached_read_tokens = cached_read_tokens + excluded.cached_read_tokens, reasoning_tokens = reasoning_tokens + excluded.reasoning_tokens, updated_at = excluded.updated_at",
+        params![day, total_delta, input_delta, output_delta, cached_delta, reasoning_delta, now],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO token_usage_samples (thread_id, model_id, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(thread_id, model_id) DO UPDATE SET total_tokens = excluded.total_tokens, input_tokens = excluded.input_tokens, output_tokens = excluded.output_tokens, cached_read_tokens = excluded.cached_read_tokens, reasoning_tokens = excluded.reasoning_tokens",
+        params![thread_id, sample_model_id, nonnegative(usage.total_tokens), nonnegative(usage.input_tokens), nonnegative(usage.output_tokens), nonnegative(usage.cached_read_tokens), nonnegative(usage.reasoning_tokens)],
+    ).map_err(|e| e.to_string())?;
+    read_daily_usage(&conn, &day)
+}
+
+#[tauri::command]
+pub fn store_get_daily_token_usage(
+    store: State<'_, AppStore>,
+    day: String,
+) -> Result<DailyTokenUsageRow, String> {
+    if !valid_usage_day(&day) {
+        return Err("invalid local usage day".into());
+    }
+    let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    let row = conn
+        .query_row(
+            "SELECT day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at FROM daily_token_usage WHERE day = ?1",
+            params![day],
+            |row| Ok(DailyTokenUsageRow {
+                day: row.get(0)?,
+                total_tokens: row.get(1)?,
+                input_tokens: row.get(2)?,
+                output_tokens: row.get(3)?,
+                cached_read_tokens: row.get(4)?,
+                reasoning_tokens: row.get(5)?,
+                updated_at: row.get(6)?,
+            }),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(row.unwrap_or(DailyTokenUsageRow {
+            day,
+            total_tokens: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            cached_read_tokens: 0,
+            reasoning_tokens: 0,
+            updated_at: 0,
+        }))
 }
 
 #[tauri::command]
@@ -581,8 +764,10 @@ pub fn account_summary() -> Result<AccountSummary, String> {
         ));
     }
 
-    // Official CLI billing endpoint (same as Grok Build credits view)
-    let url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
+    // Grok Build's CLI billing endpoint. It exposes some on-demand/monthly
+    // credit fields, but not necessarily the Grok web product's weekly
+    // subscription allowance.
+    let url = "https://cli-chat-proxy.grok.com/v1/billing";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .user_agent("gorkX/0.4.2")
@@ -740,16 +925,6 @@ fn parse_billing_body(
             }
         }
     }
-    // Fallback: monthly used/limit dollars → percent
-    if pct.is_none() {
-        let used = cfg.get("used").and_then(money_val);
-        let limit = cfg.get("monthlyLimit").and_then(money_val);
-        if let (Some(u), Some(l)) = (used, limit) {
-            if l > 0.0 {
-                pct = Some((u / l * 100.0).clamp(0.0, 100.0));
-            }
-        }
-    }
     let prepaid = cfg.get("prepaidBalance").and_then(money_val);
     let on_used = cfg.get("onDemandUsed").and_then(money_val);
     let on_cap = cfg.get("onDemandCap").and_then(money_val);
@@ -792,14 +967,17 @@ fn parse_billing_body(
         prepaid_balance: prepaid,
         on_demand_used: on_used,
         on_demand_cap: on_cap,
-        period_end,
+        // A billing-period end belongs to the same payload family as the
+        // percentage. Do not show an on-demand reset date beside a missing
+        // subscription quota.
+        period_end: if pct.is_some() { period_end } else { None },
         product_usage: if products.is_empty() {
             None
         } else {
             Some(products)
         },
         quota_note: if pct.is_some() {
-            "live from cli-chat-proxy /v1/billing?format=credits".into()
+            "live from cli-chat-proxy billing percentage".into()
         } else {
             "billing ok but no creditUsagePercent field".into()
         },
@@ -1068,7 +1246,7 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{search_thread_history, visible_models_from_cache};
+    use super::{search_thread_history, token_delta, valid_usage_day, visible_models_from_cache};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1124,6 +1302,18 @@ mod model_cache_tests {
         assert_eq!(chat_hits[0].id, "b");
         assert!(chat_hits[0].archived);
         assert!(chat_hits[0].excerpt.contains("成本"));
+    }
+
+    #[test]
+    fn daily_token_counter_uses_only_new_kernel_counter_values() {
+        assert_eq!(token_delta(Some(140), Some(100)), 40);
+        assert_eq!(token_delta(Some(140), Some(140)), 0);
+        // A reset/compaction starts the next reported segment, never a
+        // negative adjustment that would erase earlier local usage.
+        assert_eq!(token_delta(Some(25), Some(140)), 25);
+        assert_eq!(token_delta(None, Some(140)), 0);
+        assert!(valid_usage_day("2026-07-26"));
+        assert!(!valid_usage_day("2026/07/26"));
     }
 }
 

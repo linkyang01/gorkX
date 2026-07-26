@@ -206,6 +206,7 @@ import {
   type UsageSnapshot,
 } from './lib/usage';
 import { notifyPermission, revealInFinder } from './lib/host';
+import { recordDailyTokenUsage } from './lib/dailyTokenUsage';
 import {
   fetchExtensionsSnapshot,
   listWorkspaceFiles,
@@ -1827,7 +1828,14 @@ function App() {
 
       client.onUsageMeta = (meta) => {
         const u = usageFromUnknown(meta);
-        if (u) patchThread(threadId, { usage: u });
+        if (u) {
+          patchThread(threadId, { usage: u });
+          // ACP counters are the only source for this local daily record.
+          // The native store de-duplicates monotonically increasing snapshots.
+          void recordDailyTokenUsage(threadId, u).catch(() => {
+            // A usage display must never interrupt an active agent task.
+          });
+        }
       };
 
       client.onNotification = (method, rawParams) => {

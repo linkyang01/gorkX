@@ -94,6 +94,8 @@ import {
   type SandboxConfigSnapshot,
   type SandboxProfile,
 } from '../lib/sandboxConfig';
+import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
+import { fmt } from '../lib/usage';
 
 const APP_VERSION = '0.4.4'; // keep in sync with package.json
 
@@ -320,6 +322,7 @@ export function SettingsPanel({
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
   const [hooksSnap, setHooksSnap] = useState<HooksSnapshot | null>(null);
   const [hooksBusy, setHooksBusy] = useState(false);
+  const [todayTokenUsage, setTodayTokenUsage] = useState<DailyTokenUsage | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -337,6 +340,7 @@ export function SettingsPanel({
     void fetchSandboxConfig().then(setSandboxSnap).catch(() => setSandboxSnap(null));
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
+    void getTodayTokenUsage().then(setTodayTokenUsage).catch(() => setTodayTokenUsage(null));
   }, [isOpen, initialSection]);
 
   const loadProjectInstructions = () => {
@@ -1144,6 +1148,29 @@ export function SettingsPanel({
             <>
               <h2>{t('settingsUsage')}</h2>
               <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('dailyTokenUsage')}</div>
+                    <div className="settings-row-hint">
+                      {todayTokenUsage
+                        ? (todayTokenUsage.totalTokens > 0
+                          ? t('dailyTokenUsageValue').replace('{n}', fmt(todayTokenUsage.totalTokens))
+                          : t('dailyTokenUsageEmpty'))
+                        : t('dailyTokenUsageUnavailable')}
+                    </div>
+                    <div className="settings-row-hint">{t('dailyTokenUsageHint')}</div>
+                    {todayTokenUsage && (todayTokenUsage.inputTokens > 0 || todayTokenUsage.outputTokens > 0) ? (
+                      <div className="settings-row-hint mono">
+                        {t('dailyTokenUsageBreakdown')
+                          .replace('{input}', fmt(todayTokenUsage.inputTokens))
+                          .replace('{output}', fmt(todayTokenUsage.outputTokens))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button type="button" className="btn" onClick={() => void getTodayTokenUsage().then(setTodayTokenUsage)}>
+                    {t('refreshQuota')}
+                  </button>
+                </div>
                 <div className="settings-row">
                   <div>
                     <div className="settings-row-title">{t('quota')}</div>

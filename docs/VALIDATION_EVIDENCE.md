@@ -12,7 +12,8 @@
 | 认证态会话与扩展控制 | 使用 App 登录副本创建一次性 `GROK_HOME` 与项目：`verify-grok-acp.mjs … --authenticated --session-info --session-controls --runtime-controls --subagent-controls --hooks-controls --voice-controls --client-fs-write --disable-web-search` | 通过：cached-token 认证、session new/load/Plan mode、token-free session info、持久化分叉、检查点读取、会话列表/删除、模型重载、Hooks reload/list、子代理 list/get/cancel，以及原生语音控制路由均通过 | 不发送模型提示词；测试只对缺失子代理和无 Hook fixture 做路由控制验证，不证明实际模型委派、Hook 执行或语音转写 |
 | 隔离 Worktree / 自定义模型 | 在一次性单文件 Git fixture 与 App 登录副本中执行：`verify-grok-acp.mjs … --authenticated --custom-model --worktree` | 通过：临时 `[model.*]` 配置被 session/new 公告并经 `session/set_model` 选中；`_x.ai/git/worktree/create` 返回位于临时 home 的实际 Worktree 路径 | 不请求该自定义模型；Worktree 前置条件是有效 Git 仓库与至少一个提交，全部 fixture 和认证副本均在测试后删除 |
 | 本次成果中心 | `cd apps/desktop && ./node_modules/.bin/tsc --noEmit && npm run verify:web-bundle`；`cd src-tauri && cargo check && cargo test` | 通过：任务明确回传且经工作区校验的成果按文档、图片、音视频和其他文件分组为可打开卡片；前端生产包通过，Rust 56 项测试通过 | 不扫描项目推测成果；不证明模型必然回传附件，且不替代实际任务的人工验收 |
-| 账户状态真实窗口 | `cd apps/desktop && npm run build:app`；打开本地 `.app` 并查看账户菜单 | 通过：真实已登录账户显示昵称、邮箱、套餐与账单重置时间；当账单响应未给出百分比额度时，界面显示“已连接；当前套餐暂未返回可显示的额度百分比”，并把操作写为“重新登录”，不再泄露内部英文诊断或误导为未登录 | 不代表 xAI 一定为每种套餐返回额度百分比；gorkX 不根据缺失字段臆造用量 |
+| 账户状态与额度真实窗口 | `cd apps/desktop && npm run build:app`；打开本地 `.app` 并查看账户菜单 | 已纠正：CLI 账单响应中的 `used/monthlyLimit` 是另一类月度/额外额度，不能映射为 SuperGrok 网页的每周限额。gorkX 仅接受 API 明确提供的 `creditUsagePercent` 或 Grok Build 产品百分比；否则显示“当前套餐暂未返回可显示的额度百分比”，也不显示无关重置时间 | 截图人工验收以 Grok 网页的 SuperGrok 周额度为准；在 ACP/CLI 未提供同口径数据前，桌面端不能编造或换算订阅额度 |
+| 每日 Token 本地记录 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle && npm run build:app`；`cd src-tauri && cargo check && cargo test`；本机新构建 App 打开“设置 → 使用情况和计费” | 通过：界面显示“今日本地 Token 用量”，在尚未收到 ACP token 计数时诚实显示为空；Rust 57 项测试覆盖单调计数去重、相等快照不重复累计及内核重置/压缩后的新段处理。记录仅来自 ACP，按本机日期存入 gorkX SQLite | 未发起模型提示以制造计数；首次真实任务收到 ACP token counter 后才会开始形成今日累计。该数不是订阅额度、账单金额或估算值 |
 
 ## 2026-07-23 · 桌面端本地构建与浏览器链路
 
