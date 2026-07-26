@@ -26,7 +26,14 @@ export type PlusAction =
   | { type: 'new-task' }
   | { type: 'set-goal' }
   | { type: 'generate-media'; media: 'image' | 'video' }
+  | { type: 'workflow'; name: string }
   | { type: 'skill'; skill: SkillInfo };
+
+export interface WorkflowMenuItem {
+  name: string;
+  description?: string;
+  source?: string;
+}
 
 type Row =
   | { kind: 'action'; id: string; title: string; desc: string; action: PlusAction }
@@ -40,6 +47,8 @@ interface Props {
   hasActiveSession: boolean;
   /** Session slash names without leading `/` — when non-empty, filter engine slash rows */
   availableCommandNames?: string[];
+  /** Saved workflows announced by this exact live ACP session. */
+  workflows?: WorkflowMenuItem[];
   onClose: () => void;
   onAction: (action: PlusAction) => void;
 }
@@ -62,6 +71,7 @@ export function PlusMenu({
   skills,
   hasActiveSession,
   availableCommandNames,
+  workflows = [],
   onClose,
   onAction,
 }: Props) {
@@ -74,6 +84,18 @@ export function PlusMenu({
   const invocable = skills
     .filter((s) => s.userInvocable && !expertOnlySkillNames.has(s.name.toLowerCase()))
     .slice(0, 10);
+  const workflowRows = workflows
+    .filter((workflow) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name))
+    .slice(0, 12)
+    .map(
+      (workflow): Row => ({
+        kind: 'action',
+        id: `workflow-${workflow.name}`,
+        title: workflow.name,
+        desc: (workflow.description || t('plusWorkflowHint')).replace(/^Workflow:\s*/i, ''),
+        action: { type: 'workflow', name: workflow.name },
+      }),
+    );
 
   const rawRows: Row[] = [
     { kind: 'label', id: 'l-add', title: t('plusCatAdd') },
@@ -149,6 +171,13 @@ export function PlusMenu({
       desc: t('plusCompactHint'),
       action: { type: 'compact-session' } as PlusAction,
     }] as Row[]) : []),
+
+    ...(workflowRows.length
+      ? ([
+          { kind: 'label' as const, id: 'l-workflows', title: t('plusCatWorkflows') },
+          ...workflowRows,
+        ] as Row[])
+      : []),
 
     { kind: 'label', id: 'l-gen', title: t('plusCatGenerate') },
     {

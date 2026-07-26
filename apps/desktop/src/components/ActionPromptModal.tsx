@@ -7,6 +7,8 @@ export interface ActionPromptRequest {
   placeholder: string;
   submitLabel: string;
   initialValue?: string;
+  /** Used by confirmed desktop actions with optional free-form context. */
+  allowEmpty?: boolean;
 }
 
 interface Props {
@@ -30,7 +32,7 @@ export function ActionPromptModal({ request, onSubmit, onCancel }: Props) {
   if (!request) return null;
   const submit = () => {
     const text = value.trim();
-    if (text) onSubmit(text);
+    if (text || request.allowEmpty) onSubmit(text);
   };
 
   return (
@@ -61,7 +63,7 @@ export function ActionPromptModal({ request, onSubmit, onCancel }: Props) {
         <div className="action-prompt-help">{t('actionPromptSendHint')}</div>
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onCancel}>{t('cancel')}</button>
-          <button type="button" className="btn primary" disabled={!value.trim()} onClick={submit}>
+          <button type="button" className="btn primary" disabled={!value.trim() && !request.allowEmpty} onClick={submit}>
             {request.submitLabel}
           </button>
         </div>

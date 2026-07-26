@@ -71,6 +71,18 @@ export interface HookInfo {
   disabled: boolean;
 }
 
+/**
+ * A bounded command descriptor advertised by the live ACP session.  Workflow
+ * metadata is deliberately retained because Grok Build exposes saved
+ * workflows through this same command catalogue.
+ */
+export interface AvailableCommandInfo {
+  name: string;
+  description?: string;
+  workflowSource?: string;
+  workflowPath?: string;
+}
+
 /** A real kernel-level copy of a local session, returned by `_x.ai/session/fork`. */
 export interface ForkSessionResult {
   newSessionId: string;
@@ -183,6 +195,36 @@ export type SessionUpdate = {
   kind?: string;
   [k: string]: unknown;
 };
+
+const commandText = (value: unknown, max: number) =>
+  typeof value === 'string'
+    ? value.replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F]/g, '').trim().slice(0, max)
+    : '';
+
+/** Do not persist arbitrary ACP metadata in task snapshots or render it as UI. */
+function parseAvailableCommands(raw: unknown): AvailableCommandInfo[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const value = item as Record<string, unknown>;
+    const name = commandText(value.name, 128);
+    if (!name || seen.has(name.toLowerCase())) return [];
+    seen.add(name.toLowerCase());
+    const description = commandText(value.description, 512);
+    const meta = value.meta && typeof value.meta === 'object'
+      ? value.meta as Record<string, unknown>
+      : {};
+    const workflowSource = commandText(meta.workflowSource, 80);
+    const workflowPath = commandText(meta.workflowPath, 512);
+    return [{
+      name,
+      ...(description ? { description } : {}),
+      ...(workflowSource ? { workflowSource } : {}),
+      ...(workflowPath ? { workflowPath } : {}),
+    }];
+  }).slice(0, 128);
+}
 
 const workflowText = (value: unknown, max: number) =>
   typeof value === 'string'
@@ -574,7 +616,7 @@ export class AcpClient {
     | null = null;
   onTerminalCreated: ((terminalId: string) => void) | null = null;
   onAvailableCommands:
-    | ((commands: Array<{ name: string; description?: string; input?: unknown }>) => void)
+    | ((commands: AvailableCommandInfo[]) => void)
     | null = null;
   onUsageMeta: ((meta: unknown) => void) | null = null;
 
@@ -673,10 +715,9 @@ export class AcpClient {
       };
       const update = (params.update ?? params) as SessionUpdate;
       if (update.sessionUpdate === 'available_commands_update') {
-        const cmds =
-          (update as { availableCommands?: Array<{ name: string; description?: string }> })
-            .availableCommands ?? [];
-        this.onAvailableCommands?.(cmds);
+        this.onAvailableCommands?.(
+          parseAvailableCommands((update as { availableCommands?: unknown }).availableCommands),
+        );
       }
       if (params._meta) this.onUsageMeta?.(params);
       else if ((update as { _meta?: unknown })._meta) {

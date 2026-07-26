@@ -38,6 +38,7 @@ import {
   type RewindMode,
   type RewindPoint,
   type HooksSnapshot,
+  type AvailableCommandInfo,
   type WorkflowRunUpdate,
   type SessionUpdate,
   type UserQuestionAnswers,
@@ -261,7 +262,7 @@ interface Thread {
   /** Effort used when this agent process was spawned */
   effort: ReasoningEffort;
   usage?: UsageSnapshot | null;
-  commands?: Array<{ name: string; description?: string }>;
+  commands?: AvailableCommandInfo[];
   /** Last activity — sidebar sort / same-title disambiguation */
   updatedAt?: number;
   /** Hermes: inject once on first real user prompt */
@@ -682,6 +683,16 @@ function App() {
   );
   const workflowManagementAvailable = Boolean(
     active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'workflow'),
+  );
+  const activeSavedWorkflows = useMemo(
+    () => (active?.commands ?? []).flatMap((command) => {
+      const name = command.name.replace(/^\//, '');
+      // Grok Build marks saved workflows in the ACP command catalogue.  Do
+      // not infer a workflow from a command name or description alone.
+      if (!command.workflowSource || !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(name)) return [];
+      return [{ name, description: command.description, source: command.workflowSource }];
+    }),
+    [active?.commands],
   );
   threadsRef.current = threads;
   activeIdRef.current = activeId;
@@ -2357,6 +2368,26 @@ function App() {
     await runDesktopAction(`/${skill.name} ${request}`, `${t('skillDialogVisible').replace('{name}', skill.name)}: ${request}`);
   };
 
+  /** Start only a saved workflow advertised by the active kernel session. */
+  const openWorkflowAction = async (name: string) => {
+    const safeName = name.replace(/^\//, '');
+    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const advertised = agent?.commands?.some(
+      (command) => command.workflowSource && command.name.replace(/^\//, '') === safeName,
+    );
+    if (!agent?.client || !agent.sessionId || agent.busy || !advertised) return;
+    const context = await askAction({
+      title: t('workflowRunTitle').replace('{name}', safeName),
+      message: t('workflowRunHint'),
+      placeholder: t('workflowRunPlaceholder'),
+      submitLabel: t('workflowRunSubmit'),
+      allowEmpty: true,
+    });
+    if (context === null) return;
+    const command = `/${safeName}${context ? ` ${context}` : ''}`;
+    await runDesktopAction(command, `${t('workflowRunStarted').replace('{name}', safeName)}${context ? `: ${context}` : ''}`);
+  };
+
   const openBtwQuestion = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
     if (!agent?.client || !agent.sessionId) return;
@@ -2481,6 +2512,9 @@ function App() {
         return;
       case 'skill':
         await openSkillAction(action.skill);
+        return;
+      case 'workflow':
+        await openWorkflowAction(action.name);
         return;
       default:
         return;
@@ -5690,6 +5724,7 @@ function App() {
                         availableCommandNames={(active.commands ?? []).map((c) =>
                           c.name.replace(/^\//, ''),
                         )}
+                        workflows={activeSavedWorkflows}
                         onClose={() => setPlusMenuOpen(false)}
                         onAction={(a) => void handlePlusAction(a)}
                       />
