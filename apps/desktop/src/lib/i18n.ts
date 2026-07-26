@@ -436,6 +436,7 @@ const dict = {
     deleteThread: 'Delete permanently',
     deleteThreadConfirm:
       'Permanently delete this chat from Grok’s local session store and remove it from gorkX? This cannot be undone.',
+    deleteThreadFailed: 'Grok could not permanently delete this session. It remains in gorkX; you can archive it locally instead.',
     archiveThreadConfirm: 'Archive this task in gorkX only? (Grok session files stay on disk.)',
     showGrokHistory: 'Import kernel sessions…',
     importKernelSessions: 'Import kernel sessions…',
@@ -1668,6 +1669,7 @@ const dict = {
     archiveThread: '归档（仅从 gorkX 隐藏）',
     deleteThread: '永久删除',
     deleteThreadConfirm: '将从 Grok 本地会话库永久删除，并从 gorkX 移除？不可撤销。',
+    deleteThreadFailed: 'Grok 未能永久删除该会话。它仍保留在 gorkX 中；你可以改为仅在本机归档。',
     archiveThreadConfirm: '仅在 gorkX 中归档此任务？（Grok 会话文件仍保留在磁盘）',
     showGrokHistory: '查看其它会话…',
     importKernelSessions: '查看其它会话…',

@@ -2137,7 +2137,10 @@ function App() {
         client = await bootstrapClient(target?.cwd || project || undefined);
         await client.deleteSession(sessionId);
       } catch {
-        /* still hide locally if kernel rejects */
+        // Never turn a failed kernel delete into a misleading local hide.
+        // Archive is the explicit local-only alternative.
+        alert(t('deleteThreadFailed'));
+        return;
       } finally {
         await client?.stop();
       }
@@ -4191,7 +4194,14 @@ function App() {
         client = await bootstrapClient(th.cwd || project || undefined);
         await client.deleteSession(th.sessionId);
       } catch {
-        /* local remove still */
+        // The confirmation says permanent delete. Keep both the local task
+        // and its kernel session when the real deletion did not succeed.
+        patchThread(id, {
+          error: t('deleteThreadFailed'),
+          busy: false,
+        });
+        alert(t('deleteThreadFailed'));
+        return;
       } finally {
         await client?.stop();
       }
