@@ -44,6 +44,14 @@ pub fn grok_home() -> PathBuf {
     app_support_dir().join("grok-home")
 }
 
+/// Private OS-home view for Grok Build child processes. `GROK_HOME` alone is
+/// insufficient because the kernel also discovers optional skills and
+/// compatibility files relative to `HOME`. Keep that discovery app-owned so a
+/// normal gorkX launch never imports a user's unrelated CLI configuration.
+pub fn engine_process_home() -> PathBuf {
+    app_support_dir().join("engine-home")
+}
+
 /// Bundled / managed engine binary locations (never "user must install CLI" as default).
 pub fn runtime_grok_bin() -> PathBuf {
     app_support_dir().join("runtime").join("grok")
@@ -55,6 +63,7 @@ pub fn ensure_dirs() -> Result<(), String> {
     for sub in ["memory", "sessions", "bin"] {
         let _ = std::fs::create_dir_all(home.join(sub));
     }
+    let _ = std::fs::create_dir_all(engine_process_home());
     let _ = std::fs::create_dir_all(app_support_dir().join("runtime"));
     Ok(())
 }
@@ -151,14 +160,18 @@ pub fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
 pub fn apply_engine_env(cmd: &mut std::process::Command) {
     let _ = ensure_dirs();
     let home = grok_home();
+    let process_home = engine_process_home();
     cmd.env("GROK_HOME", &home);
+    cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
 }
 
 pub fn apply_engine_env_tokio(cmd: &mut tokio::process::Command) {
     let _ = ensure_dirs();
     let home = grok_home();
+    let process_home = engine_process_home();
     cmd.env("GROK_HOME", &home);
+    cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
 }
 
@@ -188,4 +201,25 @@ pub fn engine_is_app_owned(bin: &Path) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_engine_env, engine_process_home, grok_home};
+    use std::process::Command;
+
+    #[test]
+    fn engine_child_uses_only_app_owned_home_locations() {
+        let mut command = Command::new("/usr/bin/env");
+        apply_engine_env(&mut command);
+        let envs = command.get_envs().collect::<Vec<_>>();
+        let value = |name: &str| {
+            envs.iter()
+                .find(|(key, _)| *key == std::ffi::OsStr::new(name))
+                .and_then(|(_, value)| value.as_ref())
+                .map(|value| value.to_string_lossy().into_owned())
+        };
+        assert_eq!(value("HOME"), Some(engine_process_home().display().to_string()));
+        assert_eq!(value("GROK_HOME"), Some(grok_home().display().to_string()));
+    }
 }
