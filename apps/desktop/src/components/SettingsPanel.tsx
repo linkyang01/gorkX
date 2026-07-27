@@ -51,6 +51,13 @@ import {
   type ModelTestResult,
   type ModelsConfigSnapshot,
 } from '../lib/modelsConfig';
+import {
+  countVerifiedApiProviders,
+  findVerifyRecord,
+  loadModelVerifyRecords,
+  type ModelVerifyRecord,
+  upsertModelVerifyRecord,
+} from '../lib/modelVerify';
 import { t } from '../lib/i18n';
 import {
   applyAppearance,
@@ -67,6 +74,8 @@ import {
 } from '../lib/extensions';
 import {
   githubConnectReadonly,
+  githubCreatePrComment,
+  githubCreatePullRequest,
   githubDisconnect,
   githubListPrChecks,
   githubListPrComments,
@@ -81,6 +90,17 @@ import {
   type GithubStatus,
   type GithubOAuthStart,
 } from '../lib/github';
+import {
+  CONNECTOR_CATALOG,
+  deriveConnectorUiState,
+  getConnector,
+  githubWriteConfirmSummary,
+} from '../lib/connectors';
+import {
+  appendConnectorAudit,
+  loadConnectorAudit,
+  type ConnectorAuditEvent,
+} from '../lib/connectorAudit';
 import {
   fetchSubagentsConfig,
   setSubagentTypeEnabled,
@@ -122,6 +142,7 @@ export type SettingsSection =
   | 'hooks'
   | 'subagents'
   | 'mcp'
+  | 'connectors'
   | 'git'
   | 'environment'
   | 'worktree'
@@ -182,15 +203,6 @@ type NavItem = {
 
 type ModelPreset = 'openai' | 'anthropic' | 'openrouter' | 'gemini' | 'ollama' | 'custom';
 
-type StoredModelTestStatus = {
-  ok: boolean;
-  status: number;
-  checkedAt: number;
-};
-
-const MODEL_TEST_STATUS_STORAGE_KEY = 'gorkx.modelTestStatus.v1';
-const MAX_STORED_MODEL_TESTS = 80;
-
 const modelPresetValues: Record<ModelPreset, Pick<CustomModelRow, 'baseUrl' | 'apiBackend' | 'providerLabel'>> = {
   openai: { baseUrl: 'https://api.openai.com/v1', apiBackend: 'responses', providerLabel: 'OpenAI API' },
   anthropic: { baseUrl: 'https://api.anthropic.com/v1', apiBackend: 'messages', providerLabel: 'Anthropic API' },
@@ -214,34 +226,7 @@ function formatWhen(ts: number): string {
   }
 }
 
-/** This deliberately excludes display names and API keys. */
-function modelTestStatusKey(model: Pick<CustomModelRow, 'apiBackend' | 'baseUrl' | 'model'>): string {
-  return [model.apiBackend, model.baseUrl.trim().toLowerCase(), model.model.trim().toLowerCase()].join('|');
-}
 
-function loadStoredModelTestStatuses(): Record<string, StoredModelTestStatus> {
-  try {
-    const raw = localStorage.getItem(MODEL_TEST_STATUS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const result: Record<string, StoredModelTestStatus> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (
-        typeof value === 'object' &&
-        value !== null &&
-        typeof (value as StoredModelTestStatus).ok === 'boolean' &&
-        typeof (value as StoredModelTestStatus).status === 'number' &&
-        Number.isFinite((value as StoredModelTestStatus).checkedAt)
-      ) {
-        result[key] = value as StoredModelTestStatus;
-      }
-    }
-    return result;
-  } catch {
-    return {};
-  }
-}
 
 export function SettingsPanel({
   open: isOpen,
@@ -305,8 +290,8 @@ export function SettingsPanel({
   const [modelCatalog, setModelCatalog] = useState<string[]>([]);
   const [modelCatalogBusy, setModelCatalogBusy] = useState(false);
   const [modelPreset, setModelPreset] = useState<ModelPreset>('openai');
-  const [modelTestStatuses, setModelTestStatuses] = useState<Record<string, StoredModelTestStatus>>(
-    () => loadStoredModelTestStatuses(),
+  const [modelVerifyRecords, setModelVerifyRecords] = useState<ModelVerifyRecord[]>(() =>
+    loadModelVerifyRecords(),
   );
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
@@ -325,6 +310,14 @@ export function SettingsPanel({
   const [githubComments, setGithubComments] = useState<Record<number, GithubComment[]>>({});
   const [githubBusy, setGithubBusy] = useState(false);
   const [githubOauth, setGithubOauth] = useState<GithubOAuthStart | null>(null);
+  const [githubPrTitle, setGithubPrTitle] = useState('');
+  const [githubPrBody, setGithubPrBody] = useState('');
+  const [githubPrBase, setGithubPrBase] = useState('main');
+  const [githubPrDraft, setGithubPrDraft] = useState(false);
+  const [githubCommentPr, setGithubCommentPr] = useState('');
+  const [githubCommentBody, setGithubCommentBody] = useState('');
+  const [githubReceipt, setGithubReceipt] = useState<string | null>(null);
+  const [connectorAudit, setConnectorAudit] = useState<ConnectorAuditEvent[]>(() => loadConnectorAudit());
   const [projectInstructions, setProjectInstructions] = useState<ProjectInstructionsSnapshot | null>(null);
   const [projectInstructionsDraft, setProjectInstructionsDraft] = useState('');
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
@@ -353,6 +346,7 @@ export function SettingsPanel({
     void fetchSandboxConfig().then(setSandboxSnap).catch(() => setSandboxSnap(null));
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
+    setConnectorAudit(loadConnectorAudit());
     void getTodayTokenUsage().then(setTodayTokenUsage).catch(() => setTodayTokenUsage(null));
   }, [isOpen, initialSection]);
 
@@ -479,6 +473,22 @@ export function SettingsPanel({
     }
   };
 
+  const recordGithubAudit = (
+    action: ConnectorAuditEvent['action'],
+    summary: string,
+    extra?: { detail?: string; receiptUrl?: string },
+  ) => {
+    setConnectorAudit(
+      appendConnectorAudit({
+        connector: 'github',
+        action,
+        summary,
+        detail: extra?.detail,
+        receiptUrl: extra?.receiptUrl,
+      }),
+    );
+  };
+
   const withGithub = async (action: () => Promise<GithubStatus>) => {
     setGithubBusy(true);
     try {
@@ -487,7 +497,9 @@ export function SettingsPanel({
       setMsg(next.error || next.note);
       return next;
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
       return null;
     } finally {
       setGithubBusy(false);
@@ -496,7 +508,12 @@ export function SettingsPanel({
 
   const connectGithub = async () => {
     const next = await withGithub(() => githubConnectReadonly(githubToken));
-    if (next?.connected) setGithubToken('');
+    if (next?.connected) {
+      setGithubToken('');
+      recordGithubAudit('connect', `GitHub connected as ${next.login || 'user'} (token)`);
+    } else if (next) {
+      recordGithubAudit('fail', next.error || next.note || 'GitHub token connect failed');
+    }
   };
 
   const pollGithubOauth = async (flow: GithubOAuthStart) => {
@@ -509,17 +526,25 @@ export function SettingsPanel({
         if (result.status === 'connected' && result.github) {
           setGithub(result.github);
           setMsg(result.github.note);
+          recordGithubAudit(
+            'connect',
+            `GitHub connected as ${result.github.login || 'user'} (browser OAuth)`,
+          );
         } else {
           setMsg(result.message || t('githubOauthFailed'));
+          recordGithubAudit('fail', result.message || t('githubOauthFailed'));
         }
         setGithubOauth(null);
         return;
       }
       setGithubOauth(null);
       setMsg(t('githubOauthExpired'));
+      recordGithubAudit('fail', t('githubOauthExpired'));
     } catch (error) {
       setGithubOauth(null);
-      setMsg(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
     }
@@ -566,8 +591,11 @@ export function SettingsPanel({
       const prs = await githubListOpenPrs(project);
       setGithubPrs(prs);
       setMsg(prs.length ? t('githubPrsLoaded').replace('{n}', String(prs.length)) : t('githubPrsEmpty'));
+      recordGithubAudit('read', `Listed ${prs.length} open PR(s) for current project`);
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
     }
@@ -580,8 +608,11 @@ export function SettingsPanel({
       const checks = await githubListPrChecks(project, prNumber);
       setGithubChecks((current) => ({ ...current, [prNumber]: checks }));
       setMsg(t('githubChecksLoaded').replace('{n}', String(checks.length)));
+      recordGithubAudit('read', `Loaded ${checks.length} check(s) for PR #${prNumber}`);
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
     }
@@ -594,8 +625,89 @@ export function SettingsPanel({
       const comments = await githubListPrComments(project, prNumber);
       setGithubComments((current) => ({ ...current, [prNumber]: comments }));
       setMsg(t('githubCommentsLoaded').replace('{n}', String(comments.length)));
+      recordGithubAudit('read', `Loaded ${comments.length} comment(s) for PR #${prNumber}`);
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  /** Explicit user confirmation required before any remote write. */
+  const createGithubPullRequest = async () => {
+    if (!project) {
+      setMsg(t('githubProjectRequired'));
+      return;
+    }
+    if (!github?.connected && !github?.configured) {
+      setMsg(t('githubNotConnected'));
+      return;
+    }
+    const title = githubPrTitle.trim();
+    if (!title) {
+      setMsg(t('githubPrTitleRequired'));
+      return;
+    }
+    const confirmLine = githubWriteConfirmSummary({
+      action: 'create_pull_request',
+      titleOrBody: title,
+      base: githubPrBase,
+      draft: githubPrDraft,
+    });
+    if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
+    setGithubBusy(true);
+    try {
+      const created = await githubCreatePullRequest({
+        cwd: project,
+        title,
+        body: githubPrBody,
+        base: githubPrBase.trim() || 'main',
+        draft: githubPrDraft,
+      });
+      setGithubReceipt(created.url);
+      setMsg(`${t('githubPrCreated')}: #${created.number}`);
+      recordGithubAudit('write', confirmLine, { receiptUrl: created.url, detail: `PR #${created.number}` });
+      void loadGithubPrs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
+    } finally {
+      setGithubBusy(false);
+    }
+  };
+
+  const createGithubComment = async () => {
+    if (!project) {
+      setMsg(t('githubProjectRequired'));
+      return;
+    }
+    const prNumber = Number(githubCommentPr);
+    const body = githubCommentBody.trim();
+    if (!Number.isFinite(prNumber) || prNumber <= 0 || !body) {
+      setMsg(t('githubCommentRequired'));
+      return;
+    }
+    const confirmLine = githubWriteConfirmSummary({
+      action: 'create_pr_comment',
+      titleOrBody: body,
+      prNumber,
+    });
+    if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
+    setGithubBusy(true);
+    try {
+      const created = await githubCreatePrComment(project, prNumber, body);
+      setGithubReceipt(created.url);
+      setMsg(t('githubCommentCreated'));
+      recordGithubAudit('write', confirmLine, { receiptUrl: created.url });
+      setGithubCommentBody('');
+      void loadGithubComments(prNumber);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setMsg(message);
+      recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
     }
@@ -683,7 +795,12 @@ export function SettingsPanel({
           { id: 'hooks', label: t('settingsHooksTitle'), keywords: 'hooks 钩子 项目指令 agents 规则 约定' },
           { id: 'subagents', label: t('settingsSubagents'), keywords: 'subagent 子任务 委派 worktree 隔离' },
           { id: 'mcp', label: t('settingsMcp'), keywords: 'mcp connect 连接' },
-          { id: 'git', label: t('settingsGit'), keywords: 'git' },
+          {
+            id: 'connectors',
+            label: t('settingsConnectors'),
+            keywords: 'github slack notion calendar connector 连接器 oauth',
+          },
+          { id: 'git', label: t('settingsGit'), keywords: 'git github pr' },
           {
             id: 'environment',
             label: t('settingsEnvironment'),
@@ -918,26 +1035,19 @@ export function SettingsPanel({
   };
 
   const recordModelTest = (model: CustomModelRow, result: ModelTestResult) => {
-    setModelTestStatuses((previous) => {
-      const next = {
-        ...previous,
-        [modelTestStatusKey(model)]: {
-          ok: result.ok,
-          status: result.status,
-          checkedAt: Date.now(),
-        },
-      };
-      const kept = Object.entries(next)
-        .sort(([, a], [, b]) => b.checkedAt - a.checkedAt)
-        .slice(0, MAX_STORED_MODEL_TESTS);
-      const trimmed = Object.fromEntries(kept);
-      try {
-        localStorage.setItem(MODEL_TEST_STATUS_STORAGE_KEY, JSON.stringify(trimmed));
-      } catch {
-        // This is only non-secret UI metadata; the connection test itself remains valid.
-      }
-      return trimmed;
+    const next = upsertModelVerifyRecord({
+      model: model.model,
+      baseUrl: model.baseUrl,
+      apiBackend: model.apiBackend,
+      providerLabel: model.providerLabel,
+      apiKey: model.apiKey,
+      hasKeychainSecret: model.hasKeychainSecret,
+      ok: result.ok,
+      status: result.status,
+      note: result.note,
+      latencyMs: result.latencyMs,
     });
+    setModelVerifyRecords(next);
   };
 
   const makeDefaultModel = async (modelWireId: string) => {
@@ -1352,6 +1462,23 @@ export function SettingsPanel({
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
                 {t('settingsModelsHint')}
               </p>
+              <div className="settings-card" style={{ marginBottom: 12 }}>
+                <div className="settings-row-title">{t('settingsModelsVerifyTitle')}</div>
+                <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                  {t('settingsModelsVerifyHint')
+                    .replace('{n}', String(countVerifiedApiProviders(modelVerifyRecords)))
+                    .replace('{need}', '2')}
+                </div>
+                {countVerifiedApiProviders(modelVerifyRecords) >= 2 ? (
+                  <div className="settings-row-hint" style={{ marginTop: 6, color: 'var(--ok, #16a34a)' }}>
+                    {t('settingsModelsVerifyReady')}
+                  </div>
+                ) : (
+                  <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                    {t('settingsModelsVerifyNeedTwo')}
+                  </div>
+                )}
+              </div>
               <div className="settings-card">
                 <div className="settings-row-title">{t('settingsModelsGrok')}</div>
                 <div className="settings-row-hint">
@@ -1624,7 +1751,7 @@ export function SettingsPanel({
                     const isDefault =
                       modelsSnap?.defaultModel === m.model ||
                       modelsSnap?.defaultModel === m.id;
-                    const testStatus = modelTestStatuses[modelTestStatusKey(m)];
+                    const testStatus = findVerifyRecord(modelVerifyRecords, m);
                     return (
                       <div key={m.id} className="settings-row">
                         <div>
@@ -1647,6 +1774,23 @@ export function SettingsPanel({
                               ? (testStatus.ok ? t('settingsModelsVerifiedAt') : t('settingsModelsTestFailedAt')).replace('{when}', formatWhen(testStatus.checkedAt))
                               : t('settingsModelsNotTested')}
                           </div>
+                          {testStatus?.failReason ? (
+                            <div className="settings-row-hint" style={{ color: 'var(--danger, #c33)' }}>
+                              {testStatus.failReason}
+                            </div>
+                          ) : null}
+                          {testStatus ? (
+                            <div className="settings-row-hint">
+                              {t('settingsModelsCaps')}:{' '}
+                              {t('settingsModelsCapTools')}=
+                              {String(testStatus.capabilities.tools)} ·{' '}
+                              {t('settingsModelsCapVision')}=
+                              {String(testStatus.capabilities.vision)}
+                              {typeof testStatus.latencyMs === 'number'
+                                ? ` · ${testStatus.latencyMs}ms`
+                                : ''}
+                            </div>
+                          ) : null}
                         </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button
@@ -2086,6 +2230,109 @@ export function SettingsPanel({
             </>
           ) : null}
 
+          {section === 'connectors' ? (
+            <>
+              <h2>{t('settingsConnectors')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsConnectorsHint')}
+              </p>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('connectorContractTitle')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                  {t('connectorContractBody')}
+                </p>
+                <ul className="settings-list" style={{ marginTop: 10 }}>
+                  {CONNECTOR_CATALOG.map((c) => {
+                    const live = c.id === 'github' ? github : null;
+                    const state = deriveConnectorUiState(c, live);
+                    const stateLabel =
+                      state === 'soon'
+                        ? t('connectorSoon')
+                        : state === 'connected'
+                          ? t('connectorConnected')
+                          : state === 'configured'
+                            ? t('connectorConfigured')
+                            : state === 'error'
+                              ? t('connectorError')
+                              : t('connectorDisconnected');
+                    return (
+                      <li key={c.id}>
+                        <strong>
+                          {c.id === 'github'
+                            ? t('connectorName_github')
+                            : c.id === 'calendar'
+                              ? t('connectorName_calendar')
+                              : c.id === 'slack'
+                                ? t('connectorName_slack')
+                                : c.id === 'feishu'
+                                  ? t('connectorName_feishu')
+                                  : c.id === 'notion'
+                                    ? t('connectorName_notion')
+                                    : t('connectorName_drive')}
+                        </strong>
+                        <span className="muted"> · {stateLabel}</span>
+                        {c.availability === 'real' ? (
+                          <div className="settings-row-hint" style={{ marginTop: 4 }}>
+                            {t('connectorScopes')}: {c.scopes.join('; ')}
+                          </div>
+                        ) : (
+                          <div className="settings-row-hint" style={{ marginTop: 4 }}>
+                            {t('connectorSoonHint')}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginTop: 10 }}
+                  onClick={() => setSection('git')}
+                >
+                  {t('connectorOpenGithub')}
+                </button>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <div className="settings-row-title">{t('connectorAuditTitle')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                  {t('connectorAuditHint')}
+                </p>
+                {connectorAudit.length ? (
+                  <ul className="settings-list" style={{ marginTop: 10, maxHeight: 220, overflow: 'auto' }}>
+                    {connectorAudit.slice(0, 20).map((ev) => (
+                      <li key={ev.id}>
+                        <span className="muted">{formatWhen(ev.at)}</span>
+                        {' · '}
+                        <strong>{ev.connector}</strong>
+                        {' · '}
+                        {ev.action}
+                        {' · '}
+                        {ev.summary}
+                        {ev.receiptUrl ? (
+                          <>
+                            {' · '}
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => void openUrlSafe(ev.receiptUrl!)}
+                            >
+                              {t('connectorReceipt')}
+                            </button>
+                          </>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted" style={{ marginTop: 8 }}>
+                    {t('connectorAuditEmpty')}
+                  </p>
+                )}
+              </div>
+            </>
+          ) : null}
+
           {section === 'git' ? (
             <>
               <h2>{t('settingsGit')}</h2>
@@ -2105,6 +2352,9 @@ export function SettingsPanel({
               <h3 className="subhead">{t('githubTitle')}</h3>
               <div className="settings-card">
                 <p className="hint">{t('githubHint')}</p>
+                <div className="settings-row-hint" style={{ marginBottom: 8 }}>
+                  {t('connectorScopes')}: {(getConnector('github')?.scopes || []).join('; ')}
+                </div>
                 <div className="settings-row">
                   <div>
                     <div className="settings-row-title">
@@ -2115,6 +2365,11 @@ export function SettingsPanel({
                           : t('githubNotConnected')}
                     </div>
                     {github?.error ? <div className="settings-row-hint">{github.error}</div> : null}
+                    {github?.authMethod ? (
+                      <div className="settings-row-hint">
+                        {t('githubAuthMethod')}: {github.authMethod}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 {!github?.configured ? (
@@ -2156,11 +2411,130 @@ export function SettingsPanel({
                   </>
                 ) : (
                   <div className="field-row" style={{ marginTop: 10 }}>
-                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void withGithub(githubTestConnection)}>{t('githubTest')}</button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={githubBusy}
+                      onClick={() => {
+                        void withGithub(githubTestConnection).then((next) => {
+                          if (next?.connected) {
+                            recordGithubAudit('test', `GitHub test OK as ${next.login || 'user'}`);
+                          } else if (next) {
+                            recordGithubAudit('fail', next.error || next.note || 'GitHub test failed');
+                          }
+                        });
+                      }}
+                    >
+                      {t('githubTest')}
+                    </button>
                     <button type="button" className="btn" disabled={githubBusy} onClick={() => void loadGithubPrs()}>{t('githubLoadPrs')}</button>
-                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void withGithub(githubDisconnect)}>{t('githubDisconnect')}</button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={githubBusy}
+                      onClick={() => {
+                        void withGithub(githubDisconnect).then(() => {
+                          recordGithubAudit('disconnect', 'GitHub disconnected');
+                          setGithubPrs([]);
+                          setGithubReceipt(null);
+                        });
+                      }}
+                    >
+                      {t('githubDisconnect')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={githubBusy}
+                      onClick={() => {
+                        void withGithub(githubDisconnect).then(() => {
+                          recordGithubAudit('reauth', 'GitHub re-auth: cleared stored credentials');
+                          setGithubPrs([]);
+                        });
+                      }}
+                    >
+                      {t('githubReauth')}
+                    </button>
                   </div>
                 )}
+                {(github?.connected || github?.configured) && project ? (
+                  <div className="settings-card muted-block" style={{ marginTop: 12 }}>
+                    <div className="settings-row-title">{t('githubWriteTitle')}</div>
+                    <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                      {t('githubWriteHint')}
+                    </p>
+                    <div className="field-row" style={{ marginTop: 8 }}>
+                      <input
+                        value={githubPrTitle}
+                        onChange={(e) => setGithubPrTitle(e.target.value)}
+                        placeholder={t('githubPrTitlePlaceholder')}
+                        aria-label={t('githubPrTitlePlaceholder')}
+                      />
+                      <input
+                        value={githubPrBase}
+                        onChange={(e) => setGithubPrBase(e.target.value)}
+                        placeholder={t('githubPrBasePlaceholder')}
+                        aria-label={t('githubPrBasePlaceholder')}
+                        style={{ maxWidth: 120 }}
+                      />
+                    </div>
+                    <textarea
+                      value={githubPrBody}
+                      onChange={(e) => setGithubPrBody(e.target.value)}
+                      placeholder={t('githubPrBodyPlaceholder')}
+                      rows={3}
+                      style={{ width: '100%', marginTop: 8, font: 'inherit' }}
+                    />
+                    <label className="settings-row-hint" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={githubPrDraft}
+                        onChange={(e) => setGithubPrDraft(e.target.checked)}
+                      />
+                      {t('githubPrDraft')}
+                    </label>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      style={{ marginTop: 8 }}
+                      disabled={githubBusy || !githubPrTitle.trim()}
+                      onClick={() => void createGithubPullRequest()}
+                    >
+                      {t('githubCreatePr')}
+                    </button>
+                    <div className="field-row" style={{ marginTop: 12 }}>
+                      <input
+                        value={githubCommentPr}
+                        onChange={(e) => setGithubCommentPr(e.target.value)}
+                        placeholder={t('githubCommentPrPlaceholder')}
+                        aria-label={t('githubCommentPrPlaceholder')}
+                        style={{ maxWidth: 100 }}
+                      />
+                      <input
+                        value={githubCommentBody}
+                        onChange={(e) => setGithubCommentBody(e.target.value)}
+                        placeholder={t('githubCommentBodyPlaceholder')}
+                        aria-label={t('githubCommentBodyPlaceholder')}
+                      />
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={githubBusy}
+                        onClick={() => void createGithubComment()}
+                      >
+                        {t('githubCreateComment')}
+                      </button>
+                    </div>
+                    {githubReceipt ? (
+                      <div className="settings-row-hint" style={{ marginTop: 10 }}>
+                        {t('connectorReceipt')}:{' '}
+                        <button type="button" className="link-btn" onClick={() => void openUrlSafe(githubReceipt)}>
+                          {githubReceipt}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {githubPrs.length ? (
                   <ul className="settings-list" style={{ marginTop: 10 }}>
                     {githubPrs.map((pr) => (

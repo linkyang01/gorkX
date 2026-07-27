@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AcpClient, SessionSnapshot } from '../lib/acpClient';
+import { formatTaskModelDisplay } from '../lib/modelVerify';
 import { t } from '../lib/i18n';
 
 interface Props {
@@ -8,6 +9,9 @@ interface Props {
   sessionId: string | null;
   onClose: () => void;
   onManageAuth?: (destination: 'account' | 'models') => void;
+  /** Local selection fallback when snapshot omits provider branding. */
+  localModelId?: string | null;
+  localProviderLabel?: string | null;
 }
 
 function number(value: number | undefined) {
@@ -25,7 +29,15 @@ function authSourceLabel(source: SessionSnapshot['authSource']) {
   }
 }
 
-export function TaskInfoPanel({ open, client, sessionId, onClose, onManageAuth }: Props) {
+export function TaskInfoPanel({
+  open,
+  client,
+  sessionId,
+  onClose,
+  onManageAuth,
+  localModelId,
+  localProviderLabel,
+}: Props) {
   const [info, setInfo] = useState<SessionSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +89,17 @@ export function TaskInfoPanel({ open, client, sessionId, onClose, onManageAuth }
         {error ? <pre className="ext-msg err">{error}</pre> : null}
         {info ? <div className="task-info-content">
           <div className="task-info-grid">
-            <div><span>{t('taskInfoModel')}</span><strong>{info.modelDisplayName || info.model || '—'}</strong></div>
+            <div>
+              <span>{t('taskInfoModel')}</span>
+              <strong>
+                {formatTaskModelDisplay({
+                  modelId: info.model || localModelId,
+                  modelName: info.modelDisplayName || info.model || localModelId,
+                  providerLabel: localProviderLabel,
+                  authSource: info.authSource,
+                })}
+              </strong>
+            </div>
             <div><span>{t('taskInfoAgent')}</span><strong>{info.agentName || '—'}</strong></div>
             <div><span>{t('taskInfoTurns')}</span><strong>{number(info.turns)}</strong></div>
             <div><span>{t('taskInfoAuthSource')}</span><strong>{authSourceLabel(info.authSource)}</strong></div>

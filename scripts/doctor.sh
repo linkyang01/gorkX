@@ -11,6 +11,7 @@ locked_commit="$(sed -n 's/^commit = "\([0-9a-f]*\)"/\1/p' "$lock")"
 
 echo "=== gorkX doctor ==="
 echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "host: $(uname -s) $(uname -m)"
 echo
 echo "kernel source lock: ${locked_commit:-missing}"
 echo "kernel path: $engine"
@@ -58,5 +59,29 @@ else
 fi
 
 echo
+echo "--- diagnostics (macOS) ---"
+echo "app support: $HOME/Library/Application Support/gorkX"
+echo "GROK_HOME:   $default_home"
+echo "crash logs:  $HOME/Library/Logs/DiagnosticReports"
+echo "unified log: log show --predicate 'process == \"gorkx\"' --last 1h"
+echo
+echo "--- update / rollback ---"
+echo "update: GitHub Releases DMG for this Mac; in-app check never auto-installs without confirmation"
+echo "rollback: keep previous gorkX.app / reinstall prior DMG; do not run grok update"
+echo "kernel: sync lock + scripts/build-grok-kernel.sh + ACP gates only"
+echo
+echo "--- signing (if installed app present) ---"
+installed_app="${GORKX_INSTALLED_APP:-$HOME/Applications/gorkX.app}"
+if [[ -d "$installed_app" ]]; then
+  echo "installed app: $installed_app"
+  if [[ -x "$root/scripts/verify-macos-signing.sh" ]]; then
+    "$root/scripts/verify-macos-signing.sh" "$installed_app" || true
+  fi
+else
+  echo "installed app: not found at $installed_app"
+fi
+
+echo
 echo "upgrade rule: do not run grok update; sync the lock, build, and run ACP gates"
+echo "public ship: never tag/Release/DMG without explicit user approval (PRODUCT_DEVELOPMENT_PLAN §7.6)"
 echo "done."

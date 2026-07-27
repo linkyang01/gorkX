@@ -5,13 +5,18 @@ import { useEffect, useState } from 'react';
 import {
   type BackgroundSchedulerRun,
   type ScheduledJob,
+  type SchedulePermissionPolicy,
   computeNextRun,
-  computeRetryRun,
+  DEFAULT_MAX_AUTO_RETRIES,
+  describeScheduleMeta,
   formatNextRun,
   getBackgroundSchedulerStatus,
   listBackgroundSchedulerRuns,
   loadPersistentJobs,
+  localTimeZoneId,
+  nextRunAfterOutcome,
   nid,
+  parseScheduleFromNaturalLanguage,
   savePersistentJobs,
   setBackgroundSchedulerEnabled,
   SUGGESTIONS,
@@ -51,6 +56,9 @@ export function ScheduledPanel({
   const [dailyHour, setDailyHour] = useState(9);
   const [dailyMinute, setDailyMinute] = useState(0);
   const [weekdaysOnly, setWeekdaysOnly] = useState(true);
+  const [nlDraft, setNlDraft] = useState('');
+  const [permissionPolicy, setPermissionPolicy] = useState<SchedulePermissionPolicy>('plan');
+  const [modelId, setModelId] = useState('');
   const [backgroundEnabled, setBackgroundEnabled] = useState(false);
   const [backgroundSupported, setBackgroundSupported] = useState(false);
   const [backgroundBusy, setBackgroundBusy] = useState(false);
@@ -93,11 +101,17 @@ export function ScheduledPanel({
       failureCount: 0,
       lastError: null,
       nextRunAt: computeNextRun(partial),
+      timeZone: partial.timeZone || localTimeZoneId(),
+      permissionPolicy: partial.permissionPolicy || 'plan',
+      maxAutoRetries: partial.maxAutoRetries ?? DEFAULT_MAX_AUTO_RETRIES,
     };
     persist([job, ...jobs]);
     setCreating(false);
     setTitle('');
     setPrompt('');
+    setNlDraft('');
+    setModelId('');
+    setPermissionPolicy('plan');
   };
 
   const fromSuggestion = (s: (typeof SUGGESTIONS)[0]) => {
@@ -111,7 +125,23 @@ export function ScheduledPanel({
       dailyMinute: s.dailyMinute,
       weekdaysOnly: s.weekdaysOnly,
       enabled: true,
+      timeZone: localTimeZoneId(),
+      permissionPolicy: 'plan',
+      maxAutoRetries: DEFAULT_MAX_AUTO_RETRIES,
     });
+  };
+
+  const applyNaturalLanguage = () => {
+    const parsed = parseScheduleFromNaturalLanguage(nlDraft);
+    if (!parsed) return;
+    setTitle(parsed.title);
+    setPrompt(parsed.prompt);
+    setKind(parsed.kind);
+    setIntervalMinutes(parsed.intervalMinutes);
+    setDailyHour(parsed.dailyHour);
+    setDailyMinute(parsed.dailyMinute);
+    setWeekdaysOnly(parsed.weekdaysOnly);
+    setCreating(true);
   };
 
   const toggle = (id: string) => {
@@ -137,20 +167,37 @@ export function ScheduledPanel({
     const result = await onRunJob(job);
     const now = Date.now();
     persist(
-      jobs.map((j) =>
-        j.id === job.id
-          ? {
-              ...j,
-              lastRunAt: now,
-              failureCount: result.ok ? 0 : (j.failureCount ?? 0) + 1,
-              lastError: result.ok ? null : (result.error || '无法启动 Agent').slice(0, 500),
-              nextRunAt: result.ok
-                ? computeNextRun(j, now)
-                : computeRetryRun((j.failureCount ?? 0) + 1, now),
-            }
-          : j,
-      ),
+      jobs.map((j) => {
+        if (j.id !== job.id) return j;
+        if (result.ok) {
+          return {
+            ...j,
+            lastRunAt: now,
+            failureCount: 0,
+            lastError: null,
+            nextRunAt: computeNextRun(j, now),
+            enabled: true,
+          };
+        }
+        const failureCount = (j.failureCount ?? 0) + 1;
+        const outcome = nextRunAfterOutcome(j, false, failureCount, now);
+        return {
+          ...j,
+          lastRunAt: now,
+          failureCount,
+          lastError: outcome.pauseAuto
+            ? `${(result.error || t('schedRunFailed')).slice(0, 400)} · ${t('schedAutoRetryPaused')}`
+            : (result.error || t('schedRunFailed')).slice(0, 500),
+          nextRunAt: outcome.nextRunAt,
+          enabled: outcome.pauseAuto ? false : j.enabled,
+        };
+      }),
     );
+  };
+
+  /** Safe manual re-run after auto-retry pause — does not invent success. */
+  const reRunFailed = async (job: ScheduledJob) => {
+    await runNow({ ...job, enabled: true });
   };
 
   const submitCreate = () => {
@@ -165,6 +212,10 @@ export function ScheduledPanel({
       dailyMinute,
       weekdaysOnly,
       enabled: true,
+      timeZone: localTimeZoneId(),
+      modelId: modelId.trim() || undefined,
+      permissionPolicy,
+      maxAutoRetries: DEFAULT_MAX_AUTO_RETRIES,
     });
   };
 
@@ -244,6 +295,27 @@ export function ScheduledPanel({
             onClick={() => setCreating((v) => !v)}
           >
             {creating ? t('cancel') : t('schedCreate')}
+          </button>
+        </div>
+
+        <div className="settings-card" style={{ marginBottom: 12 }}>
+          <div className="settings-row-title">{t('schedNlTitle')}</div>
+          <p className="settings-row-hint" style={{ marginTop: 4 }}>{t('schedNlHint')}</p>
+          <textarea
+            value={nlDraft}
+            onChange={(e) => setNlDraft(e.target.value)}
+            rows={2}
+            placeholder={t('schedNlPlaceholder')}
+            style={{ width: '100%', marginTop: 8, font: 'inherit' }}
+          />
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ marginTop: 8 }}
+            disabled={nlDraft.trim().length < 4}
+            onClick={applyNaturalLanguage}
+          >
+            {t('schedNlApply')}
           </button>
         </div>
 
@@ -329,6 +401,29 @@ export function ScheduledPanel({
                 </label>
               </div>
             )}
+            <label className="field">
+              <span>{t('schedFieldTimezone')}</span>
+              <input value={localTimeZoneId()} readOnly title={t('schedTimezoneHint')} />
+            </label>
+            <label className="field">
+              <span>{t('schedFieldPermission')}</span>
+              <select
+                value={permissionPolicy}
+                onChange={(e) => setPermissionPolicy(e.target.value as SchedulePermissionPolicy)}
+              >
+                <option value="plan">{t('schedPermPlan')}</option>
+                <option value="default">{t('schedPermDefault')}</option>
+              </select>
+            </label>
+            <p className="settings-row-hint">{t('schedPermHint')}</p>
+            <label className="field">
+              <span>{t('schedFieldModel')}</span>
+              <input
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                placeholder={t('schedModelPlaceholder')}
+              />
+            </label>
             <button
               type="button"
               className="btn primary"
@@ -368,12 +463,14 @@ export function ScheduledPanel({
           <p className="hint">{t('schedEmpty')}</p>
         ) : (
           <ul className="sched-list">
-            {jobs.map((j) => (
+            {jobs.map((j) => {
+              const meta = describeScheduleMeta(j);
+              return (
               <li key={j.id} className={`sched-item${j.enabled ? '' : ' off'}`}>
                 <div className="sched-item-main">
                   <div className="sched-item-title">{j.title}</div>
                   <div className="sched-item-meta">
-                    {j.projectPath
+                    {meta.dataSource === 'project'
                       ? projectDisplayName(j.projectPath, aliases)
                       : t('projectPickerNoProject')}
                     {' · '}
@@ -383,6 +480,13 @@ export function ScheduledPanel({
                           .replace('{h}', String(j.dailyHour).padStart(2, '0'))
                           .replace('{m}', String(j.dailyMinute).padStart(2, '0'))}
                     {j.weekdaysOnly ? ` · ${t('schedWeekdays')}` : ''}
+                    {' · '}
+                    {meta.timeZone}
+                  </div>
+                  <div className="sched-item-meta">
+                    {t('schedFieldPermission')}:{' '}
+                    {meta.permissionPolicy === 'plan' ? t('schedPermPlan') : t('schedPermDefault')}
+                    {meta.modelId ? ` · ${t('schedFieldModel')}: ${meta.modelId}` : ''}
                   </div>
                   <div className="sched-item-meta">
                     {t('schedNext')}: {formatNextRun(j.nextRunAt)}
@@ -392,7 +496,9 @@ export function ScheduledPanel({
                   </div>
                   {j.failureCount > 0 ? (
                     <div className="sched-item-meta" style={{ color: 'var(--danger, #c33)' }}>
-                      最近调度失败 {j.failureCount} 次{j.lastError ? `：${j.lastError.slice(0, 120)}` : ''}
+                      {t('schedFailCount').replace('{n}', String(j.failureCount))}
+                      {j.lastError ? `：${j.lastError.slice(0, 120)}` : ''}
+                      {meta.autoRetryPaused ? ` · ${t('schedAutoRetryPaused')}` : ''}
                     </div>
                   ) : null}
                 </div>
@@ -400,6 +506,11 @@ export function ScheduledPanel({
                   <button type="button" className="btn btn-sm" onClick={() => void runNow(j)}>
                     {t('schedRunNow')}
                   </button>
+                  {meta.autoRetryPaused || (j.failureCount > 0 && !j.enabled) ? (
+                    <button type="button" className="btn btn-sm primary-sm" onClick={() => void reRunFailed(j)}>
+                      {t('schedSafeRerun')}
+                    </button>
+                  ) : null}
                   <button type="button" className="btn btn-sm" onClick={() => toggle(j.id)}>
                     {j.enabled ? t('schedPause') : t('schedResume')}
                   </button>
@@ -408,7 +519,8 @@ export function ScheduledPanel({
                   </button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
         <p className="hint" style={{ marginTop: 12 }}>

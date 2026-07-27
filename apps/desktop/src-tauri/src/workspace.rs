@@ -368,6 +368,134 @@ pub async fn workspace_list_files(cwd: String, query: Option<String>, limit: Opt
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceTextFile {
+    pub path: String,
+    pub content: String,
+    /// Milliseconds since UNIX epoch; used for optimistic conflict detection on save.
+    pub mtime_ms: u64,
+    pub size: u64,
+}
+
+/// Read full text for in-app edit. Project-bounded, rejects symlinks/binary/oversize.
+#[tauri::command]
+pub fn workspace_read_text_file(cwd: String, path: String) -> Result<WorkspaceTextFile, String> {
+    let root = workspace_root(&cwd)?;
+    let requested = PathBuf::from(path.trim());
+    if !requested.is_absolute() {
+        return Err("path must be absolute".into());
+    }
+    let original_meta = fs::symlink_metadata(&requested)
+        .map_err(|e| format!("read file metadata: {e}"))?;
+    if original_meta.file_type().is_symlink() {
+        return Err("refusing to read a symlink".into());
+    }
+    let resolved = requested
+        .canonicalize()
+        .map_err(|e| format!("resolve path: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("path outside the current project".into());
+    }
+    let meta = fs::metadata(&resolved).map_err(|e| format!("stat file: {e}"))?;
+    if !meta.is_file() {
+        return Err("not a regular file".into());
+    }
+    if meta.len() > MAX_CLIENT_WRITE_BYTES as u64 {
+        return Err("file is too large to edit in gorkX (1 MB max)".into());
+    }
+    let raw = fs::read(&resolved).map_err(|e| format!("read file: {e}"))?;
+    if raw.contains(&0) {
+        return Err("binary file cannot be edited as text".into());
+    }
+    let content = String::from_utf8(raw).map_err(|_| "file is not valid UTF-8 text".to_string())?;
+    let mtime_ms = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    Ok(WorkspaceTextFile {
+        path: resolved.display().to_string(),
+        content,
+        mtime_ms,
+        size: meta.len(),
+    })
+}
+
+/// Save text only if the on-disk mtime still matches the value loaded for edit.
+/// Prevents silently overwriting another window's changes.
+#[tauri::command]
+pub fn workspace_write_text_if_mtime(
+    cwd: String,
+    path: String,
+    content: String,
+    expected_mtime_ms: u64,
+) -> Result<WorkspaceTextFile, String> {
+    let root = workspace_root(&cwd)?;
+    let requested = PathBuf::from(path.trim());
+    if !requested.is_absolute() {
+        return Err("path must be absolute".into());
+    }
+    let original_meta = fs::symlink_metadata(&requested)
+        .map_err(|e| format!("read file metadata: {e}"))?;
+    if original_meta.file_type().is_symlink() {
+        return Err("refusing to write through a symlink".into());
+    }
+    let resolved = requested
+        .canonicalize()
+        .map_err(|e| format!("resolve path: {e}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("path outside the current project".into());
+    }
+    let meta = fs::metadata(&resolved).map_err(|e| format!("stat file: {e}"))?;
+    if !meta.is_file() {
+        return Err("not a regular file".into());
+    }
+    let current_mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    if current_mtime != expected_mtime_ms {
+        return Err("conflict: file changed on disk since you opened it".into());
+    }
+    if content.len() > MAX_CLIENT_WRITE_BYTES || content.as_bytes().contains(&0) {
+        return Err("content must be plain text up to 1 MB without NUL bytes".into());
+    }
+    let parent = resolved
+        .parent()
+        .ok_or_else(|| "file path has no parent".to_string())?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let name = resolved
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("file");
+    let tmp = parent.join(format!(".{name}.gorkx-edit-{nonce}.tmp"));
+    let write_result = (|| -> Result<(), String> {
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&tmp)
+            .map_err(|e| format!("create temporary file: {e}"))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("write temporary file: {e}"))?;
+        file.sync_all()
+            .map_err(|e| format!("sync temporary file: {e}"))?;
+        fs::rename(&tmp, &resolved).map_err(|e| format!("replace file: {e}"))?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    write_result?;
+    workspace_read_text_file(cwd, resolved.display().to_string())
+}
+
 /// Read-only preview of a workspace file (first N lines) for non-git review.
 #[tauri::command]
 pub fn read_workspace_file_preview(

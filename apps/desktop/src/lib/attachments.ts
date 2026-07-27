@@ -13,6 +13,8 @@ export interface ComposerAttachment {
   /** object URL or asset URL for thumbnail / preview */
   previewUrl?: string;
   size?: number;
+  /** External http(s) URL when the agent returned a non-file resource link. */
+  href?: string;
 }
 
 /** ACP resource-link payload. Image blocks are optional in ACP; resource links are baseline. */

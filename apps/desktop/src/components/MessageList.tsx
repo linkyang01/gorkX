@@ -64,7 +64,7 @@ function ThoughtBlock({ text }: { text: string }) {
   const clean = sanitizeText(text);
   if (!clean) return null;
   return (
-    <div className="tl-row tl-meta">
+    <div className="tl-row tl-meta tl-tool" data-layer="tool">
       <button type="button" className="tl-meta-btn" onClick={() => setOpen((v) => !v)}>
         <span className="tl-ico">
           <IconThought size={14} />
@@ -90,7 +90,7 @@ function ToolRow({ text, status, kind }: { text: string; status?: string; kind?:
     !/^call-[0-9a-f-]+/i.test(showBody) &&
     showBody !== title;
   return (
-    <div className={`tl-row tl-meta${failed ? ' fail' : ''}`}>
+    <div className={`tl-row tl-meta tl-tool${failed ? ' fail' : ''}`} data-layer="tool">
       <button type="button" className="tl-meta-btn" onClick={() => setOpen((v) => !v)}>
         <span className="tl-ico">
           {failed ? <IconWarning size={14} /> : <IconTool size={14} />}
@@ -111,7 +111,7 @@ function SystemRow({ text }: { text: string }) {
   if (!clean) return null;
   const short = clean.length > 120 ? summarizeError(clean) : clean;
   return (
-    <div className="tl-row tl-meta">
+    <div className="tl-row tl-meta tl-decision" data-layer="decision">
       <span className="tl-ico">
         <IconSystem size={14} />
       </span>
@@ -148,7 +148,7 @@ function LineView({
   const [copied, setCopied] = useState(false);
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
     return (
-      <div className="tl-row tl-assistant">
+      <div className="tl-row tl-plan" data-layer="plan">
         <PlanCard
           entries={line.planEntries}
           onToggle={(entryId) => onTogglePlanEntry(line.id, entryId)}
@@ -159,7 +159,7 @@ function LineView({
   }
   if (line.role === 'workflow') {
     return (
-      <div className="tl-row tl-assistant">
+      <div className="tl-row tl-result" data-layer="result">
         <WorkflowCard
           workflow={line.workflow}
           fallback={line.text}
@@ -171,7 +171,7 @@ function LineView({
   }
   if (line.role === 'scheduled') {
     return (
-      <div className="tl-row tl-assistant">
+      <div className="tl-row tl-result" data-layer="result">
         <KernelScheduleCard
           task={line.scheduledTask}
           onDelete={line.scheduledTask ? onScheduledTaskDelete : undefined}
@@ -190,7 +190,7 @@ function LineView({
     const text = visibleUserPrompt(line.text);
     const atts = line.attachments || [];
     return (
-      <div className="tl-row tl-user">
+      <div className="tl-row tl-user" data-layer="message">
         <div className="tl-user-stack">
           {atts.length && onOpenAttachment ? (
             <AttachmentStrip items={atts} onOpen={onOpenAttachment} compact />
@@ -210,7 +210,7 @@ function LineView({
   if (!body && !attachments.length) return null;
   const response = extractResponseChoices(body);
   return (
-    <div className="tl-row tl-assistant">
+    <div className="tl-row tl-assistant tl-result" data-layer="result">
       <div className="tl-assistant-body">
         {attachments.length && onOpenAttachment ? (
           <AttachmentStrip items={attachments} onOpen={onOpenAttachment} variant="gallery" />

@@ -77,12 +77,16 @@ import { ProjectPicker, type ProjectPickerAction } from './components/ProjectPic
 import {
   type ScheduledJob,
   computeNextRun,
-  computeRetryRun,
+  nextRunAfterOutcome,
   loadPersistentJobs,
   savePersistentJobs,
 } from './lib/scheduled';
 import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
 import { listCustomModels } from './lib/modelsConfig';
+import {
+  formatTaskModelDisplay,
+  resolveProviderForModelId,
+} from './lib/modelVerify';
 import {
   applyGoalPatch,
   goalFromMetaFields,
@@ -135,6 +139,7 @@ import {
   createNamedProject,
   projectsRoot,
   revokeAttachment,
+  newAttachId,
   type ComposerAttachment,
 } from './lib/attachments';
 import { captureScreenRegion } from './lib/host';
@@ -223,6 +228,22 @@ import { t } from './lib/i18n';
 import { effortShortLabel, formatPeriodEnd, modelShortLabel } from './lib/threadLabels';
 import { formatThreadClock, threadListLabel } from './lib/threadList';
 import { snapToLines } from './lib/threadSnapshots';
+import {
+  loadOptInPanelOpen,
+  OPT_IN_PANEL_KEYS,
+  pickHomeRecentTasks,
+} from './lib/panelLayout';
+import {
+  canAnswerApproval,
+  DEFAULT_STALL_MS,
+  deriveCurrentStep,
+  deriveTaskRunPhase,
+  isTaskStalled,
+  resolveBusyFollowUpMode,
+  shouldShowInRunCenter,
+  type TaskRunPhase,
+} from './lib/taskRunStatus';
+import { RunCenterPanel, type RunCenterRow } from './components/RunCenterPanel';
 import './App.css';
 
 // Panels below are opened deliberately, not needed to render a task or the
@@ -290,6 +311,8 @@ interface Thread {
   userTurnCount?: number;
   /** Active /goal for this task (banner + persist; agent owns execution) */
   sessionGoal?: SessionGoal | null;
+  /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
+  lastEventAt?: number;
 }
 
 type PendingApproval =
@@ -466,6 +489,10 @@ function App() {
   });
   const [modelId, setModelId] = useState(() => localStorage.getItem('gorkx.modelId') ?? '');
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+  /** Custom API rows for provider labels on the task chrome (no secrets). */
+  const [customModelRows, setCustomModelRows] = useState<
+    Array<{ model: string; id: string; providerLabel?: string; baseUrl?: string }>
+  >([]);
   const [taskFilter, setTaskFilter] = useState('');
   /** When user opens a worktree path as project, remember the original repo. */
   const [worktreeMainProject, setWorktreeMainProject] = useState<string | null>(() => {
@@ -484,15 +511,13 @@ function App() {
     }
   });
   const [kernelOpen, setKernelOpen] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(() => {
-    // Default closed on first launch (empty Review is noisy); remember preference.
-    const v = localStorage.getItem('gorkx.reviewOpen');
-    return v === '1' || v === 'true';
-  });
-  const [terminalOpen, setTerminalOpen] = useState(() => {
-    const v = localStorage.getItem('gorkx.terminalOpen');
-    return v === '1' || v === 'true';
-  });
+  // Opt-in panels: empty Review/Terminal never occupy the main stage by default.
+  const [reviewOpen, setReviewOpen] = useState(() =>
+    loadOptInPanelOpen(OPT_IN_PANEL_KEYS.review),
+  );
+  const [terminalOpen, setTerminalOpen] = useState(() =>
+    loadOptInPanelOpen(OPT_IN_PANEL_KEYS.terminal),
+  );
 
   const [extOpen, setExtOpen] = useState(false);
   const [extSnap, setExtSnap] = useState<ExtensionsSnapshot | null>(null);
@@ -541,6 +566,11 @@ function App() {
   const [approvalQueue, setApprovalQueue] = useState<PendingApproval[]>([]);
   const [activeApprovalKey, setActiveApprovalKey] = useState<string | null>(null);
   const [approvalInboxOpen, setApprovalInboxOpen] = useState(false);
+  /** Per-task follow-up text queued until busy ends (when /btw is unavailable). */
+  const [queuedFollowUps, setQueuedFollowUps] = useState<Record<string, string>>({});
+  /** User chose "keep waiting" — suppress stall banner until the next heartbeat gap. */
+  const [stallSnoozeUntil, setStallSnoozeUntil] = useState<Record<string, number>>({});
+  const [stallClock, setStallClock] = useState(() => Date.now());
   const [deliverablesOpen, setDeliverablesOpen] = useState(false);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
@@ -765,15 +795,40 @@ function App() {
     const seen = new Set<string>();
     return active.lines.flatMap((line) => line.role === 'assistant' ? (line.attachments ?? []) : [])
       .filter((item) => {
-        const key = `${item.path}\u0000${item.name}`;
+        // ACP-surfaced only; path may be empty for pure link attachments.
+        const key = item.href && !item.path
+          ? `href:${item.href}`
+          : `${item.path}\u0000${item.name}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
       });
   }, [active]);
+  const activeDeliverableLinks = useMemo(() => {
+    if (!active) return [];
+    const out: { id: string; href: string; name?: string }[] = [];
+    const seen = new Set<string>();
+    for (const line of active.lines) {
+      for (const att of line.attachments ?? []) {
+        if (att.href && /^https?:\/\//i.test(att.href) && !seen.has(att.href)) {
+          seen.add(att.href);
+          out.push({ id: att.id, href: att.href, name: att.name });
+        }
+      }
+    }
+    return out;
+  }, [active]);
   const enqueueApproval = useCallback((entry: PendingApproval) => {
     setApprovalQueue((previous) => previous.some((item) => item.key === entry.key) ? previous : [...previous, entry]);
     setActiveApprovalKey((previous) => previous ?? entry.key);
+    // Approval is a real ACP pause — count as heartbeat for the origin task.
+    setThreads((prev) =>
+      prev.map((th) =>
+        th.id === entry.threadId
+          ? { ...th, lastEventAt: entry.createdAt || Date.now(), updatedAt: Date.now() }
+          : th,
+      ),
+    );
   }, []);
   const removeApproval = useCallback((key: string) => {
     setApprovalQueue((previous) => previous.filter((item) => item.key !== key));
@@ -782,6 +837,125 @@ function App() {
   const activeBtwAvailable = Boolean(
     active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
   );
+  const activeFollowUpMode = resolveBusyFollowUpMode({
+    busy: Boolean(active?.busy),
+    btwAvailable: activeBtwAvailable,
+  });
+
+  /** Per-thread run phase + step from live busy/error/approvals/tools only. */
+  const threadRunInfo = useCallback(
+    (th: Thread, now = stallClock) => {
+      const pending = approvalQueue.filter((a) => a.threadId === th.id);
+      const phase = deriveTaskRunPhase({
+        busy: th.busy,
+        error: th.error,
+        pendingDecisionCount: pending.length,
+        lastEventAt: th.lastEventAt,
+        now,
+      });
+      const tools = th.lines
+        .filter((l) => l.role === 'tool')
+        .map((l) => ({ label: l.text, toolStatus: l.toolStatus }));
+      const planLines = th.lines.filter((l) => l.role === 'plan' && l.planEntries?.length);
+      const planEntries = planLines[planLines.length - 1]?.planEntries ?? [];
+      const decisionLabel =
+        pending.length > 0
+          ? pending[0].kind === 'permission'
+            ? t('approvalInboxPermissionTitle')
+            : pending[0].kind === 'plan'
+              ? t('approvalInboxPlanTitle')
+              : pending[0].kind === 'trust'
+                ? t('approvalInboxTrustTitle')
+                : t('approvalInboxQuestionTitle')
+          : null;
+      const step = deriveCurrentStep({
+        tools,
+        planEntries,
+        pendingDecisionLabel: decisionLabel,
+      });
+      const stalled = isTaskStalled({
+        busy: th.busy,
+        lastEventAt: th.lastEventAt,
+        now,
+        pendingDecisionCount: pending.length,
+        stallMs: DEFAULT_STALL_MS,
+      });
+      return { phase, step, stalled, pendingCount: pending.length };
+    },
+    [approvalQueue, stallClock],
+  );
+
+  const runCenterRows = useMemo<RunCenterRow[]>(() => {
+    const rows: RunCenterRow[] = [];
+    for (const th of threads) {
+      if (th.archived) continue;
+      const info = threadRunInfo(th);
+      if (!shouldShowInRunCenter(info.phase)) continue;
+      rows.push({
+        threadId: th.id,
+        title: th.title || t('newThread'),
+        projectLabel:
+          th.projectKey && th.projectKey !== NO_PROJECT_KEY
+            ? projectDisplayName(th.cwd || th.projectKey, projectAliases)
+            : t('tasksSection'),
+        phase: info.phase,
+        stepLabel: info.step,
+        stalled: info.stalled,
+      });
+    }
+    // Awaiting decisions first, then running, then failed
+    const rank: Record<TaskRunPhase, number> = {
+      awaiting_decision: 0,
+      running: 1,
+      failed: 2,
+      idle: 3,
+    };
+    rows.sort((a, b) => rank[a.phase] - rank[b.phase]);
+    return rows;
+  }, [threads, threadRunInfo, projectAliases]);
+
+  const focusThreadFromRunCenter = useCallback(
+    (threadId: string) => {
+      const th = threadsRef.current.find((item) => item.id === threadId);
+      if (!th) return;
+      if (th.projectKey === NO_PROJECT_KEY) {
+        setProject('');
+      } else if (th.cwd || th.projectKey) {
+        setProject(th.cwd || th.projectKey);
+      }
+      selectThread(threadId);
+    },
+    [selectThread],
+  );
+
+  // Tick stall clock while any task is busy (real heartbeat comparison only).
+  useEffect(() => {
+    const anyBusy = threads.some((th) => th.busy && !th.archived);
+    if (!anyBusy) return;
+    const id = window.setInterval(() => setStallClock(Date.now()), 5_000);
+    return () => window.clearInterval(id);
+  }, [threads]);
+
+  const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
+
+  // Flush queued next-turn text when a task leaves busy (not for btw side-channel).
+  useEffect(() => {
+    for (const th of threads) {
+      if (th.busy || th.archived) continue;
+      const queued = queuedFollowUps[th.id];
+      if (!queued?.trim()) continue;
+      if (activeIdRef.current !== th.id) continue;
+      if (!th.client || !th.sessionId) continue;
+      setQueuedFollowUps((prev) => {
+        if (!(th.id in prev)) return prev;
+        const { [th.id]: _drop, ...rest } = prev;
+        return rest;
+      });
+      window.setTimeout(() => {
+        void sendRef.current(queued);
+      }, 0);
+    }
+  }, [threads, queuedFollowUps]);
   const workflowManagementAvailable = Boolean(
     active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'workflow'),
   );
@@ -857,10 +1031,10 @@ function App() {
     localStorage.setItem('gorkx.grokCmd', grokCmd);
   }, [grokCmd]);
   useEffect(() => {
-    localStorage.setItem('gorkx.reviewOpen', reviewOpen ? '1' : '0');
+    localStorage.setItem(OPT_IN_PANEL_KEYS.review, reviewOpen ? '1' : '0');
   }, [reviewOpen]);
   useEffect(() => {
-    localStorage.setItem('gorkx.terminalOpen', terminalOpen ? '1' : '0');
+    localStorage.setItem(OPT_IN_PANEL_KEYS.terminal, terminalOpen ? '1' : '0');
   }, [terminalOpen]);
 
   const scopeKey = projectScopeKey(project);
@@ -1231,9 +1405,21 @@ function App() {
   const loadCustomModels = useCallback(async () => {
     const snap = await listCustomModels();
     if (!snap?.customModels?.length && !snap?.defaultModel) return;
+    setCustomModelRows(
+      (snap.customModels ?? []).map((m) => ({
+        model: m.model || m.id,
+        id: m.id,
+        providerLabel: m.providerLabel,
+        baseUrl: m.baseUrl,
+      })),
+    );
     const custom: ModelInfo[] = (snap.customModels ?? []).map((m) => ({
       modelId: m.model || m.id,
-      name: m.name ? `${m.name} · custom` : `${m.model || m.id} · custom`,
+      name: m.providerLabel
+        ? `${m.name || m.model || m.id} · ${m.providerLabel}`
+        : m.name
+          ? `${m.name} · custom`
+          : `${m.model || m.id} · custom`,
       _meta: m.contextWindow ? { totalContextTokens: m.contextWindow } : undefined,
     }));
     if (custom.length) {
@@ -1367,8 +1553,7 @@ function App() {
             return {
               ...j,
               lastRunAt: now,
-              failureCount: 0,
-              lastError: null,
+              // Do not clear failures until a successful dispatch finishes.
               nextRunAt: computeNextRun(j, now),
             };
           });
@@ -1384,21 +1569,37 @@ function App() {
                 localStorage.removeItem('gorkx.project');
               }
               await new Promise((r) => setTimeout(r, 200));
+              // Foreground scheduler: attended ACP session — external writes
+              // still pause in Decisions; never full auto without user policy.
               const result = await createThreadRef.current?.({ initialPrompt: job.prompt });
-              if (result?.ok) continue;
+              if (result?.ok) {
+                const current = await loadPersistentJobs();
+                await savePersistentJobs(
+                  current.map((item) =>
+                    item.id === job.id
+                      ? { ...item, failureCount: 0, lastError: null }
+                      : item,
+                  ),
+                );
+                continue;
+              }
               // Re-read so a user edit or a different due job cannot be
               // overwritten by this failure record.
               const current = await loadPersistentJobs();
               const failureCount = (current.find((item) => item.id === job.id)?.failureCount ?? 0) + 1;
               const error = (result?.error || '调度执行器未就绪').slice(0, 500);
+              const outcome = nextRunAfterOutcome(job, false, failureCount, Date.now());
               await savePersistentJobs(
                 current.map((item) =>
                   item.id === job.id
                     ? {
                         ...item,
                         failureCount,
-                        lastError: error,
-                        nextRunAt: computeRetryRun(failureCount, Date.now()),
+                        lastError: outcome.pauseAuto
+                          ? `${error} · auto-retry paused (manual re-run required)`
+                          : error,
+                        nextRunAt: outcome.nextRunAt,
+                        enabled: outcome.pauseAuto ? false : item.enabled,
                       }
                     : item,
                 ),
@@ -1406,14 +1607,18 @@ function App() {
             } catch {
               const current = await loadPersistentJobs();
               const failureCount = (current.find((item) => item.id === job.id)?.failureCount ?? 0) + 1;
+              const outcome = nextRunAfterOutcome(job, false, failureCount, Date.now());
               await savePersistentJobs(
                 current.map((item) =>
                   item.id === job.id
                     ? {
                         ...item,
                         failureCount,
-                        lastError: '调度过程发生未预期错误',
-                        nextRunAt: computeRetryRun(failureCount, Date.now()),
+                        lastError: outcome.pauseAuto
+                          ? '调度过程发生未预期错误 · auto-retry paused'
+                          : '调度过程发生未预期错误',
+                        nextRunAt: outcome.nextRunAt,
+                        enabled: outcome.pauseAuto ? false : item.enabled,
                       }
                     : item,
                 ),
@@ -1531,8 +1736,11 @@ function App() {
   );
 
   const appendLine = useCallback((threadId: string, line: ChatLine) => {
+    const at = Date.now();
     setThreads((prev) =>
-      prev.map((th) => (th.id === threadId ? { ...th, lines: [...th.lines, line] } : th)),
+      prev.map((th) =>
+        th.id === threadId ? { ...th, lines: [...th.lines, line], lastEventAt: at, updatedAt: at } : th,
+      ),
     );
   }, []);
 
@@ -1545,6 +1753,7 @@ function App() {
       meta?: { toolStatus?: string; toolKind?: string; parentSubagentId?: string },
     ) => {
       if (!chunk && !toolKey) return;
+      const at = Date.now();
       setThreads((prev) =>
         prev.map((th) => {
           if (th.id !== threadId) return th;
@@ -1580,7 +1789,7 @@ function App() {
                 toolKind: meta?.toolKind ?? prev.toolKind,
                 parentSubagentId: meta?.parentSubagentId ?? prev.parentSubagentId,
               };
-              return { ...th, lines };
+              return { ...th, lines, lastEventAt: at, updatedAt: at };
             }
             lines.push({
               id: nid(),
@@ -1591,7 +1800,7 @@ function App() {
               toolStatus: meta?.toolStatus,
               toolKind: meta?.toolKind,
             });
-            return { ...th, lines };
+            return { ...th, lines, lastEventAt: at, updatedAt: at };
           }
           const last = lines[lines.length - 1];
           if (last && last.role === role && !last.toolKey) {
@@ -1599,7 +1808,7 @@ function App() {
           } else {
             lines.push({ id: nid(), role, text: chunk });
           }
-          return { ...th, lines };
+          return { ...th, lines, lastEventAt: at, updatedAt: at };
         }),
       );
     },
@@ -1636,16 +1845,29 @@ function App() {
               });
           }
           const cwd = threadsRef.current.find((thread) => thread.id === threadId)?.cwd;
-          if (!cwd) return;
           for (const resource of resourceLinks) {
             const path = resourceLinkFilePath(resource.uri);
-            if (!path) continue;
-            void buildWorkspaceResourceAttachment(cwd, path)
-              .then(appendDeliveredAttachment)
-              .catch(() => {
-                // Ignore untrusted, missing, remote, oversized or outside-workspace
-                // resource links. They are never made visible as local files.
+            if (path) {
+              if (!cwd) continue;
+              void buildWorkspaceResourceAttachment(cwd, path)
+                .then(appendDeliveredAttachment)
+                .catch(() => {
+                  // Ignore untrusted, missing, remote, oversized or outside-workspace
+                  // resource links. They are never made visible as local files.
+                });
+              continue;
+            }
+            // Non-file ACP links (http/https) are listed as link deliverables only.
+            const uri = (resource.uri || '').trim();
+            if (/^https?:\/\//i.test(uri) && uri.length <= 4_096) {
+              appendDeliveredAttachment({
+                id: newAttachId(),
+                path: '',
+                name: resource.name || uri,
+                kind: 'file',
+                href: uri,
               });
+            }
           }
         };
         const subagent = parseSubagentUpdate(update);
@@ -2794,7 +3016,7 @@ function App() {
         return;
       case 'terminal':
         setTerminalOpen(true);
-        localStorage.setItem('gorkx.terminalOpen', '1');
+        localStorage.setItem(OPT_IN_PANEL_KEYS.terminal, '1');
         return;
       case 'review':
         setReviewOpen(true);
@@ -3640,6 +3862,18 @@ function App() {
 
     // No thread / brand-new stub without session: create one and send (Codex home composer)
     const live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
+    // While busy: only /btw is side-channel; any other text is queued for next turn.
+    if (live?.busy && text && !choiceSubmission && !/^\/btw(?:\s|$)/i.test(text)) {
+      setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
+      setDraft('');
+      setSlashOpen(false);
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueued')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
+      });
+      return;
+    }
     if (!live?.client || !live.sessionId) {
       if (live?.busy) return;
       if (!active || !active.sessionId) {
@@ -3923,6 +4157,7 @@ function App() {
       }
     }
   };
+  sendRef.current = send;
 
   const insertAtFile = (path: string) => {
     setDraft((d) => {
@@ -4394,12 +4629,20 @@ function App() {
     if (!activeApproval || activeApproval.kind !== 'permission') return;
     try {
       const th = threadsRef.current.find((x) => x.id === activeApproval.threadId);
+      if (
+        !canAnswerApproval({
+          approvalThreadId: activeApproval.threadId,
+          targetThreadId: th?.id ?? '',
+          hasClient: Boolean(th?.client),
+        })
+      ) {
+        throw new Error(t('approvalInboxUnavailable'));
+      }
       const optionId =
         prefer === 'allow' || prefer === 'reject'
           ? pickPermissionOption(activeApproval.request.options, prefer)
           : prefer;
-      if (!th?.client) throw new Error(t('approvalInboxUnavailable'));
-      await th.client.respond(activeApproval.request.jsonrpcId, permissionResult(optionId));
+      await th!.client!.respond(activeApproval.request.jsonrpcId, permissionResult(optionId));
       removeApproval(activeApproval.key);
     } catch {
       appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
@@ -4415,8 +4658,16 @@ function App() {
     if (!activeApproval || activeApproval.kind !== 'question') return;
     try {
       const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
-      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
-      await thread.client.respond(activeApproval.request.jsonrpcId, result);
+      if (
+        !canAnswerApproval({
+          approvalThreadId: activeApproval.threadId,
+          targetThreadId: thread?.id ?? '',
+          hasClient: Boolean(thread?.client),
+        })
+      ) {
+        throw new Error(t('approvalInboxUnavailable'));
+      }
+      await thread!.client!.respond(activeApproval.request.jsonrpcId, result);
       removeApproval(activeApproval.key);
     } catch {
       appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
@@ -4430,8 +4681,16 @@ function App() {
     if (!activeApproval || activeApproval.kind !== 'plan') return;
     try {
       const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
-      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
-      await thread.client.respond(activeApproval.request.jsonrpcId, planApprovalResult(outcome, feedback));
+      if (
+        !canAnswerApproval({
+          approvalThreadId: activeApproval.threadId,
+          targetThreadId: thread?.id ?? '',
+          hasClient: Boolean(thread?.client),
+        })
+      ) {
+        throw new Error(t('approvalInboxUnavailable'));
+      }
+      await thread!.client!.respond(activeApproval.request.jsonrpcId, planApprovalResult(outcome, feedback));
       removeApproval(activeApproval.key);
     } catch {
       appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
@@ -4442,8 +4701,16 @@ function App() {
     if (!activeApproval || activeApproval.kind !== 'trust') return;
     try {
       const thread = threadsRef.current.find((item) => item.id === activeApproval.threadId);
-      if (!thread?.client) throw new Error(t('approvalInboxUnavailable'));
-      await thread.client.respond(activeApproval.request.jsonrpcId, folderTrustResult(outcome));
+      if (
+        !canAnswerApproval({
+          approvalThreadId: activeApproval.threadId,
+          targetThreadId: thread?.id ?? '',
+          hasClient: Boolean(thread?.client),
+        })
+      ) {
+        throw new Error(t('approvalInboxUnavailable'));
+      }
+      await thread!.client!.respond(activeApproval.request.jsonrpcId, folderTrustResult(outcome));
       removeApproval(activeApproval.key);
     } catch {
       appendLine(activeApproval.threadId, { id: nid(), role: 'system', text: t('approvalInboxAnswerFailed') });
@@ -4736,6 +5003,21 @@ function App() {
             </div>
           </div>
 
+          {/* Stage B: cross-task run center — only non-idle ACP-backed tasks */}
+          <div className="block-head run-center-head" style={{ marginTop: 4 }}>
+            <span className="block-title">{t('runCenterTitle')}</span>
+            {runCenterRows.length ? (
+              <span className="run-center-count">{runCenterRows.length}</span>
+            ) : null}
+          </div>
+          <div className="run-center-wrap">
+            <RunCenterPanel
+              rows={runCenterRows}
+              activeId={activeId}
+              onSelect={focusThreadFromRunCenter}
+            />
+          </div>
+
           {(() => {
             const q = taskFilter.trim().toLowerCase();
             const matchTitle = (title: string) =>
@@ -4901,10 +5183,17 @@ function App() {
                     ) : null}
                   </div>
                   <div className="proj-threads">
-                      {live.map((th) => (
+                      {live.map((th) => {
+                        const info = threadRunInfo(th);
+                        return (
                         <ThreadListRow
                           key={th.id}
-                          thread={th}
+                          thread={{
+                            ...th,
+                            runPhase: info.phase,
+                            runStep: info.step,
+                            runStalled: info.stalled,
+                          }}
                           siblings={live}
                           activeId={activeId}
                           onSelect={() => {
@@ -4919,7 +5208,8 @@ function App() {
                             if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
                           }}
                         />
-                      ))}
+                        );
+                      })}
                       {live.length === 0 && remote.length === 0 ? (
                         <div className="hint">
                           {q ? t('taskSearchEmpty') : t('noProjectTasks')}
@@ -5005,10 +5295,17 @@ function App() {
               const inbox = inboxAll.filter(
                 (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
               );
-              return inbox.map((th) => (
+              return inbox.map((th) => {
+                const info = threadRunInfo(th);
+                return (
                 <ThreadListRow
                   key={th.id}
-                  thread={th}
+                  thread={{
+                    ...th,
+                    runPhase: info.phase,
+                    runStep: info.step,
+                    runStalled: info.stalled,
+                  }}
                   siblings={inboxAll}
                   activeId={activeId}
                   onSelect={() => {
@@ -5023,7 +5320,8 @@ function App() {
                     if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
                   }}
                 />
-              ));
+                );
+              });
             })()}
             {(() => {
               const q = taskFilter.trim().toLowerCase();
@@ -5287,6 +5585,36 @@ function App() {
               </div>
               <h2>{t('emptyHello')}</h2>
               <p>{project ? t('emptyHelloSub') : t('emptyTasksSub')}</p>
+              {(() => {
+                const scope = project ? projectScopeKey(project) : NO_PROJECT_KEY;
+                const scoped = threadsForScope(threads, scope);
+                const recent = pickHomeRecentTasks(scoped, 5);
+                if (!recent.length) return null;
+                return (
+                  <section className="home-recent" aria-label={t('homeRecentTitle')}>
+                    <h3 className="home-recent-title">{t('homeRecentTitle')}</h3>
+                    <ul className="home-recent-list">
+                      {recent.map((th) => {
+                        const label = threadListLabel(th, scoped, t('newThread'));
+                        const clock = formatThreadClock(th.updatedAt);
+                        return (
+                          <li key={th.id}>
+                            <button
+                              type="button"
+                              className="home-recent-item"
+                              onClick={() => selectThread(th.id)}
+                              title={label}
+                            >
+                              <span className="home-recent-label">{label}</span>
+                              {clock ? <span className="home-recent-meta">{clock}</span> : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </section>
+                );
+              })()}
               <div className="starter-groups">
                 {(
                   [
@@ -5521,10 +5849,18 @@ function App() {
                         }}
                       >
                         <span className="composer-ctl-main">
-                          {modelShortLabel(
-                            modelId || availableModels[0]?.modelId || '',
-                            availableModels,
-                          ) || 'model'}
+                          {formatTaskModelDisplay({
+                            modelId: modelId || availableModels[0]?.modelId || '',
+                            modelName:
+                              modelShortLabel(
+                                modelId || availableModels[0]?.modelId || '',
+                                availableModels,
+                              ) || 'model',
+                            providerLabel: resolveProviderForModelId(
+                              modelId || availableModels[0]?.modelId,
+                              customModelRows,
+                            ),
+                          })}
                         </span>
                         <span className="composer-ctl-meta">{effortShortLabel(effort)}</span>
                       </button>
@@ -6004,6 +6340,52 @@ function App() {
             {btwCard?.threadId === active.id ? (
               <BtwCard state={btwCard} onDismiss={() => setBtwCard(null)} />
             ) : null}
+            {(() => {
+              const info = threadRunInfo(active);
+              const snoozeUntil = stallSnoozeUntil[active.id] ?? 0;
+              const showStall =
+                info.stalled && info.phase === 'running' && stallClock >= snoozeUntil;
+              if (!showStall) return null;
+              return (
+                <div className="run-stall-banner" role="status">
+                  <p>{t('runStallBanner')}</p>
+                  <div className="run-stall-actions">
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        // Acknowledge still-working: refresh heartbeat baseline only in UI snooze.
+                        setStallSnoozeUntil((prev) => ({
+                          ...prev,
+                          [active.id]: Date.now() + DEFAULT_STALL_MS,
+                        }));
+                      }}
+                    >
+                      {t('runStallStillWorking')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setStallSnoozeUntil((prev) => ({
+                          ...prev,
+                          [active.id]: Date.now() + DEFAULT_STALL_MS,
+                        }));
+                      }}
+                    >
+                      {t('runStallKeepWaiting')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      onClick={() => void cancelTurn()}
+                    >
+                      {t('runStallCancel')}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="composer-dock">
               <div
                 className={`composer${dragOver ? ' drag-over' : ''}`}
@@ -6036,6 +6418,26 @@ function App() {
                   />
                 ) : null}
                 {dragOver ? <div className="composer-drop-hint">{t('dropFilesHint')}</div> : null}
+                {queuedFollowUps[active.id] ? (
+                  <div className="follow-up-queued" role="status">
+                    <span>
+                      {t('followUpQueued')}: {queuedFollowUps[active.id].slice(0, 100)}
+                      {queuedFollowUps[active.id].length > 100 ? '…' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() =>
+                        setQueuedFollowUps((prev) => {
+                          const { [active.id]: _drop, ...rest } = prev;
+                          return rest;
+                        })
+                      }
+                    >
+                      {t('followUpClearQueue')}
+                    </button>
+                  </div>
+                ) : null}
                 <SlashMenu
                   open={slashOpen}
                   items={slashMenuItems(draft)}
@@ -6143,6 +6545,37 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {activeFollowUpMode === 'btw' ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('followUpBtwHint')}
+                        onClick={() => void openBtwQuestion()}
+                      >
+                        {t('followUpBtw')}
+                      </button>
+                    ) : null}
+                    {activeFollowUpMode === 'queue' ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('followUpQueueHint')}
+                        disabled={!draft.trim()}
+                        onClick={() => {
+                          const text = draft.trim();
+                          if (!text) return;
+                          setQueuedFollowUps((prev) => ({ ...prev, [active.id]: text }));
+                          setDraft('');
+                          appendLine(active.id, {
+                            id: nid(),
+                            role: 'system',
+                            text: `${t('followUpQueued')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
+                          });
+                        }}
+                      >
+                        {t('followUpQueue')}
+                      </button>
+                    ) : null}
                     <div className="plus-wrap">
                       <button
                         type="button"
@@ -6276,10 +6709,18 @@ function App() {
                         }}
                       >
                         <span className="composer-ctl-main">
-                          {modelShortLabel(
-                            modelId || availableModels[0]?.modelId || '',
-                            availableModels,
-                          ) || 'model'}
+                          {formatTaskModelDisplay({
+                            modelId: active?.modelId || modelId || availableModels[0]?.modelId || '',
+                            modelName:
+                              modelShortLabel(
+                                active?.modelId || modelId || availableModels[0]?.modelId || '',
+                                availableModels,
+                              ) || 'model',
+                            providerLabel: resolveProviderForModelId(
+                              active?.modelId || modelId || availableModels[0]?.modelId,
+                              customModelRows,
+                            ),
+                          })}
                         </span>
                         <span className="composer-ctl-meta">
                           {effortShortLabel(active ? active.effort : effort)}
@@ -6402,7 +6843,11 @@ function App() {
         )}
       </main>
 
-      <AttachmentPreview item={previewAtt} onClose={() => setPreviewAtt(null)} />
+      <AttachmentPreview
+        item={previewAtt}
+        projectCwd={active?.cwd || project || undefined}
+        onClose={() => setPreviewAtt(null)}
+      />
 
       <OnboardingModal
         open={onboardOpen}
@@ -6657,6 +7102,11 @@ function App() {
         open
         client={active?.client ?? null}
         sessionId={active?.sessionId ?? null}
+        localModelId={active?.modelId || modelId || null}
+        localProviderLabel={resolveProviderForModelId(
+          active?.modelId || modelId,
+          customModelRows,
+        )}
         onClose={() => setTaskInfoOpen(false)}
         onManageAuth={(destination) => {
           setTaskInfoOpen(false);
@@ -6695,18 +7145,36 @@ function App() {
         activeKey={activeApproval?.key ?? null}
         onClose={() => setApprovalInboxOpen(false)}
         onSelect={(key) => {
+          const entry = approvalQueue.find((item) => item.key === key);
           setActiveApprovalKey(key);
           setApprovalInboxOpen(false);
+          // Always return to the origin task before answering.
+          if (entry) focusThreadFromRunCenter(entry.threadId);
         }}
       />
       <DeliverablesPanel
         open={deliverablesOpen}
         items={activeDeliverables}
+        links={activeDeliverableLinks}
+        taskTitle={active?.title}
         onClose={() => setDeliverablesOpen(false)}
         onOpen={(item) => {
           setDeliverablesOpen(false);
           setPreviewAtt(item);
         }}
+        onReveal={(path) => {
+          void revealInFinder(path).catch(() => {});
+        }}
+        onCopySummary={async (text) => {
+          try {
+            await navigator.clipboard.writeText(text);
+            alert(t('deliverablesCopied'));
+          } catch {
+            alert(text);
+          }
+        }}
+        onExportTask={() => void exportActiveSession()}
+        canExport={Boolean(active?.sessionId && !active.busy)}
       />
       {rewindDialog ? (
         <RewindDialog

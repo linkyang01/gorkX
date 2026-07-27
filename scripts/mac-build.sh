@@ -25,3 +25,9 @@ find src-tauri/target/release/bundle -name '*.app' 2>/dev/null || true
 echo "Tip: first open may need: xattr -dr com.apple.quarantine <App>.app"
 echo "Engine in app: Contents/Resources/grok (if bundled)"
 echo "GROK_HOME default: ~/Library/Application Support/gorkX/grok-home"
+echo
+echo "Stage G checks (no tag/DMG):"
+echo "  scripts/verify-macos-app-bundle.sh <App>.app"
+echo "  scripts/verify-macos-signing.sh <App>.app"
+echo "  scripts/verify-release-readiness.sh"
+echo "Public DMG requires Developer ID + notarization and explicit user approval (§7.6)."

@@ -20,6 +20,13 @@ if [[ ! -s "$engine_license" || ! -s "$engine_notices" ]]; then
   exit 3
 fi
 
+exe="$(find "$app_path/Contents/MacOS" -type f -perm +111 2>/dev/null | head -1 || true)"
+if [[ -n "$exe" ]]; then
+  echo "PASS: main binary: $(file -b "$exe")"
+fi
+echo "PASS: engine binary: $(file -b "$engine")"
+echo "PASS: host arch: $(uname -m)"
+
 probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/gorkx-bundle-check.XXXXXX")"
 trap 'rm -rf "$probe_dir"' EXIT
 version="$(GROK_HOME="$probe_dir/grok-home" "$engine" --version 2>&1)"

@@ -124,6 +124,8 @@ pub fn run() {
             workspace::workspace_write_agents_md,
             workspace::workspace_write_client_text,
             workspace::workspace_validate_resource_attachment,
+            workspace::workspace_read_text_file,
+            workspace::workspace_write_text_if_mtime,
             workspace::read_workspace_file_preview,
             extensions::extensions_snapshot,
             extensions::extensions_open_skills_dir,

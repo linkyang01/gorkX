@@ -4,6 +4,7 @@ import { fetchGitSnapshot, type GitSnapshot } from '../lib/git';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
 import {
+  githubCreatePrComment,
   githubListOpenPrs,
   githubListPrChecks,
   githubListPrComments,
@@ -11,6 +12,8 @@ import {
   type GithubComment,
   type GithubPullRequest,
 } from '../lib/github';
+import { githubWriteConfirmSummary } from '../lib/connectors';
+import { appendConnectorAudit } from '../lib/connectorAudit';
 import { openUrlSafe } from '../lib/updates';
 import type { ToolEvent } from './ToolTimeline';
 import type { PlanEntry } from '../lib/acpClient';
@@ -103,6 +106,8 @@ export function ReviewPanel({
   const [remoteChecks, setRemoteChecks] = useState<Record<number, GithubCheckRun[]>>({});
   const [remoteComments, setRemoteComments] = useState<Record<number, GithubComment[]>>({});
   const [remoteLoadedCwd, setRemoteLoadedCwd] = useState<string | null>(null);
+  const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
+  const [remoteReceipt, setRemoteReceipt] = useState<string | null>(null);
 
   const refresh = () => {
     if (!cwd) {
@@ -158,6 +163,41 @@ export function ReviewPanel({
         setRemoteComments((current) => ({ ...current, [prNumber]: comments })),
       )
       .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setRemoteBusy(false));
+  };
+
+  const postRemoteComment = (prNumber: number) => {
+    if (!cwd) return;
+    const body = (commentDrafts[prNumber] || '').trim();
+    if (!body) return;
+    const confirmLine = githubWriteConfirmSummary({
+      action: 'create_pr_comment',
+      titleOrBody: body,
+      prNumber,
+    });
+    if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
+    setRemoteBusy(true);
+    setRemoteError(null);
+    void githubCreatePrComment(cwd, prNumber, body)
+      .then((created) => {
+        setRemoteReceipt(created.url);
+        setCommentDrafts((current) => ({ ...current, [prNumber]: '' }));
+        appendConnectorAudit({
+          connector: 'github',
+          action: 'write',
+          summary: confirmLine,
+          receiptUrl: created.url,
+        });
+        return githubListPrComments(cwd, prNumber);
+      })
+      .then((comments) => {
+        if (comments) setRemoteComments((current) => ({ ...current, [prNumber]: comments }));
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        setRemoteError(message);
+        appendConnectorAudit({ connector: 'github', action: 'fail', summary: message });
+      })
       .finally(() => setRemoteBusy(false));
   };
 
@@ -799,9 +839,39 @@ export function ReviewPanel({
                       ) : null}
                     </ul>
                   ) : null}
+                  <div className="field-row" style={{ marginTop: 8 }}>
+                    <input
+                      value={commentDrafts[pr.number] || ''}
+                      onChange={(e) =>
+                        setCommentDrafts((current) => ({
+                          ...current,
+                          [pr.number]: e.target.value,
+                        }))
+                      }
+                      placeholder={t('githubCommentBodyPlaceholder')}
+                      aria-label={t('githubCommentBodyPlaceholder')}
+                      disabled={remoteBusy}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      disabled={remoteBusy || !(commentDrafts[pr.number] || '').trim()}
+                      onClick={() => postRemoteComment(pr.number)}
+                    >
+                      {t('githubCreateComment')}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
+          ) : null}
+          {remoteReceipt ? (
+            <div className="hint" style={{ marginTop: 10 }}>
+              {t('connectorReceipt')}:{' '}
+              <button type="button" className="link-btn" onClick={() => void openUrlSafe(remoteReceipt)}>
+                {remoteReceipt}
+              </button>
+            </div>
           ) : null}
         </div>
       ) : null}
