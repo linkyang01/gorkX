@@ -21,7 +21,10 @@ function stored<T extends string>(key: string, values: readonly T[], fallback: T
 
 export function loadAppearance(): AppearancePreferences {
   return {
-    theme: stored(THEME_KEY, ['system', 'light', 'dark'] as const, 'system'),
+    // gorkX is a focused command workspace first. A deliberate graphite dark
+    // surface is the default for new installs; people who selected System or
+    // Light keep that preference unchanged.
+    theme: stored(THEME_KEY, ['system', 'light', 'dark'] as const, 'dark'),
     density: stored(DENSITY_KEY, ['compact', 'comfortable', 'spacious'] as const, 'comfortable'),
   };
 }
