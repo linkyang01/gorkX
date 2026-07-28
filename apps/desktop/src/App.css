@@ -2252,7 +2252,7 @@ button.pill:hover {
 
 .settings-nav-item.on,
 .settings-nav-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--sb-fill-strong);
 }
 
 .settings-main {
@@ -2288,7 +2288,9 @@ button.pill:hover {
   border: 1px solid var(--hairline);
   border-radius: 12px;
   padding: 10px 12px;
-  background: #fafafa;
+  /* Every settings section uses this shared surface. Keep it token-driven so
+     a dark workspace never contains a high-contrast light card. */
+  background: var(--glass);
   margin-bottom: 14px;
 }
 
