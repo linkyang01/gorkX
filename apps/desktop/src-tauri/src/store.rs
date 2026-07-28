@@ -876,14 +876,14 @@ fn parse_billing_body(
     avatar_url: Option<String>,
 ) -> Result<AccountSummary, String> {
     let cfg = body.get("config").unwrap_or(&body);
-    let mut pct = cfg.get("creditUsagePercent").and_then(|x| x.as_f64());
+    let mut pct = cfg.get("creditUsagePercent").and_then(billing_percent);
     // Fallback: GrokBuild product usage
     if pct.is_none() {
         if let Some(arr) = cfg.get("productUsage").and_then(|x| x.as_array()) {
             for p in arr {
                 let name = p.get("product").and_then(|x| x.as_str()).unwrap_or("");
                 if name.eq_ignore_ascii_case("GrokBuild") || name.contains("Build") {
-                    pct = p.get("usagePercent").and_then(|x| x.as_f64());
+                    pct = p.get("usagePercent").and_then(billing_percent);
                     break;
                 }
             }
@@ -906,7 +906,7 @@ fn parse_billing_body(
                 .and_then(|x| x.as_str())
                 .unwrap_or("?")
                 .to_string();
-            let up = p.get("usagePercent").and_then(|x| x.as_f64());
+            let up = p.get("usagePercent").and_then(billing_percent);
             products.push(ProductUsageRow {
                 product: name,
                 usage_percent: up,
@@ -946,6 +946,21 @@ fn parse_billing_body(
             "billing ok but no creditUsagePercent field".into()
         },
     })
+}
+
+/// Billing has returned both JSON numbers and percentage strings across Grok
+/// Build releases. Parse only a valid 0–100 percentage so a real `"0%"` is
+/// never mistaken for a missing quota, while malformed values remain absent.
+fn billing_percent(value: &serde_json::Value) -> Option<f64> {
+    let raw = value.as_f64().or_else(|| {
+        value
+            .as_str()
+            .map(str::trim)
+            .map(|s| s.trim_end_matches('%').trim())
+            .filter(|s| !s.is_empty())
+            .and_then(|s| s.parse::<f64>().ok())
+    })?;
+    (0.0..=100.0).contains(&raw).then_some(raw)
 }
 
 
@@ -1210,7 +1225,7 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{search_thread_history, valid_usage_day, visible_models_from_cache};
+    use super::{billing_percent, search_thread_history, valid_usage_day, visible_models_from_cache};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1272,6 +1287,15 @@ mod model_cache_tests {
     fn daily_token_usage_requires_a_local_calendar_day() {
         assert!(valid_usage_day("2026-07-26"));
         assert!(!valid_usage_day("2026/07/26"));
+    }
+
+    #[test]
+    fn billing_percent_preserves_zero_from_number_or_string() {
+        assert_eq!(billing_percent(&serde_json::json!(0)), Some(0.0));
+        assert_eq!(billing_percent(&serde_json::json!("0%")), Some(0.0));
+        assert_eq!(billing_percent(&serde_json::json!("42.5")), Some(42.5));
+        assert_eq!(billing_percent(&serde_json::json!("unknown")), None);
+        assert_eq!(billing_percent(&serde_json::json!(101)), None);
     }
 }
 

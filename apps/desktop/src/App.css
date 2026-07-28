@@ -4980,8 +4980,9 @@ button.pill:hover {
   line-height: 1.4;
   white-space: pre;
   border: 1px solid var(--hairline);
-  /* Empty state: light — not a black void */
-  background: #fafafa;
+  /* Keep the empty review surface in the active theme instead of leaving a
+     bright rectangle inside the graphite workspace. */
+  background: var(--glass-soft);
   color: var(--text);
 }
 

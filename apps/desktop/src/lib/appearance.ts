@@ -4,6 +4,8 @@ export type DensityPreference = 'compact' | 'comfortable' | 'spacious';
 
 const THEME_KEY = 'gorkx.theme';
 const DENSITY_KEY = 'gorkx.density';
+const THEME_DEFAULT_VERSION_KEY = 'gorkx.theme-default-version';
+const THEME_DEFAULT_VERSION = '2';
 
 export interface AppearancePreferences {
   theme: ThemePreference;
@@ -20,11 +22,29 @@ function stored<T extends string>(key: string, values: readonly T[], fallback: T
 }
 
 export function loadAppearance(): AppearancePreferences {
+  const savedTheme = stored(THEME_KEY, ['system', 'light', 'dark'] as const, 'dark');
+  let theme = savedTheme;
+
+  try {
+    // Before the graphite workspace refresh, new installs were silently saved
+    // as “System”. Migrate only that old default once so existing users see the
+    // new product surface; an explicit Light/Dark choice is always preserved.
+    if (localStorage.getItem(THEME_DEFAULT_VERSION_KEY) !== THEME_DEFAULT_VERSION) {
+      if (savedTheme === 'system') {
+        theme = 'dark';
+        localStorage.setItem(THEME_KEY, theme);
+      }
+      localStorage.setItem(THEME_DEFAULT_VERSION_KEY, THEME_DEFAULT_VERSION);
+    }
+  } catch {
+    /* Storage is unavailable: use the current launch's resolved preference. */
+  }
+
   return {
     // gorkX is a focused command workspace first. A deliberate graphite dark
-    // surface is the default for new installs; people who selected System or
-    // Light keep that preference unchanged.
-    theme: stored(THEME_KEY, ['system', 'light', 'dark'] as const, 'dark'),
+    // surface is the default for new installs and for the prior implicit
+    // “System” default; people who explicitly selected Light/Dark keep it.
+    theme,
     density: stored(DENSITY_KEY, ['compact', 'comfortable', 'spacious'] as const, 'comfortable'),
   };
 }
