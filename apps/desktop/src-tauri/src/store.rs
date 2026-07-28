@@ -728,10 +728,10 @@ pub fn account_summary() -> Result<AccountSummary, String> {
         ));
     }
 
-    // Grok Build's CLI billing endpoint. It exposes some on-demand/monthly
-    // credit fields, but not necessarily the Grok web product's weekly
-    // subscription allowance.
-    let url = "https://cli-chat-proxy.grok.com/v1/billing";
+    // Match Grok Build's own billing extension. The `credits` format is the
+    // account-quota payload used by `/usage`; the bare endpoint can return a
+    // reduced billing shape without the SuperGrok weekly percentage.
+    let url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
         .user_agent("gorkX/0.4.2")
