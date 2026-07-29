@@ -283,7 +283,7 @@ function DeferredPanelFallback() {
 }
 
 export type ChatMode = 'agent' | 'plan';
-type NewTaskProfile = 'default' | 'explore';
+type NewTaskProfile = string;
 
 /**
  * Plan is already a first-class desktop control.  Supplying the matching
@@ -305,7 +305,7 @@ function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile): AgentP
   // `explore` is a bundled Grok Build profile with its own smaller read-only
   // toolset and Plan permission mode. The desktop only selects it for a new
   // task; it does not recreate those restrictions in the shell.
-  return profile === 'explore' ? 'explore' : undefined;
+  return profile !== 'default' ? profile : undefined;
 }
 
 interface Thread {
@@ -507,9 +507,7 @@ function App() {
   const [chatMode, setChatMode] = useState<ChatMode>(() => {
     return localStorage.getItem('gorkx.chatMode') === 'plan' ? 'plan' : 'agent';
   });
-  const [newTaskProfile, setNewTaskProfile] = useState<NewTaskProfile>(() => {
-    return localStorage.getItem('gorkx.newTaskProfile') === 'explore' ? 'explore' : 'default';
-  });
+  const [newTaskProfile, setNewTaskProfile] = useState<NewTaskProfile>(() => localStorage.getItem('gorkx.newTaskProfile') || 'default');
   const [effort, setEffort] = useState<ReasoningEffort>(() => {
     const v = localStorage.getItem('gorkx.effort');
     return v === 'low' || v === 'medium' || v === 'high' ? v : 'high';
@@ -7316,6 +7314,12 @@ function App() {
           } catch {
             /* browser preview */
           }
+        }}
+        newTaskProfile={newTaskProfile}
+        onNewTaskProfile={(profile) => {
+          const next = profile || 'default';
+          setNewTaskProfile(next);
+          try { localStorage.setItem('gorkx.newTaskProfile', next); } catch { /* browser preview */ }
         }}
         onOpenMemory={() => setMemoryOpen(true)}
         onOpenTutorial={() => setTutorialOpen(true)}

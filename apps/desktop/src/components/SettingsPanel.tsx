@@ -116,6 +116,7 @@ import {
   type SandboxProfile,
 } from '../lib/sandboxConfig';
 import { getPersonalRules, savePersonalRules } from '../lib/personalRules';
+import { listAgentProfiles, removeAgentProfile, saveAgentProfile, type AgentProfileSummary } from '../lib/agentProfiles';
 import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
 import {
   applyManagedSetup,
@@ -141,6 +142,7 @@ export type SettingsSection =
   | 'browser'
   | 'computer'
   | 'hooks'
+  | 'agents'
   | 'subagents'
   | 'mcp'
   | 'connectors'
@@ -189,6 +191,9 @@ interface Props {
   onVoiceShortcutEnabled: (enabled: boolean) => void;
   showMessageTimestamps: boolean;
   onShowMessageTimestamps: (enabled: boolean) => void;
+  /** Native Grok Build profile used when starting the next task. */
+  newTaskProfile: string;
+  onNewTaskProfile: (profile: string) => void;
   /** Jump out of settings into product surfaces */
   onOpenMemory?: () => void;
   onOpenTutorial?: () => void;
@@ -259,6 +264,8 @@ export function SettingsPanel({
   onVoiceShortcutEnabled,
   showMessageTimestamps,
   onShowMessageTimestamps,
+  newTaskProfile,
+  onNewTaskProfile,
   onOpenMemory,
   onOpenTutorial,
   onOpenExtensions,
@@ -350,6 +357,11 @@ export function SettingsPanel({
   const [personalRulesDraft, setPersonalRulesDraft] = useState('');
   const [personalRulesPath, setPersonalRulesPath] = useState('');
   const [personalRulesBusy, setPersonalRulesBusy] = useState(false);
+  const [agentProfiles, setAgentProfiles] = useState<AgentProfileSummary[]>([]);
+  const [agentProfileBusy, setAgentProfileBusy] = useState(false);
+  const [agentRoleName, setAgentRoleName] = useState('');
+  const [agentRoleDescription, setAgentRoleDescription] = useState('');
+  const [agentRoleInstructions, setAgentRoleInstructions] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -368,6 +380,7 @@ export function SettingsPanel({
       setPersonalRulesDraft('');
       setPersonalRulesPath('');
     });
+    void listAgentProfiles().then(setAgentProfiles).catch(() => setAgentProfiles([]));
     void listCustomModels().then(setModelsSnap);
     void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
     void fetchMediaToolsConfig().then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch(() => setMediaTools(null));
@@ -821,6 +834,7 @@ export function SettingsPanel({
         title: t('settingsGroupCoding'),
         items: [
           { id: 'hooks', label: t('settingsHooksTitle'), keywords: 'hooks 钩子 项目指令 agents 规则 约定' },
+          { id: 'agents', label: t('settingsAgents'), keywords: 'agent 角色 自定义 工作方式' },
           { id: 'subagents', label: t('settingsSubagents'), keywords: 'subagent 子任务 委派 worktree 隔离' },
           { id: 'mcp', label: t('settingsMcp'), keywords: 'mcp connect 连接' },
           {
@@ -1022,6 +1036,19 @@ export function SettingsPanel({
     } finally {
       setPersonalRulesBusy(false);
     }
+  };
+
+  const saveAgentRole = async () => {
+    if (!agentRoleName.trim()) { setMsg(t('settingsAgentRoleNameRequired')); return; }
+    setAgentProfileBusy(true);
+    try {
+      const saved = await saveAgentProfile(agentRoleName, agentRoleDescription, agentRoleInstructions);
+      setAgentProfiles((current) => [...current.filter((item) => item.name !== saved.name), saved].sort((a, b) => a.name.localeCompare(b.name)));
+      setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions('');
+      onNewTaskProfile(saved.name);
+      setMsg(t('settingsAgentRoleSaved'));
+    } catch (error) { setMsg(error instanceof Error ? error.message : String(error)); }
+    finally { setAgentProfileBusy(false); }
   };
 
   const restoreOne = async (row: ArchivedTaskRow) => {
@@ -1410,6 +1437,31 @@ export function SettingsPanel({
                   <li>{t('settingsMemoryHow4')}</li>
                 </ul>
               </div>
+            </>
+          ) : null}
+
+          {section === 'agents' ? (
+            <>
+              <h2>{t('settingsAgents')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>{t('settingsAgentsHint')}</p>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('settingsAgentDefault')}</div>
+                <p className="hint">{t('settingsAgentDefaultHint')}</p>
+                <select className="settings-select" value={newTaskProfile} onChange={(event) => onNewTaskProfile(event.target.value)}>
+                  <option value="default">{t('settingsAgentStandard')}</option>
+                  <option value="explore">{t('settingsAgentExplore')}</option>
+                  {agentProfiles.map((profile) => <option key={profile.name} value={profile.name}>{profile.displayName} — {profile.description}</option>)}
+                </select>
+              </div>
+              <h3 className="subhead">{t('settingsAgentCreate')}</h3>
+              <div className="settings-card">
+                <p className="hint">{t('settingsAgentCreateHint')}</p>
+                <input className="settings-input" value={agentRoleName} maxLength={80} placeholder={t('settingsAgentRoleName')} onChange={(event) => setAgentRoleName(event.target.value)} />
+                <input className="settings-input" style={{ marginTop: 8 }} value={agentRoleDescription} maxLength={240} placeholder={t('settingsAgentRoleDescription')} onChange={(event) => setAgentRoleDescription(event.target.value)} />
+                <textarea className="settings-textarea" style={{ marginTop: 8 }} rows={6} value={agentRoleInstructions} maxLength={12000} placeholder={t('settingsAgentRoleInstructions')} onChange={(event) => setAgentRoleInstructions(event.target.value)} />
+                <div className="field-row" style={{ marginTop: 8 }}><button type="button" className="btn primary" disabled={agentProfileBusy} onClick={() => void saveAgentRole()}>{agentProfileBusy ? t('settingsAgentSaving') : t('settingsAgentSave')}</button></div>
+              </div>
+              {agentProfiles.filter((profile) => profile.editable).length ? <div className="settings-card"><div className="settings-row-title">{t('settingsAgentCreated')}</div>{agentProfiles.filter((profile) => profile.editable).map((profile) => <div className="settings-row" key={profile.name}><div><strong>{profile.displayName}</strong><div className="settings-row-hint">{profile.description}</div></div><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setAgentProfileBusy(true); void removeAgentProfile(profile.name).then(() => { setAgentProfiles((current) => current.filter((item) => item.name !== profile.name)); if (newTaskProfile === profile.name) onNewTaskProfile('default'); setMsg(t('settingsAgentRemoved')); }).catch((error) => setMsg(error instanceof Error ? error.message : String(error))).finally(() => setAgentProfileBusy(false)); }}>{t('settingsRemove')}</button></div>)}</div> : null}
             </>
           ) : null}
 

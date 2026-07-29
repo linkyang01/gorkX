@@ -1,4 +1,5 @@
 mod agent_bridge;
+mod agent_profiles;
 mod app_update;
 mod auth;
 mod capture;
@@ -229,6 +230,9 @@ pub fn run() {
             sandbox_config::sandbox_config_set_profile,
             personal_rules::personal_rules_get,
             personal_rules::personal_rules_set,
+            agent_profiles::agent_profiles_list,
+            agent_profiles::agent_profile_save,
+            agent_profiles::agent_profile_remove,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
