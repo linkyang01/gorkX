@@ -291,7 +291,7 @@ type NewTaskProfile = string;
  * the kernel before the first user turn; `session/set_mode(plan)` below still
  * owns the engine's actual plan-mode control plane.
  */
-function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile): AgentProfile | undefined {
+function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile, cwd: string): AgentProfile | undefined {
   if (mode === 'plan') {
     return {
       name: 'gorkx-plan',
@@ -305,6 +305,13 @@ function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile): AgentP
   // `explore` is a bundled Grok Build profile with its own smaller read-only
   // toolset and Plan permission mode. The desktop only selects it for a new
   // task; it does not recreate those restrictions in the shell.
+  if (profile.startsWith('project:')) {
+    const match = /^project:([^|]+)\|(.+)$/.exec(profile);
+    let profileProject = '';
+    try { profileProject = match ? decodeURIComponent(match[1]) : ''; } catch { return undefined; }
+    if (!match || profileProject !== cwd) return undefined;
+    return match[2];
+  }
   return profile !== 'default' ? profile : undefined;
 }
 
@@ -3572,7 +3579,7 @@ function App() {
     try {
       const client = await bootstrapClient(cwdBase);
       wireClient(id, client);
-      const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile));
+      const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile, cwdBase));
       rememberModels(session);
       let sessionId = session.sessionId;
       let cwd = cwdBase;

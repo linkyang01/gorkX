@@ -381,7 +381,7 @@ export function SettingsPanel({
       setPersonalRulesDraft('');
       setPersonalRulesPath('');
     });
-    void listAgentProfiles().then(setAgentProfiles).catch(() => setAgentProfiles([]));
+    void listAgentProfiles(project).then(setAgentProfiles).catch(() => setAgentProfiles([]));
     void listCustomModels().then(setModelsSnap);
     void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
     void fetchMediaToolsConfig().then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch(() => setMediaTools(null));
@@ -1451,7 +1451,7 @@ export function SettingsPanel({
                 <select className="settings-select" value={newTaskProfile} onChange={(event) => onNewTaskProfile(event.target.value)}>
                   <option value="default">{t('settingsAgentStandard')}</option>
                   <option value="explore">{t('settingsAgentExplore')}</option>
-                  {agentProfiles.map((profile) => <option key={profile.name} value={profile.name}>{profile.displayName} — {profile.description}</option>)}
+                  {agentProfiles.map((profile) => <option key={`${profile.scope}:${profile.name}`} value={profile.scope === 'project' && project ? `project:${encodeURIComponent(project)}|${profile.name}` : profile.name}>{profile.displayName} — {profile.description}{profile.scope === 'project' ? ` · ${profile.source}` : ''}</option>)}
                 </select>
               </div>
               <h3 className="subhead">{editingAgentName ? t('settingsAgentEdit') : t('settingsAgentCreate')}</h3>

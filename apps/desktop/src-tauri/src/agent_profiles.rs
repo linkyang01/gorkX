@@ -17,6 +17,7 @@ pub struct AgentProfileSummary {
     pub display_name: String,
     pub description: String,
     pub source: String,
+    pub scope: String,
     pub editable: bool,
     pub content: Option<String>,
 }
@@ -60,7 +61,7 @@ fn quoted(value: &str) -> String {
     value.trim().trim_matches('"').trim_matches('\'').to_string()
 }
 
-fn read_profile(path: &Path) -> Result<AgentProfileSummary, String> {
+fn read_profile(path: &Path, source: &str, scope: &str) -> Result<AgentProfileSummary, String> {
     refuse_symlink(path)?;
     let content = std::fs::read_to_string(path).map_err(|e| format!("read agent profile: {e}"))?;
     if content.len() > 64 * 1024 { return Err("Agent profile is too large.".into()); }
@@ -84,22 +85,32 @@ fn read_profile(path: &Path) -> Result<AgentProfileSummary, String> {
         name,
         display_name,
         description,
-        source: "个人角色".into(),
+        source: source.into(),
+        scope: scope.into(),
         editable,
         content: editable.then_some(content),
     })
 }
 
 #[tauri::command]
-pub fn agent_profiles_list() -> Result<Vec<AgentProfileSummary>, String> {
-    let dir = agents_dir();
-    if !dir.exists() { return Ok(Vec::new()); }
-    refuse_symlink(&dir)?;
+pub fn agent_profiles_list(project: Option<String>) -> Result<Vec<AgentProfileSummary>, String> {
     let mut profiles = Vec::new();
-    for entry in std::fs::read_dir(&dir).map_err(|e| format!("read agent profiles: {e}"))? {
-        let path = entry.map_err(|e| format!("read agent profile: {e}"))?.path();
-        if path.extension().and_then(|v| v.to_str()) != Some("md") || !path.is_file() { continue; }
-        if let Ok(profile) = read_profile(&path) { profiles.push(profile); }
+    let mut read_dir = |dir: PathBuf, source: &str, scope: &str| -> Result<(), String> {
+        if !dir.exists() { return Ok(()); }
+        refuse_symlink(&dir)?;
+        for entry in std::fs::read_dir(&dir).map_err(|e| format!("read agent profiles: {e}"))? {
+            let path = entry.map_err(|e| format!("read agent profile: {e}"))?.path();
+            if path.extension().and_then(|v| v.to_str()) != Some("md") || !path.is_file() { continue; }
+            if let Ok(profile) = read_profile(&path, source, scope) { profiles.push(profile); }
+        }
+        Ok(())
+    };
+    read_dir(agents_dir(), "个人角色", "user")?;
+    if let Some(project) = project.filter(|value| !value.trim().is_empty()) {
+        let path = PathBuf::from(project.trim());
+        if path.is_dir() && !std::fs::symlink_metadata(&path).map_err(|e| format!("read project: {e}"))?.file_type().is_symlink() {
+            read_dir(path.join(".grok").join("agents"), "项目角色", "project")?;
+        }
     }
     profiles.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(profiles)
@@ -126,7 +137,7 @@ pub fn agent_profile_save(display_name: String, description: String, instruction
     refuse_symlink(&temp)?;
     std::fs::write(&temp, content).map_err(|e| format!("write agent profile: {e}"))?;
     std::fs::rename(&temp, &path).map_err(|e| format!("save agent profile: {e}"))?;
-    read_profile(&path)
+    read_profile(&path, "个人角色", "user")
 }
 
 #[tauri::command]
