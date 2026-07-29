@@ -21,6 +21,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Compact | Native ACP compact button plus automatic threshold handling | 🟡 engine decides compaction availability |
 | Current-task usage | Task information panel → native session usage read | 🟡 aggregate tokens and cost appear only when the active Grok Build session supplies them; no cost is inferred from subscription quota or local daily counters |
 | Quick start | Settings → General → Quick start; native walkthrough of visible desktop controls | ✅ does not depend on a slash command or create an engine task |
+| Image editing | With an image staged in the composer: `+` → Edit attached image → plain-language edit form; optional model override in Settings → Models → Media tools | 🟡 Grok Build exposes `image_edit` as an engine tool, not a stable ACP slash route. gorkX keeps the image attached and sends the explicit edit intent; the kernel selects an available tool and model. The override writes the documented App `GROK_HOME` feature setting but never claims a model is available. |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar / `+` menu file save; `/export` remains keyboard compatibility | ✅ |
 | Fork | Toolbar calls `_x.ai/session/fork`, creates a durable child task, then loads it while preserving the original task | ✅ isolated ACP gate verifies child load and unchanged parent |

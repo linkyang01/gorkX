@@ -33,6 +33,7 @@ export type PlusAction =
   | { type: 'send-feedback' }
   | { type: 'start-kernel-loop' }
   | { type: 'generate-media'; media: 'image' | 'video' }
+  | { type: 'edit-attached-image' }
   | { type: 'workflow'; name: string }
   | { type: 'engine-action'; name: string; title: string; description?: string }
   | { type: 'skill'; skill: SkillInfo };
@@ -54,6 +55,8 @@ interface Props {
   planModeOn: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
+  /** Show image edit only after the user has actually staged an image. */
+  hasImageAttachment?: boolean;
   /** Session slash names without leading `/` — when non-empty, filter engine slash rows */
   availableCommandNames?: string[];
   /** Saved workflows announced by this exact live ACP session. */
@@ -81,6 +84,7 @@ export function PlusMenu({
   planModeOn,
   skills,
   hasActiveSession,
+  hasImageAttachment = false,
   availableCommandNames,
   workflows = [],
   engineActions = [],
@@ -260,6 +264,13 @@ export function PlusMenu({
       desc: t('plusImagineVideoHint'),
       action: { type: 'generate-media', media: 'video' },
     },
+    ...(hasImageAttachment ? ([{
+      kind: 'action' as const,
+      id: 'edit-attached-image',
+      title: t('plusEditImage'),
+      desc: t('plusEditImageHint'),
+      action: { type: 'edit-attached-image' } as PlusAction,
+    }] as Row[]) : []),
 
     { kind: 'label', id: 'l-mem', title: t('plusCatMemory') },
     {

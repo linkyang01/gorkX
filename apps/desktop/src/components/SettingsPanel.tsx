@@ -107,7 +107,7 @@ import {
   setSubagentsEnabled,
   type SubagentsConfigSnapshot,
 } from '../lib/subagentsConfig';
-import { fetchMediaToolsConfig, setMediaToolEnabled, type MediaToolsConfigSnapshot } from '../lib/mediaToolsConfig';
+import { fetchMediaToolsConfig, setImageEditModelOverride, setMediaToolEnabled, type MediaToolsConfigSnapshot } from '../lib/mediaToolsConfig';
 import {
   fetchSandboxConfig,
   setSandboxProfile,
@@ -281,6 +281,7 @@ export function SettingsPanel({
   const [subagentsBusy, setSubagentsBusy] = useState(false);
   const [mediaTools, setMediaTools] = useState<MediaToolsConfigSnapshot | null>(null);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [imageEditModelDraft, setImageEditModelDraft] = useState('');
   const [sandboxSnap, setSandboxSnap] = useState<SandboxConfigSnapshot | null>(null);
   const [sandboxBusy, setSandboxBusy] = useState(false);
   const [subscriptionModels, setSubscriptionModels] = useState<SubscriptionModelsSnapshot | null>(null);
@@ -349,7 +350,7 @@ export function SettingsPanel({
     void fetchMemoryStatus().then(setMemory);
     void listCustomModels().then(setModelsSnap);
     void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
-    void fetchMediaToolsConfig().then(setMediaTools).catch(() => setMediaTools(null));
+    void fetchMediaToolsConfig().then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch(() => setMediaTools(null));
     void fetchSandboxConfig().then(setSandboxSnap).catch(() => setSandboxSnap(null));
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
@@ -1544,6 +1545,20 @@ export function SettingsPanel({
                   const enabled = kind === 'image' ? (mediaTools?.imageGenEnabled ?? true) : (mediaTools?.videoGenEnabled ?? true);
                   return <div className="settings-row" style={{ marginTop: 10 }} key={kind}><div><div className="settings-row-title">{kind === 'image' ? t('mediaImage') : t('mediaVideo')}</div><div className="settings-row-hint">{enabled ? t('mediaEnabled') : t('mediaDisabled')}</div></div><button type="button" className={`btn${enabled ? ' primary' : ''}`} disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setMediaToolEnabled(kind, !enabled).then(setMediaTools).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{enabled ? t('mediaDisabled') : t('mediaEnabled')}</button></div>;
                 })}
+                <div className="settings-row" style={{ marginTop: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="settings-row-title">{t('mediaImageEditModel')}</div>
+                    <div className="settings-row-hint">{t('mediaImageEditModelHint')}</div>
+                    <input
+                      className="settings-text-input"
+                      value={imageEditModelDraft}
+                      maxLength={256}
+                      placeholder={t('mediaImageEditModelPlaceholder')}
+                      onChange={(event) => setImageEditModelDraft(event.target.value)}
+                    />
+                  </div>
+                  <button type="button" className="btn" disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setImageEditModelOverride(imageEditModelDraft).then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{t('mediaSave')}</button>
+                </div>
               </div>
               <h3 className="subhead">{t('settingsModelsCustom')}</h3>
               <div className="settings-card">

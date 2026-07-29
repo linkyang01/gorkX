@@ -2759,6 +2759,24 @@ function App() {
     await runDesktopAction(command, visible);
   };
 
+  /**
+   * Grok Build exposes image editing as an engine tool, not a stable ACP slash
+   * command. Keep the staged image attached and make the edit intent explicit;
+   * the kernel then selects its available image-edit tool for this prompt.
+   */
+  const openImageEditAction = async () => {
+    if (!composerAtts.some((attachment) => attachment.kind === 'image')) return;
+    const prompt = await askAction({
+      title: t('imageEditDialogTitle'),
+      message: t('imageEditDialogHint'),
+      placeholder: t('imageEditDialogPlaceholder'),
+      submitLabel: t('imageEditDialogSubmit'),
+    });
+    if (!prompt) return;
+    setDraft(`${t('imageEditPromptPrefix')}: ${prompt}`);
+    setSlashOpen(false);
+  };
+
   /** Launch the kernel-owned evidence workflow only when ACP advertises it. */
   const openDeepResearchAction = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
@@ -3109,6 +3127,10 @@ function App() {
       case 'generate-media':
         setPlusMenuOpen(false);
         await openMediaAction(action.media);
+        return;
+      case 'edit-attached-image':
+        setPlusMenuOpen(false);
+        await openImageEditAction();
         return;
       case 'skill':
         await openSkillAction(action.skill);
@@ -5839,6 +5861,7 @@ function App() {
                         planModeOn={chatMode === 'plan'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
+                        hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
                         availableCommandNames={
                           // Only expose engine-owned actions after an actual session
                           // advertised them. A static fallback made image generation
@@ -6635,6 +6658,7 @@ function App() {
                         planModeOn={(active.chatMode ?? chatMode) === 'plan'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
+                        hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
                         availableCommandNames={(active.commands ?? []).map((c) =>
                           c.name.replace(/^\//, ''),
                         )}

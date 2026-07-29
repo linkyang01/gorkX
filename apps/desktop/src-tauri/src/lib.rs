@@ -215,6 +215,7 @@ pub fn run() {
             models_config::models_migrate_plaintext_keys,
             media_tools_config::media_tools_config_get,
             media_tools_config::media_tools_config_set,
+            media_tools_config::media_tools_image_edit_model_set,
             subagents_config::subagents_config_get,
             subagents_config::subagents_config_set_enabled,
             subagents_config::subagents_config_set_type_enabled,
