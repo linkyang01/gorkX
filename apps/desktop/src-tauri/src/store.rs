@@ -1225,7 +1225,7 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{billing_percent, search_thread_history, valid_usage_day, visible_models_from_cache};
+    use super::{billing_percent, parse_billing_body, search_thread_history, valid_usage_day, visible_models_from_cache};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1296,6 +1296,37 @@ mod model_cache_tests {
         assert_eq!(billing_percent(&serde_json::json!("42.5")), Some(42.5));
         assert_eq!(billing_percent(&serde_json::json!("unknown")), None);
         assert_eq!(billing_percent(&serde_json::json!(101)), None);
+    }
+
+    #[test]
+    fn billing_summary_reads_credit_and_product_usage_from_live_shape() {
+        // The CLI billing endpoint returns this nested `config` shape for
+        // subscription accounts. Keep the product rows separate from the
+        // total: they are explanatory detail, not a locally inferred quota.
+        let body = serde_json::json!({
+            "config": {
+                "creditUsagePercent": 17,
+                "currentPeriod": { "end": "2026-08-01T12:51:38+00:00" },
+                "productUsage": [
+                    { "product": "GrokBuild", "usagePercent": 16 },
+                    { "product": "GrokChat", "usagePercent": 1 }
+                ]
+            }
+        });
+        let summary = parse_billing_body(
+            body,
+            Some("person@example.invalid".into()),
+            Some("Person".into()),
+            Some("SuperGrok".into()),
+            None,
+        ).unwrap();
+        assert_eq!(summary.credit_usage_percent, Some(17.0));
+        assert_eq!(summary.quota_label.as_deref(), Some("已用 17% · 剩 83%"));
+        assert_eq!(summary.period_end.as_deref(), Some("2026-08-01T12:51:38+00:00"));
+        let product_usage = summary.product_usage.unwrap();
+        assert_eq!(product_usage.len(), 2);
+        assert_eq!(product_usage[0].product, "GrokBuild");
+        assert_eq!(product_usage[0].usage_percent, Some(16.0));
     }
 }
 
