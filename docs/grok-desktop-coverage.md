@@ -41,7 +41,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 
 | Surface | Desktop control | Status |
 |---|---|---|
-| MCP / Skills / Plugins | Discover and manage through App `GROK_HOME`; add remote HTTPS HTTP/SSE MCP from a native form | ✅ engine capability governs individual entries; headers, secrets and arbitrary local commands remain advanced configuration |
+| MCP / Skills / Plugins | Discover and manage through App `GROK_HOME`; add remote HTTPS HTTP/SSE MCP from a native form; reload live MCP servers for the current task | ✅ engine capability governs individual entries; the reload button calls the native hot-refresh route and then reads that task's fresh inventory. Headers, secrets and arbitrary local commands remain advanced configuration |
 | Hooks | Active-task settings loads discovered hooks; explicit reload, trust/untrust and enable/disable controls | 🟡 `_x.ai/hooks/list` and reload are ACP-gated; authored hook files and a real configured-hook run remain acceptance scenarios |
 | Memory | Browse, search, remember, forget, local compact and per-project injection | ✅ |
 
