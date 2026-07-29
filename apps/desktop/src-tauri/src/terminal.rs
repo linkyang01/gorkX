@@ -12,6 +12,14 @@ use tokio::sync::Mutex;
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
+fn terminal_invocation(command: &str, args: &[String]) -> (String, Vec<String>) {
+    #[cfg(unix)]
+    if args.is_empty() {
+        return ("/bin/zsh".into(), vec!["-lc".into(), command.into()]);
+    }
+    (command.into(), args.to_vec())
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalExitStatus {
@@ -91,22 +99,9 @@ pub async fn terminal_create(
     // agent terminal tool call. Preserve standard ACP argv calls when args are
     // present, but evaluate the command string through the platform shell for
     // this documented empty-argv form.
-    #[cfg(unix)]
-    let mut cmd = if args.is_empty() {
-        let mut shell = Command::new("/bin/zsh");
-        shell.arg("-lc").arg(&command);
-        shell
-    } else {
-        let mut direct = Command::new(&command);
-        direct.args(&args);
-        direct
-    };
-    #[cfg(not(unix))]
-    let mut cmd = {
-        let mut direct = Command::new(&command);
-        direct.args(&args);
-        direct
-    };
+    let (program, invocation_args) = terminal_invocation(&command, &args);
+    let mut cmd = Command::new(program);
+    cmd.args(invocation_args);
     cmd
         .current_dir(&workdir)
         .stdout(Stdio::piped())
@@ -370,4 +365,24 @@ pub async fn terminal_list(pool: State<'_, Arc<TerminalPool>>) -> Result<Vec<ser
             .cmp(b["terminalId"].as_str().unwrap_or(""))
     });
     Ok(list)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::terminal_invocation;
+
+    #[cfg(unix)]
+    #[test]
+    fn empty_argv_acp_command_runs_through_shell() {
+        let (program, args) = terminal_invocation("/bin/zsh -lc 'printf ok'", &[]);
+        assert_eq!(program, "/bin/zsh");
+        assert_eq!(args, vec!["-lc", "/bin/zsh -lc 'printf ok'"]);
+    }
+
+    #[test]
+    fn explicit_argv_keeps_standard_acp_shape() {
+        let (program, args) = terminal_invocation("git", &["status".into(), "--short".into()]);
+        assert_eq!(program, "git");
+        assert_eq!(args, vec!["status", "--short"]);
+    }
 }
