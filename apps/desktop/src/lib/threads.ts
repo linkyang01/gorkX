@@ -43,6 +43,7 @@ export interface ChatLineSnap {
   toolStatus?: string | null;
   toolKind?: string | null;
   attachmentsJson?: string | null;
+  at?: number | null;
 }
 
 /** A local-only task/history search result from gorkX's SQLite snapshots. */
@@ -310,6 +311,7 @@ export async function saveChatSnapshot(
         toolStatus: l.toolStatus ?? null,
         toolKind: l.toolKind ?? null,
         attachmentsJson: l.attachmentsJson ?? null,
+        at: l.at ?? null,
       })),
     });
   } catch {

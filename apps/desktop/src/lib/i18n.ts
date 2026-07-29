@@ -910,6 +910,9 @@ const dict = {
     settingsDensityComfortableHint: 'Balanced density for daily work.',
     settingsDensitySpacious: 'Spacious',
     settingsDensitySpaciousHint: 'More breathing room between interface elements.',
+    settingsMessages: 'Messages',
+    settingsMessageTimestamps: 'Show local message times',
+    settingsMessageTimestampsHint: 'Shows when gorkX received new user and assistant messages. Older saved messages without a recorded time stay blank.',
     settingsPersonalization: 'Personalization',
     settingsPersonalizationHint:
       'Help the agent learn how you like to work—preferences, habits, and project conventions.',
@@ -2366,6 +2369,9 @@ const dict = {
     settingsDensityComfortableHint: '适合日常工作的平衡密度。',
     settingsDensitySpacious: '宽松',
     settingsDensitySpaciousHint: '界面元素之间留出更多空间。',
+    settingsMessages: '消息',
+    settingsMessageTimestamps: '显示本机消息时间',
+    settingsMessageTimestampsHint: '显示 gorkX 收到新用户和助手消息的本机时间；旧的已保存消息没有记录时间时会保持不显示。',
     settingsPersonalization: '个性化',
     settingsPersonalizationHint:
       '让助手越来越懂你的习惯、偏好和项目约定。',

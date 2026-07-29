@@ -183,6 +183,8 @@ interface Props {
   /** Renderer-only preference; native voice remains available via the composer button. */
   voiceShortcutEnabled: boolean;
   onVoiceShortcutEnabled: (enabled: boolean) => void;
+  showMessageTimestamps: boolean;
+  onShowMessageTimestamps: (enabled: boolean) => void;
   /** Jump out of settings into product surfaces */
   onOpenMemory?: () => void;
   onOpenTutorial?: () => void;
@@ -249,6 +251,8 @@ export function SettingsPanel({
   onWebSearchEnabled,
   voiceShortcutEnabled,
   onVoiceShortcutEnabled,
+  showMessageTimestamps,
+  onShowMessageTimestamps,
   onOpenMemory,
   onOpenTutorial,
   onOpenExtensions,
@@ -1198,6 +1202,20 @@ export function SettingsPanel({
                     {t('tutorialOpen')}
                   </button>
                 </div>
+              </div>
+              <h3 className="subhead">{t('settingsMessages')}</h3>
+              <div className="settings-card">
+                <label className="settings-row toggle-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsMessageTimestamps')}</div>
+                    <div className="settings-row-hint">{t('settingsMessageTimestampsHint')}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showMessageTimestamps}
+                    onChange={(event) => onShowMessageTimestamps(event.target.checked)}
+                  />
+                </label>
               </div>
             </>
           ) : null}

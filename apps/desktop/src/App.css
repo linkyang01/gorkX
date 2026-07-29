@@ -5522,6 +5522,19 @@ button.pill:hover {
   justify-content: flex-end;
 }
 
+.msg-time {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tl-user .msg-time {
+  text-align: right;
+  padding-right: 3px;
+}
+
 /* ── Native session rewind ───────────────────────────── */
 
 .rewind-modal {

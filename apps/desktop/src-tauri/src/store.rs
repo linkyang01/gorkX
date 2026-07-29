@@ -47,6 +47,8 @@ pub struct ChatLineRow {
     pub tool_kind: Option<String>,
     #[serde(default)]
     pub attachments_json: Option<String>,
+    #[serde(default)]
+    pub at: Option<i64>,
 }
 
 /// A bounded, local-only task search result. It deliberately contains only
@@ -117,6 +119,7 @@ impl AppStore {
               tool_status TEXT,
               tool_kind TEXT,
               attachments_json TEXT,
+              at INTEGER,
               PRIMARY KEY (project, thread_id, seq)
             );
             CREATE INDEX IF NOT EXISTS idx_chat_thread
@@ -169,6 +172,7 @@ impl AppStore {
             [],
         );
         let _ = conn.execute("ALTER TABLE chat_lines ADD COLUMN attachments_json TEXT", []);
+        let _ = conn.execute("ALTER TABLE chat_lines ADD COLUMN at INTEGER", []);
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -1433,8 +1437,8 @@ pub fn store_save_chat(
             .prepare(
                 r#"
                 INSERT INTO chat_lines (
-                  thread_id, project, seq, id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json
-                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+                  thread_id, project, seq, id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json, at
+                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
                 "#,
             )
             .map_err(|e| e.to_string())?;
@@ -1451,6 +1455,7 @@ pub fn store_save_chat(
                 line.tool_status,
                 line.tool_kind,
                 line.attachments_json,
+                line.at,
             ])
             .map_err(|e| e.to_string())?;
         }
@@ -1469,7 +1474,7 @@ pub fn store_load_chat(
     let mut stmt = conn
         .prepare(
             r#"
-            SELECT id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json
+            SELECT id, role, text, tool_key, parent_subagent_id, tool_status, tool_kind, attachments_json, at
             FROM chat_lines
             WHERE project = ?1 AND thread_id = ?2
             ORDER BY seq ASC
@@ -1487,6 +1492,7 @@ pub fn store_load_chat(
                 tool_status: r.get(5)?,
                 tool_kind: r.get(6)?,
                 attachments_json: r.get(7)?,
+                at: r.get(8)?,
             })
         })
         .map_err(|e| e.to_string())?

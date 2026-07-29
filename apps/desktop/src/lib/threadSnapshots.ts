@@ -11,6 +11,7 @@ export type StoredChatLine = {
   toolStatus?: string | null;
   toolKind?: string | null;
   attachmentsJson?: string | null;
+  at?: number | null;
 };
 
 type StoredAttachment = {
@@ -62,6 +63,7 @@ export function snapToLines(snaps: StoredChatLine[]): ChatLine[] {
       toolStatus: s.toolStatus ?? undefined,
       toolKind: s.toolKind ?? undefined,
       attachments: attachmentsFromJson(s.attachmentsJson),
+      at: typeof s.at === 'number' && Number.isFinite(s.at) ? s.at : undefined,
     }];
   });
 }

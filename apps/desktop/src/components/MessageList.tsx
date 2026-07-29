@@ -34,6 +34,8 @@ export interface ChatLine {
   workflow?: WorkflowRunUpdate;
   /** Live scheduler projection; restored snapshots retain plain text only. */
   scheduledTask?: KernelScheduledTaskUpdate;
+  /** Local receive time; absent for snapshots created before timestamp support. */
+  at?: number;
 }
 
 interface Props {
@@ -57,6 +59,17 @@ interface Props {
   scheduledTaskDeleteDisabled?: boolean;
   /** Explicit click copies only the rendered assistant text to the local clipboard. */
   onCopyAssistant?: (text: string) => void | Promise<void>;
+  /** Display only locally-recorded times; missing historical values stay hidden. */
+  showTimestamps?: boolean;
+}
+
+function formatLineTime(at?: number): string | null {
+  if (!at || !Number.isFinite(at)) return null;
+  try {
+    return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return null;
+  }
 }
 
 function ThoughtBlock({ text }: { text: string }) {
@@ -132,6 +145,7 @@ function LineView({
   onScheduledTaskDelete,
   scheduledTaskDeleteDisabled,
   onCopyAssistant,
+  showTimestamps = false,
 }: {
   line: ChatLine;
   onTogglePlanEntry: (lineId: string, entryId: string) => void;
@@ -144,6 +158,7 @@ function LineView({
   onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
   scheduledTaskDeleteDisabled?: boolean;
   onCopyAssistant?: (text: string) => void | Promise<void>;
+  showTimestamps?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   if (line.role === 'plan' && line.planEntries && line.planEntries.length > 0) {
@@ -196,6 +211,7 @@ function LineView({
             <AttachmentStrip items={atts} onOpen={onOpenAttachment} compact />
           ) : null}
           {text ? <div className="tl-user-pill">{text}</div> : null}
+          {showTimestamps && formatLineTime(line.at) ? <span className="msg-time">{formatLineTime(line.at)}</span> : null}
         </div>
       </div>
     );
@@ -231,6 +247,7 @@ function LineView({
             {copied ? t('copyDone') : t('copyResponse')}
           </button>
         ) : null}
+        {showTimestamps && formatLineTime(line.at) ? <span className="msg-time">{formatLineTime(line.at)}</span> : null}
       </div>
     </div>
   );
@@ -256,6 +273,7 @@ export function MessageList({
   onScheduledTaskDelete,
   scheduledTaskDeleteDisabled = false,
   onCopyAssistant,
+  showTimestamps = false,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
@@ -321,6 +339,7 @@ export function MessageList({
                 onScheduledTaskDelete={onScheduledTaskDelete}
                 scheduledTaskDeleteDisabled={scheduledTaskDeleteDisabled}
                 onCopyAssistant={onCopyAssistant}
+                showTimestamps={showTimestamps}
               />
             </div>
           );

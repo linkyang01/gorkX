@@ -571,6 +571,14 @@ function App() {
   /** Streaming text is intentionally preview-only until Grok Build finalizes it. */
   const [voiceInterim, setVoiceInterim] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  /** Local display preference equivalent to Grok Build TUI's timestamps. */
+  const [showMessageTimestamps, setShowMessageTimestamps] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.showMessageTimestamps') === '1';
+    } catch {
+      return false;
+    }
+  });
   /** Capability armed in composer (user completes request in chat). */
   const [capabilityArm, setCapabilityArm] = useState<{
     prefix: string;
@@ -1208,6 +1216,7 @@ function App() {
           parentSubagentId: l.parentSubagentId,
           toolStatus: l.toolStatus,
           toolKind: l.toolKind,
+          at: l.at ?? null,
           attachmentsJson: l.attachments?.length
             ? JSON.stringify(l.attachments.map(({ id, path, name, kind, size }) => ({ id, path, name, kind, size })))
             : null,
@@ -1789,7 +1798,7 @@ function App() {
     const at = Date.now();
     setThreads((prev) =>
       prev.map((th) =>
-        th.id === threadId ? { ...th, lines: [...th.lines, line], lastEventAt: at, updatedAt: at } : th,
+        th.id === threadId ? { ...th, lines: [...th.lines, { ...line, at: line.at ?? at }], lastEventAt: at, updatedAt: at } : th,
       ),
     );
   }, []);
@@ -1874,6 +1883,7 @@ function App() {
               parentSubagentId: meta?.parentSubagentId,
               toolStatus: meta?.toolStatus,
               toolKind: meta?.toolKind,
+              at,
             });
             return { ...th, lines, lastEventAt: at, updatedAt: at };
           }
@@ -1881,7 +1891,7 @@ function App() {
           if (last && last.role === role && !last.toolKey) {
             lines[lines.length - 1] = { ...last, text: last.text + chunk };
           } else {
-            lines.push({ id: nid(), role, text: chunk });
+            lines.push({ id: nid(), role, text: chunk, at });
           }
           return { ...th, lines, lastEventAt: at, updatedAt: at };
         }),
@@ -1901,7 +1911,7 @@ function App() {
             if (thread.lines.some((line) => line.attachments?.some((item) => item.path === attachment.path))) return thread;
             return {
               ...thread,
-              lines: [...thread.lines, { id: nid(), role: 'assistant', text: '', attachments: [attachment] }],
+              lines: [...thread.lines, { id: nid(), role: 'assistant', text: '', at: Date.now(), attachments: [attachment] }],
             };
           }));
         };
@@ -6444,6 +6454,7 @@ function App() {
                 }
               }}
               showProcessInChat={false}
+              showTimestamps={showMessageTimestamps}
               choiceDisabled={active.busy}
               onSelectChoice={(value) => void send(value)}
               followUps={followUps[active.id]?.suggestions}
@@ -7217,6 +7228,15 @@ function App() {
           setVoiceShortcutEnabled(enabled);
           try {
             localStorage.setItem('gorkx.voiceShortcutEnabled', enabled ? '1' : '0');
+          } catch {
+            /* browser preview */
+          }
+        }}
+        showMessageTimestamps={showMessageTimestamps}
+        onShowMessageTimestamps={(enabled) => {
+          setShowMessageTimestamps(enabled);
+          try {
+            localStorage.setItem('gorkx.showMessageTimestamps', enabled ? '1' : '0');
           } catch {
             /* browser preview */
           }
