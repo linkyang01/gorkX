@@ -2777,6 +2777,29 @@ function App() {
     setSlashOpen(false);
   };
 
+  /** Send a correction to the in-progress kernel turn without exposing /interject. */
+  const openInterjectAction = async () => {
+    const current = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!current?.client || !current.sessionId || !current.busy) return;
+    const content = await askAction({
+      title: t('interjectDialogTitle'),
+      message: t('interjectDialogHint'),
+      placeholder: t('interjectDialogPlaceholder'),
+      submitLabel: t('interjectDialogSubmit'),
+    });
+    if (!content) return;
+    try {
+      await current.client.interject(current.sessionId, content);
+      appendLine(current.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('interjectSent')}: ${content.slice(0, 160)}${content.length > 160 ? '…' : ''}`,
+      });
+    } catch (error) {
+      patchThread(current.id, { error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
   /** Launch the kernel-owned evidence workflow only when ACP advertises it. */
   const openDeepResearchAction = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
@@ -6612,6 +6635,16 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {active.busy ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('interjectButtonHint')}
+                        onClick={() => void openInterjectAction()}
+                      >
+                        {t('interjectButton')}
+                      </button>
+                    ) : null}
                     {activeFollowUpMode === 'btw' ? (
                       <button
                         type="button"
