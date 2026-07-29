@@ -66,6 +66,12 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Computer Hub workspace | Settings → Screen capture → Computer Hub workspace | 🟡 fixed `workspace status/start/pause/resume/stop` actions are wired to the bundled Grok Build binary, require confirmation, and are still server/account-gated; exposing a project can make its content available to the remote service. |
 | Computer automation | — | ❌ no background screen capture or local mouse/keyboard control is shipped. Computer Hub workspace exposure is not represented as local computer control; gorkX keeps explicit screenshot capture for that use case. |
 
+## Scheduling
+
+| Surface | Desktop control | Status |
+|---|---|---|
+| Local arrangement update | Scheduled tasks → Edit → Save changes | ✅ updates the existing persisted job in place, retaining ID and execution record; the next run is recalculated only from the updated rule |
+
 ## Evidence gates
 
 ```bash

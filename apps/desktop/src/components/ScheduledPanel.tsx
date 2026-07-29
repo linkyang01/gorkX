@@ -48,6 +48,7 @@ export function ScheduledPanel({
 }: Props) {
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [creating, setCreating] = useState(false);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
   const [projectPath, setProjectPath] = useState(currentProject || '');
@@ -89,6 +90,16 @@ export function ScheduledPanel({
     void savePersistentJobs(next);
   };
 
+  const resetForm = () => {
+    setCreating(false);
+    setEditingJobId(null);
+    setTitle('');
+    setPrompt('');
+    setNlDraft('');
+    setModelId('');
+    setPermissionPolicy('plan');
+  };
+
   const addJob = (partial: Omit<
     ScheduledJob,
     'id' | 'createdAt' | 'nextRunAt' | 'lastRunAt' | 'failureCount' | 'lastError'
@@ -106,12 +117,7 @@ export function ScheduledPanel({
       maxAutoRetries: partial.maxAutoRetries ?? DEFAULT_MAX_AUTO_RETRIES,
     };
     persist([job, ...jobs]);
-    setCreating(false);
-    setTitle('');
-    setPrompt('');
-    setNlDraft('');
-    setModelId('');
-    setPermissionPolicy('plan');
+    resetForm();
   };
 
   const fromSuggestion = (s: (typeof SUGGESTIONS)[0]) => {
@@ -202,7 +208,7 @@ export function ScheduledPanel({
 
   const submitCreate = () => {
     if (!title.trim() || !prompt.trim()) return;
-    addJob({
+    const partial = {
       title: title.trim(),
       prompt: prompt.trim(),
       projectPath: projectPath.trim(),
@@ -216,7 +222,33 @@ export function ScheduledPanel({
       modelId: modelId.trim() || undefined,
       permissionPolicy,
       maxAutoRetries: DEFAULT_MAX_AUTO_RETRIES,
-    });
+    };
+    if (!editingJobId) {
+      addJob(partial);
+      return;
+    }
+    persist(jobs.map((job) => {
+      if (job.id !== editingJobId) return job;
+      const updated: ScheduledJob = { ...job, ...partial, nextRunAt: job.nextRunAt };
+      return { ...updated, nextRunAt: updated.enabled ? computeNextRun(updated) : updated.nextRunAt };
+    }));
+    resetForm();
+  };
+
+  /** Edit in place: preserve durable history and only replace schedule fields. */
+  const editJob = (job: ScheduledJob) => {
+    setEditingJobId(job.id);
+    setTitle(job.title);
+    setPrompt(job.prompt);
+    setProjectPath(job.projectPath);
+    setKind(job.kind);
+    setIntervalMinutes(job.intervalMinutes);
+    setDailyHour(job.dailyHour);
+    setDailyMinute(job.dailyMinute);
+    setWeekdaysOnly(job.weekdaysOnly);
+    setPermissionPolicy(job.permissionPolicy || 'plan');
+    setModelId(job.modelId || '');
+    setCreating(true);
   };
 
   const toggleBackground = async () => {
@@ -292,7 +324,10 @@ export function ScheduledPanel({
           <button
             type="button"
             className="btn primary"
-            onClick={() => setCreating((v) => !v)}
+            onClick={() => {
+              if (creating) resetForm();
+              else { setEditingJobId(null); setCreating(true); }
+            }}
           >
             {creating ? t('cancel') : t('schedCreate')}
           </button>
@@ -430,7 +465,7 @@ export function ScheduledPanel({
               disabled={!title.trim() || !prompt.trim()}
               onClick={submitCreate}
             >
-              {t('schedSave')}
+              {editingJobId ? t('schedSaveChanges') : t('schedSave')}
             </button>
           </div>
         ) : null}
@@ -505,6 +540,9 @@ export function ScheduledPanel({
                 <div className="sched-item-actions">
                   <button type="button" className="btn btn-sm" onClick={() => void runNow(j)}>
                     {t('schedRunNow')}
+                  </button>
+                  <button type="button" className="btn btn-sm" onClick={() => editJob(j)}>
+                    {t('schedEdit')}
                   </button>
                   {meta.autoRetryPaused || (j.failureCount > 0 && !j.enabled) ? (
                     <button type="button" className="btn btn-sm primary-sm" onClick={() => void reRunFailed(j)}>
