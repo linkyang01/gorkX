@@ -12,6 +12,8 @@ interface Props {
   /** Local selection fallback when snapshot omits provider branding. */
   localModelId?: string | null;
   localProviderLabel?: string | null;
+  privacyOptOut?: boolean | null;
+  onSetPrivacy?: (optOut: boolean) => Promise<void>;
 }
 
 function number(value: number | undefined) {
@@ -42,11 +44,14 @@ export function TaskInfoPanel({
   onManageAuth,
   localModelId,
   localProviderLabel,
+  privacyOptOut,
+  onSetPrivacy,
 }: Props) {
   const [info, setInfo] = useState<SessionSnapshot | null>(null);
   const [usage, setUsage] = useState<SessionUsageSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!client || !sessionId) {
@@ -84,6 +89,14 @@ export function TaskInfoPanel({
   const usedPct = typeof context?.usagePct === 'number'
     ? Math.max(0, Math.min(100, context.usagePct))
     : context?.total ? Math.round(((context.used ?? 0) / context.total) * 100) : 0;
+  const privacyAvailable = info?.authSource === 'oauth' && typeof privacyOptOut === 'boolean' && Boolean(onSetPrivacy);
+  const changePrivacy = async (optOut: boolean) => {
+    if (!onSetPrivacy || privacyBusy || !window.confirm(optOut ? t('taskInfoPrivacyConfirmOff') : t('taskInfoPrivacyConfirmOn'))) return;
+    setPrivacyBusy(true);
+    try { await onSetPrivacy(optOut); await load(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setPrivacyBusy(false); }
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -126,6 +139,15 @@ export function TaskInfoPanel({
               </button>
             </div>
           ) : null}
+          <section className="task-info-context">
+            <div className="task-info-context-head"><strong>{t('taskInfoPrivacy')}</strong></div>
+            {privacyAvailable ? <>
+              <p className="hint">{privacyOptOut ? t('taskInfoPrivacyOff') : t('taskInfoPrivacyOn')}</p>
+              <button type="button" className="btn btn-sm" disabled={privacyBusy} onClick={() => void changePrivacy(!privacyOptOut)}>
+                {privacyBusy ? t('taskInfoPrivacyUpdating') : (privacyOptOut ? t('taskInfoPrivacyChooseOn') : t('taskInfoPrivacyChooseOff'))}
+              </button>
+            </> : <p className="hint">{t('taskInfoPrivacyUnavailable')}</p>}
+          </section>
           <section className="task-info-context">
             <div className="task-info-context-head"><strong>{t('taskInfoContext')}</strong><span>{usedPct}%</span></div>
             <div className="task-info-meter" aria-label={t('taskInfoContext')}><i style={{ width: `${usedPct}%` }} /></div>

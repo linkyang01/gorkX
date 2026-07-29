@@ -7481,6 +7481,11 @@ function App() {
           active?.modelId || modelId,
           customModelRows,
         )}
+        privacyOptOut={account?.codingDataRetentionOptOut}
+        onSetPrivacy={active?.client && active?.sessionId ? async (optOut) => {
+          await active.client!.setCodingDataRetention(optOut);
+          setAccount((current) => current ? { ...current, codingDataRetentionOptOut: optOut } : current);
+        } : undefined}
         onClose={() => setTaskInfoOpen(false)}
         onManageAuth={(destination) => {
           setTaskInfoOpen(false);

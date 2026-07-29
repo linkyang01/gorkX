@@ -581,6 +581,23 @@ pub fn profile_asset_from_auth_file() -> Option<String> {
     None
 }
 
+/// Cached server-confirmed coding-data sharing choice. `true` means opted out.
+/// The choice is written by Grok Build's authenticated privacy endpoint.
+pub fn coding_data_retention_opt_out_from_auth_file() -> Option<bool> {
+    fn find(value: &Value) -> Option<bool> {
+        match value {
+            Value::Object(map) => map.get("coding_data_retention_opt_out")
+                .or_else(|| map.get("codingDataRetentionOptOut"))
+                .and_then(Value::as_bool)
+                .or_else(|| map.values().find_map(find)),
+            Value::Array(items) => items.iter().find_map(find),
+            _ => None,
+        }
+    }
+    let raw = std::fs::read_to_string(crate::paths::auth_json_path()).ok()?;
+    find(&serde_json::from_str::<Value>(&raw).ok()?)
+}
+
 /// Fetch avatar asset id from cli-chat-proxy /v1/user (authoritative).
 pub fn fetch_profile_asset_id(token: &str) -> Option<String> {
     let client = reqwest::blocking::Client::builder()

@@ -627,6 +627,8 @@ pub struct AccountSummary {
     pub on_demand_cap: Option<f64>,
     pub period_end: Option<String>,
     pub product_usage: Option<Vec<ProductUsageRow>>,
+    /// Server-confirmed cached choice; true means coding data sharing is off.
+    pub coding_data_retention_opt_out: Option<bool>,
     pub quota_note: String,
 }
 
@@ -691,6 +693,7 @@ fn account_shell(
         on_demand_cap: None,
         period_end: None,
         product_usage: None,
+        coding_data_retention_opt_out: crate::auth::coding_data_retention_opt_out_from_auth_file(),
         quota_note: note,
     }
 }
@@ -944,6 +947,7 @@ fn parse_billing_body(
         } else {
             Some(products)
         },
+        coding_data_retention_opt_out: crate::auth::coding_data_retention_opt_out_from_auth_file(),
         quota_note: if pct.is_some() {
             "live from cli-chat-proxy billing percentage".into()
         } else {

@@ -1084,6 +1084,16 @@ export class AcpClient {
     return result;
   }
 
+  /** Change coding-data sharing through Grok Build's authenticated privacy extension. */
+  async setCodingDataRetention(optOut: boolean): Promise<boolean> {
+    const raw = await this.request('x.ai/privacy/setCodingDataRetention', {
+      codingDataRetentionOptOut: optOut,
+    }, 20_000) as { codingDataRetentionOptOut?: unknown; result?: { codingDataRetentionOptOut?: unknown } };
+    const value = raw.result?.codingDataRetentionOptOut ?? raw.codingDataRetentionOptOut;
+    if (typeof value !== 'boolean') throw new Error('Kernel did not confirm the privacy preference');
+    return value;
+  }
+
   async loadSession(sessionId: string, cwd: string): Promise<SessionInfo> {
     this.sessionCwd = cwd;
     const raw = (await this.request('session/load', {

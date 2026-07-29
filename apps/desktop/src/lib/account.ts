@@ -17,6 +17,8 @@ export interface AccountSummary {
   onDemandCap?: number | null;
   periodEnd?: string | null;
   productUsage?: Array<{ product: string; usagePercent?: number | null }> | null;
+  /** Server-confirmed cached preference; true means coding data sharing is off. */
+  codingDataRetentionOptOut?: boolean | null;
   quotaNote: string;
 }
 
