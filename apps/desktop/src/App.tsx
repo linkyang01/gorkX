@@ -1911,7 +1911,14 @@ function App() {
     const detail = error instanceof Error ? error.message : String(error);
     patchThread(threadId, { busy: false, error: detail });
     appendLine(threadId, { id: nid(), role: 'system', text: t('taskFailedVisible') });
-  }, [appendLine, patchThread]);
+    // Account information can otherwise remain a stale cached success while
+    // the engine has just proved that its OAuth session cannot be refreshed.
+    // Refresh through the same authenticated account path so the sidebar tells
+    // the truth (and never fabricate quota or a logged-in state).
+    if (requiresAccountReauthentication(detail)) {
+      void refreshAccount();
+    }
+  }, [appendLine, patchThread, refreshAccount]);
 
   const appendOrMerge = useCallback(
     (
