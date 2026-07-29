@@ -868,7 +868,8 @@ pub fn config_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{catalog_model_ids, has_generated_text, model_catalog_url, validate_base_url};
+    use super::{catalog_model_ids, has_generated_text, model_catalog_url, parse_inline_table_assign, toml_inline_table, validate_base_url};
+    use std::collections::BTreeMap;
 
     #[test]
     fn accepts_https_and_local_http_model_endpoints() {
@@ -881,6 +882,24 @@ mod tests {
         assert!(validate_base_url("https://token@example.com/v1").is_err());
         assert!(validate_base_url("https://api.example.com/v1?api_key=nope").is_err());
         assert!(validate_base_url("file:///tmp/model").is_err());
+    }
+
+    #[test]
+    fn round_trips_native_provider_request_maps() {
+        let mut values = BTreeMap::new();
+        values.insert("api-version".to_string(), "2026-07-22".to_string());
+        values.insert("X-Workspace".to_string(), "research".to_string());
+        let rendered = toml_inline_table(&values).expect("safe request map");
+        let parsed = parse_inline_table_assign(&format!("query_params = {rendered}"), "query_params")
+            .expect("parse emitted inline table");
+        assert_eq!(parsed, values);
+    }
+
+    #[test]
+    fn rejects_multiline_provider_request_values() {
+        let mut values = BTreeMap::new();
+        values.insert("X-Test".to_string(), "unsafe\nvalue".to_string());
+        assert!(toml_inline_table(&values).is_err());
     }
 
     #[test]
