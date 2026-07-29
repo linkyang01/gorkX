@@ -164,9 +164,14 @@ child.stdout.on('data', (chunk) => {
   }
 });
 
-// Resource smoke deliberately permits a full model turn; all other protocol
-// gates retain the short fail-fast process ceiling.
-const timeout = setTimeout(() => child.kill('SIGKILL'), resourceSmoke || btwSmoke ? 150_000 : 20_000);
+// Resource smoke deliberately permits a full model turn. Authenticated control
+// gates still send no model request, but OAuth refresh/keychain recovery can
+// legitimately take longer than an unauthenticated initialize; do not kill a
+// healthy session while it is restoring credentials.
+const timeout = setTimeout(
+  () => child.kill('SIGKILL'),
+  resourceSmoke || btwSmoke ? 150_000 : authenticated ? 60_000 : 20_000,
+);
 function request(method, params, timeoutMs = 8_000) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
