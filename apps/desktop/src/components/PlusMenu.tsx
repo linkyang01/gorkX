@@ -18,6 +18,7 @@ export type PlusAction =
   | { type: 'memory-panel' }
   | { type: 'plan-toggle'; on: boolean }
   | { type: 'explore-mode'; on: boolean }
+  | { type: 'task-memory'; on: boolean }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'task-info' }
@@ -56,6 +57,8 @@ interface Props {
   planModeOn: boolean;
   /** `explore` is a new-task-only, kernel-owned read-only profile. */
   exploreModeOn?: boolean;
+  /** New task only: the kernel's supported --no-memory process option. */
+  taskMemoryEnabled?: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
   /** Show image edit only after the user has actually staged an image. */
@@ -86,6 +89,7 @@ export function PlusMenu({
   home,
   planModeOn,
   exploreModeOn = false,
+  taskMemoryEnabled = true,
   skills,
   hasActiveSession,
   hasImageAttachment = false,
@@ -210,6 +214,13 @@ export function PlusMenu({
       title: exploreModeOn ? t('plusExploreOff') : t('plusExploreOn'),
       desc: t('plusExploreHint'),
       action: { type: 'explore-mode', on: !exploreModeOn } as PlusAction,
+    }] as Row[]) : []),
+    ...(home ? ([{
+      kind: 'action' as const,
+      id: 'task-memory',
+      title: taskMemoryEnabled ? t('plusTaskMemoryOff') : t('plusTaskMemoryOn'),
+      desc: taskMemoryEnabled ? t('plusTaskMemoryOffHint') : t('plusTaskMemoryOnHint'),
+      action: { type: 'task-memory', on: !taskMemoryEnabled } as PlusAction,
     }] as Row[]) : []),
     {
       kind: 'action',

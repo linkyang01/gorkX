@@ -710,6 +710,7 @@ export class AcpClient {
     workingDirectory?: string,
     webSearchEnabled = true,
     maxTurns?: number | null,
+    memoryEnabled = true,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
@@ -718,6 +719,7 @@ export class AcpClient {
       workingDirectory: workingDirectory ?? null,
       webSearchEnabled,
       maxTurns: Number.isInteger(maxTurns) && (maxTurns ?? 0) >= 1 && (maxTurns ?? 0) <= 200 ? maxTurns : null,
+      memoryEnabled,
     });
     const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();

@@ -24,6 +24,8 @@ export interface ThreadMeta {
   worktreePath?: string | null;
   effort: ReasoningEffort;
   chatMode: 'agent' | 'plan';
+  /** Whether this task may use Grok Build and gorkX cross-task memory. */
+  memoryEnabled?: boolean;
   updatedAt: number;
   /** optional project path when loaded from sqlite */
   project?: string;
@@ -93,6 +95,7 @@ async function migrateLocalStorageOnce(): Promise<void> {
             worktreePath: m.worktreePath ?? null,
             effort: m.effort || 'high',
             chatMode: m.chatMode || 'agent',
+            memoryEnabled: m.memoryEnabled !== false,
             updatedAt: m.updatedAt || Date.now(),
           },
         });
@@ -114,6 +117,7 @@ function rowToMeta(r: {
   worktreePath?: string | null;
   effort: string;
   chatMode: string;
+  memoryEnabled?: boolean;
   updatedAt: number;
   archived?: boolean;
   sessionGoalText?: string | null;
@@ -130,6 +134,7 @@ function rowToMeta(r: {
     worktreePath: r.worktreePath,
     effort: (r.effort as ReasoningEffort) || 'high',
     chatMode: r.chatMode === 'plan' ? 'plan' : 'agent',
+    memoryEnabled: r.memoryEnabled !== false,
     updatedAt: r.updatedAt,
     archived: Boolean(r.archived),
     sessionGoalText: r.sessionGoalText ?? null,
@@ -154,6 +159,7 @@ export async function loadThreadMetas(project: string): Promise<ThreadMeta[]> {
           worktreePath?: string | null;
           effort: string;
           chatMode: string;
+          memoryEnabled?: boolean;
           updatedAt: number;
           archived?: boolean;
           sessionGoalText?: string | null;
@@ -183,6 +189,7 @@ export async function searchThreadHistory(query: string, limit = 36): Promise<Th
       worktreePath?: string | null;
       effort: string;
       chatMode: string;
+      memoryEnabled?: boolean;
       updatedAt: number;
       archived?: boolean;
       sessionGoalText?: string | null;
@@ -215,6 +222,7 @@ export async function upsertThreadMeta(project: string, meta: ThreadMeta): Promi
     worktreePath: meta.worktreePath ?? null,
     effort: meta.effort,
     chatMode: meta.chatMode,
+    memoryEnabled: meta.memoryEnabled !== false,
     updatedAt: Date.now(),
     archived: Boolean(meta.archived),
     sessionGoalText: meta.sessionGoalText ?? null,

@@ -345,6 +345,8 @@ interface Thread {
   userTurnCount?: number;
   /** Active /goal for this task (banner + persist; agent owns execution) */
   sessionGoal?: SessionGoal | null;
+  /** This task was started with Grok Build cross-task memory disabled. */
+  memoryEnabled?: boolean;
   /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
   lastEventAt?: number;
 }
@@ -482,6 +484,7 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     projectKey: projectScopeKey(m.project),
     archived: Boolean(m.archived),
     effort: m.effort || 'high',
+    memoryEnabled: m.memoryEnabled !== false,
     updatedAt: m.updatedAt || Date.now(),
     sessionGoal: fromMeta || fromLines,
   };
@@ -517,6 +520,14 @@ function App() {
     return localStorage.getItem('gorkx.chatMode') === 'plan' ? 'plan' : 'agent';
   });
   const [newTaskProfile, setNewTaskProfile] = useState<NewTaskProfile>(() => localStorage.getItem('gorkx.newTaskProfile') || 'default');
+  /** A per-task choice; false maps to Grok Build's real `--no-memory` flag. */
+  const [newTaskMemoryEnabled, setNewTaskMemoryEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.newTaskMemoryEnabled') !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [effort, setEffort] = useState<ReasoningEffort>(() => {
     const v = localStorage.getItem('gorkx.effort');
     return v === 'low' || v === 'medium' || v === 'high' ? v : 'high';
@@ -1785,6 +1796,7 @@ function App() {
       worktreePath: th.worktreePath,
       effort: th.effort,
       chatMode: th.chatMode,
+      memoryEnabled: th.memoryEnabled !== false,
       updatedAt: Date.now(),
       archived: Boolean(th.archived),
       project: th.projectKey,
@@ -2452,7 +2464,7 @@ function App() {
     [],
   );
 
-  const bootstrapClient = useCallback(async (workingDirectory?: string) => {
+  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true) => {
     const client = await AcpClient.start(
       perm,
       grokCmd || undefined,
@@ -2460,6 +2472,7 @@ function App() {
       workingDirectory || project || undefined,
       webSearchEnabled,
       maxAgentTurns,
+      memoryEnabled,
     );
     await client.initialize();
     await client.authenticate('cached_token');
@@ -3149,6 +3162,14 @@ function App() {
       case 'explore-mode':
         setNewTaskProfile(action.on ? 'explore' : 'default');
         return;
+      case 'task-memory':
+        setNewTaskMemoryEnabled(action.on);
+        try {
+          localStorage.setItem('gorkx.newTaskMemoryEnabled', action.on ? '1' : '0');
+        } catch {
+          /* local preference is optional */
+        }
+        return;
       case 'fork-session':
         setPlusMenuOpen(false);
         await forkActiveSession();
@@ -3542,6 +3563,7 @@ function App() {
     const initialDisplay = (opts?.initialDisplay || '').trim();
     const initialAttachments = opts?.initialAttachments || [];
     const selectedProfile = opts?.profileOverride ?? newTaskProfile;
+    const memoryEnabled = newTaskMemoryEnabled;
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
@@ -3578,13 +3600,14 @@ function App() {
         projectKey: scope,
         worktreePath: null,
         effort,
+        memoryEnabled,
         archived: false,
         updatedAt: createdAt,
       },
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient(cwdBase);
+      const client = await bootstrapClient(cwdBase, memoryEnabled);
       wireClient(id, client);
       const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile, cwdBase));
       rememberModels(session);
@@ -3650,10 +3673,12 @@ function App() {
       const mid = selectedModelId;
       // Hermes: load durable memory for first prompt injection
       let memInject = '';
-      try {
-        memInject = await fetchMemoryInjection(project || undefined);
-      } catch {
-        memInject = '';
+      if (memoryEnabled) {
+        try {
+          memInject = await fetchMemoryInjection(project || undefined);
+        } catch {
+          memInject = '';
+        }
       }
       // Title is fixed at create (seedTitle). Do not rewrite after agent runs.
       patchThread(id, {
@@ -3669,6 +3694,7 @@ function App() {
         memoryInject: memInject || null,
         memoryInjected: false,
         userTurnCount: 0,
+        memoryEnabled,
       });
 
       // Home-style: first message creates the session
@@ -3716,11 +3742,13 @@ function App() {
         } finally {
           patchThread(id, { busy: false });
           // Auto-learn: persist session dump after first turn
-          void recordSessionMemory(
-            project || undefined,
-            seedTitle,
-            userVisible.slice(0, 2000),
-          );
+          if (memoryEnabled) {
+            void recordSessionMemory(
+              project || undefined,
+              seedTitle,
+              userVisible.slice(0, 2000),
+            );
+          }
         }
       }
       return { ok: true };
@@ -4603,6 +4631,7 @@ function App() {
         cwd || project || undefined,
         webSearchEnabled,
         maxAgentTurns,
+        active.memoryEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -4714,6 +4743,7 @@ function App() {
         th.cwd || project || undefined,
         webSearchEnabled,
         maxAgentTurns,
+        th.memoryEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -5983,6 +6013,7 @@ function App() {
                         home
                         planModeOn={chatMode === 'plan'}
                         exploreModeOn={newTaskProfile === 'explore'}
+                        taskMemoryEnabled={newTaskMemoryEnabled}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
@@ -6016,6 +6047,16 @@ function App() {
                         onClick={() => setNewTaskProfile('default')}
                       >
                         {t('modeExplore')}
+                      </button>
+                    ) : null}
+                    {!newTaskMemoryEnabled ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('plusTaskMemoryOffHint')}
+                        onClick={() => void handlePlusAction({ type: 'task-memory', on: true })}
+                      >
+                        {t('plusTaskMemoryOff')}
                       </button>
                     ) : null}
                     {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' && (!newTaskProfile.startsWith('project:') || Boolean(projectRoleNameForCwd(newTaskProfile, project))) ? (
@@ -6825,6 +6866,7 @@ function App() {
                       <PlusMenu
                         open={plusMenuOpen}
                         planModeOn={(active.chatMode ?? chatMode) === 'plan'}
+                        taskMemoryEnabled={active.memoryEnabled !== false}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
