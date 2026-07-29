@@ -6264,38 +6264,6 @@ function App() {
                 </>
               ) : null}
             </header>
-            {active.error ? (
-              <div
-                className="hint"
-                role="alert"
-                style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 24px 10px' }}
-              >
-                <span>{requiresAccountReauthentication(active.error) ? t('accountSignInAgain') : t('taskFailedVisible')}</span>
-                {requiresAccountReauthentication(active.error) ? (
-                  <button
-                    type="button"
-                    className="btn btn-sm primary-sm"
-                    disabled={taskReauthBusy}
-                    onClick={() => void reauthenticateTask(active.id)}
-                  >
-                    {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
-                  </button>
-                ) : null}
-                <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(true)}>
-                  {t('taskErrorDetails')}
-                </button>
-                {!active.client ? (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={active.busy}
-                    onClick={() => void reconnectThread(active.id).catch(() => {})}
-                  >
-                    {t('taskErrorReconnect')}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
             {/* Goal console: persist + /goal subcommands + plan-based progress */}
             {active.sessionGoal ? (
               <div
@@ -6442,6 +6410,39 @@ function App() {
                   </button>
                 ) : null}
               </div>
+            ) : null}
+            {active.error ? (
+              <section className="task-error-card" role="alert" aria-label={t('taskErrorDialogTitle')}>
+                <div>
+                  <strong>{requiresAccountReauthentication(active.error) ? t('accountSignInAgain') : t('taskFailedVisible')}</strong>
+                  <p>{t('taskErrorDialogHint')}</p>
+                </div>
+                <div className="task-error-card-actions">
+                  {requiresAccountReauthentication(active.error) ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      disabled={taskReauthBusy}
+                      onClick={() => void reauthenticateTask(active.id)}
+                    >
+                      {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
+                    </button>
+                  ) : null}
+                  <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(true)}>
+                    {t('taskErrorDetails')}
+                  </button>
+                  {!active.client ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={active.busy}
+                      onClick={() => void reconnectThread(active.id).catch(() => {})}
+                    >
+                      {t('taskErrorReconnect')}
+                    </button>
+                  ) : null}
+                </div>
+              </section>
             ) : null}
             <ProcessPanel
               open={processOpen}

@@ -1434,6 +1434,49 @@ button.pill:hover {
   color: var(--status-danger);
 }
 
+/* A failed task must not collapse into a red status dot. Keep recovery and
+ * exact diagnostics in the conversation where the person is already looking. */
+.task-error-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 var(--chat-gutter) 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--status-danger) 38%, var(--glass-border-dim));
+  border-radius: var(--radius-md);
+  background: var(--status-danger-soft);
+  color: var(--text);
+}
+
+.task-error-card strong {
+  display: block;
+  font-size: 13px;
+}
+
+.task-error-card p {
+  margin: 3px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.task-error-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  flex: none;
+}
+
+@media (max-width: 680px) {
+  .task-error-card {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
 .pill.warn-pill {
   background: var(--status-warn-soft);
   color: var(--status-warn);
