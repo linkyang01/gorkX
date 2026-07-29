@@ -6011,6 +6011,16 @@ function App() {
                         {t('modeExplore')}
                       </button>
                     ) : null}
+                    {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('taskRoleActiveHint')}
+                        onClick={() => { setSettingsInitialSection('agents'); setKernelOpen(true); }}
+                      >
+                        {newTaskProfile.startsWith('project:') ? t('taskRoleProject') : t('taskRoleCustom')}
+                      </button>
+                    ) : null}
                   </div>
                   <div className="composer-toolbar-right">
                     <div className="composer-model-wrap">

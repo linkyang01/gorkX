@@ -67,6 +67,9 @@ const dict = {
     voiceErrorRebuild:
       'App is missing mic permission strings — restart gorkX after a full rebuild (not only hot reload).',
     thinking: 'Thinking',
+    taskRoleCustom: 'Task role',
+    taskRoleProject: 'Project role',
+    taskRoleActiveHint: 'A native Grok Build role will be used for the next new task. Click to change it.',
     tools: 'Tools',
     statusOffline: 'Grok offline',
     statusReady: 'Ready',
@@ -1574,6 +1577,9 @@ const dict = {
     voiceErrorRebuild:
       '应用缺少麦克风权限说明（开发模式需完整重新编译，仅热更新不够）。正在重启后即可。',
     thinking: '思考',
+    taskRoleCustom: '任务角色',
+    taskRoleProject: '项目角色',
+    taskRoleActiveHint: '下一次新建任务将使用 Grok Build 原生角色；点击可调整。',
     tools: '工具',
     statusOffline: '未就绪',
     statusReady: '就绪',
