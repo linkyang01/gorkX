@@ -362,6 +362,7 @@ export function SettingsPanel({
   const [agentRoleName, setAgentRoleName] = useState('');
   const [agentRoleDescription, setAgentRoleDescription] = useState('');
   const [agentRoleInstructions, setAgentRoleInstructions] = useState('');
+  const [editingAgentName, setEditingAgentName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1042,9 +1043,9 @@ export function SettingsPanel({
     if (!agentRoleName.trim()) { setMsg(t('settingsAgentRoleNameRequired')); return; }
     setAgentProfileBusy(true);
     try {
-      const saved = await saveAgentProfile(agentRoleName, agentRoleDescription, agentRoleInstructions);
+      const saved = await saveAgentProfile(agentRoleName, agentRoleDescription, agentRoleInstructions, editingAgentName || undefined);
       setAgentProfiles((current) => [...current.filter((item) => item.name !== saved.name), saved].sort((a, b) => a.name.localeCompare(b.name)));
-      setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions('');
+      setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions(''); setEditingAgentName(null);
       onNewTaskProfile(saved.name);
       setMsg(t('settingsAgentRoleSaved'));
     } catch (error) { setMsg(error instanceof Error ? error.message : String(error)); }
@@ -1453,15 +1454,15 @@ export function SettingsPanel({
                   {agentProfiles.map((profile) => <option key={profile.name} value={profile.name}>{profile.displayName} — {profile.description}</option>)}
                 </select>
               </div>
-              <h3 className="subhead">{t('settingsAgentCreate')}</h3>
+              <h3 className="subhead">{editingAgentName ? t('settingsAgentEdit') : t('settingsAgentCreate')}</h3>
               <div className="settings-card">
                 <p className="hint">{t('settingsAgentCreateHint')}</p>
                 <input className="settings-input" value={agentRoleName} maxLength={80} placeholder={t('settingsAgentRoleName')} onChange={(event) => setAgentRoleName(event.target.value)} />
                 <input className="settings-input" style={{ marginTop: 8 }} value={agentRoleDescription} maxLength={240} placeholder={t('settingsAgentRoleDescription')} onChange={(event) => setAgentRoleDescription(event.target.value)} />
                 <textarea className="settings-textarea" style={{ marginTop: 8 }} rows={6} value={agentRoleInstructions} maxLength={12000} placeholder={t('settingsAgentRoleInstructions')} onChange={(event) => setAgentRoleInstructions(event.target.value)} />
-                <div className="field-row" style={{ marginTop: 8 }}><button type="button" className="btn primary" disabled={agentProfileBusy} onClick={() => void saveAgentRole()}>{agentProfileBusy ? t('settingsAgentSaving') : t('settingsAgentSave')}</button></div>
+                <div className="field-row" style={{ marginTop: 8 }}><button type="button" className="btn primary" disabled={agentProfileBusy} onClick={() => void saveAgentRole()}>{agentProfileBusy ? t('settingsAgentSaving') : t('settingsAgentSave')}</button>{editingAgentName ? <button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setEditingAgentName(null); setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions(''); }}>{t('cancel')}</button> : null}</div>
               </div>
-              {agentProfiles.filter((profile) => profile.editable).length ? <div className="settings-card"><div className="settings-row-title">{t('settingsAgentCreated')}</div>{agentProfiles.filter((profile) => profile.editable).map((profile) => <div className="settings-row" key={profile.name}><div><strong>{profile.displayName}</strong><div className="settings-row-hint">{profile.description}</div></div><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setAgentProfileBusy(true); void removeAgentProfile(profile.name).then(() => { setAgentProfiles((current) => current.filter((item) => item.name !== profile.name)); if (newTaskProfile === profile.name) onNewTaskProfile('default'); setMsg(t('settingsAgentRemoved')); }).catch((error) => setMsg(error instanceof Error ? error.message : String(error))).finally(() => setAgentProfileBusy(false)); }}>{t('settingsRemove')}</button></div>)}</div> : null}
+              {agentProfiles.filter((profile) => profile.editable).length ? <div className="settings-card"><div className="settings-row-title">{t('settingsAgentCreated')}</div>{agentProfiles.filter((profile) => profile.editable).map((profile) => <div className="settings-row" key={profile.name}><div><strong>{profile.displayName}</strong><div className="settings-row-hint">{profile.description}</div></div><div className="field-row"><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { const body = profile.content?.replace(/^[\s\S]*?\n---\n?/, '') || ''; setEditingAgentName(profile.name); setAgentRoleName(profile.displayName); setAgentRoleDescription(profile.description); setAgentRoleInstructions(body.trim()); }}>{t('settingsEdit')}</button><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setAgentProfileBusy(true); void removeAgentProfile(profile.name).then(() => { setAgentProfiles((current) => current.filter((item) => item.name !== profile.name)); if (newTaskProfile === profile.name) onNewTaskProfile('default'); setMsg(t('settingsAgentRemoved')); }).catch((error) => setMsg(error instanceof Error ? error.message : String(error))).finally(() => setAgentProfileBusy(false)); }}>{t('settingsRemove')}</button></div></div>)}</div> : null}
             </>
           ) : null}
 

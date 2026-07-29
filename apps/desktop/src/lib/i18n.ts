@@ -935,6 +935,7 @@ const dict = {
     settingsAgentStandard: 'Standard assistant',
     settingsAgentExplore: 'Explore (read-only research)',
     settingsAgentCreate: 'Create a task role',
+    settingsAgentEdit: 'Edit task role',
     settingsAgentCreateHint: 'The role is saved in gorkX’s private GROK_HOME and loaded directly by the bundled kernel.',
     settingsAgentRoleName: 'Role name, e.g. Report writer',
     settingsAgentRoleNameRequired: 'Enter a role name.',
@@ -945,6 +946,7 @@ const dict = {
     settingsAgentRoleSaved: 'Role saved and selected for new tasks.',
     settingsAgentCreated: 'Roles created in gorkX',
     settingsAgentRemoved: 'Role removed.',
+    settingsEdit: 'Edit',
     settingsRemove: 'Remove',
     settingsPersonalizationHint:
       'Help the agent learn how you like to work—preferences, habits, and project conventions.',
@@ -2432,6 +2434,7 @@ const dict = {
     settingsAgentStandard: '标准助手',
     settingsAgentExplore: '探索（只读调研）',
     settingsAgentCreate: '创建任务角色',
+    settingsAgentEdit: '编辑任务角色',
     settingsAgentCreateHint: '角色保存到 gorkX 私有的 GROK_HOME，由内置内核直接读取。',
     settingsAgentRoleName: '角色名称，例如「报告撰写」',
     settingsAgentRoleNameRequired: '请填写角色名称。',
@@ -2442,6 +2445,7 @@ const dict = {
     settingsAgentRoleSaved: '角色已保存，并用于后续新任务。',
     settingsAgentCreated: '在 gorkX 中创建的角色',
     settingsAgentRemoved: '角色已移除。',
+    settingsEdit: '编辑',
     settingsRemove: '移除',
     settingsPersonalizationHint:
       '让助手越来越懂你的习惯、偏好和项目约定。',

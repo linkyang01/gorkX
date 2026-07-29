@@ -87,7 +87,7 @@ pub fn agent_profiles_list() -> Result<Vec<AgentProfileSummary>, String> {
 }
 
 #[tauri::command]
-pub fn agent_profile_save(display_name: String, description: String, instructions: String) -> Result<AgentProfileSummary, String> {
+pub fn agent_profile_save(display_name: String, description: String, instructions: String, existing_name: Option<String>) -> Result<AgentProfileSummary, String> {
     let display_name = display_name.trim().replace(['\r', '\n'], " ");
     if display_name.is_empty() || display_name.chars().count() > 80 { return Err("Role name must be between 1 and 80 characters.".into()); }
     let description = description.trim().replace('\n', " ");
@@ -97,9 +97,14 @@ pub fn agent_profile_save(display_name: String, description: String, instruction
     let dir = agents_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("create agent profiles folder: {e}"))?;
     refuse_symlink(&dir)?;
-    let stem = display_name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
-    let stem = stem.trim_matches('-');
-    let name = if stem.is_empty() { format!("{PREFIX}role-{:x}", chrono::Utc::now().timestamp_millis()) } else { format!("{PREFIX}{}", &stem[..stem.len().min(60)]) };
+    let derived_stem = display_name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
+    let derived_stem = derived_stem.trim_matches('-');
+    let name = match existing_name.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if value.starts_with(PREFIX) && is_safe_name(value) => value.to_string(),
+        Some(_) => return Err("Only a gorkX-created role can be edited here.".into()),
+        None if derived_stem.is_empty() => format!("{PREFIX}role-{:x}", chrono::Utc::now().timestamp_millis()),
+        None => format!("{PREFIX}{}", &derived_stem[..derived_stem.len().min(60)]),
+    };
     if !is_safe_name(&name) { return Err("Role name is not supported.".into()); }
     let path = dir.join(format!("{name}.md"));
     refuse_symlink(&path)?;
