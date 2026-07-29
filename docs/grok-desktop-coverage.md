@@ -19,6 +19,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Plan mode | ACP mode, Review plan and execute/retry controls | 🟡 engine plan quality decides the result |
 | Native subagents | Persisted tree from lifecycle updates; `_x.ai/subagent/list_running` reconciliation after reconnect; get/cancel controls | 🟡 kernel decides delegation and isolation; isolated ACP gate confirms the three control routes, but a real delegated coding task remains a release acceptance scenario |
 | Compact | Native ACP compact button plus automatic threshold handling | 🟡 engine decides compaction availability |
+| Current-task usage | Task information panel → native session usage read | 🟡 aggregate tokens and cost appear only when the active Grok Build session supplies them; no cost is inferred from subscription quota or local daily counters |
 | Quick start | Settings → General → Quick start; native walkthrough of visible desktop controls | ✅ does not depend on a slash command or create an engine task |
 | Slash + skills | Live advertised commands first, local desktop commands second | ✅ |
 | Export | Toolbar / `+` menu file save; `/export` remains keyboard compatibility | ✅ |

@@ -172,6 +172,19 @@ export interface SessionSnapshot {
   };
 }
 
+/** Read-only aggregate returned by Grok Build's native session-usage extension. */
+export interface SessionUsageSnapshot {
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedReadTokens?: number;
+  reasoningTokens?: number;
+  /** Present only when the engine reports a complete aggregate cost. */
+  totalCostUsd?: number;
+  costIsPartial?: boolean;
+  usageIsIncomplete?: boolean;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -1207,6 +1220,57 @@ export class AcpClient {
     const info = value as SessionSnapshot;
     if (!info.sessionId || !info.cwd || !info.context) throw new Error('Kernel returned an incomplete task info snapshot');
     return info;
+  }
+
+  /**
+   * Read a completed session's aggregate usage without prompting the model.
+   * Cost is intentionally optional: Grok Build omits it when a complete total
+   * is unavailable, and callers must never turn a missing cost into zero.
+   */
+  async getSessionUsage(sessionId: string): Promise<SessionUsageSnapshot> {
+    let raw: unknown;
+    try {
+      raw = await this.request('x.ai/session/usage', { sessionId }, 15_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('_x.ai/session/usage', { sessionId }, 15_000);
+    }
+    const result = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    const root = result && typeof result === 'object' ? result as Record<string, unknown> : null;
+    const usage = root?.usage && typeof root.usage === 'object'
+      ? root.usage as Record<string, unknown>
+      : root;
+    if (!usage) throw new Error('Kernel returned an invalid session usage snapshot');
+    const number = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = usage[key] ?? root?.[key];
+        if (typeof value === 'number' && Number.isFinite(value)) return value;
+      }
+      return undefined;
+    };
+    const boolean = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = usage[key] ?? root?.[key];
+        if (typeof value === 'boolean') return value;
+      }
+      return undefined;
+    };
+    const snapshot: SessionUsageSnapshot = {
+      totalTokens: number('totalTokens', 'total_tokens'),
+      inputTokens: number('inputTokens', 'input_tokens'),
+      outputTokens: number('outputTokens', 'output_tokens'),
+      cachedReadTokens: number('cachedReadTokens', 'cached_read_tokens', 'cacheReadInputTokens', 'cache_read_input_tokens'),
+      reasoningTokens: number('reasoningTokens', 'reasoning_tokens', 'thoughtTokens', 'thought_tokens'),
+      totalCostUsd: number('totalCostUsd', 'total_cost_usd'),
+      costIsPartial: boolean('costIsPartial', 'cost_is_partial'),
+      usageIsIncomplete: boolean('usageIsIncomplete', 'usage_is_incomplete'),
+    };
+    if (Object.values(snapshot).every((value) => value == null)) {
+      throw new Error('Kernel returned an empty session usage snapshot');
+    }
+    return snapshot;
   }
 
   /** Create a kernel-managed share link. Callers must confirm with the user

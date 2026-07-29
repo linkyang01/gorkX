@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AcpClient, SessionSnapshot } from '../lib/acpClient';
+import type { AcpClient, SessionSnapshot, SessionUsageSnapshot } from '../lib/acpClient';
 import { formatTaskModelDisplay } from '../lib/modelVerify';
 import { t } from '../lib/i18n';
 
@@ -16,6 +16,11 @@ interface Props {
 
 function number(value: number | undefined) {
   return typeof value === 'number' ? value.toLocaleString() : '—';
+}
+
+function usd(value: number | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 6 }).format(value);
 }
 
 /** A readable desktop surface for the engine's read-only session snapshot. */
@@ -39,12 +44,14 @@ export function TaskInfoPanel({
   localProviderLabel,
 }: Props) {
   const [info, setInfo] = useState<SessionSnapshot | null>(null);
+  const [usage, setUsage] = useState<SessionUsageSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!client || !sessionId) {
       setInfo(null);
+      setUsage(null);
       setError(null);
       return;
     }
@@ -52,8 +59,16 @@ export function TaskInfoPanel({
     setError(null);
     try {
       setInfo(await client.getSessionInfo(sessionId));
+      // Session usage is optional on older / policy-restricted engine builds.
+      // The task-info snapshot stays useful when this read-only extension is absent.
+      try {
+        setUsage(await client.getSessionUsage(sessionId));
+      } catch {
+        setUsage(null);
+      }
     } catch (cause) {
       setInfo(null);
+      setUsage(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setLoading(false);
@@ -121,6 +136,24 @@ export function TaskInfoPanel({
               <div><span>{t('taskInfoToolCalls')}</span><strong>{number(context?.toolCallCount)}</strong></div>
             </div>
           </section>
+          {usage ? (
+            <section className="task-info-context task-info-session-usage">
+              <div className="task-info-context-head"><strong>{t('taskInfoSessionUsage')}</strong></div>
+              <div className="task-info-grid task-info-metrics">
+                <div><span>{t('taskInfoTokens')}</span><strong>{number(usage.totalTokens)}</strong></div>
+                <div><span>{t('taskInfoInputTokens')}</span><strong>{number(usage.inputTokens)}</strong></div>
+                <div><span>{t('taskInfoOutputTokens')}</span><strong>{number(usage.outputTokens)}</strong></div>
+                <div><span>{t('taskInfoCachedTokens')}</span><strong>{number(usage.cachedReadTokens)}</strong></div>
+              </div>
+              {usage.totalCostUsd != null ? (
+                <div className="task-info-cost">
+                  <span>{t('taskInfoCost')}</span><strong>{usd(usage.totalCostUsd)}</strong>
+                  {usage.costIsPartial ? <small>{t('taskInfoCostPartial')}</small> : null}
+                </div>
+              ) : null}
+              {usage.usageIsIncomplete ? <p className="hint">{t('taskInfoUsageIncomplete')}</p> : null}
+            </section>
+          ) : null}
           <div className="task-info-path"><span>{t('taskInfoFolder')}</span><code>{info.cwd}</code></div>
         </div> : null}
       </section>
