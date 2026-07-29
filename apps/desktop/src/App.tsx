@@ -607,6 +607,9 @@ function App() {
   const [deliverablesOpen, setDeliverablesOpen] = useState(false);
   /** An engine failure must remain inspectable; a red badge alone is not useful. */
   const [taskErrorOpen, setTaskErrorOpen] = useState(false);
+  /** Local projection of Grok Build's current-session prompt history. */
+  const [promptHistoryOpen, setPromptHistoryOpen] = useState(false);
+  const [promptHistoryIndex, setPromptHistoryIndex] = useState(-1);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -1790,6 +1793,20 @@ function App() {
       ),
     );
   }, []);
+
+  const activePromptHistory = useMemo(() => {
+    const seen = new Set<string>();
+    return (active?.lines ?? [])
+      .filter((line) => line.role === 'user' && line.text.trim())
+      .map((line) => line.text.trim())
+      .reverse()
+      .filter((text) => {
+        if (seen.has(text)) return false;
+        seen.add(text);
+        return true;
+      })
+      .slice(0, 30);
+  }, [active?.lines]);
 
   /**
    * Keep the technical error available on demand, while always leaving a
@@ -3097,6 +3114,9 @@ function App() {
         return;
       case 'task-info':
         setTaskInfoOpen(true);
+        return;
+      case 'prompt-history':
+        setPromptHistoryOpen(true);
         return;
       case 'compact-session':
         await compactActiveSession();
@@ -5818,6 +5838,7 @@ function App() {
                   onChange={(e) => {
                     const v = e.target.value;
                     setDraft(v);
+                    setPromptHistoryIndex(-1);
                     setSlashOpen(v.startsWith('/') && !v.includes('\n'));
                     if (
                       capabilityArm &&
@@ -5835,6 +5856,28 @@ function App() {
                   rows={2}
                   onKeyDown={(e) => {
                     if (handleComposerMenuKeys(e)) return;
+                    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && activePromptHistory.length) {
+                      if (e.key === 'ArrowUp' && !draft.trim()) {
+                        e.preventDefault();
+                        setDraft(activePromptHistory[0]);
+                        setPromptHistoryIndex(0);
+                        return;
+                      }
+                      if (e.key === 'ArrowUp' && promptHistoryIndex >= 0) {
+                        e.preventDefault();
+                        const next = Math.min(promptHistoryIndex + 1, activePromptHistory.length - 1);
+                        setDraft(activePromptHistory[next]);
+                        setPromptHistoryIndex(next);
+                        return;
+                      }
+                      if (e.key === 'ArrowDown' && promptHistoryIndex >= 0) {
+                        e.preventDefault();
+                        const next = promptHistoryIndex - 1;
+                        setPromptHistoryIndex(next);
+                        setDraft(next >= 0 ? activePromptHistory[next] : '');
+                        return;
+                      }
+                    }
                     if (e.key === 'Escape') {
                       if (capabilityArm) {
                         setCapabilityArm(null);
@@ -6945,6 +6988,47 @@ function App() {
         projectCwd={active?.cwd || project || undefined}
         onClose={() => setPreviewAtt(null)}
       />
+
+      {promptHistoryOpen ? (
+        <div className="modal-backdrop" onClick={() => setPromptHistoryOpen(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('promptHistoryTitle')}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>{t('promptHistoryTitle')}</h2>
+              <button type="button" className="btn btn-sm" onClick={() => setPromptHistoryOpen(false)}>
+                {t('cancel')}
+              </button>
+            </div>
+            <p className="text-prompt-msg">{t('promptHistoryHint')}</p>
+            {activePromptHistory.length ? (
+              <div style={{ display: 'grid', gap: 6, maxHeight: 360, overflow: 'auto' }}>
+                {activePromptHistory.map((text, index) => (
+                  <button
+                    key={`${index}:${text}`}
+                    type="button"
+                    className="slash-item"
+                    style={{ textAlign: 'left' }}
+                    onClick={() => {
+                      setDraft(text);
+                      setPromptHistoryIndex(index);
+                      setPromptHistoryOpen(false);
+                    }}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="hint">{t('promptHistoryEmpty')}</div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {taskErrorOpen && active?.error ? (
         <div className="modal-backdrop" onClick={() => setTaskErrorOpen(false)}>

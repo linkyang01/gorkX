@@ -21,6 +21,7 @@ export type PlusAction =
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'task-info' }
+  | { type: 'prompt-history' }
   | { type: 'compact-session' }
   | { type: 'recap-session' }
   | { type: 'share-session' }
@@ -298,6 +299,13 @@ export function PlusMenu({
       title: t('taskInfoTitle'),
       desc: t('taskInfoMenuHint'),
       action: { type: 'task-info' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'prompt-history',
+      title: t('plusPromptHistory'),
+      desc: t('plusPromptHistoryHint'),
+      action: { type: 'prompt-history' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession && slashAllowed('/fork', availableCommandNames) ? ([{
       kind: 'action' as const,
