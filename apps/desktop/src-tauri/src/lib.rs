@@ -31,6 +31,11 @@ use tauri::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Remove the historical gorkX-only memory key before the bundled engine
+    // reads config.toml, preventing a known unrecognized-key startup warning.
+    if let Err(error) = memory::migrate_legacy_auto_learn_config() {
+        eprintln!("gorkX memory preference migration skipped: {error}");
+    }
     let pool = Arc::new(AgentPool::new());
     let terminals = Arc::new(TerminalPool::new());
     let ptys = Arc::new(pty::PtyPool::new());

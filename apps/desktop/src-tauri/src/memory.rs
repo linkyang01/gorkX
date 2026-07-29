@@ -1,7 +1,7 @@
 //! Hermes-style persistent memory under App GROK_HOME/memory.
 //! Layers: USER.md · AGENT.md · workspaces/<slug>/MEMORY.md · sessions/
 
-use crate::paths::{config_toml_path, ensure_dirs, memory_dir};
+use crate::paths::{app_support_dir, config_toml_path, ensure_dirs, memory_dir};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -35,6 +35,12 @@ fn memory_root() -> PathBuf {
 fn config_path() -> PathBuf {
     config_toml_path()
 }
+
+/// This is a gorkX-only preference, not a Grok Build config.toml key.
+fn auto_learn_settings_path() -> PathBuf { app_support_dir().join("memory-settings.json") }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AutoLearnSettings { auto_learn: bool }
 
 fn read_bool_in_section(section: &str, key: &str, default: bool) -> bool {
     let path = config_path();
@@ -142,7 +148,6 @@ fn repair_double_bracket_memory_section(path: &Path) -> Result<(), String> {
     }
     let mut out: Vec<String> = Vec::new();
     let mut enabled = true;
-    let mut auto_learn = true;
     let mut i = 0;
     let lines: Vec<&str> = raw.lines().collect();
     while i < lines.len() {
@@ -154,9 +159,6 @@ fn repair_double_bracket_memory_section(path: &Path) -> Result<(), String> {
                 if let Some(rest) = l.strip_prefix("enabled") {
                     let v = rest.trim().trim_start_matches('=').trim();
                     enabled = matches!(v, "true" | "1" | "yes");
-                } else if let Some(rest) = l.strip_prefix("auto_learn") {
-                    let v = rest.trim().trim_start_matches('=').trim();
-                    auto_learn = matches!(v, "true" | "1" | "yes");
                 }
                 i += 1;
             }
@@ -168,9 +170,8 @@ fn repair_double_bracket_memory_section(path: &Path) -> Result<(), String> {
     let mut body = out.join("\n");
     body = body.trim_end().to_string();
     body.push_str(&format!(
-        "\n\n[memory]\nenabled = {}\nauto_learn = {}\n",
+        "\n\n[memory]\nenabled = {}\n",
         if enabled { "true" } else { "false" },
-        if auto_learn { "true" } else { "false" },
     ));
     std::fs::write(path, body).map_err(|e| e.to_string())?;
     Ok(())
@@ -182,8 +183,54 @@ fn read_config_enabled() -> bool {
 }
 
 fn read_auto_learn() -> bool {
-    read_bool_in_section("[memory]", "auto_learn", true)
+    std::fs::read_to_string(auto_learn_settings_path()).ok()
+        .and_then(|raw| serde_json::from_str::<AutoLearnSettings>(&raw).ok())
+        .map(|settings| settings.auto_learn)
+        .unwrap_or(true)
 }
+
+fn write_auto_learn(enabled: bool) -> Result<(), String> {
+    let path = auto_learn_settings_path();
+    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
+    let body = serde_json::to_vec_pretty(&AutoLearnSettings { auto_learn: enabled }).map_err(|error| error.to_string())?;
+    std::fs::write(path, body).map_err(|error| error.to_string())
+}
+
+/// Strip only the historical key from the `[memory]` table, not other tables.
+fn strip_legacy_auto_learn(raw: &str) -> (String, Option<bool>) {
+    let mut in_memory = false;
+    let mut migrated = None;
+    let mut kept = Vec::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') { in_memory = trimmed == "[memory]"; }
+        if in_memory {
+            if let Some((key, value)) = trimmed.split_once('=') {
+                if key.trim() == "auto_learn" {
+                    let value = value.split('#').next().unwrap_or("").trim().to_ascii_lowercase();
+                    migrated = Some(matches!(value.as_str(), "true" | "1" | "yes"));
+                    continue;
+                }
+            }
+        }
+        kept.push(line);
+    }
+    let mut next = kept.join("\n");
+    if raw.ends_with('\n') && !next.ends_with('\n') { next.push('\n'); }
+    (next, migrated)
+}
+
+fn migrate_legacy_auto_learn() -> Result<(), String> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path).unwrap_or_default();
+    let (next, legacy) = strip_legacy_auto_learn(&raw);
+    let Some(legacy) = legacy else { return Ok(()) };
+    if !auto_learn_settings_path().is_file() { write_auto_learn(legacy)?; }
+    std::fs::write(path, next).map_err(|error| error.to_string())
+}
+
+/// Run before Grok Build starts so the engine never sees the obsolete key.
+pub fn migrate_legacy_auto_learn_config() -> Result<(), String> { ensure_dirs()?; migrate_legacy_auto_learn() }
 
 fn project_slug(project: &str) -> String {
     let p = project.trim();
@@ -255,10 +302,10 @@ pub fn ensure_memory_layout(project: Option<&str>) -> Result<(), String> {
     }
     // Ensure config has memory section with defaults if missing
     let _ = repair_double_bracket_memory_section(&config_path());
+    migrate_legacy_auto_learn()?;
     let cfg_raw = std::fs::read_to_string(config_path()).unwrap_or_default();
     if !config_path().exists() || !cfg_raw.contains("[memory]") {
         write_bool_in_section("memory", "enabled", true)?;
-        write_bool_in_section("memory", "auto_learn", true)?;
     }
     Ok(())
 }
@@ -423,7 +470,7 @@ pub fn memory_set_enabled(enabled: bool) -> Result<MemoryStatus, String> {
 
 #[tauri::command]
 pub fn memory_set_auto_learn(enabled: bool) -> Result<MemoryStatus, String> {
-    write_bool_in_section("[memory]", "auto_learn", enabled)?;
+    write_auto_learn(enabled)?;
     memory_status(None)
 }
 
@@ -1106,7 +1153,17 @@ fn compact_markdown_lines(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::strip_legacy_answer_mode_template;
+    use super::{strip_legacy_answer_mode_template, strip_legacy_auto_learn};
+
+    #[test]
+    fn legacy_auto_learn_is_removed_only_from_memory_section() {
+        let raw = "[memory]\nenabled = true\nauto_learn = false # app legacy\n\n[other]\nauto_learn = true\n";
+        let (next, migrated) = strip_legacy_auto_learn(raw);
+        assert_eq!(migrated, Some(false));
+        assert!(next.contains("[memory]\nenabled = true"));
+        assert!(!next.contains("auto_learn = false"));
+        assert!(next.contains("[other]\nauto_learn = true"));
+    }
 
     #[test]
     fn injection_omits_only_the_legacy_answer_mode_scaffold() {
