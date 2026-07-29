@@ -28,6 +28,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | `completions`, `wrap` | Not mirrored | Shell completion generation and OSC 52 forwarding solve external-terminal limitations; gorkX already has a native terminal dock and system clipboard. It does not pretend an arbitrary wrapped remote shell is an agent workflow. |
 | `agent`, `leader` | ACP bridge (internal) | gorkX starts and supervises its own `grok agent stdio` transport; it does not expose a second shared-server lifecycle to ordinary users. |
 | `setup` managed configuration | Settings: Environment → Managed configuration | gorkX first fetches read-only `setup --json`; only a successful current preview enables the installing form. The user sees a second confirmation, then gorkX invokes only exact `setup` in the App-owned `GROK_HOME` and asks them to reconnect tasks. |
+| `workspace status/start/pause/resume/stop` | Settings: Screen capture → Computer Hub workspace | Fixed actions only; status is read first and all state changes require confirmation because selected project content may be exposed to a server-gated remote hub. It is not local mouse/keyboard control. |
 | `update` | Settings: Update (gorkX release) | The bundled Grok Build binary is source-locked to a gorkX release. Users upgrade the app, not an independently mutable kernel. |
 
 When upgrading the bundled engine, compare its `BUILTIN_COMMANDS`, prompt

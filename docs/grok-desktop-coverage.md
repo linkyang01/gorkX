@@ -59,7 +59,8 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Chrome / Playwright MCP | Configure and diagnose version-pinned isolated MCP; optional origin allowlist | ✅ browser actions still depend on Chrome and the engine MCP runtime |
 | Source preview | Explicit HTTP(S) link opens in a separate native gorkX reading window | ✅ validates the URL and has no gorkX credential bridge; it is separate from the Agent's MCP Chrome profile |
 | Screenshot attach | Explicit macOS region picker → local PNG attachment | ✅ |
-| Computer automation | — | ❌ no background capture or mouse/keyboard control is shipped. The bundled Grok Build binary exposes terminal-TUI mouse reporting, not an ACP macOS-computer-control route; gorkX therefore keeps only the explicit screenshot picker. |
+| Computer Hub workspace | Settings → Screen capture → Computer Hub workspace | 🟡 fixed `workspace status/start/pause/resume/stop` actions are wired to the bundled Grok Build binary, require confirmation, and are still server/account-gated; exposing a project can make its content available to the remote service. |
+| Computer automation | — | ❌ no background screen capture or local mouse/keyboard control is shipped. Computer Hub workspace exposure is not represented as local computer control; gorkX keeps explicit screenshot capture for that use case. |
 
 ## Evidence gates
 
