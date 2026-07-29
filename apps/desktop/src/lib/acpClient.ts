@@ -476,8 +476,13 @@ export function folderTrustResult(outcome: 'trust' | 'reject') {
 function extMethodParams(method: string, rawParams: unknown): { method: string; params: Record<string, unknown> } {
   const outer = rawParams && typeof rawParams === 'object' ? rawParams as Record<string, unknown> : {};
   const wrapped = typeof outer.method === 'string' && outer.params && typeof outer.params === 'object';
+  // Grok Build has used both `x.ai/...` and `_x.ai/...` for extension
+  // envelopes. Normalize after unwrapping as well: otherwise a real
+  // ask-user-question request reaches the generic JSON-RPC fallback and the
+  // user never sees the desktop choice card.
+  const extensionMethod = wrapped ? String(outer.method) : method;
   return {
-    method: wrapped ? String(outer.method) : method.replace(/^_/, ''),
+    method: extensionMethod.replace(/^_/, ''),
     params: (wrapped ? outer.params : outer) as Record<string, unknown>,
   };
 }
