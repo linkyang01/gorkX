@@ -122,13 +122,7 @@ export function canAnswerApproval(opts: {
   );
 }
 
-/**
- * When BTW is not advertised, user guidance while busy is queued for the next free turn.
- */
-export function resolveBusyFollowUpMode(opts: {
-  busy: boolean;
-  btwAvailable: boolean;
-}): 'btw' | 'queue' | 'none' {
-  if (!opts.busy) return 'none';
-  return opts.btwAvailable ? 'btw' : 'queue';
+/** User guidance during a running task is queued for the next free turn. */
+export function resolveBusyFollowUpMode(opts: { busy: boolean }): 'queue' | 'none' {
+  return opts.busy ? 'queue' : 'none';
 }

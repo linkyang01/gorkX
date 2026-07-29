@@ -183,7 +183,6 @@ import {
   type ApprovalInboxRow,
 } from './components/ApprovalInboxPanel';
 import { RewindDialog } from './components/RewindDialog';
-import { BtwCard, type BtwCardState } from './components/BtwCard';
 import { AppBanners } from './components/AppBanners';
 import { SlashMenu } from './components/SlashMenu';
 import {
@@ -462,7 +461,6 @@ function App() {
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
   const [taskInfoOpen, setTaskInfoOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>();
-  const [btwCard, setBtwCard] = useState<BtwCardState | null>(null);
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -573,7 +571,7 @@ function App() {
   const [approvalQueue, setApprovalQueue] = useState<PendingApproval[]>([]);
   const [activeApprovalKey, setActiveApprovalKey] = useState<string | null>(null);
   const [approvalInboxOpen, setApprovalInboxOpen] = useState(false);
-  /** Per-task follow-up text queued until busy ends (when /btw is unavailable). */
+  /** Per-task follow-up text queued until busy ends. */
   const [queuedFollowUps, setQueuedFollowUps] = useState<Record<string, string>>({});
   /** User chose "keep waiting" — suppress stall banner until the next heartbeat gap. */
   const [stallSnoozeUntil, setStallSnoozeUntil] = useState<Record<string, number>>({});
@@ -842,13 +840,7 @@ function App() {
     setApprovalQueue((previous) => previous.filter((item) => item.key !== key));
     setActiveApprovalKey((previous) => previous === key ? null : previous);
   }, []);
-  const activeBtwAvailable = Boolean(
-    active?.busy && active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'btw'),
-  );
-  const activeFollowUpMode = resolveBusyFollowUpMode({
-    busy: Boolean(active?.busy),
-    btwAvailable: activeBtwAvailable,
-  });
+  const activeFollowUpMode = resolveBusyFollowUpMode({ busy: Boolean(active?.busy) });
 
   /** Per-thread run phase + step from live busy/error/approvals/tools only. */
   const threadRunInfo = useCallback(
@@ -947,7 +939,7 @@ function App() {
   const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
   const toggleNativeVoiceRef = useRef<() => void>(() => {});
 
-  // Flush queued next-turn text when a task leaves busy (not for btw side-channel).
+  // Flush queued next-turn text when a task leaves busy.
   useEffect(() => {
     for (const th of threads) {
       if (th.busy || th.archived) continue;
@@ -2691,20 +2683,6 @@ function App() {
     }
   };
 
-  const dispatchBtw = (agent: Thread, question: string) => {
-    if (!agent.client || !agent.sessionId) return;
-    const card: BtwCardState = { threadId: agent.id, question, status: 'loading' };
-    setBtwCard(card);
-    void agent.client.askBtw(agent.sessionId, question).then(
-      (result) => setBtwCard((current) => current === card
-        ? { ...card, status: 'done', answer: result.answer }
-        : current),
-      (error) => setBtwCard((current) => current === card
-        ? { ...card, status: 'error', error: error instanceof Error ? error.message : String(error) }
-        : current),
-    );
-  };
-
   /**
    * Sends a real engine capability while keeping its implementation command
    * out of the user's desktop workflow and visible conversation wording.
@@ -2898,18 +2876,6 @@ function App() {
     await runDesktopAction(`/${safeName}${request ? ` ${request}` : ''}`, `${title}${request ? `: ${request}` : ''}`);
   };
 
-  const openBtwQuestion = async () => {
-    const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
-    if (!agent?.client || !agent.sessionId) return;
-    const question = await askText({
-      title: t('btwTitle'),
-      message: t('btwHint'),
-      placeholder: t('btwQuestionPlaceholder'),
-      okLabel: t('btwAsk'),
-    });
-    if (question) dispatchBtw(agent, question);
-  };
-
   /** Compress through the native ACP endpoint, without exposing `/compact`. */
   const compactActiveSession = async () => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
@@ -3080,10 +3046,6 @@ function App() {
       case 'rewind-session':
         setPlusMenuOpen(false);
         await openRewindDialog();
-        return;
-      case 'ask-btw':
-        setPlusMenuOpen(false);
-        await openBtwQuestion();
         return;
       case 'task-info':
         setTaskInfoOpen(true);
@@ -3909,8 +3871,8 @@ function App() {
 
     // No thread / brand-new stub without session: create one and send (Codex home composer)
     const live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
-    // While busy: only /btw is side-channel; any other text is queued for next turn.
-    if (live?.busy && text && !choiceSubmission && !/^\/btw(?:\s|$)/i.test(text)) {
+    // While busy, text is queued for the next normal turn.
+    if (live?.busy && text && !choiceSubmission) {
       setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
       setDraft('');
       setSlashOpen(false);
@@ -3936,10 +3898,7 @@ function App() {
       // sessionId present but reconnect failed
       return;
     }
-    // `/btw` has its own ACP method and deliberately bypasses the main prompt
-    // queue, so it remains available while an ordinary turn is running.
-    const sideQuestion = /^\/btw(?:\s|$)/i.test(text);
-    if (live.busy && !sideQuestion) return;
+    if (live.busy) return;
 
     // Use the live agent (may have been reconnected above)
     const agent = live;
@@ -3948,13 +3907,11 @@ function App() {
 
     // Suggestions belong to the prior response. A user-authored send (or a
     // clicked suggestion) starts the next turn, so they must not linger.
-    if (!/^\/btw(?:\s|$)/i.test(text)) {
-      setFollowUps((previous) => {
-        if (!(agent.id in previous)) return previous;
-        const { [agent.id]: _consumed, ...rest } = previous;
-        return rest;
-      });
-    }
+    setFollowUps((previous) => {
+      if (!(agent.id in previous)) return previous;
+      const { [agent.id]: _consumed, ...rest } = previous;
+      return rest;
+    });
 
     // Silent auto-compact near model threshold (always on; no UI toggle)
     if (!text.startsWith('/') && !compactingRef.current) {
@@ -3984,17 +3941,11 @@ function App() {
       const arg = rest.join(' ').trim();
       const name = (cmd || '').toLowerCase();
       if (name === 'btw') {
-        if (!arg) {
-          appendLine(agent.id, { id: nid(), role: 'system', text: t('btwNeedQuestion') });
-          return;
-        }
-        // Side questions are text-only in the current Grok Build ACP schema.
-        // Keep any staged attachments untouched for the user's next main turn.
         setDraft('');
         setSlashOpen(false);
         setAtOpen(false);
         setCapabilityArm(null);
-        dispatchBtw(agent, arg);
+        appendLine(agent.id, { id: nid(), role: 'system', text: t('btwUnavailable') });
         return;
       }
       if (name === 'compact') {
@@ -5836,16 +5787,6 @@ function App() {
                 />
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
-                    {activeBtwAvailable ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('btwHint')}
-                        onClick={() => void openBtwQuestion()}
-                      >
-                        {t('btwStart')}
-                      </button>
-                    ) : null}
                     <div className="plus-wrap">
                       <button
                         type="button"
@@ -6385,9 +6326,6 @@ function App() {
                 ) : null
               }
             />
-            {btwCard?.threadId === active.id ? (
-              <BtwCard state={btwCard} onDismiss={() => setBtwCard(null)} />
-            ) : null}
             {(() => {
               const info = threadRunInfo(active);
               const snoozeUntil = stallSnoozeUntil[active.id] ?? 0;
@@ -6612,16 +6550,6 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
-                    {activeFollowUpMode === 'btw' ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('followUpBtwHint')}
-                        onClick={() => void openBtwQuestion()}
-                      >
-                        {t('followUpBtw')}
-                      </button>
-                    ) : null}
                     {activeFollowUpMode === 'queue' ? (
                       <button
                         type="button"

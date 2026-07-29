@@ -124,7 +124,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | ✅ local schedules plus engine-advertised recurring task flow | C |
-| `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；仍缺真实模型回答验收 | C |
+| 运行中补充 | 桌面端“下一回合”队列 | ✅ 当前 `0.2.112` ACP 的 `x.ai/btw` 与 `_x.ai/btw` 均返回 `Method not found`，因此不展示伪旁问；输入会在当前回合结束后作为下一普通回合发送。`/btw` 仅保留兼容识别并明确提示限制。 | C |
 | `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
 ### 5.2 Worktree & git review

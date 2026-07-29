@@ -106,8 +106,7 @@ assert.equal(
 );
 
 // Busy follow-up mode
-assert.equal(resolveBusyFollowUpMode({ busy: false, btwAvailable: true }), 'none');
-assert.equal(resolveBusyFollowUpMode({ busy: true, btwAvailable: true }), 'btw');
-assert.equal(resolveBusyFollowUpMode({ busy: true, btwAvailable: false }), 'queue');
+assert.equal(resolveBusyFollowUpMode({ busy: false }), 'none');
+assert.equal(resolveBusyFollowUpMode({ busy: true }), 'queue');
 
 console.log('taskRunStatus.test.ts: ok');

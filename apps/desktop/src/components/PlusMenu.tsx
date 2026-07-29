@@ -19,7 +19,6 @@ export type PlusAction =
   | { type: 'plan-toggle'; on: boolean }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
-  | { type: 'ask-btw' }
   | { type: 'task-info' }
   | { type: 'compact-session' }
   | { type: 'recap-session' }
@@ -303,13 +302,6 @@ export function PlusMenu({
       desc: t('slashDescRewind'),
       action: { type: 'rewind-session' } as PlusAction,
     }] as Row[]) : []),
-    {
-      kind: 'action',
-      id: 'btw',
-      title: t('btwTitle'),
-      desc: t('btwHint'),
-      action: { type: 'ask-btw' },
-    },
     ...(hasActiveSession && slashAllowed('/feedback', availableCommandNames) ? ([{
       kind: 'action' as const,
       id: 'feedback',
@@ -382,7 +374,6 @@ export function PlusMenu({
   const rows: Row[] = rawRows.filter((row) => {
     if (row.kind !== 'action') return true;
     const a = row.action;
-    if (a.type === 'ask-btw') return slashAllowed('/btw', availableCommandNames);
     if (a.type === 'generate-media') return hasActiveSession && slashAllowed(a.media === 'image' ? '/imagine' : '/imagine-video', availableCommandNames);
     return true;
   });
