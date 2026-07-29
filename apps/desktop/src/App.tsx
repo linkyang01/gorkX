@@ -6003,9 +6003,14 @@ function App() {
                 </button>
               ) : null}
               {active.error ? (
-                <span className="pill err" title={active.error}>
-                  {t('error')}
-                </span>
+                <button
+                  type="button"
+                  className="pill err"
+                  title={t('taskErrorDetailsHint')}
+                  onClick={() => alert(active.error)}
+                >
+                  {t('taskErrorDetails')}
+                </button>
               ) : null}
               {active.sessionId ? (
                 <>
