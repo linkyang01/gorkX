@@ -3,6 +3,7 @@
 
 use crate::paths::{config_toml_path, ensure_dirs, grok_home};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
@@ -29,6 +30,12 @@ pub struct CustomModelRow {
     pub api_backend: String,
     #[serde(default)]
     pub provider_label: String,
+    /// App-owned representation of Grok Build's `query_params` inline table.
+    #[serde(default)]
+    pub query_params: BTreeMap<String, String>,
+    /// Header name -> environment variable name. Values never enter gorkX.
+    #[serde(default)]
+    pub env_http_headers: BTreeMap<String, String>,
     #[serde(default)]
     pub context_window: Option<u64>,
 }
@@ -138,6 +145,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
         has_plaintext_secret: false,
         api_backend: default_backend(),
         provider_label: String::new(),
+        query_params: BTreeMap::new(),
+        env_http_headers: BTreeMap::new(),
         context_window: None,
     };
     let mut in_models = false;
@@ -182,6 +191,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
                     has_plaintext_secret: false,
                     api_backend: default_backend(),
                     provider_label: String::new(),
+                    query_params: BTreeMap::new(),
+                    env_http_headers: BTreeMap::new(),
                     context_window: None,
                 };
                 continue;
@@ -212,6 +223,10 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
             cur.api_backend = v;
         } else if let Some(v) = parse_str_assign(t, "provider_label") {
             cur.provider_label = v;
+        } else if let Some(v) = parse_inline_table_assign(t, "query_params") {
+            cur.query_params = v;
+        } else if let Some(v) = parse_inline_table_assign(t, "env_http_headers") {
+            cur.env_http_headers = v;
         } else if let Some(v) = parse_str_assign(t, "env_key") {
             cur.api_key = format!("env:{v}");
             if v == key_env_name(cur_id.as_deref().unwrap_or_default()) {
@@ -246,6 +261,37 @@ fn parse_str_assign(line: &str, key: &str) -> Option<String> {
 
 fn parse_u64_assign(line: &str, key: &str) -> Option<u64> {
     parse_str_assign(line, key)?.parse().ok()
+}
+
+/// Parse the bounded string-to-string TOML inline tables that gorkX emits for
+/// model request metadata. Unknown/complex TOML stays untouched in the source
+/// file; it simply is not surfaced as an editable row rather than being lost.
+fn parse_inline_table_assign(line: &str, key: &str) -> Option<BTreeMap<String, String>> {
+    let raw = line.strip_prefix(key)?.trim().strip_prefix('=')?.trim();
+    let inner = raw.strip_prefix('{')?.strip_suffix('}')?.trim();
+    let mut out = BTreeMap::new();
+    if inner.is_empty() { return Some(out); }
+    for pair in inner.split(',') {
+        let (name, value) = pair.split_once('=')?;
+        let name = name.trim().trim_matches('"').trim_matches('\'').to_string();
+        let value = value.trim().trim_matches('"').trim_matches('\'').to_string();
+        if !name.is_empty() && !value.is_empty() { out.insert(name, value); }
+    }
+    Some(out)
+}
+
+fn toml_inline_table(values: &BTreeMap<String, String>) -> Result<String, String> {
+    if values.len() > 32 { return Err("at most 32 request parameters or headers".into()); }
+    let mut items = Vec::new();
+    for (key, value) in values {
+        let key = key.trim();
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() || key.len() > 160 || value.len() > 1_000 || key.contains(['\n', '\r', '"']) || value.contains(['\n', '\r']) {
+            return Err("request parameter/header names and values must be single-line text".into());
+        }
+        items.push(format!("\"{}\" = \"{}\"", escape_toml_str(key), escape_toml_str(value)));
+    }
+    Ok(format!("{{ {} }}", items.join(", ")))
 }
 
 fn escape_toml_str(s: &str) -> String {
@@ -313,6 +359,12 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
             "provider_label = \"{}\"\n",
             escape_toml_str(model.provider_label.trim())
         ));
+    }
+    if !model.query_params.is_empty() {
+        body.push_str(&format!("query_params = {}\n", toml_inline_table(&model.query_params)?));
+    }
+    if !model.env_http_headers.is_empty() {
+        body.push_str(&format!("env_http_headers = {}\n", toml_inline_table(&model.env_http_headers)?));
     }
     if !model.api_key.trim().is_empty() && !model.api_key.starts_with("env:") {
         keychain_store(&id, model.api_key.trim())?;

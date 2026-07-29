@@ -10,6 +10,8 @@ export interface CustomModelRow {
   hasPlaintextSecret?: boolean;
   apiBackend: string;
   providerLabel: string;
+  queryParams?: Record<string, string>;
+  envHttpHeaders?: Record<string, string>;
   contextWindow?: number | null;
 }
 

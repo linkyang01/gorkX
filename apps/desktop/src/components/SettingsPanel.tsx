@@ -227,6 +227,22 @@ const modelPresetValues: Record<ModelPreset, Pick<CustomModelRow, 'baseUrl' | 'a
   custom: { baseUrl: '', apiBackend: 'chat_completions', providerLabel: '' },
 };
 
+/** One `name=value` pair per line keeps advanced provider wiring legible. */
+function requestMapFromText(value: string, label: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const raw of value.split(/\n+/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const index = line.indexOf('=');
+    if (index < 1 || !line.slice(index + 1).trim()) throw new Error(`${label} 请每行填写 名称=值。`);
+    const key = line.slice(0, index).trim();
+    const item = line.slice(index + 1).trim();
+    if (key.length > 160 || item.length > 1_000 || /[\r\n"]/.test(key) || /[\r\n]/.test(item)) throw new Error(`${label} 包含不支持的字符。`);
+    out[key] = item;
+  }
+  return out;
+}
+
 type NavGroup = {
   title: string;
   items: NavItem[];
@@ -310,6 +326,8 @@ export function SettingsPanel({
     apiKey: '',
     apiBackend: 'chat_completions',
     providerLabel: '',
+    queryParams: '',
+    envHttpHeaders: '',
   });
   const [modelBusy, setModelBusy] = useState(false);
   const [modelCatalog, setModelCatalog] = useState<string[]>([]);
@@ -1078,6 +1096,8 @@ export function SettingsPanel({
         apiKey: modelForm.apiKey.trim(),
         apiBackend: modelForm.apiBackend,
         providerLabel: modelForm.providerLabel.trim(),
+        queryParams: requestMapFromText(modelForm.queryParams, '查询参数'),
+        envHttpHeaders: requestMapFromText(modelForm.envHttpHeaders, '环境变量请求头'),
       };
       const snap = await upsertCustomModel(row);
       setModelsSnap(snap);
@@ -1832,6 +1852,16 @@ export function SettingsPanel({
                     <option value="responses">responses (OpenAI)</option>
                     <option value="messages">messages (Anthropic)</option>
                   </select>
+                </label>
+                <label className="field">
+                  <span>{t('settingsModelsQueryParams')}</span>
+                  <textarea value={modelForm.queryParams} onChange={(e) => setModelForm((f) => ({ ...f, queryParams: e.target.value }))} placeholder="api-version=2026-07-22" rows={2} spellCheck={false} />
+                  <small>{t('settingsModelsQueryParamsHint')}</small>
+                </label>
+                <label className="field">
+                  <span>{t('settingsModelsEnvHeaders')}</span>
+                  <textarea value={modelForm.envHttpHeaders} onChange={(e) => setModelForm((f) => ({ ...f, envHttpHeaders: e.target.value }))} placeholder="X-API-Key=MY_PROVIDER_API_KEY" rows={2} spellCheck={false} />
+                  <small>{t('settingsModelsEnvHeadersHint')}</small>
                 </label>
                 <div className="field-row" style={{ marginTop: 10 }}>
                   <button
