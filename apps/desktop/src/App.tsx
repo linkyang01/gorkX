@@ -605,6 +605,8 @@ function App() {
   const [stallSnoozeUntil, setStallSnoozeUntil] = useState<Record<string, number>>({});
   const [stallClock, setStallClock] = useState(() => Date.now());
   const [deliverablesOpen, setDeliverablesOpen] = useState(false);
+  /** An engine failure must remain inspectable; a red badge alone is not useful. */
+  const [taskErrorOpen, setTaskErrorOpen] = useState(false);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -1789,6 +1791,17 @@ function App() {
     );
   }, []);
 
+  /**
+   * Keep the technical error available on demand, while always leaving a
+   * human-readable trace in the task. This avoids an empty conversation when
+   * session startup or the first prompt fails before any assistant content.
+   */
+  const markTaskFailed = useCallback((threadId: string, error: unknown) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    patchThread(threadId, { busy: false, error: detail });
+    appendLine(threadId, { id: nid(), role: 'system', text: t('taskFailedVisible') });
+  }, [appendLine, patchThread]);
+
   const appendOrMerge = useCallback(
     (
       threadId: string,
@@ -2736,7 +2749,7 @@ function App() {
     try {
       await agent.client.prompt(agent.sessionId, command);
     } catch (error) {
-      patchThread(agent.id, { error: error instanceof Error ? error.message : String(error) });
+      markTaskFailed(agent.id, error);
     } finally {
       patchThread(agent.id, { busy: false });
     }
@@ -3633,9 +3646,7 @@ function App() {
           });
         } catch (e) {
           const error = e instanceof Error ? e.message : String(e);
-          patchThread(id, {
-            error,
-          });
+          markTaskFailed(id, error);
           return { ok: false, error };
         } finally {
           patchThread(id, { busy: false });
@@ -3664,10 +3675,7 @@ function App() {
         alert(t('projectUnavailable').replace('{path}', cwdBase));
         return { ok: false, error };
       }
-      patchThread(id, {
-        busy: false,
-        error,
-      });
+      markTaskFailed(id, error);
       return { ok: false, error };
     }
   };
@@ -6056,7 +6064,7 @@ function App() {
                   type="button"
                   className="pill err"
                   title={t('taskErrorDetailsHint')}
-                  onClick={() => alert(active.error)}
+                  onClick={() => setTaskErrorOpen(true)}
                 >
                   {t('taskErrorDetails')}
                 </button>
@@ -6086,6 +6094,28 @@ function App() {
                 </>
               ) : null}
             </header>
+            {active.error ? (
+              <div
+                className="hint"
+                role="alert"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 24px 10px' }}
+              >
+                <span>{t('taskFailedVisible')}</span>
+                <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(true)}>
+                  {t('taskErrorDetails')}
+                </button>
+                {!active.client ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={active.busy}
+                    onClick={() => void reconnectThread(active.id).catch(() => {})}
+                  >
+                    {t('taskErrorReconnect')}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {/* Goal console: persist + /goal subcommands + plan-based progress */}
             {active.sessionGoal ? (
               <div
@@ -6915,6 +6945,57 @@ function App() {
         projectCwd={active?.cwd || project || undefined}
         onClose={() => setPreviewAtt(null)}
       />
+
+      {taskErrorOpen && active?.error ? (
+        <div className="modal-backdrop" onClick={() => setTaskErrorOpen(false)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('taskErrorDialogTitle')}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>{t('taskErrorDialogTitle')}</h2>
+              <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(false)}>
+                {t('cancel')}
+              </button>
+            </div>
+            <p className="text-prompt-msg">{t('taskErrorDialogHint')}</p>
+            <pre className="modal-body">{active.error}</pre>
+            <div className="modal-actions">
+              {!active.client ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={active.busy}
+                  onClick={() => {
+                    setTaskErrorOpen(false);
+                    void reconnectThread(active.id).catch(() => {});
+                  }}
+                >
+                  {t('taskErrorReconnect')}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  void navigator.clipboard.writeText(active.error!).then(
+                    () => alert(t('taskErrorCopied')),
+                    () => alert(active.error),
+                  );
+                }}
+              >
+                {t('taskErrorCopy')}
+              </button>
+              <button type="button" className="btn btn-sm primary-sm" onClick={() => setTaskErrorOpen(false)}>
+                {t('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <OnboardingModal
         open={onboardOpen}
