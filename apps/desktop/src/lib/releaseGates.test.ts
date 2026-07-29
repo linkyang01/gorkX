@@ -3,6 +3,7 @@
  * Run: node --experimental-strip-types src/lib/releaseGates.test.ts
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   classifySigningLevel,
   evaluateReleaseGates,
@@ -12,6 +13,20 @@ import {
   platformMaturity,
   updateRollbackPolicy,
 } from './releaseGates.ts';
+
+// A stale renderer constant previously made Settings and update checks report
+// an older release than the app bundle. Keep every published package marker
+// aligned with the package manifest before a release can pass its local gate.
+const packageVersion = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+const tauriVersion = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8')).version;
+const rendererMeta = fs.readFileSync('src/lib/appMeta.ts', 'utf8');
+const packageLock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+const cargoToml = fs.readFileSync('src-tauri/Cargo.toml', 'utf8');
+assert.equal(tauriVersion, packageVersion);
+assert.equal(packageLock.version, packageVersion);
+assert.equal(packageLock.packages[''].version, packageVersion);
+assert.match(rendererMeta, new RegExp(`APP_VERSION = '${packageVersion.replace(/\./g, '\\.')}'`));
+assert.match(cargoToml, new RegExp(`^version = \"${packageVersion.replace(/\./g, '\\.')}\"$`, 'm'));
 
 assert.equal(classifySigningLevel({ hasSignature: false }), 'none');
 assert.equal(classifySigningLevel({ hasSignature: true, authority: 'adhoc' }), 'adhoc');
