@@ -85,8 +85,29 @@ pub async fn terminal_create(
         format!("{command} {}", args.join(" "))
     };
 
-    let mut cmd = Command::new(&command);
-    cmd.args(&args)
+    // Grok Build's ACP terminal adapter sends its Unix shell invocation as one
+    // command string (for example `/bin/zsh -lc 'rg …'`) with no argv entries.
+    // Executing that literal string makes macOS report ENOENT and breaks every
+    // agent terminal tool call. Preserve standard ACP argv calls when args are
+    // present, but evaluate the command string through the platform shell for
+    // this documented empty-argv form.
+    #[cfg(unix)]
+    let mut cmd = if args.is_empty() {
+        let mut shell = Command::new("/bin/zsh");
+        shell.arg("-lc").arg(&command);
+        shell
+    } else {
+        let mut direct = Command::new(&command);
+        direct.args(&args);
+        direct
+    };
+    #[cfg(not(unix))]
+    let mut cmd = {
+        let mut direct = Command::new(&command);
+        direct.args(&args);
+        direct
+    };
+    cmd
         .current_dir(&workdir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
