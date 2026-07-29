@@ -3610,6 +3610,20 @@ function App() {
       return { ok: true };
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
+      // A project may have been moved or deleted outside gorkX (especially a
+      // disposable worktree). Do not leave an empty failed task that makes it
+      // look like the kernel or account failed. Remove only the stale desktop
+      // project reference; this never touches files on disk.
+      if (
+        /Project folder is unavailable for the agent sandbox|Project folder is not a directory for the agent sandbox/i.test(error)
+        && (cwdOverride || project)
+      ) {
+        setThreads((items) => items.filter((thread) => thread.id !== id));
+        if (project === cwdBase) removeProjectFromApp(cwdBase);
+        if (activeIdRef.current === id) selectThread(null);
+        alert(t('projectUnavailable').replace('{path}', cwdBase));
+        return { ok: false, error };
+      }
       patchThread(id, {
         busy: false,
         error,
