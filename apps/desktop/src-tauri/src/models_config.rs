@@ -33,6 +33,9 @@ pub struct CustomModelRow {
     /// App-owned representation of Grok Build's `query_params` inline table.
     #[serde(default)]
     pub query_params: BTreeMap<String, String>,
+    /// Static per-model request headers. Never use this for API keys.
+    #[serde(default)]
+    pub extra_headers: BTreeMap<String, String>,
     /// Header name -> environment variable name. Values never enter gorkX.
     #[serde(default)]
     pub env_http_headers: BTreeMap<String, String>,
@@ -146,6 +149,7 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
         api_backend: default_backend(),
         provider_label: String::new(),
         query_params: BTreeMap::new(),
+        extra_headers: BTreeMap::new(),
         env_http_headers: BTreeMap::new(),
         context_window: None,
     };
@@ -192,6 +196,7 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
                     api_backend: default_backend(),
                     provider_label: String::new(),
                     query_params: BTreeMap::new(),
+                    extra_headers: BTreeMap::new(),
                     env_http_headers: BTreeMap::new(),
                     context_window: None,
                 };
@@ -225,6 +230,8 @@ pub fn list_custom_models() -> Result<ModelsConfigSnapshot, String> {
             cur.provider_label = v;
         } else if let Some(v) = parse_inline_table_assign(t, "query_params") {
             cur.query_params = v;
+        } else if let Some(v) = parse_inline_table_assign(t, "extra_headers") {
+            cur.extra_headers = v;
         } else if let Some(v) = parse_inline_table_assign(t, "env_http_headers") {
             cur.env_http_headers = v;
         } else if let Some(v) = parse_str_assign(t, "env_key") {
@@ -362,6 +369,9 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
     }
     if !model.query_params.is_empty() {
         body.push_str(&format!("query_params = {}\n", toml_inline_table(&model.query_params)?));
+    }
+    if !model.extra_headers.is_empty() {
+        body.push_str(&format!("extra_headers = {}\n", toml_inline_table(&model.extra_headers)?));
     }
     if !model.env_http_headers.is_empty() {
         body.push_str(&format!("env_http_headers = {}\n", toml_inline_table(&model.env_http_headers)?));

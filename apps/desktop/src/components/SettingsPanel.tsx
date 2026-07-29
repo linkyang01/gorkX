@@ -327,6 +327,7 @@ export function SettingsPanel({
     apiBackend: 'chat_completions',
     providerLabel: '',
     queryParams: '',
+    extraHeaders: '',
     envHttpHeaders: '',
   });
   const [modelBusy, setModelBusy] = useState(false);
@@ -1097,6 +1098,7 @@ export function SettingsPanel({
         apiBackend: modelForm.apiBackend,
         providerLabel: modelForm.providerLabel.trim(),
         queryParams: requestMapFromText(modelForm.queryParams, '查询参数'),
+        extraHeaders: requestMapFromText(modelForm.extraHeaders, '静态请求头'),
         envHttpHeaders: requestMapFromText(modelForm.envHttpHeaders, '环境变量请求头'),
       };
       const snap = await upsertCustomModel(row);
@@ -1857,6 +1859,11 @@ export function SettingsPanel({
                   <span>{t('settingsModelsQueryParams')}</span>
                   <textarea value={modelForm.queryParams} onChange={(e) => setModelForm((f) => ({ ...f, queryParams: e.target.value }))} placeholder="api-version=2026-07-22" rows={2} spellCheck={false} />
                   <small>{t('settingsModelsQueryParamsHint')}</small>
+                </label>
+                <label className="field">
+                  <span>{t('settingsModelsStaticHeaders')}</span>
+                  <textarea value={modelForm.extraHeaders} onChange={(e) => setModelForm((f) => ({ ...f, extraHeaders: e.target.value }))} placeholder="X-Workspace=research" rows={2} spellCheck={false} />
+                  <small>{t('settingsModelsStaticHeadersHint')}</small>
                 </label>
                 <label className="field">
                   <span>{t('settingsModelsEnvHeaders')}</span>

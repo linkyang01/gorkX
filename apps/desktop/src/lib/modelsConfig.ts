@@ -11,6 +11,7 @@ export interface CustomModelRow {
   apiBackend: string;
   providerLabel: string;
   queryParams?: Record<string, string>;
+  extraHeaders?: Record<string, string>;
   envHttpHeaders?: Record<string, string>;
   contextWindow?: number | null;
 }
