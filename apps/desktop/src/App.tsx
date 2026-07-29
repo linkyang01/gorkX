@@ -291,6 +291,12 @@ type NewTaskProfile = string;
  * the kernel before the first user turn; `session/set_mode(plan)` below still
  * owns the engine's actual plan-mode control plane.
  */
+function projectRoleNameForCwd(profile: NewTaskProfile, cwd: string): string | null {
+  const match = /^project:([^|]+)\|(.+)$/.exec(profile);
+  if (!match) return null;
+  try { return decodeURIComponent(match[1]) === cwd ? match[2] : null; } catch { return null; }
+}
+
 function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile, cwd: string): AgentProfile | undefined {
   if (mode === 'plan') {
     return {
@@ -306,11 +312,7 @@ function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile, cwd: st
   // toolset and Plan permission mode. The desktop only selects it for a new
   // task; it does not recreate those restrictions in the shell.
   if (profile.startsWith('project:')) {
-    const match = /^project:([^|]+)\|(.+)$/.exec(profile);
-    let profileProject = '';
-    try { profileProject = match ? decodeURIComponent(match[1]) : ''; } catch { return undefined; }
-    if (!match || profileProject !== cwd) return undefined;
-    return match[2];
+    return projectRoleNameForCwd(profile, cwd) ?? undefined;
   }
   return profile !== 'default' ? profile : undefined;
 }
@@ -1083,6 +1085,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem('gorkx.newTaskProfile', newTaskProfile);
   }, [newTaskProfile]);
+  useEffect(() => {
+    if (newTaskProfile.startsWith('project:') && !projectRoleNameForCwd(newTaskProfile, project)) {
+      setNewTaskProfile('default');
+    }
+  }, [project, newTaskProfile]);
   useEffect(() => {
     localStorage.setItem('gorkx.effort', effort);
   }, [effort]);
@@ -6011,7 +6018,7 @@ function App() {
                         {t('modeExplore')}
                       </button>
                     ) : null}
-                    {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' ? (
+                    {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' && (!newTaskProfile.startsWith('project:') || Boolean(projectRoleNameForCwd(newTaskProfile, project))) ? (
                       <button
                         type="button"
                         className="composer-mode-pill"
