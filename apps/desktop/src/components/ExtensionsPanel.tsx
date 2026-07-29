@@ -198,7 +198,6 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
           {tab === 'mcp' ? (
             <>
               {liveClient && liveSessionId ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void refreshLiveMcp(true).catch((e) => setMsg(String(e)))}>{t('extMcpRefreshLive')}</button> : null}
-              {liveClient && liveSessionId ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient.reloadLiveMcpServers().then(() => Promise.all([refreshLiveMcp(true), refresh()])).then(() => setMsg(t('extMcpReloaded'))).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{t('extMcpReload')}</button> : null}
               <button
                 type="button"
                 className="btn btn-sm"

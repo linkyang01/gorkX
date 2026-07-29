@@ -1526,15 +1526,6 @@ export class AcpClient {
     return raw.result?.servers ?? raw.servers ?? [];
   }
 
-  /**
-   * Ask the running Grok Build process to rediscover MCP servers. This is
-   * distinct from re-reading the current list: it invokes the native hot
-   * refresh route, so configuration changes can reach the current task.
-   */
-  async reloadLiveMcpServers(): Promise<void> {
-    await this.request('x.ai/internal/reload_all_mcp_servers', {}, 30_000);
-  }
-
   async toggleLiveMcp(sessionId: string, serverName: string, enabled: boolean): Promise<void> {
     await this.request('x.ai/mcp/toggle', { sessionId, serverName, enabled }, 20_000);
   }
