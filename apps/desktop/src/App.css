@@ -244,6 +244,7 @@ body,
 .composer textarea,
 .field input,
 .field textarea,
+.settings-textarea,
 .att-preview-text,
 .att-preview-body,
 pre,
@@ -5840,6 +5841,26 @@ button.pill:hover {
   background: var(--glass-soft);
   color: var(--text);
 }
+
+.settings-textarea {
+  display: block;
+  width: 100%;
+  min-height: 112px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--glass-border-dim);
+  border-radius: 10px;
+  padding: 9px 10px;
+  margin-top: 10px;
+  background: var(--glass-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-textarea::placeholder { color: var(--text-faint); }
+.settings-textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); border-color: var(--accent); }
 
 .field-row {
   display: flex;

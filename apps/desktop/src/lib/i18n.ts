@@ -918,6 +918,12 @@ const dict = {
     settingsPersonalization: 'Personalization',
     settingsPersonalizationHint:
       'Help the agent learn how you like to work—preferences, habits, and project conventions.',
+    settingsPersonalInstructions: 'Personal instructions',
+    settingsPersonalInstructionsHint: 'Add lasting preferences for every new task, such as language, tone, and how you want work presented. Saved locally in gorkX and applied after you start or reconnect a task.',
+    settingsPersonalInstructionsPlaceholder: 'For example: Reply in Chinese first. Use concise tables for comparisons, and ask before external actions.',
+    settingsPersonalInstructionsSaved: 'Personal instructions saved for new tasks.',
+    settingsPersonalInstructionsCleared: 'Personal instructions cleared for new tasks.',
+    settingsPersonalInstructionsSaving: 'Saving…',
     settingsMemoryGrokHint:
       'Saved on this Mac for this app. Turn on so new tasks can reuse what you already shared.',
     settingsOpenMemoryPanel: 'Open memory panel',
@@ -2379,6 +2385,12 @@ const dict = {
     settingsPersonalization: '个性化',
     settingsPersonalizationHint:
       '让助手越来越懂你的习惯、偏好和项目约定。',
+    settingsPersonalInstructions: '个人指令',
+    settingsPersonalInstructionsHint: '为每个新任务保存长期偏好，例如语言、语气与成果呈现方式。内容只保存在 gorkX 本机；新建或重新连接任务后生效。',
+    settingsPersonalInstructionsPlaceholder: '例如：优先用中文回复。比较时使用简洁表格；涉及外部操作先征求我的确认。',
+    settingsPersonalInstructionsSaved: '已为新任务保存个人指令。',
+    settingsPersonalInstructionsCleared: '已清除新任务的个人指令。',
+    settingsPersonalInstructionsSaving: '正在保存…',
     settingsMemoryGrokHint: '开启后，新任务可以沿用你已经交代过的内容。',
     settingsOpenMemoryPanel: '打开记忆面板',
     settingsMemoryHowTitle: '记忆如何保存',

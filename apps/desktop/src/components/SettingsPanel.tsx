@@ -115,6 +115,7 @@ import {
   type SandboxConfigSnapshot,
   type SandboxProfile,
 } from '../lib/sandboxConfig';
+import { getPersonalRules, savePersonalRules } from '../lib/personalRules';
 import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
 import {
   applyManagedSetup,
@@ -341,6 +342,9 @@ export function SettingsPanel({
   const [managedSetup, setManagedSetup] = useState<string | null>(null);
   const [managedSetupBusy, setManagedSetupBusy] = useState(false);
   const [managedSetupReady, setManagedSetupReady] = useState(false);
+  const [personalRulesDraft, setPersonalRulesDraft] = useState('');
+  const [personalRulesPath, setPersonalRulesPath] = useState('');
+  const [personalRulesBusy, setPersonalRulesBusy] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -352,6 +356,13 @@ export function SettingsPanel({
     void fetchAccountSummary().then(setAccount);
     void fetchSubscriptionModelsSnapshot(false).then(setSubscriptionModels);
     void fetchMemoryStatus().then(setMemory);
+    void getPersonalRules().then((snapshot) => {
+      setPersonalRulesDraft(snapshot.content);
+      setPersonalRulesPath(snapshot.path);
+    }).catch(() => {
+      setPersonalRulesDraft('');
+      setPersonalRulesPath('');
+    });
     void listCustomModels().then(setModelsSnap);
     void fetchSubagentsConfig().then(setSubagentsSnap).catch(() => setSubagentsSnap(null));
     void fetchMediaToolsConfig().then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch(() => setMediaTools(null));
@@ -994,6 +1005,20 @@ export function SettingsPanel({
     }
   };
 
+  const savePersonalInstructions = async (content = personalRulesDraft) => {
+    setPersonalRulesBusy(true);
+    try {
+      const snapshot = await savePersonalRules(content);
+      setPersonalRulesDraft(snapshot.content);
+      setPersonalRulesPath(snapshot.path);
+      setMsg(snapshot.content ? t('settingsPersonalInstructionsSaved') : t('settingsPersonalInstructionsCleared'));
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPersonalRulesBusy(false);
+    }
+  };
+
   const restoreOne = async (row: ArchivedTaskRow) => {
     if (!onRestoreArchived) return;
     setArchBusy(true);
@@ -1203,20 +1228,6 @@ export function SettingsPanel({
                   </button>
                 </div>
               </div>
-              <h3 className="subhead">{t('settingsMessages')}</h3>
-              <div className="settings-card">
-                <label className="settings-row toggle-row">
-                  <div>
-                    <div className="settings-row-title">{t('settingsMessageTimestamps')}</div>
-                    <div className="settings-row-hint">{t('settingsMessageTimestampsHint')}</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={showMessageTimestamps}
-                    onChange={(event) => onShowMessageTimestamps(event.target.checked)}
-                  />
-                </label>
-              </div>
             </>
           ) : null}
 
@@ -1272,6 +1283,20 @@ export function SettingsPanel({
                   </label>
                 ))}
               </div>
+              <h3 className="subhead">{t('settingsMessages')}</h3>
+              <div className="settings-card">
+                <label className="settings-row toggle-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsMessageTimestamps')}</div>
+                    <div className="settings-row-hint">{t('settingsMessageTimestampsHint')}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showMessageTimestamps}
+                    onChange={(event) => onShowMessageTimestamps(event.target.checked)}
+                  />
+                </label>
+              </div>
             </>
           ) : null}
 
@@ -1311,6 +1336,37 @@ export function SettingsPanel({
                     {t('settingsOpenMemoryPanel')}
                   </button>
                 </div>
+              </div>
+              <h3 className="subhead">{t('settingsPersonalInstructions')}</h3>
+              <div className="settings-card">
+                <p className="hint">{t('settingsPersonalInstructionsHint')}</p>
+                <textarea
+                  className="settings-textarea"
+                  value={personalRulesDraft}
+                  maxLength={12000}
+                  rows={6}
+                  placeholder={t('settingsPersonalInstructionsPlaceholder')}
+                  onChange={(event) => setPersonalRulesDraft(event.target.value)}
+                />
+                <div className="field-row" style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={personalRulesBusy}
+                    onClick={() => void savePersonalInstructions()}
+                  >
+                    {personalRulesBusy ? t('settingsPersonalInstructionsSaving') : t('settingsInstructionsSave')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={personalRulesBusy || !personalRulesDraft}
+                    onClick={() => void savePersonalInstructions('')}
+                  >
+                    {t('goalClear')}
+                  </button>
+                </div>
+                {personalRulesPath ? <div className="settings-row-hint mono">{personalRulesPath}</div> : null}
               </div>
               <div className="settings-card muted-block">
                 <div className="settings-row-title">{t('settingsMemoryHowTitle')}</div>

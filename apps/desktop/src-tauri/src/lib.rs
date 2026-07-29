@@ -11,6 +11,7 @@ mod media;
 mod models_config;
 mod media_tools_config;
 mod paths;
+mod personal_rules;
 mod pty;
 mod scheduler;
 mod sandbox_config;
@@ -226,6 +227,8 @@ pub fn run() {
             subagents_config::subagents_config_set_type_enabled,
             sandbox_config::sandbox_config_get,
             sandbox_config::sandbox_config_set_profile,
+            personal_rules::personal_rules_get,
+            personal_rules::personal_rules_set,
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
