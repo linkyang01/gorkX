@@ -28,6 +28,9 @@ pub struct ThreadMetaRow {
     /// False means Grok was started with --no-subagents for this task.
     #[serde(default = "default_memory_enabled")]
     pub subagents_enabled: bool,
+    /// False means Grok was started with --no-plan for this task.
+    #[serde(default = "default_memory_enabled")]
+    pub planning_enabled: bool,
     pub updated_at: i64,
     #[serde(default)]
     pub archived: bool,
@@ -112,6 +115,7 @@ impl AppStore {
               chat_mode TEXT NOT NULL DEFAULT 'agent',
               memory_enabled INTEGER NOT NULL DEFAULT 1,
               subagents_enabled INTEGER NOT NULL DEFAULT 1,
+              planning_enabled INTEGER NOT NULL DEFAULT 1,
               updated_at INTEGER NOT NULL,
               archived INTEGER NOT NULL DEFAULT 0,
               PRIMARY KEY (project, id)
@@ -185,6 +189,10 @@ impl AppStore {
         );
         let _ = conn.execute(
             "ALTER TABLE thread_meta ADD COLUMN subagents_enabled INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE thread_meta ADD COLUMN planning_enabled INTEGER NOT NULL DEFAULT 1",
             [],
         );
         let _ = conn.execute(
@@ -335,7 +343,7 @@ pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result
         .prepare(
             r#"
             SELECT id, project, title, session_id, model_id, cwd, worktree_path,
-                   effort, chat_mode, COALESCE(memory_enabled, 1), COALESCE(subagents_enabled, 1), updated_at, COALESCE(archived, 0),
+                   effort, chat_mode, COALESCE(memory_enabled, 1), COALESCE(subagents_enabled, 1), COALESCE(planning_enabled, 1), updated_at, COALESCE(archived, 0),
                    session_goal_text, session_goal_status, session_goal_message
             FROM thread_meta
             WHERE project = ?1
@@ -348,7 +356,8 @@ pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result
         .query_map(params![project], |r| {
             let memory_enabled: i64 = r.get(9)?;
             let subagents_enabled: i64 = r.get(10)?;
-            let arch: i64 = r.get(12)?;
+            let planning_enabled: i64 = r.get(11)?;
+            let arch: i64 = r.get(13)?;
             Ok(ThreadMetaRow {
                 id: r.get(0)?,
                 project: r.get(1)?,
@@ -361,11 +370,12 @@ pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result
                 chat_mode: r.get(8)?,
                 memory_enabled: memory_enabled != 0,
                 subagents_enabled: subagents_enabled != 0,
-                updated_at: r.get(11)?,
+                planning_enabled: planning_enabled != 0,
+                updated_at: r.get(12)?,
                 archived: arch != 0,
-                session_goal_text: r.get(13)?,
-                session_goal_status: r.get(14)?,
-                session_goal_message: r.get(15)?,
+                session_goal_text: r.get(14)?,
+                session_goal_status: r.get(15)?,
+                session_goal_message: r.get(16)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -456,9 +466,9 @@ pub fn store_upsert_thread(store: State<'_, AppStore>, meta: ThreadMetaRow) -> R
         r#"
         INSERT INTO thread_meta (
           id, project, title, session_id, model_id, cwd, worktree_path,
-          effort, chat_mode, memory_enabled, subagents_enabled, updated_at, archived,
+          effort, chat_mode, memory_enabled, subagents_enabled, planning_enabled, updated_at, archived,
           session_goal_text, session_goal_status, session_goal_message
-        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
         ON CONFLICT(project, id) DO UPDATE SET
           title=excluded.title,
           session_id=excluded.session_id,
@@ -469,6 +479,7 @@ pub fn store_upsert_thread(store: State<'_, AppStore>, meta: ThreadMetaRow) -> R
           chat_mode=excluded.chat_mode,
           memory_enabled=excluded.memory_enabled,
           subagents_enabled=excluded.subagents_enabled,
+          planning_enabled=excluded.planning_enabled,
           updated_at=excluded.updated_at,
           archived=excluded.archived,
           session_goal_text=excluded.session_goal_text,
@@ -487,6 +498,7 @@ pub fn store_upsert_thread(store: State<'_, AppStore>, meta: ThreadMetaRow) -> R
             meta.chat_mode,
             if meta.memory_enabled { 1 } else { 0 },
             if meta.subagents_enabled { 1 } else { 0 },
+            if meta.planning_enabled { 1 } else { 0 },
             meta.updated_at,
             if meta.archived { 1 } else { 0 },
             meta.session_goal_text,

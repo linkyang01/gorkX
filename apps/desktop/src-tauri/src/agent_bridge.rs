@@ -94,6 +94,7 @@ fn agent_cli_args(
     max_turns: Option<u16>,
     memory_enabled: bool,
     subagents_enabled: bool,
+    planning_enabled: bool,
 ) -> Vec<String> {
     // `--disable-web-search` and `--no-memory` are root Grok flags (not agent
     // flags), so
@@ -108,6 +109,9 @@ fn agent_cli_args(
     }
     if !subagents_enabled {
         args.push("--no-subagents".into());
+    }
+    if !planning_enabled {
+        args.push("--no-plan".into());
     }
     if let Some(limit) = max_turns.filter(|value| (1..=200).contains(value)) {
         args.push("--max-turns".into());
@@ -157,6 +161,7 @@ pub async fn agent_start(
     max_turns: Option<u16>,
     memory_enabled: Option<bool>,
     subagents_enabled: Option<bool>,
+    planning_enabled: Option<bool>,
 ) -> Result<AgentInfo, String> {
     let mode = match permission_mode.as_str() {
         "auto" | "full" => permission_mode.clone(),
@@ -180,6 +185,7 @@ pub async fn agent_start(
         max_turns,
         memory_enabled.unwrap_or(true),
         subagents_enabled.unwrap_or(true),
+        planning_enabled.unwrap_or(true),
     );
     let _ = paths::ensure_dirs();
     let working_directory = resolve_agent_working_directory(working_directory)?;
@@ -754,10 +760,10 @@ mod tests {
 
     #[test]
     fn agent_args_disable_web_search_only_when_user_turns_it_off() {
-        let enabled = agent_cli_args("default", Some("high"), true, None, true, true);
+        let enabled = agent_cli_args("default", Some("high"), true, None, true, true, true);
         assert_eq!(enabled, vec!["agent", "--reasoning-effort", "high", "stdio"]);
 
-        let disabled = agent_cli_args("full", None, false, Some(12), false, false);
-        assert_eq!(disabled, vec!["--disable-web-search", "--no-memory", "--no-subagents", "--max-turns", "12", "agent", "--always-approve", "stdio"]);
+        let disabled = agent_cli_args("full", None, false, Some(12), false, false, false);
+        assert_eq!(disabled, vec!["--disable-web-search", "--no-memory", "--no-subagents", "--no-plan", "--max-turns", "12", "agent", "--always-approve", "stdio"]);
     }
 }

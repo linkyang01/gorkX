@@ -20,6 +20,7 @@ export type PlusAction =
   | { type: 'explore-mode'; on: boolean }
   | { type: 'task-memory'; on: boolean }
   | { type: 'task-subagents'; on: boolean }
+  | { type: 'task-planning'; on: boolean }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'task-info' }
@@ -62,6 +63,8 @@ interface Props {
   taskMemoryEnabled?: boolean;
   /** New task only: disable kernel delegation with --no-subagents. */
   taskSubagentsEnabled?: boolean;
+  /** New task only: disable kernel plan mode with --no-plan. */
+  taskPlanningEnabled?: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
   /** Show image edit only after the user has actually staged an image. */
@@ -94,6 +97,7 @@ export function PlusMenu({
   exploreModeOn = false,
   taskMemoryEnabled = true,
   taskSubagentsEnabled = true,
+  taskPlanningEnabled = true,
   skills,
   hasActiveSession,
   hasImageAttachment = false,
@@ -218,6 +222,13 @@ export function PlusMenu({
       title: exploreModeOn ? t('plusExploreOff') : t('plusExploreOn'),
       desc: t('plusExploreHint'),
       action: { type: 'explore-mode', on: !exploreModeOn } as PlusAction,
+    }] as Row[]) : []),
+    ...(home ? ([{
+      kind: 'action' as const,
+      id: 'task-planning',
+      title: taskPlanningEnabled ? t('plusTaskPlanningOff') : t('plusTaskPlanningOn'),
+      desc: taskPlanningEnabled ? t('plusTaskPlanningOffHint') : t('plusTaskPlanningOnHint'),
+      action: { type: 'task-planning', on: !taskPlanningEnabled } as PlusAction,
     }] as Row[]) : []),
     ...(home ? ([{
       kind: 'action' as const,

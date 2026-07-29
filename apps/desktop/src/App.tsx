@@ -349,6 +349,8 @@ interface Thread {
   memoryEnabled?: boolean;
   /** This task was started with Grok Build subagent delegation disabled. */
   subagentsEnabled?: boolean;
+  /** This task was started with Grok Build planning disabled. */
+  planningEnabled?: boolean;
   /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
   lastEventAt?: number;
 }
@@ -488,6 +490,7 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     effort: m.effort || 'high',
     memoryEnabled: m.memoryEnabled !== false,
     subagentsEnabled: m.subagentsEnabled !== false,
+    planningEnabled: m.planningEnabled !== false,
     updatedAt: m.updatedAt || Date.now(),
     sessionGoal: fromMeta || fromLines,
   };
@@ -534,6 +537,13 @@ function App() {
   const [newTaskSubagentsEnabled, setNewTaskSubagentsEnabled] = useState(() => {
     try {
       return localStorage.getItem('gorkx.newTaskSubagentsEnabled') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [newTaskPlanningEnabled, setNewTaskPlanningEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.newTaskPlanningEnabled') !== '0';
     } catch {
       return true;
     }
@@ -1808,6 +1818,7 @@ function App() {
       chatMode: th.chatMode,
       memoryEnabled: th.memoryEnabled !== false,
       subagentsEnabled: th.subagentsEnabled !== false,
+      planningEnabled: th.planningEnabled !== false,
       updatedAt: Date.now(),
       archived: Boolean(th.archived),
       project: th.projectKey,
@@ -2475,7 +2486,7 @@ function App() {
     [],
   );
 
-  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true, subagentsEnabled = true) => {
+  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true, subagentsEnabled = true, planningEnabled = true) => {
     const client = await AcpClient.start(
       perm,
       grokCmd || undefined,
@@ -2485,6 +2496,7 @@ function App() {
       maxAgentTurns,
       memoryEnabled,
       subagentsEnabled,
+      planningEnabled,
     );
     await client.initialize();
     await client.authenticate('cached_token');
@@ -2749,6 +2761,22 @@ function App() {
    * the selected default and live tasks switch through `session/set_mode`.
    */
   const changeChatMode = async (next: ChatMode) => {
+    if (next === 'plan' && active?.planningEnabled === false) {
+      appendLine(active.id, {
+        id: nid(),
+        role: 'system',
+        text: t('plusTaskPlanningLocked'),
+      });
+      return;
+    }
+    if (next === 'plan') {
+      setNewTaskPlanningEnabled(true);
+      try {
+        localStorage.setItem('gorkx.newTaskPlanningEnabled', '1');
+      } catch {
+        /* local preference is optional */
+      }
+    }
     setChatMode(next);
     const modeId = next === 'plan' ? 'plan' : 'default';
     let setModeOk = false;
@@ -3190,6 +3218,17 @@ function App() {
           /* local preference is optional */
         }
         return;
+      case 'task-planning':
+        setNewTaskPlanningEnabled(action.on);
+        try {
+          localStorage.setItem('gorkx.newTaskPlanningEnabled', action.on ? '1' : '0');
+        } catch {
+          /* local preference is optional */
+        }
+        if (!action.on && chatMode === 'plan') {
+          await changeChatMode('agent');
+        }
+        return;
       case 'fork-session':
         setPlusMenuOpen(false);
         await forkActiveSession();
@@ -3585,6 +3624,7 @@ function App() {
     const selectedProfile = opts?.profileOverride ?? newTaskProfile;
     const memoryEnabled = newTaskMemoryEnabled;
     const subagentsEnabled = newTaskSubagentsEnabled;
+    const planningEnabled = newTaskPlanningEnabled;
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
@@ -3623,13 +3663,14 @@ function App() {
         effort,
         memoryEnabled,
         subagentsEnabled,
+        planningEnabled,
         archived: false,
         updatedAt: createdAt,
       },
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient(cwdBase, memoryEnabled, subagentsEnabled);
+      const client = await bootstrapClient(cwdBase, memoryEnabled, subagentsEnabled, planningEnabled);
       wireClient(id, client);
       const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile, cwdBase));
       rememberModels(session);
@@ -3718,6 +3759,7 @@ function App() {
         userTurnCount: 0,
         memoryEnabled,
         subagentsEnabled,
+        planningEnabled,
       });
 
       // Home-style: first message creates the session
@@ -4656,6 +4698,7 @@ function App() {
         maxAgentTurns,
         active.memoryEnabled !== false,
         active.subagentsEnabled !== false,
+        active.planningEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -4769,6 +4812,7 @@ function App() {
         maxAgentTurns,
         th.memoryEnabled !== false,
         th.subagentsEnabled !== false,
+        th.planningEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -6040,6 +6084,7 @@ function App() {
                         exploreModeOn={newTaskProfile === 'explore'}
                         taskMemoryEnabled={newTaskMemoryEnabled}
                         taskSubagentsEnabled={newTaskSubagentsEnabled}
+                        taskPlanningEnabled={newTaskPlanningEnabled}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
@@ -6093,6 +6138,16 @@ function App() {
                         onClick={() => void handlePlusAction({ type: 'task-subagents', on: true })}
                       >
                         {t('plusTaskSubagentsOff')}
+                      </button>
+                    ) : null}
+                    {!newTaskPlanningEnabled ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('plusTaskPlanningOffHint')}
+                        onClick={() => void handlePlusAction({ type: 'task-planning', on: true })}
+                      >
+                        {t('plusTaskPlanningOff')}
                       </button>
                     ) : null}
                     {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' && (!newTaskProfile.startsWith('project:') || Boolean(projectRoleNameForCwd(newTaskProfile, project))) ? (
@@ -6905,6 +6960,7 @@ function App() {
                         planModeOn={(active.chatMode ?? chatMode) === 'plan'}
                         taskMemoryEnabled={active.memoryEnabled !== false}
                         taskSubagentsEnabled={active.subagentsEnabled !== false}
+                        taskPlanningEnabled={active.planningEnabled !== false}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}

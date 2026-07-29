@@ -28,6 +28,8 @@ export interface ThreadMeta {
   memoryEnabled?: boolean;
   /** Whether this task may let Grok Build dispatch subagents. */
   subagentsEnabled?: boolean;
+  /** Whether this task may enter Grok Build plan mode. */
+  planningEnabled?: boolean;
   updatedAt: number;
   /** optional project path when loaded from sqlite */
   project?: string;
@@ -99,6 +101,7 @@ async function migrateLocalStorageOnce(): Promise<void> {
             chatMode: m.chatMode || 'agent',
             memoryEnabled: m.memoryEnabled !== false,
             subagentsEnabled: m.subagentsEnabled !== false,
+            planningEnabled: m.planningEnabled !== false,
             updatedAt: m.updatedAt || Date.now(),
           },
         });
@@ -122,6 +125,7 @@ function rowToMeta(r: {
   chatMode: string;
   memoryEnabled?: boolean;
   subagentsEnabled?: boolean;
+  planningEnabled?: boolean;
   updatedAt: number;
   archived?: boolean;
   sessionGoalText?: string | null;
@@ -140,6 +144,7 @@ function rowToMeta(r: {
     chatMode: r.chatMode === 'plan' ? 'plan' : 'agent',
     memoryEnabled: r.memoryEnabled !== false,
     subagentsEnabled: r.subagentsEnabled !== false,
+    planningEnabled: r.planningEnabled !== false,
     updatedAt: r.updatedAt,
     archived: Boolean(r.archived),
     sessionGoalText: r.sessionGoalText ?? null,
@@ -166,6 +171,7 @@ export async function loadThreadMetas(project: string): Promise<ThreadMeta[]> {
           chatMode: string;
           memoryEnabled?: boolean;
           subagentsEnabled?: boolean;
+          planningEnabled?: boolean;
           updatedAt: number;
           archived?: boolean;
           sessionGoalText?: string | null;
@@ -197,6 +203,7 @@ export async function searchThreadHistory(query: string, limit = 36): Promise<Th
       chatMode: string;
       memoryEnabled?: boolean;
       subagentsEnabled?: boolean;
+      planningEnabled?: boolean;
       updatedAt: number;
       archived?: boolean;
       sessionGoalText?: string | null;
@@ -231,6 +238,7 @@ export async function upsertThreadMeta(project: string, meta: ThreadMeta): Promi
     chatMode: meta.chatMode,
     memoryEnabled: meta.memoryEnabled !== false,
     subagentsEnabled: meta.subagentsEnabled !== false,
+    planningEnabled: meta.planningEnabled !== false,
     updatedAt: Date.now(),
     archived: Boolean(meta.archived),
     sessionGoalText: meta.sessionGoalText ?? null,

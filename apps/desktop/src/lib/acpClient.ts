@@ -712,6 +712,7 @@ export class AcpClient {
     maxTurns?: number | null,
     memoryEnabled = true,
     subagentsEnabled = true,
+    planningEnabled = true,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
@@ -722,6 +723,7 @@ export class AcpClient {
       maxTurns: Number.isInteger(maxTurns) && (maxTurns ?? 0) >= 1 && (maxTurns ?? 0) <= 200 ? maxTurns : null,
       memoryEnabled,
       subagentsEnabled,
+      planningEnabled,
     });
     const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();
