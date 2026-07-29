@@ -259,6 +259,7 @@ const dict = {
     followUpQueue: 'Queue for next turn',
     followUpQueueHint: 'Will send when the current turn finishes. Kernel /btw is not available on this session.',
     followUpQueued: 'Queued for next turn',
+    followUpEditQueue: 'Edit queued text',
     followUpClearQueue: 'Clear queue',
 
     remainingQuota: 'Remaining usage',
@@ -888,6 +889,8 @@ const dict = {
     settingsShortcuts: 'Keyboard shortcuts',
     settingsShortcutsHint: 'View and use gorkX shortcuts (same list as ⌘/).',
     settingsOpenShortcuts: 'Show shortcuts',
+    settingsVoiceShortcut: 'Voice shortcut',
+    settingsVoiceShortcutHint: 'Press Ctrl+Space or F8 in gorkX to start or stop native voice input. Turning this off does not disable voice input.',
     settingsUsage: 'Usage & billing',
     dailyTokenUsage: "Today's local token usage",
     dailyTokenUsageValue: '{n} tokens recorded today',
@@ -1666,6 +1669,7 @@ const dict = {
     followUpQueue: '排队到下一轮',
     followUpQueueHint: '当前回合结束后自动发送。本会话未提供内核 /btw。',
     followUpQueued: '已排队到下一轮',
+    followUpEditQueue: '编辑排队内容',
     followUpClearQueue: '清除排队',
 
     remainingQuota: '剩余用量',
@@ -2283,6 +2287,8 @@ const dict = {
     settingsShortcuts: '键盘快捷键',
     settingsShortcutsHint: '查看本应用的常用快捷键。',
     settingsOpenShortcuts: '显示快捷键',
+    settingsVoiceShortcut: '语音快捷键',
+    settingsVoiceShortcutHint: '在 gorkX 内按 Ctrl+Space 或 F8 可开始或停止原生语音输入；关闭此项不会禁用语音输入按钮。',
     settingsUsage: '使用情况和计费',
     dailyTokenUsage: '今日本地 Token 用量',
     dailyTokenUsageValue: '今日已记录 {n} Tokens',

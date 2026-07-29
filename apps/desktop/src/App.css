@@ -897,6 +897,12 @@ body {
   white-space: nowrap;
 }
 
+.follow-up-queued-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
 /* Project/session menus: icon + label in a row */
 .project-pop-menu .pop-menu-item {
   display: flex;

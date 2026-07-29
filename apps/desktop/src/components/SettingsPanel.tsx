@@ -180,6 +180,9 @@ interface Props {
   onPerm: (p: PermissionMode) => void;
   webSearchEnabled: boolean;
   onWebSearchEnabled: (enabled: boolean) => void;
+  /** Renderer-only preference; native voice remains available via the composer button. */
+  voiceShortcutEnabled: boolean;
+  onVoiceShortcutEnabled: (enabled: boolean) => void;
   /** Jump out of settings into product surfaces */
   onOpenMemory?: () => void;
   onOpenExtensions?: () => void;
@@ -243,6 +246,8 @@ export function SettingsPanel({
   onPerm,
   webSearchEnabled,
   onWebSearchEnabled,
+  voiceShortcutEnabled,
+  onVoiceShortcutEnabled,
   onOpenMemory,
   onOpenExtensions,
   onOpenShortcuts,
@@ -1294,6 +1299,19 @@ export function SettingsPanel({
                 >
                   {t('settingsOpenShortcuts')}
                 </button>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <label className="settings-row toggle-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsVoiceShortcut')}</div>
+                    <div className="settings-row-hint">{t('settingsVoiceShortcutHint')}</div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={voiceShortcutEnabled}
+                    onChange={(event) => onVoiceShortcutEnabled(event.target.checked)}
+                  />
+                </label>
               </div>
               <div className="settings-card" style={{ marginTop: 12 }}>
                 <div className="settings-row">

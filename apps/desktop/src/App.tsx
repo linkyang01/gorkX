@@ -510,6 +510,13 @@ function App() {
       return true;
     }
   });
+  const [voiceShortcutEnabled, setVoiceShortcutEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.voiceShortcutEnabled') !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [kernelOpen, setKernelOpen] = useState(false);
   // Opt-in panels: empty Review/Terminal never occupy the main stage by default.
   const [reviewOpen, setReviewOpen] = useState(() =>
@@ -937,6 +944,7 @@ function App() {
   }, [threads]);
 
   const sendRef = useRef<(text?: string) => Promise<void>>(async () => {});
+  const toggleNativeVoiceRef = useRef<() => void>(() => {});
 
   // Flush queued next-turn text when a task leaves busy (not for btw side-channel).
   useEffect(() => {
@@ -1246,6 +1254,18 @@ function App() {
         setShortcutsOpen((v) => !v);
         return;
       }
+      // Mirrors the engine's native-voice shortcut while keeping it scoped to
+      // this desktop window. The visible microphone button always remains.
+      if (
+        voiceShortcutEnabled
+        && !e.altKey
+        && !e.metaKey
+        && (e.key === 'F8' || (e.ctrlKey && e.code === 'Space'))
+      ) {
+        e.preventDefault();
+        toggleNativeVoiceRef.current();
+        return;
+      }
       // Focus composer (⌘L) — works from anywhere
       if (meta && (e.key === 'l' || e.key === 'L') && !e.shiftKey && !e.altKey) {
         e.preventDefault();
@@ -1267,7 +1287,7 @@ function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [project, cycleThread, focusComposer]);
+  }, [project, cycleThread, focusComposer, voiceShortcutEnabled]);
 
   const activeTools: ToolEvent[] = useMemo(() => {
     if (!active) return [];
@@ -2239,6 +2259,10 @@ function App() {
       setVoiceError(error instanceof Error ? error.message : t('voiceErrorGeneric'));
     }
   }, [voiceListeningSessionId]);
+
+  useEffect(() => {
+    toggleNativeVoiceRef.current = () => { void toggleNativeVoice(); };
+  }, [toggleNativeVoice]);
 
   /**
    * Rehydrate only the engine's currently-running child tasks after a session
@@ -6424,18 +6448,37 @@ function App() {
                       {t('followUpQueued')}: {queuedFollowUps[active.id].slice(0, 100)}
                       {queuedFollowUps[active.id].length > 100 ? '…' : ''}
                     </span>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() =>
-                        setQueuedFollowUps((prev) => {
-                          const { [active.id]: _drop, ...rest } = prev;
-                          return rest;
-                        })
-                      }
-                    >
-                      {t('followUpClearQueue')}
-                    </button>
+                    <div className="follow-up-queued-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => {
+                          const queued = queuedFollowUps[active.id];
+                          if (!queued) return;
+                          // Editing must stop the automatic next-turn send first;
+                          // the user explicitly re-queues the revised text.
+                          setDraft(queued);
+                          setQueuedFollowUps((prev) => {
+                            const { [active.id]: _drop, ...rest } = prev;
+                            return rest;
+                          });
+                        }}
+                      >
+                        {t('followUpEditQueue')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() =>
+                          setQueuedFollowUps((prev) => {
+                            const { [active.id]: _drop, ...rest } = prev;
+                            return rest;
+                          })
+                        }
+                      >
+                        {t('followUpClearQueue')}
+                      </button>
+                    </div>
                   </div>
                 ) : null}
                 <SlashMenu
@@ -6953,6 +6996,15 @@ function App() {
           setWebSearchEnabled(enabled);
           try {
             localStorage.setItem('gorkx.webSearchEnabled', enabled ? '1' : '0');
+          } catch {
+            /* browser preview */
+          }
+        }}
+        voiceShortcutEnabled={voiceShortcutEnabled}
+        onVoiceShortcutEnabled={(enabled) => {
+          setVoiceShortcutEnabled(enabled);
+          try {
+            localStorage.setItem('gorkx.voiceShortcutEnabled', enabled ? '1' : '0');
           } catch {
             /* browser preview */
           }

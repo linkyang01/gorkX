@@ -18,6 +18,7 @@ const ROWS: Array<{ keys: string; action: string }> = [
   { keys: '⇧⌘/Ctrl + J', action: 'Terminal dock' },
   { keys: '⇧⌘/Ctrl + E', action: 'Extensions' },
   { keys: '⌘/Ctrl + K', action: 'Kernel settings' },
+  { keys: 'Ctrl + Space / F8', action: 'Start / stop voice input' },
   { keys: '⌘/Ctrl + /', action: 'Shortcuts' },
   { keys: 'Esc', action: 'Close menus / modals' },
 ];
