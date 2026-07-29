@@ -2245,6 +2245,15 @@ function App() {
       };
 
       client.onExit = () => {
+        const live = threadsRef.current.find((thread) => thread.id === threadId);
+        // Native dictation belongs to this ACP process. Once it exits there
+        // is no microphone stream to stop or transcript to receive, so never
+        // leave the composer claiming it is still listening.
+        setVoiceListeningSessionId((current) => current === live?.sessionId ? null : current);
+        setVoiceInterim('');
+        if (live?.sessionId && activeIdRef.current === threadId) {
+          setVoiceError(t('voiceErrorSessionClosed'));
+        }
         // The request cannot be answered once its ACP process is gone. Do not
         // leave a stale approval that looks actionable in another task.
         setApprovalQueue((previous) => previous.filter((item) => item.threadId !== threadId));

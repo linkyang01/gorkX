@@ -63,6 +63,7 @@ const dict = {
     voiceErrorNoSpeech: 'No speech detected — try again',
     voiceErrorNoDevice: 'No microphone found',
     voiceErrorGeneric: 'Voice input failed',
+    voiceErrorSessionClosed: 'Voice input stopped because the agent connection closed',
     voiceErrorRebuild:
       'App is missing mic permission strings — restart gorkX after a full rebuild (not only hot reload).',
     thinking: 'Thinking',
@@ -1522,6 +1523,7 @@ const dict = {
     voiceErrorNoSpeech: '没有听到声音，请再试一次',
     voiceErrorNoDevice: '未检测到麦克风',
     voiceErrorGeneric: '语音输入失败',
+    voiceErrorSessionClosed: '助手连接已断开，语音输入已停止',
     voiceErrorRebuild:
       '应用缺少麦克风权限说明（开发模式需完整重新编译，仅热更新不够）。正在重启后即可。',
     thinking: '思考',
