@@ -21,6 +21,7 @@ export type PlusAction =
   | { type: 'task-memory'; on: boolean }
   | { type: 'task-subagents'; on: boolean }
   | { type: 'task-planning'; on: boolean }
+  | { type: 'search-scope' }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'task-info' }
@@ -65,6 +66,8 @@ interface Props {
   taskSubagentsEnabled?: boolean;
   /** New task only: disable kernel plan mode with --no-plan. */
   taskPlanningEnabled?: boolean;
+  /** Current kernel explicitly supports ACP search tool overrides. */
+  searchScopeAvailable?: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
   /** Show image edit only after the user has actually staged an image. */
@@ -98,6 +101,7 @@ export function PlusMenu({
   taskMemoryEnabled = true,
   taskSubagentsEnabled = true,
   taskPlanningEnabled = true,
+  searchScopeAvailable = false,
   skills,
   hasActiveSession,
   hasImageAttachment = false,
@@ -257,6 +261,13 @@ export function PlusMenu({
       title: t('plusDeepResearch'),
       desc: t('plusDeepResearchHint'),
       action: { type: 'deep-research' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession && searchScopeAvailable ? ([{
+      kind: 'action' as const,
+      id: 'search-scope',
+      title: t('plusSearchScope'),
+      desc: t('plusSearchScopeHint'),
+      action: { type: 'search-scope' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession && slashAllowed('/loop', availableCommandNames) ? ([{
       kind: 'action' as const,

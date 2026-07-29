@@ -584,6 +584,13 @@ export interface PromptResult {
   _meta?: Record<string, unknown>;
 }
 
+/** Kernel-native search constraints sent through the ACP prompt metadata. */
+export interface SearchToolOverrides {
+  fromDate?: string;
+  toDate?: string;
+  allowedDomains?: string[];
+}
+
 export interface ModelInfo {
   modelId: string;
   name?: string;
@@ -608,6 +615,7 @@ export interface SessionInfo {
     currentModelId?: string;
     availableModels?: ModelInfo[];
   };
+  _meta?: Record<string, unknown>;
 }
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -670,6 +678,8 @@ export class AcpClient {
   private unlistenExit: UnlistenFn | null = null;
   private sessionCwd = '';
   private readonly allowClientFileWrites: boolean;
+  /** Only true after this exact live kernel advertises ACP toolOverrides. */
+  supportsSearchToolOverrides = false;
 
   onSessionUpdate: ((update: SessionUpdate, sessionId?: string) => void) | null = null;
   onPermissionRequest: ((req: PermissionRequest) => void) | null = null;
@@ -1058,7 +1068,7 @@ export class AcpClient {
   }
 
   async initialize() {
-    return this.request(
+    const result = await this.request(
       'initialize',
       {
         protocolVersion: 1,
@@ -1070,7 +1080,10 @@ export class AcpClient {
         },
       },
       30_000,
-    );
+    ) as { _meta?: Record<string, unknown> };
+    const caps = result?._meta?.['x.ai/capabilities'] as { toolOverrides?: unknown } | undefined;
+    this.supportsSearchToolOverrides = Boolean(caps?.toolOverrides);
+    return result;
   }
 
   /**
@@ -1401,6 +1414,7 @@ export class AcpClient {
     sessionId: string,
     text: string,
     resources: PromptResourceLink[] = [],
+    searchOverrides?: SearchToolOverrides | null,
   ): Promise<PromptResult> {
     const prompt: unknown[] = [{ type: 'text', text }];
     for (const resource of resources) {
@@ -1424,6 +1438,14 @@ export class AcpClient {
       sessionId,
       messageId,
       prompt,
+      ...(searchOverrides !== undefined && this.supportsSearchToolOverrides
+        ? { _meta: { toolOverrides: searchOverrides === null ? null : { x_search: {
+          date_bound: (searchOverrides.fromDate || searchOverrides.toDate)
+            ? { ...(searchOverrides.fromDate ? { fromDate: searchOverrides.fromDate } : {}), ...(searchOverrides.toDate ? { toDate: searchOverrides.toDate } : {}) }
+            : undefined,
+          web_search: searchOverrides.allowedDomains?.length ? { allowed_domains: searchOverrides.allowedDomains } : undefined,
+        } } } }
+        : {}),
     })) as PromptResult;
     if (result) {
       const resultId = result.userMessageId

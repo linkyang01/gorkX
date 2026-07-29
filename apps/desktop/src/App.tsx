@@ -38,6 +38,7 @@ import {
   type FolderTrustRequest,
   type PlanApprovalRequest,
   type ReasoningEffort,
+  type SearchToolOverrides,
   type RewindMode,
   type RewindPoint,
   type RewindResult,
@@ -351,6 +352,10 @@ interface Thread {
   subagentsEnabled?: boolean;
   /** This task was started with Grok Build planning disabled. */
   planningEnabled?: boolean;
+  /** This exact ACP process advertised native search tool overrides. */
+  searchScopeAvailable?: boolean;
+  /** Applied to the next prompt; the engine then retains it for the session. */
+  pendingSearchScope?: SearchToolOverrides | null;
   /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
   lastEventAt?: number;
 }
@@ -360,6 +365,29 @@ type PendingApproval =
   | { key: string; kind: 'question'; threadId: string; createdAt: number; request: UserQuestionRequest }
   | { key: string; kind: 'plan'; threadId: string; createdAt: number; request: PlanApprovalRequest }
   | { key: string; kind: 'trust'; threadId: string; createdAt: number; request: FolderTrustRequest };
+
+/** Text entered in the desktop search-scope form becomes the kernel's native
+ * ACP metadata, not an instruction hidden in the prompt. */
+function parseSearchScopeForm(value: string): SearchToolOverrides | null {
+  const lines = value.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  let fromDate: string | undefined;
+  let toDate: string | undefined;
+  const dateMatch = lines[0]?.match(/^(\d{4}-\d{2}-\d{2})?\s*\.\.\s*(\d{4}-\d{2}-\d{2})?$/);
+  if (dateMatch) {
+    fromDate = dateMatch[1] || undefined;
+    toDate = dateMatch[2] || undefined;
+    lines.shift();
+  }
+  const domains = lines.flatMap((line) => line.split(/[\s,]+/)).filter(Boolean).map((domain) => domain.toLowerCase());
+  if (!fromDate && !toDate && !domains.length) throw new Error('请填写日期范围或至少一个网站域名。');
+  for (const date of [fromDate, toDate]) {
+    if (date && Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new Error('日期请使用 YYYY-MM-DD 格式。');
+  }
+  if (fromDate && toDate && fromDate > toDate) throw new Error('开始日期不能晚于结束日期。');
+  if (domains.length > 64 || domains.some((domain) => !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain))) throw new Error('网站请只填写域名，例如 example.com；最多 64 个。');
+  return { ...(fromDate ? { fromDate } : {}), ...(toDate ? { toDate } : {}), ...(domains.length ? { allowedDomains: [...new Set(domains)] } : {}) };
+}
 
 /** Bounded, server-provided follow-up chips for one task's latest response. */
 type FollowUpState = {
@@ -3229,6 +3257,27 @@ function App() {
           await changeChatMode('agent');
         }
         return;
+      case 'search-scope': {
+        setPlusMenuOpen(false);
+        const current = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+        if (!current?.client || !current.sessionId || !current.searchScopeAvailable) return;
+        const answer = await askAction({
+          title: t('searchScopeTitle'),
+          message: t('searchScopeMessage'),
+          placeholder: t('searchScopePlaceholder'),
+          submitLabel: t('searchScopeApply'),
+          allowEmpty: true,
+        });
+        if (answer === null) return;
+        try {
+          const scope = parseSearchScopeForm(answer);
+          patchThread(current.id, { pendingSearchScope: scope });
+          appendLine(current.id, { id: nid(), role: 'system', text: scope ? t('searchScopeQueued') : t('searchScopeCleared') });
+        } catch (error) {
+          alert(error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
       case 'fork-session':
         setPlusMenuOpen(false);
         await forkActiveSession();
@@ -3760,6 +3809,7 @@ function App() {
         memoryEnabled,
         subagentsEnabled,
         planningEnabled,
+        searchScopeAvailable: client.supportsSearchToolOverrides,
       });
 
       // Home-style: first message creates the session
@@ -4341,7 +4391,12 @@ function App() {
       }
     }
     try {
-      const result = await client.prompt(sessionId, engineBody, attachmentResourceLinks(atts));
+      const result = await client.prompt(
+        sessionId,
+        engineBody,
+        attachmentResourceLinks(atts),
+        agent.pendingSearchScope,
+      );
       if (result?.stopReason && result.stopReason !== 'end_turn') {
         appendLine(agent.id, {
           id: nid(),
@@ -4352,6 +4407,7 @@ function App() {
       if (markInjected) {
         patchThread(agent.id, { memoryInjected: true, memoryInject: null });
       }
+      if (agent.pendingSearchScope !== undefined) patchThread(agent.id, { pendingSearchScope: undefined });
     } catch (e) {
       patchThread(agent.id, {
         error: e instanceof Error ? e.message : String(e),
@@ -6961,6 +7017,7 @@ function App() {
                         taskMemoryEnabled={active.memoryEnabled !== false}
                         taskSubagentsEnabled={active.subagentsEnabled !== false}
                         taskPlanningEnabled={active.planningEnabled !== false}
+                        searchScopeAvailable={active.searchScopeAvailable === true}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
