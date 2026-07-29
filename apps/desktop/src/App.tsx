@@ -6380,10 +6380,20 @@ function App() {
                 <button
                   type="button"
                   className="pill err"
-                  title={t('taskErrorDetailsHint')}
-                  onClick={() => setTaskErrorOpen(true)}
+                  title={requiresAccountReauthentication(active.error)
+                    ? t('taskErrorSignInHint')
+                    : t('taskErrorDetailsHint')}
+                  onClick={() => {
+                    if (requiresAccountReauthentication(active.error)) {
+                      void reauthenticateTask(active.id);
+                    } else {
+                      setTaskErrorOpen(true);
+                    }
+                  }}
                 >
-                  {t('taskErrorDetails')}
+                  {requiresAccountReauthentication(active.error)
+                    ? t('taskErrorSignInRequired')
+                    : t('taskErrorDetails')}
                 </button>
               ) : null}
               {active.sessionId ? (
