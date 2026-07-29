@@ -537,6 +537,15 @@ function App() {
       return true;
     }
   });
+  /** Optional Grok Build `--max-turns` cap for newly started agent processes. */
+  const [maxAgentTurns, setMaxAgentTurns] = useState<number | null>(() => {
+    try {
+      const value = Number.parseInt(localStorage.getItem('gorkx.maxAgentTurns') || '', 10);
+      return Number.isInteger(value) && value >= 1 && value <= 200 ? value : null;
+    } catch {
+      return null;
+    }
+  });
   const [voiceShortcutEnabled, setVoiceShortcutEnabled] = useState(() => {
     try {
       return localStorage.getItem('gorkx.voiceShortcutEnabled') !== '0';
@@ -2438,11 +2447,12 @@ function App() {
       effort,
       workingDirectory || project || undefined,
       webSearchEnabled,
+      maxAgentTurns,
     );
     await client.initialize();
     await client.authenticate('cached_token');
     return client;
-  }, [perm, grokCmd, effort, project, webSearchEnabled]);
+  }, [perm, grokCmd, effort, project, webSearchEnabled, maxAgentTurns]);
 
   const rememberModels = useCallback(
     (session: { models?: { currentModelId?: string; availableModels?: ModelInfo[] } }) => {
@@ -4580,6 +4590,7 @@ function App() {
         next,
         cwd || project || undefined,
         webSearchEnabled,
+        maxAgentTurns,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -4690,6 +4701,7 @@ function App() {
         th.effort || effort,
         th.cwd || project || undefined,
         webSearchEnabled,
+        maxAgentTurns,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -7272,6 +7284,17 @@ function App() {
           setWebSearchEnabled(enabled);
           try {
             localStorage.setItem('gorkx.webSearchEnabled', enabled ? '1' : '0');
+          } catch {
+            /* browser preview */
+          }
+        }}
+        maxAgentTurns={maxAgentTurns}
+        onMaxAgentTurns={(turns) => {
+          const next = Number.isInteger(turns) && (turns ?? 0) >= 1 && (turns ?? 0) <= 200 ? turns : null;
+          setMaxAgentTurns(next);
+          try {
+            if (next == null) localStorage.removeItem('gorkx.maxAgentTurns');
+            else localStorage.setItem('gorkx.maxAgentTurns', String(next));
           } catch {
             /* browser preview */
           }

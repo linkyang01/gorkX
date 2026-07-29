@@ -5862,6 +5862,20 @@ button.pill:hover {
 .settings-textarea::placeholder { color: var(--text-faint); }
 .settings-textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); border-color: var(--accent); }
 
+.settings-number-input {
+  width: 104px;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border-dim);
+  border-radius: 9px;
+  padding: 7px 9px;
+  background: var(--glass-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: right;
+}
+.settings-number-input::placeholder { color: var(--text-faint); }
+.settings-number-input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); border-color: var(--accent); }
+
 .field-row {
   display: flex;
   align-items: center;

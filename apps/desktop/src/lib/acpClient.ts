@@ -709,6 +709,7 @@ export class AcpClient {
     reasoningEffort?: ReasoningEffort | string,
     workingDirectory?: string,
     webSearchEnabled = true,
+    maxTurns?: number | null,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
@@ -716,6 +717,7 @@ export class AcpClient {
       reasoningEffort: reasoningEffort ?? null,
       workingDirectory: workingDirectory ?? null,
       webSearchEnabled,
+      maxTurns: Number.isInteger(maxTurns) && (maxTurns ?? 0) >= 1 && (maxTurns ?? 0) <= 200 ? maxTurns : null,
     });
     const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();

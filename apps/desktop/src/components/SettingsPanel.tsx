@@ -181,6 +181,9 @@ interface Props {
   onPerm: (p: PermissionMode) => void;
   webSearchEnabled: boolean;
   onWebSearchEnabled: (enabled: boolean) => void;
+  /** Optional native `--max-turns` limit for a newly started Grok Build agent. */
+  maxAgentTurns: number | null;
+  onMaxAgentTurns: (turns: number | null) => void;
   /** Renderer-only preference; native voice remains available via the composer button. */
   voiceShortcutEnabled: boolean;
   onVoiceShortcutEnabled: (enabled: boolean) => void;
@@ -250,6 +253,8 @@ export function SettingsPanel({
   onPerm,
   webSearchEnabled,
   onWebSearchEnabled,
+  maxAgentTurns,
+  onMaxAgentTurns,
   voiceShortcutEnabled,
   onVoiceShortcutEnabled,
   showMessageTimestamps,
@@ -1200,6 +1205,34 @@ export function SettingsPanel({
                     />
                   </label>
                 ))}
+              </div>
+              <h3 className="subhead">{t('settingsTaskRunLimit')}</h3>
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsTaskRunLimit')}</div>
+                    <div className="settings-row-hint">{t('settingsTaskRunLimitHint')}</div>
+                  </div>
+                  <input
+                    className="settings-number-input"
+                    type="number"
+                    min={1}
+                    max={200}
+                    inputMode="numeric"
+                    aria-label={t('settingsTaskRunLimit')}
+                    placeholder={t('settingsTaskRunLimitDefault')}
+                    value={maxAgentTurns ?? ''}
+                    onChange={(event) => {
+                      const raw = event.target.value.trim();
+                      if (!raw) {
+                        onMaxAgentTurns(null);
+                        return;
+                      }
+                      const value = Number.parseInt(raw, 10);
+                      if (Number.isInteger(value) && value >= 1 && value <= 200) onMaxAgentTurns(value);
+                    }}
+                  />
+                </div>
               </div>
               <h3 className="subhead">{t('settingsComposer')}</h3>
               <div className="settings-card muted-block">

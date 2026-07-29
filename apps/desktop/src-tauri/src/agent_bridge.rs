@@ -91,6 +91,7 @@ fn agent_cli_args(
     permission_mode: &str,
     reasoning_effort: Option<&str>,
     web_search_enabled: bool,
+    max_turns: Option<u16>,
 ) -> Vec<String> {
     // `--disable-web-search` is a root Grok flag (not an `agent` flag), so
     // it must come before the subcommand. Keep the remaining agent flags
@@ -98,6 +99,10 @@ fn agent_cli_args(
     let mut args = Vec::new();
     if !web_search_enabled {
         args.push("--disable-web-search".into());
+    }
+    if let Some(limit) = max_turns.filter(|value| (1..=200).contains(value)) {
+        args.push("--max-turns".into());
+        args.push(limit.to_string());
     }
     args.push("agent".into());
     match permission_mode {
@@ -140,6 +145,7 @@ pub async fn agent_start(
     reasoning_effort: Option<String>,
     working_directory: Option<String>,
     web_search_enabled: Option<bool>,
+    max_turns: Option<u16>,
 ) -> Result<AgentInfo, String> {
     let mode = match permission_mode.as_str() {
         "auto" | "full" => permission_mode.clone(),
@@ -160,6 +166,7 @@ pub async fn agent_start(
         &mode,
         reasoning_effort.as_deref(),
         web_search_enabled.unwrap_or(true),
+        max_turns,
     );
     let _ = paths::ensure_dirs();
     let working_directory = resolve_agent_working_directory(working_directory)?;
@@ -734,10 +741,10 @@ mod tests {
 
     #[test]
     fn agent_args_disable_web_search_only_when_user_turns_it_off() {
-        let enabled = agent_cli_args("default", Some("high"), true);
+        let enabled = agent_cli_args("default", Some("high"), true, None);
         assert_eq!(enabled, vec!["agent", "--reasoning-effort", "high", "stdio"]);
 
-        let disabled = agent_cli_args("full", None, false);
-        assert_eq!(disabled, vec!["--disable-web-search", "agent", "--always-approve", "stdio"]);
+        let disabled = agent_cli_args("full", None, false, Some(12));
+        assert_eq!(disabled, vec!["--disable-web-search", "--max-turns", "12", "agent", "--always-approve", "stdio"]);
     }
 }
