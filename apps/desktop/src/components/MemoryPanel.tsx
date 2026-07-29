@@ -103,7 +103,10 @@ export function MemoryPanel({
         </div>
         <p className="text-prompt-msg">{t('memoryHint')}</p>
         {err ? <div className="hint">{err}</div> : null}
-        <div className="field-row" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <section style={{ marginBottom: 14 }} aria-label={t('memoryKernelTitle')}>
+          <strong>{t('memoryKernelTitle')}</strong>
+          <p className="hint" style={{ margin: '5px 0 8px' }}>{t('memoryKernelHint')}</p>
+          <div className="field-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               type="checkbox"
@@ -112,21 +115,6 @@ export function MemoryPanel({
               onChange={() => void toggle()}
             />
             {st?.enabled ? t('memoryOn') : t('memoryOff')}
-          </label>
-          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }} title={t('memoryAutoLearnHint')}>
-            <input
-              type="checkbox"
-              checked={Boolean(st?.autoLearn)}
-              disabled={busy || !st || !st?.enabled}
-              onChange={() => {
-                setBusy(true);
-                void setMemoryAutoLearn(!st?.autoLearn)
-                  .then((s) => setSt(s))
-                  .catch((e) => setErr(String(e)))
-                  .finally(() => setBusy(false));
-              }}
-            />
-            {t('memoryAutoLearn')}
           </label>
           <button type="button" className="btn btn-sm" onClick={() => void refresh()}>
             {t('kernelRefresh')}
@@ -164,10 +152,45 @@ export function MemoryPanel({
           >
             {t('memoryClearGlobal')}
           </button>
-        </div>
-        <div className="hint" style={{ marginBottom: 10 }}>
-          {st?.note}
-        </div>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={busy}
+            onClick={() => {
+              if (!confirm(t('memoryClearAllConfirm'))) return;
+              setBusy(true);
+              void memoryClear('all', grokCmd, project)
+                .then(() => refresh())
+                .catch((e) => setErr(String(e)))
+                .finally(() => setBusy(false));
+            }}
+          >
+            {t('memoryClearAll')}
+          </button>
+          </div>
+        </section>
+        <section style={{ borderTop: '1px solid var(--hairline)', paddingTop: 12, marginBottom: 10 }} aria-label={t('memoryLocalNotesTitle')}>
+          <strong>{t('memoryLocalNotesTitle')}</strong>
+          <p className="hint" style={{ margin: '5px 0 8px' }}>{t('memoryLocalNotesHint')}</p>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }} title={t('memoryAutoLearnHint')}>
+            <input
+              type="checkbox"
+              checked={Boolean(st?.autoLearn)}
+              disabled={busy || !st || !st?.enabled}
+              onChange={() => {
+                setBusy(true);
+                void setMemoryAutoLearn(!st?.autoLearn)
+                  .then((s) => setSt(s))
+                  .catch((e) => setErr(String(e)))
+                  .finally(() => setBusy(false));
+              }}
+            />
+            {t('memoryAutoLearn')}
+          </label>
+          <div className="hint" style={{ marginTop: 8 }}>
+            {st?.note}
+          </div>
+        </section>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {canCaptureSessionMemory ? (
             <button
