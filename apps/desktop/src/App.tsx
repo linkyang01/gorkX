@@ -282,6 +282,7 @@ function DeferredPanelFallback() {
 }
 
 export type ChatMode = 'agent' | 'plan';
+type NewTaskProfile = 'default' | 'explore';
 
 /**
  * Plan is already a first-class desktop control.  Supplying the matching
@@ -289,16 +290,21 @@ export type ChatMode = 'agent' | 'plan';
  * the kernel before the first user turn; `session/set_mode(plan)` below still
  * owns the engine's actual plan-mode control plane.
  */
-function agentProfileForChatMode(mode: ChatMode): AgentProfile | undefined {
-  if (mode !== 'plan') return undefined;
-  return {
-    name: 'gorkx-plan',
-    description: 'A plan-first assistant for a gorkX desktop task.',
-    promptMode: 'extend',
-    permissionMode: 'default',
-    promptBody:
-      'Work plan-first. Understand the request and relevant project context, then present a clear, actionable plan before proposing changes. Keep the user in control of consequential actions.',
-  };
+function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile): AgentProfile | undefined {
+  if (mode === 'plan') {
+    return {
+      name: 'gorkx-plan',
+      description: 'A plan-first assistant for a gorkX desktop task.',
+      promptMode: 'extend',
+      permissionMode: 'default',
+      promptBody:
+        'Work plan-first. Understand the request and relevant project context, then present a clear, actionable plan before proposing changes. Keep the user in control of consequential actions.',
+    };
+  }
+  // `explore` is a bundled Grok Build profile with its own smaller read-only
+  // toolset and Plan permission mode. The desktop only selects it for a new
+  // task; it does not recreate those restrictions in the shell.
+  return profile === 'explore' ? 'explore' : undefined;
 }
 
 interface Thread {
@@ -499,6 +505,9 @@ function App() {
   });
   const [chatMode, setChatMode] = useState<ChatMode>(() => {
     return localStorage.getItem('gorkx.chatMode') === 'plan' ? 'plan' : 'agent';
+  });
+  const [newTaskProfile, setNewTaskProfile] = useState<NewTaskProfile>(() => {
+    return localStorage.getItem('gorkx.newTaskProfile') === 'explore' ? 'explore' : 'default';
   });
   const [effort, setEffort] = useState<ReasoningEffort>(() => {
     const v = localStorage.getItem('gorkx.effort');
@@ -755,6 +764,7 @@ function App() {
         initialPrompt?: string;
         initialDisplay?: string;
         initialAttachments?: ComposerAttachment[];
+        profileOverride?: NewTaskProfile;
       }) => Promise<{ ok: boolean; error?: string }>)
     | null
   >(null);
@@ -1041,6 +1051,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem('gorkx.chatMode', chatMode);
   }, [chatMode]);
+  useEffect(() => {
+    localStorage.setItem('gorkx.newTaskProfile', newTaskProfile);
+  }, [newTaskProfile]);
   useEffect(() => {
     localStorage.setItem('gorkx.effort', effort);
   }, [effort]);
@@ -3058,6 +3071,9 @@ function App() {
       case 'plan-toggle':
         await changeChatMode(action.on ? 'plan' : 'agent');
         return;
+      case 'explore-mode':
+        setNewTaskProfile(action.on ? 'explore' : 'default');
+        return;
       case 'fork-session':
         setPlusMenuOpen(false);
         await forkActiveSession();
@@ -3441,11 +3457,13 @@ function App() {
     /** Friendly wording shown in chat when the engine command is internal. */
     initialDisplay?: string;
     initialAttachments?: ComposerAttachment[];
+    profileOverride?: NewTaskProfile;
   }) => {
     const useWorktree = Boolean(opts?.worktree);
     const initialPrompt = (opts?.initialPrompt || '').trim();
     const initialDisplay = (opts?.initialDisplay || '').trim();
     const initialAttachments = opts?.initialAttachments || [];
+    const selectedProfile = opts?.profileOverride ?? newTaskProfile;
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
@@ -3490,7 +3508,7 @@ function App() {
     try {
       const client = await bootstrapClient(cwdBase);
       wireClient(id, client);
-      const session = await client.newSession(cwdBase, agentProfileForChatMode(chatMode));
+      const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile));
       rememberModels(session);
       let sessionId = session.sessionId;
       let cwd = cwdBase;
@@ -5686,6 +5704,7 @@ function App() {
                           onClick={() => {
                             // Starter cards are guidance, not an implicit agent turn:
                             // let people tailor the brief and add files before they send.
+                            if (titleKey === 'starterExplore') setNewTaskProfile('explore');
                             setDraft(t(promptKey));
                             setSlashOpen(false);
                             focusComposer();
@@ -5836,6 +5855,7 @@ function App() {
                         open={plusMenuOpen}
                         home
                         planModeOn={chatMode === 'plan'}
+                        exploreModeOn={newTaskProfile === 'explore'}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
@@ -5859,6 +5879,16 @@ function App() {
                         onClick={() => void changeChatMode('agent')}
                       >
                         {t('modePlan')}
+                      </button>
+                    ) : null}
+                    {newTaskProfile === 'explore' && chatMode !== 'plan' ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('plusExploreHint')}
+                        onClick={() => setNewTaskProfile('default')}
+                      >
+                        {t('modeExplore')}
                       </button>
                     ) : null}
                   </div>

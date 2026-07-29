@@ -17,6 +17,7 @@ export type PlusAction =
   | { type: 'extensions' }
   | { type: 'memory-panel' }
   | { type: 'plan-toggle'; on: boolean }
+  | { type: 'explore-mode'; on: boolean }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
   | { type: 'task-info' }
@@ -52,6 +53,8 @@ interface Props {
   open: boolean;
   home?: boolean;
   planModeOn: boolean;
+  /** `explore` is a new-task-only, kernel-owned read-only profile. */
+  exploreModeOn?: boolean;
   skills: SkillInfo[];
   hasActiveSession: boolean;
   /** Show image edit only after the user has actually staged an image. */
@@ -81,6 +84,7 @@ export function PlusMenu({
   open,
   home,
   planModeOn,
+  exploreModeOn = false,
   skills,
   hasActiveSession,
   hasImageAttachment = false,
@@ -199,6 +203,13 @@ export function PlusMenu({
       desc: t('plusPlanHint'),
       action: { type: 'plan-toggle', on: !planModeOn },
     },
+    ...(home ? ([{
+      kind: 'action' as const,
+      id: 'explore-mode',
+      title: exploreModeOn ? t('plusExploreOff') : t('plusExploreOn'),
+      desc: t('plusExploreHint'),
+      action: { type: 'explore-mode', on: !exploreModeOn } as PlusAction,
+    }] as Row[]) : []),
     {
       kind: 'action',
       id: 'goal',

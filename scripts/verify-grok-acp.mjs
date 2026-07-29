@@ -35,6 +35,8 @@
 // --agent-profile verifies the portable agent-profile object contract carried
 // in ACP session/new. It creates no prompt and changes only the isolated test
 // session.
+// --agent-profile-name <name> verifies a named, kernel-discovered profile;
+// names are bounded identifiers and never file paths.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -43,7 +45,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write] [--disable-web-search] [--agent-profile]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -61,17 +63,23 @@ const voiceControlsSmoke = options.includes('--voice-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
 const agentProfileSmoke = options.includes('--agent-profile');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke || agentProfileSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw, --session-info and --agent-profile require --authenticated with explicit disposable auth and project directories');
+const agentProfileNameIndex = options.indexOf('--agent-profile-name');
+const agentProfileName = agentProfileNameIndex >= 0 ? options[agentProfileNameIndex + 1] : '';
+if (agentProfileNameIndex >= 0 && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(agentProfileName)) {
+  console.error('--agent-profile-name requires one safe profile name');
+  process.exit(2);
+}
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke || agentProfileSmoke || agentProfileName) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw, --session-info and agent-profile checks require --authenticated with explicit disposable auth and project directories');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write', '--disable-web-search', '--agent-profile'];
-if (options.some((option) => !knownOptions.includes(option))) {
-  console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
+  console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
 }
 
@@ -226,7 +234,7 @@ try {
     await request('authenticate', { methodId: 'cached_token' }, 30_000);
     console.log('PASS: ACP authenticate(cached_token)');
 
-    const agentProfile = agentProfileSmoke
+    const agentProfile = agentProfileName || (agentProfileSmoke
       ? {
           name: 'gorkx-acp-profile-smoke',
           description: 'Isolated gorkX ACP profile contract smoke test.',
@@ -234,7 +242,7 @@ try {
           permissionMode: 'default',
           promptBody: 'Keep this isolated protocol validation concise.',
         }
-      : undefined;
+      : undefined);
     const created = await request('session/new', {
       cwd,
       mcpServers: [],
@@ -247,6 +255,9 @@ try {
     console.log('PASS: ACP session/new');
     if (agentProfileSmoke) {
       console.log('PASS: ACP session/new _meta.agentProfile (portable profile)');
+    }
+    if (agentProfileName) {
+      console.log(`PASS: ACP session/new _meta.agentProfile (${agentProfileName})`);
     }
 
     if (customModelSmoke) {
