@@ -7,6 +7,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { readTextFile } from '@tauri-apps/plugin-fs';
+import { APP_VERSION } from './appMeta';
 
 export type PermissionMode = 'default' | 'auto' | 'full';
 
@@ -1049,7 +1050,7 @@ export class AcpClient {
       'initialize',
       {
         protocolVersion: 1,
-        clientInfo: { name: 'gorkX', version: '0.1.0' },
+        clientInfo: { name: 'gorkX', version: APP_VERSION },
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: this.allowClientFileWrites },
           terminal: true,

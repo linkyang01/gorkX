@@ -19,6 +19,7 @@ import {
   storeDbPath,
 } from '../lib/threads';
 import { revealInFinder } from '../lib/host';
+import { APP_VERSION } from '../lib/appMeta';
 import {
   checkAppUpdate,
   checkKernelUpdate,
@@ -125,7 +126,6 @@ import {
 } from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
 
-const APP_VERSION = '0.5.0'; // keep in sync with package.json
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
 export type SettingsSection =

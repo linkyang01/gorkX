@@ -6,9 +6,8 @@ import { clearChatCache, storeDataDir, storeDbPath } from '../lib/threads';
 import { revealInFinder } from '../lib/host';
 import { fetchAccountSummary, fetchSubscriptionModelsSnapshot } from '../lib/account';
 import type { AccountSummary } from '../lib/account';
+import { APP_VERSION } from '../lib/appMeta';
 import { t } from '../lib/i18n';
-
-const APP_VERSION = '0.3.6';
 
 interface Props {
   open: boolean;
