@@ -185,6 +185,7 @@ interface Props {
   onVoiceShortcutEnabled: (enabled: boolean) => void;
   /** Jump out of settings into product surfaces */
   onOpenMemory?: () => void;
+  onOpenTutorial?: () => void;
   onOpenExtensions?: () => void;
   onOpenShortcuts?: () => void;
   onOpenWorktrees?: () => void;
@@ -249,6 +250,7 @@ export function SettingsPanel({
   voiceShortcutEnabled,
   onVoiceShortcutEnabled,
   onOpenMemory,
+  onOpenTutorial,
   onOpenExtensions,
   onOpenShortcuts,
   onOpenWorktrees,
@@ -1176,6 +1178,25 @@ export function SettingsPanel({
               <h3 className="subhead">{t('autoCompact')}</h3>
               <div className="settings-card muted-block">
                 <p className="hint">{t('settingsAutoCompactAlways')}</p>
+              </div>
+              <h3 className="subhead">{t('tutorialTitle')}</h3>
+              <div className="settings-card">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('tutorialTitle')}</div>
+                    <div className="settings-row-hint">{t('tutorialIntro')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      onClose();
+                      onOpenTutorial?.();
+                    }}
+                  >
+                    {t('tutorialOpen')}
+                  </button>
+                </div>
               </div>
             </>
           ) : null}

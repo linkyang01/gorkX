@@ -35,6 +35,8 @@ export function clearOnboardingDismiss(): void {
 
 interface Props {
   open: boolean;
+  /** Setup is first-run only; tutorial is an always-available desktop equivalent of `/tutorial`. */
+  mode?: 'setup' | 'tutorial';
   status: GrokStatus | null;
   account: AccountSummary | null;
   project: string | null;
@@ -47,6 +49,7 @@ interface Props {
 
 export function OnboardingModal({
   open,
+  mode = 'setup',
   status,
   account,
   project,
@@ -57,6 +60,49 @@ export function OnboardingModal({
   onRefresh,
 }: Props) {
   if (!open) return null;
+
+  if (mode === 'tutorial') {
+    const topics = [
+      t('tutorialTopicTask'),
+      t('tutorialTopicProject'),
+      t('tutorialTopicFiles'),
+      t('tutorialTopicPlan'),
+      t('tutorialTopicApproval'),
+      t('tutorialTopicReview'),
+      t('tutorialTopicMemory'),
+      t('tutorialTopicExtensions'),
+      t('tutorialTopicVoice'),
+    ];
+    return (
+      <div className="modal-backdrop onboard-backdrop" onClick={onClose}>
+        <div
+          className="modal onboard-modal onboard-tutorial-modal"
+          role="dialog"
+          aria-label={t('tutorialTitle')}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-head">
+            <h2 style={{ margin: 0 }}>{t('tutorialTitle')}</h2>
+            <button type="button" className="btn btn-sm" onClick={onClose} aria-label="close">
+              <IconClose size={14} />
+            </button>
+          </div>
+          <p className="text-prompt-msg">{t('tutorialIntro')}</p>
+          <ol className="onboard-steps onboard-tutorial-steps">
+            {topics.map((topic, index) => (
+              <li className="onboard-step" key={topic}>
+                <span className="onboard-tutorial-number" aria-hidden>{index + 1}</span>
+                <span className="onboard-tutorial-copy">{topic}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="onboard-foot">
+            <button type="button" className="btn primary" onClick={onClose}>{t('onboardStart')}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const kernelOk = Boolean(status?.installed);
   const authOk = Boolean(

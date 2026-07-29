@@ -607,6 +607,7 @@ function App() {
   const [nameEditOpen, setNameEditOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [onboardOpen, setOnboardOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const [appUpdateBanner, setAppUpdateBanner] = useState<AppUpdateInfo | null>(null);
   /** Opt-in: show Grok kernel history under selected project (not auto-loaded). */
   const [showGrokHistory, setShowGrokHistory] = useState(false);
@@ -6894,6 +6895,7 @@ function App() {
 
       <OnboardingModal
         open={onboardOpen}
+        mode="setup"
         status={status}
         account={account}
         project={project || null}
@@ -6933,6 +6935,19 @@ function App() {
             }
           })();
         }}
+        onRefresh={refreshStatus}
+      />
+
+      <OnboardingModal
+        open={tutorialOpen}
+        mode="tutorial"
+        status={status}
+        account={account}
+        project={project || null}
+        onClose={() => setTutorialOpen(false)}
+        onOpenSettings={() => setKernelOpen(true)}
+        onLogin={() => undefined}
+        onPickProject={() => undefined}
         onRefresh={refreshStatus}
       />
 
@@ -7010,6 +7025,7 @@ function App() {
           }
         }}
         onOpenMemory={() => setMemoryOpen(true)}
+        onOpenTutorial={() => setTutorialOpen(true)}
         onOpenExtensions={() => setExtOpen(true)}
         onOpenShortcuts={() => setShortcutsOpen(true)}
         onOpenWorktrees={() => setWorktreePanelOpen(true)}
