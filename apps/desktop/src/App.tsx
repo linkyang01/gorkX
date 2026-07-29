@@ -3293,7 +3293,7 @@ function App() {
     }
   };
 
-  const removeProjectFromApp = (path: string) => {
+  const removeProjectFromApp = (path: string, options?: { clearTaskIndex?: boolean }) => {
     // UI-only: remove from recent list; never delete files on disk
     setRecentProjects(removeRecentProject(path));
     setPinnedProjects((prev) => {
@@ -3305,8 +3305,11 @@ function App() {
       setProject('');
       localStorage.setItem('gorkx.project', '');
     }
-    // Optional: clear saved thread index for this project (not disk code)
-    void clearProjectStore(path);
+    // A deliberate user removal also clears the app-only task index. Recovery
+    // from a missing folder must retain it: an external disk or temporary
+    // worktree can return later, and removing a sidebar row must not erase
+    // the user's local task history in that case.
+    if (options?.clearTaskIndex !== false) void clearProjectStore(path);
   };
 
   /** Rename the desktop task and, while live, the corresponding Grok session. */
@@ -3619,7 +3622,7 @@ function App() {
         && (cwdOverride || project)
       ) {
         setThreads((items) => items.filter((thread) => thread.id !== id));
-        if (project === cwdBase) removeProjectFromApp(cwdBase);
+        if (project === cwdBase) removeProjectFromApp(cwdBase, { clearTaskIndex: false });
         if (activeIdRef.current === id) selectThread(null);
         alert(t('projectUnavailable').replace('{path}', cwdBase));
         return { ok: false, error };
