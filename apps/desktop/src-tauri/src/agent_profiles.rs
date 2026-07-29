@@ -30,6 +30,25 @@ fn is_safe_name(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
 }
 
+fn resolve_role_name(display_name: &str, existing_name: Option<&str>) -> Result<String, String> {
+    match existing_name.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if value.starts_with(PREFIX) && is_safe_name(value) => Ok(value.to_string()),
+        Some(_) => Err("Only a gorkX-created role can be edited here.".into()),
+        None => {
+            let stem = display_name.to_ascii_lowercase().chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+                .collect::<String>();
+            let stem = stem.trim_matches('-');
+            let name = if stem.is_empty() {
+                format!("{PREFIX}role-{:x}", chrono::Utc::now().timestamp_millis())
+            } else {
+                format!("{PREFIX}{}", &stem[..stem.len().min(60)])
+            };
+            if is_safe_name(&name) { Ok(name) } else { Err("Role name is not supported.".into()) }
+        }
+    }
+}
+
 fn refuse_symlink(path: &Path) -> Result<(), String> {
     if let Ok(meta) = std::fs::symlink_metadata(path) {
         if meta.file_type().is_symlink() { return Err("Agent profile path must not be a symbolic link.".into()); }
@@ -97,15 +116,7 @@ pub fn agent_profile_save(display_name: String, description: String, instruction
     let dir = agents_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("create agent profiles folder: {e}"))?;
     refuse_symlink(&dir)?;
-    let derived_stem = display_name.to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '-' }).collect::<String>();
-    let derived_stem = derived_stem.trim_matches('-');
-    let name = match existing_name.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-        Some(value) if value.starts_with(PREFIX) && is_safe_name(value) => value.to_string(),
-        Some(_) => return Err("Only a gorkX-created role can be edited here.".into()),
-        None if derived_stem.is_empty() => format!("{PREFIX}role-{:x}", chrono::Utc::now().timestamp_millis()),
-        None => format!("{PREFIX}{}", &derived_stem[..derived_stem.len().min(60)]),
-    };
-    if !is_safe_name(&name) { return Err("Role name is not supported.".into()); }
+    let name = resolve_role_name(&display_name, existing_name.as_deref())?;
     let path = dir.join(format!("{name}.md"));
     refuse_symlink(&path)?;
     let escaped_description = description.replace(['"', '\r'], "'");
@@ -130,6 +141,15 @@ pub fn agent_profile_remove(name: String) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::is_safe_name;
+    use super::{is_safe_name, resolve_role_name};
     #[test] fn accepts_engine_safe_role_names() { assert!(is_safe_name("gorkx-report_writer")); assert!(!is_safe_name("gorkx role")); }
+    #[test] fn edit_keeps_the_existing_native_identity() {
+        assert_eq!(resolve_role_name("改名后的角色", Some("gorkx-report-writer")).unwrap(), "gorkx-report-writer");
+        assert!(resolve_role_name("anything", Some("outside-role")).is_err());
+    }
+    #[test] fn non_ascii_display_name_still_gets_a_safe_engine_name() {
+        let name = resolve_role_name("报告撰写", None).unwrap();
+        assert!(name.starts_with("gorkx-role-"));
+        assert!(is_safe_name(&name));
+    }
 }
