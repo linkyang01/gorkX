@@ -23,9 +23,10 @@ interface Props {
   project?: string;
   grokCmd?: string;
   /** Runs an engine-backed memory action without exposing command syntax. */
-  onRunKernelMemoryAction?: (action: 'capture' | 'organize') => void;
+  onRunKernelMemoryAction?: (action: 'capture' | 'organize' | 'remember', note?: string) => void;
   canCaptureSessionMemory?: boolean;
   canOrganizeSessionMemory?: boolean;
+  canRememberSessionMemory?: boolean;
 }
 
 export function MemoryPanel({
@@ -36,6 +37,7 @@ export function MemoryPanel({
   onRunKernelMemoryAction,
   canCaptureSessionMemory = false,
   canOrganizeSessionMemory = false,
+  canRememberSessionMemory = false,
 }: Props) {
   const [st, setSt] = useState<MemoryStatus | null>(null);
   const [body, setBody] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export function MemoryPanel({
   const [err, setErr] = useState<string | null>(null);
   const [rememberDraft, setRememberDraft] = useState('');
   const [rememberOpen, setRememberOpen] = useState(false);
+  const [kernelRememberDraft, setKernelRememberDraft] = useState('');
+  const [kernelRememberOpen, setKernelRememberOpen] = useState(false);
   const [forgetDraft, setForgetDraft] = useState('');
   const [forgetOpen, setForgetOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
@@ -167,7 +171,56 @@ export function MemoryPanel({
           >
             {t('memoryClearAll')}
           </button>
+          {canRememberSessionMemory ? (
+            <button
+              type="button"
+              className="btn btn-sm primary-sm"
+              onClick={() => {
+                setKernelRememberOpen((value) => !value);
+                setRememberOpen(false);
+              }}
+              disabled={!onRunKernelMemoryAction}
+            >
+              {t('memoryKernelRemember')}
+            </button>
+          ) : null}
           </div>
+          {kernelRememberOpen ? (
+            <div className="field" style={{ marginTop: 10 }}>
+              <label>{t('memoryKernelRememberPrompt')}</label>
+              <input
+                type="text"
+                value={kernelRememberDraft}
+                onChange={(event) => setKernelRememberDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' || !kernelRememberDraft.trim()) return;
+                  onRunKernelMemoryAction?.('remember', kernelRememberDraft.trim());
+                  setKernelRememberDraft('');
+                  setKernelRememberOpen(false);
+                }}
+                placeholder={t('memoryRememberPlaceholder')}
+              />
+              <div className="modal-actions" style={{ marginTop: 8 }}>
+                <button type="button" className="btn btn-sm" onClick={() => setKernelRememberOpen(false)}>
+                  {t('cancel')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  disabled={!kernelRememberDraft.trim() || !onRunKernelMemoryAction}
+                  onClick={() => {
+                    const note = kernelRememberDraft.trim();
+                    if (!note) return;
+                    onRunKernelMemoryAction?.('remember', note);
+                    setKernelRememberDraft('');
+                    setKernelRememberOpen(false);
+                  }}
+                >
+                  {t('memoryKernelRemember')}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
         <section style={{ borderTop: '1px solid var(--hairline)', paddingTop: 12, marginBottom: 10 }} aria-label={t('memoryLocalNotesTitle')}>
           <strong>{t('memoryLocalNotesTitle')}</strong>
@@ -243,7 +296,7 @@ export function MemoryPanel({
               setForgetOpen(false);
             }}
           >
-            {t('memoryRemember')}
+              {t('memoryRememberLocal')}
           </button>
           <button
             type="button"

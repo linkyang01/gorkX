@@ -7295,9 +7295,18 @@ function App() {
         grokCmd={grokCmd}
         canCaptureSessionMemory={Boolean(active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'flush'))}
         canOrganizeSessionMemory={Boolean(active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'dream'))}
-        onRunKernelMemoryAction={(action) => {
-          const command = action === 'capture' ? '/flush' : '/dream';
-          const visible = action === 'capture' ? t('memoryFlushVisible') : t('memoryDreamVisible');
+        canRememberSessionMemory={Boolean(active?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'remember'))}
+        onRunKernelMemoryAction={(action, note) => {
+          const command = action === 'capture'
+            ? '/flush'
+            : action === 'organize'
+              ? '/dream'
+              : `/remember ${note || ''}`.trim();
+          const visible = action === 'capture'
+            ? t('memoryFlushVisible')
+            : action === 'organize'
+              ? t('memoryDreamVisible')
+              : `${t('memoryKernelRememberVisible')}: ${note || ''}`;
           setMemoryOpen(false);
           void runDesktopAction(command, visible);
         }}
