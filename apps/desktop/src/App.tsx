@@ -43,6 +43,7 @@ import {
   type RewindResult,
   type HooksSnapshot,
   type AvailableCommandInfo,
+  type AgentProfile,
   type WorkflowRunUpdate,
   type KernelScheduledTaskUpdate,
   type SessionUpdate,
@@ -281,6 +282,24 @@ function DeferredPanelFallback() {
 }
 
 export type ChatMode = 'agent' | 'plan';
+
+/**
+ * Plan is already a first-class desktop control.  Supplying the matching
+ * portable Grok Build profile at session creation makes its role explicit to
+ * the kernel before the first user turn; `session/set_mode(plan)` below still
+ * owns the engine's actual plan-mode control plane.
+ */
+function agentProfileForChatMode(mode: ChatMode): AgentProfile | undefined {
+  if (mode !== 'plan') return undefined;
+  return {
+    name: 'gorkx-plan',
+    description: 'A plan-first assistant for a gorkX desktop task.',
+    promptMode: 'extend',
+    permissionMode: 'default',
+    promptBody:
+      'Work plan-first. Understand the request and relevant project context, then present a clear, actionable plan before proposing changes. Keep the user in control of consequential actions.',
+  };
+}
 
 interface Thread {
   id: string;
@@ -3471,7 +3490,7 @@ function App() {
     try {
       const client = await bootstrapClient(cwdBase);
       wireClient(id, client);
-      const session = await client.newSession(cwdBase);
+      const session = await client.newSession(cwdBase, agentProfileForChatMode(chatMode));
       rememberModels(session);
       let sessionId = session.sessionId;
       let cwd = cwdBase;

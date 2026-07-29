@@ -11,6 +11,15 @@ import { APP_VERSION } from './appMeta';
 
 export type PermissionMode = 'default' | 'auto' | 'full';
 
+/**
+ * A Grok Build agent profile supplied with ACP `session/new`.
+ *
+ * The kernel accepts either the name of a discovered profile or a portable
+ * profile definition. Keep this boundary deliberately small: the desktop may
+ * choose a role for a new task, but it must not invent a second agent loop.
+ */
+export type AgentProfile = string | Record<string, unknown>;
+
 export interface AgentInfo {
   id: string;
   pid: number;
@@ -1063,11 +1072,12 @@ export class AcpClient {
     return this.request('authenticate', { methodId }, 30_000);
   }
 
-  async newSession(cwd: string): Promise<SessionInfo> {
+  async newSession(cwd: string, agentProfile?: AgentProfile): Promise<SessionInfo> {
     this.sessionCwd = cwd;
     const result = (await this.request('session/new', {
       cwd,
       mcpServers: [],
+      ...(agentProfile ? { _meta: { agentProfile } } : {}),
     })) as SessionInfo;
     return result;
   }

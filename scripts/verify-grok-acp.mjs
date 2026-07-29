@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 // Protocol gate for a Grok Build binary. By default it intentionally requires
 // no login and never touches the user's GROK_HOME or project directory.
-// Pass --authenticated only with an explicit disposable GROK_HOME/CWD pair.
+// Pass --authenticated only with an explicit disposable GROK_HOME/project-dir
+// pair. `GORKX_ACP_TEST_AUTH_DIR` and `GORKX_ACP_TEST_PROJECT_DIR` are
+// preferred over the legacy names: some process runners reserve or strip
+// `*_HOME` and `*_CWD`.
 // --worktree additionally creates a worktree only in that disposable Git CWD.
 // --resource sends one minimal model request with a temporary local attachment.
 // --custom-model verifies a disposable [model.*] override can be selected;
@@ -29,6 +32,9 @@
 // it does not create a session or write a file.
 // --disable-web-search starts the exact root-flag + agent invocation used by
 // gorkX when a user turns off web research. It sends no model request.
+// --agent-profile verifies the portable agent-profile object contract carried
+// in ACP session/new. It creates no prompt and changes only the isolated test
+// session.
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -37,7 +43,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write] [--disable-web-search]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write] [--disable-web-search] [--agent-profile]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -54,25 +60,30 @@ const sessionInfoSmoke = options.includes('--session-info');
 const voiceControlsSmoke = options.includes('--voice-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw and --session-info require --authenticated with an explicit disposable CWD');
+const agentProfileSmoke = options.includes('--agent-profile');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke || agentProfileSmoke) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw, --session-info and --agent-profile require --authenticated with explicit disposable auth and project directories');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write', '--disable-web-search'];
+const knownOptions = ['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write', '--disable-web-search', '--agent-profile'];
 if (options.some((option) => !knownOptions.includes(option))) {
   console.error(`unknown option: ${options.find((option) => !knownOptions.includes(option))}`);
   process.exit(2);
 }
 
 const isolatedHome = !authenticated;
-const home = authenticated ? process.env.GORKX_ACP_TEST_HOME : await mkdtemp(join(tmpdir(), 'gorkx-acp-smoke-'));
-const cwd = authenticated ? process.env.GORKX_ACP_TEST_CWD : home;
+const home = authenticated
+  ? (process.env.GORKX_ACP_TEST_AUTH_DIR || process.env.GORKX_ACP_TEST_HOME)
+  : await mkdtemp(join(tmpdir(), 'gorkx-acp-smoke-'));
+const cwd = authenticated
+  ? (process.env.GORKX_ACP_TEST_PROJECT_DIR || process.env.GORKX_ACP_TEST_CWD)
+  : home;
 if (!home || !cwd) {
-  console.error('--authenticated requires explicit GROKX_ACP_TEST_HOME and GROKX_ACP_TEST_CWD');
+  console.error('--authenticated requires explicit GROKX_ACP_TEST_AUTH_DIR and GROKX_ACP_TEST_PROJECT_DIR');
   process.exit(2);
 }
 if (authenticated) {
@@ -161,6 +172,10 @@ function request(method, params, timeoutMs = 8_000) {
         if (message.error) reject(new Error(message.error.message || JSON.stringify(message.error)));
         else resolve(message.result);
       },
+      reject: (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
     });
     child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
   });
@@ -211,12 +226,28 @@ try {
     await request('authenticate', { methodId: 'cached_token' }, 30_000);
     console.log('PASS: ACP authenticate(cached_token)');
 
-    const created = await request('session/new', { cwd, mcpServers: [] });
+    const agentProfile = agentProfileSmoke
+      ? {
+          name: 'gorkx-acp-profile-smoke',
+          description: 'Isolated gorkX ACP profile contract smoke test.',
+          promptMode: 'extend',
+          permissionMode: 'default',
+          promptBody: 'Keep this isolated protocol validation concise.',
+        }
+      : undefined;
+    const created = await request('session/new', {
+      cwd,
+      mcpServers: [],
+      ...(agentProfile ? { _meta: { agentProfile } } : {}),
+    });
     const sessionId = created?.sessionId;
     if (typeof sessionId !== 'string' || !sessionId) {
       throw new Error(`session/new returned no sessionId: ${JSON.stringify(created)}`);
     }
     console.log('PASS: ACP session/new');
+    if (agentProfileSmoke) {
+      console.log('PASS: ACP session/new _meta.agentProfile (portable profile)');
+    }
 
     if (customModelSmoke) {
       if (!JSON.stringify(created).includes(customModelId)) {
