@@ -4891,9 +4891,9 @@ function App() {
       }
       // Sync ref immediately so send() can use client before next render
       threadsRef.current = threadsRef.current.map((x) =>
-        x.id === id ? { ...x, client, busy: false, error: null } : x,
+        x.id === id ? { ...x, client, busy: false, error: null, searchScopeAvailable: client.supportsSearchToolOverrides } : x,
       );
-      patchThread(id, { client, busy: false, error: null });
+      patchThread(id, { client, busy: false, error: null, searchScopeAvailable: client.supportsSearchToolOverrides });
       autoReconnectTried.current.delete(id);
       return client;
     } catch (e) {
