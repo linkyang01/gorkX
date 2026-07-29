@@ -1,6 +1,7 @@
 /** Update checks: Grok kernel (CLI) + gorkX app (GitHub releases + DMG install). */
 
 import { invoke } from '@tauri-apps/api/core';
+import { APP_VERSION } from './appMeta';
 
 export const GORKX_GITHUB = {
   owner: 'linkyang01',
@@ -245,11 +246,11 @@ export async function openWebPreview(raw: string): Promise<void> {
 }
 
 export async function appVersion(): Promise<string> {
-  if (!isTauri()) return '0.4.3';
+  if (!isTauri()) return APP_VERSION;
   try {
     return await invoke<string>('app_current_version');
   } catch {
-    return '0.4.3';
+    return APP_VERSION;
   }
 }
 

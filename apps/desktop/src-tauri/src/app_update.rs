@@ -10,7 +10,7 @@ use std::time::Duration;
 
 const OWNER: &str = "linkyang01";
 const REPO: &str = "gorkX";
-const UA: &str = "gorkX-desktop-updater/0.4.3";
+const UA: &str = "gorkX-desktop-updater/0.5.1";
 static NEXT_DOWNLOAD_TEMP_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

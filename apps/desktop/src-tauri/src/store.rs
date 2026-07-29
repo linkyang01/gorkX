@@ -734,7 +734,7 @@ pub fn account_summary() -> Result<AccountSummary, String> {
     let url = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("gorkX/0.4.2")
+        .user_agent("gorkX/0.5.1")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1157,7 +1157,7 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
         .header("Accept", "application/json")
         .header("x-grok-client-mode", "cli")
         .header("X-XAI-Token-Auth", "xai-grok-cli")
-        .header("User-Agent", "gorkX/0.4.2")
+        .header("User-Agent", "gorkX/0.5.1")
         .send()
         .map_err(|e| format!("models request failed: {e}"))?;
     if !resp.status().is_success() {
