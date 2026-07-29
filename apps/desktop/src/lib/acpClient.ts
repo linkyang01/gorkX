@@ -1444,12 +1444,19 @@ export class AcpClient {
       messageId,
       prompt,
       ...(searchOverrides !== undefined && this.supportsSearchToolOverrides
-        ? { _meta: { toolOverrides: searchOverrides === null ? null : { x_search: {
-          date_bound: (searchOverrides.fromDate || searchOverrides.toDate)
-            ? { ...(searchOverrides.fromDate ? { fromDate: searchOverrides.fromDate } : {}), ...(searchOverrides.toDate ? { toDate: searchOverrides.toDate } : {}) }
-            : undefined,
-          web_search: searchOverrides.allowedDomains?.length ? { allowed_domains: searchOverrides.allowedDomains } : undefined,
-        } } } }
+        ? { _meta: { toolOverrides: searchOverrides === null
+          ? { xSearch: null, webSearch: null }
+          : {
+              ...(searchOverrides.fromDate || searchOverrides.toDate
+                ? { xSearch: { dateBound: {
+                    ...(searchOverrides.fromDate ? { fromDate: searchOverrides.fromDate } : {}),
+                    ...(searchOverrides.toDate ? { toDate: searchOverrides.toDate } : {}),
+                  } } }
+                : {}),
+              ...(searchOverrides.allowedDomains?.length
+                ? { webSearch: { allowedDomains: searchOverrides.allowedDomains } }
+                : {}),
+            } } }
         : {}),
     })) as PromptResult;
     if (result) {
