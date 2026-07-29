@@ -97,6 +97,16 @@ function localizeAccountNote(raw: string | null | undefined): string {
   return note;
 }
 
+/**
+ * Keep authentication recovery desktop-first.  The engine can return several
+ * transport-specific phrasings, but the user only needs one safe action:
+ * sign in again.  This classifier never inspects or returns credential data.
+ */
+export function requiresAccountReauthentication(raw: string | null | undefined): boolean {
+  const note = (raw || '').trim();
+  return /token expired|session expired|re-?authentication required|refresh failed|not logged in|no auth(?:entication)? session|no auth\.json/i.test(note);
+}
+
 export async function fetchAccountSummary(): Promise<AccountSummary | null> {
   if (!isTauri()) return null;
   try {

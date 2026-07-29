@@ -195,6 +195,7 @@ import {
   uiDisplayName,
   startLoginFlow,
   logoutAccount,
+  requiresAccountReauthentication,
 } from './lib/account';
 import type { AccountSummary } from './lib/account';
 import {
@@ -615,6 +616,7 @@ function App() {
   const [deliverablesOpen, setDeliverablesOpen] = useState(false);
   /** An engine failure must remain inspectable; a red badge alone is not useful. */
   const [taskErrorOpen, setTaskErrorOpen] = useState(false);
+  const [taskReauthBusy, setTaskReauthBusy] = useState(false);
   /** Local projection of Grok Build's current-session prompt history. */
   const [promptHistoryOpen, setPromptHistoryOpen] = useState(false);
   const [promptHistoryIndex, setPromptHistoryIndex] = useState(-1);
@@ -2271,7 +2273,9 @@ function App() {
         patchThread(threadId, {
           busy: false,
           client: null,
-          error: 'Agent process exited',
+          // If the prompt/session request already gave us a useful reason,
+          // do not replace it with the generic process-exit symptom.
+          error: live?.error?.trim() || 'Agent process exited',
         });
         appendLine(threadId, {
           id: nid(),
@@ -4724,6 +4728,35 @@ function App() {
   };
   reconnectRef.current = reconnectThread;
 
+  /** Re-authenticate in the browser, then reconnect without re-sending work. */
+  const reauthenticateTask = async (id: string) => {
+    setTaskReauthBusy(true);
+    try {
+      const result = await startLoginFlow();
+      if (result.account) setAccount(result.account);
+      if (!result.ok) {
+        if (result.note) setAccountError(result.note);
+        return;
+      }
+      setAccountError(null);
+      refreshStatus();
+      await refreshAccount();
+
+      // Do not reuse a process started with the expired session.  Suppress its
+      // normal one-shot reconnect while we intentionally replace it.
+      const thread = threadsRef.current.find((item) => item.id === id);
+      autoReconnectTried.current.add(id);
+      await thread?.client?.stop().catch(() => undefined);
+      patchThread(id, { client: null, busy: false, error: null });
+      await reconnectThread(id);
+      setTaskErrorOpen(false);
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTaskReauthBusy(false);
+    }
+  };
+
   const answerPermission = async (prefer: 'allow' | 'reject' | string) => {
     if (!activeApproval || activeApproval.kind !== 'permission') return;
     try {
@@ -6162,7 +6195,17 @@ function App() {
                 role="alert"
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 24px 10px' }}
               >
-                <span>{t('taskFailedVisible')}</span>
+                <span>{requiresAccountReauthentication(active.error) ? t('accountSignInAgain') : t('taskFailedVisible')}</span>
+                {requiresAccountReauthentication(active.error) ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm primary-sm"
+                    disabled={taskReauthBusy}
+                    onClick={() => void reauthenticateTask(active.id)}
+                  >
+                    {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
+                  </button>
+                ) : null}
                 <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(true)}>
                   {t('taskErrorDetails')}
                 </button>
@@ -7068,6 +7111,16 @@ function App() {
             <p className="text-prompt-msg">{t('taskErrorDialogHint')}</p>
             <pre className="modal-body">{active.error}</pre>
             <div className="modal-actions">
+              {requiresAccountReauthentication(active.error) ? (
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  disabled={taskReauthBusy}
+                  onClick={() => void reauthenticateTask(active.id)}
+                >
+                  {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
+                </button>
+              ) : null}
               {!active.client ? (
                 <button
                   type="button"
