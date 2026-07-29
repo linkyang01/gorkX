@@ -347,6 +347,8 @@ interface Thread {
   sessionGoal?: SessionGoal | null;
   /** This task was started with Grok Build cross-task memory disabled. */
   memoryEnabled?: boolean;
+  /** This task was started with Grok Build subagent delegation disabled. */
+  subagentsEnabled?: boolean;
   /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
   lastEventAt?: number;
 }
@@ -485,6 +487,7 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     archived: Boolean(m.archived),
     effort: m.effort || 'high',
     memoryEnabled: m.memoryEnabled !== false,
+    subagentsEnabled: m.subagentsEnabled !== false,
     updatedAt: m.updatedAt || Date.now(),
     sessionGoal: fromMeta || fromLines,
   };
@@ -524,6 +527,13 @@ function App() {
   const [newTaskMemoryEnabled, setNewTaskMemoryEnabled] = useState(() => {
     try {
       return localStorage.getItem('gorkx.newTaskMemoryEnabled') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [newTaskSubagentsEnabled, setNewTaskSubagentsEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('gorkx.newTaskSubagentsEnabled') !== '0';
     } catch {
       return true;
     }
@@ -1797,6 +1807,7 @@ function App() {
       effort: th.effort,
       chatMode: th.chatMode,
       memoryEnabled: th.memoryEnabled !== false,
+      subagentsEnabled: th.subagentsEnabled !== false,
       updatedAt: Date.now(),
       archived: Boolean(th.archived),
       project: th.projectKey,
@@ -2464,7 +2475,7 @@ function App() {
     [],
   );
 
-  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true) => {
+  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true, subagentsEnabled = true) => {
     const client = await AcpClient.start(
       perm,
       grokCmd || undefined,
@@ -2473,6 +2484,7 @@ function App() {
       webSearchEnabled,
       maxAgentTurns,
       memoryEnabled,
+      subagentsEnabled,
     );
     await client.initialize();
     await client.authenticate('cached_token');
@@ -3170,6 +3182,14 @@ function App() {
           /* local preference is optional */
         }
         return;
+      case 'task-subagents':
+        setNewTaskSubagentsEnabled(action.on);
+        try {
+          localStorage.setItem('gorkx.newTaskSubagentsEnabled', action.on ? '1' : '0');
+        } catch {
+          /* local preference is optional */
+        }
+        return;
       case 'fork-session':
         setPlusMenuOpen(false);
         await forkActiveSession();
@@ -3564,6 +3584,7 @@ function App() {
     const initialAttachments = opts?.initialAttachments || [];
     const selectedProfile = opts?.profileOverride ?? newTaskProfile;
     const memoryEnabled = newTaskMemoryEnabled;
+    const subagentsEnabled = newTaskSubagentsEnabled;
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
@@ -3601,13 +3622,14 @@ function App() {
         worktreePath: null,
         effort,
         memoryEnabled,
+        subagentsEnabled,
         archived: false,
         updatedAt: createdAt,
       },
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient(cwdBase, memoryEnabled);
+      const client = await bootstrapClient(cwdBase, memoryEnabled, subagentsEnabled);
       wireClient(id, client);
       const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile, cwdBase));
       rememberModels(session);
@@ -3695,6 +3717,7 @@ function App() {
         memoryInjected: false,
         userTurnCount: 0,
         memoryEnabled,
+        subagentsEnabled,
       });
 
       // Home-style: first message creates the session
@@ -4632,6 +4655,7 @@ function App() {
         webSearchEnabled,
         maxAgentTurns,
         active.memoryEnabled !== false,
+        active.subagentsEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -4744,6 +4768,7 @@ function App() {
         webSearchEnabled,
         maxAgentTurns,
         th.memoryEnabled !== false,
+        th.subagentsEnabled !== false,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -6014,6 +6039,7 @@ function App() {
                         planModeOn={chatMode === 'plan'}
                         exploreModeOn={newTaskProfile === 'explore'}
                         taskMemoryEnabled={newTaskMemoryEnabled}
+                        taskSubagentsEnabled={newTaskSubagentsEnabled}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
@@ -6057,6 +6083,16 @@ function App() {
                         onClick={() => void handlePlusAction({ type: 'task-memory', on: true })}
                       >
                         {t('plusTaskMemoryOff')}
+                      </button>
+                    ) : null}
+                    {!newTaskSubagentsEnabled ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={t('plusTaskSubagentsOffHint')}
+                        onClick={() => void handlePlusAction({ type: 'task-subagents', on: true })}
+                      >
+                        {t('plusTaskSubagentsOff')}
                       </button>
                     ) : null}
                     {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' && (!newTaskProfile.startsWith('project:') || Boolean(projectRoleNameForCwd(newTaskProfile, project))) ? (
@@ -6868,6 +6904,7 @@ function App() {
                         open={plusMenuOpen}
                         planModeOn={(active.chatMode ?? chatMode) === 'plan'}
                         taskMemoryEnabled={active.memoryEnabled !== false}
+                        taskSubagentsEnabled={active.subagentsEnabled !== false}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={Boolean(active.client && active.sessionId)}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}

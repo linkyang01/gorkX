@@ -17,7 +17,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Model / effort | Subscription and custom-model picker; effort is applied at engine spawn | ✅ |
 | Permission modes | Default / Auto / Full chooser + permission cards | ✅ |
 | Plan mode | ACP mode, Review plan and execute/retry controls | 🟡 engine plan quality decides the result |
-| Native subagents | Persisted tree from lifecycle updates; `_x.ai/subagent/list_running` reconciliation after reconnect; get/cancel controls | 🟡 kernel decides delegation and isolation; isolated ACP gate confirms the three control routes, but a real delegated coding task remains a release acceptance scenario |
+| Native subagents | Persisted tree from lifecycle updates; `_x.ai/subagent/list_running` reconciliation after reconnect; get/cancel controls; new task → **Use one agent only** | 🟡 a single-agent task starts with native `--no-subagents`; otherwise the kernel decides delegation and isolation. Isolated ACP gate confirms the three control routes, but a real delegated coding task remains a release acceptance scenario |
 | Compact | Native ACP compact button plus automatic threshold handling | 🟡 engine decides compaction availability |
 | Current-task usage | Task information panel → native session usage read | 🟡 aggregate tokens and cost appear only when the active Grok Build session supplies them; no cost is inferred from subscription quota or local daily counters |
 | Coding-data privacy | Task information → native privacy setting | ✅ cached OAuth state and confirmed `x.ai/privacy/setCodingDataRetention`; API-key and team-managed states remain unavailable rather than guessed |
