@@ -107,23 +107,23 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Grok surface | Desktop control | Status | Phase |
 |--------------|-----------------|--------|-------|
 | New session `/new` | New task | ✅ | — |
-| Resume / `sessions list|search` | Session list + search + restore | 🟡 | A |
+| Resume / `sessions list|search` | Session list + search + restore | ✅ local task search + Kernel Sessions recovery panel | A |
 | Rename `/rename` | Rename | ✅ | — |
-| Delete session | Delete (UI vs kernel hard-delete clear) | 🟡 | A |
-| Model `/model`, `grok models` | Model picker (subscription-real) | 🟡 | A |
+| Delete session | Delete (UI vs kernel hard-delete clear) | ✅ confirmed ACP delete + local-index removal | A |
+| Model `/model`, `grok models` | Model picker (subscription-real) | ✅ live subscription/custom-provider selection | A |
 | Effort `/effort` | Effort picker | ✅ | — |
-| Permission modes | Default/Auto/Full + cards | 🟡 | A |
-| Plan `/plan`, set_mode | Plan mode + Apply | 🟡 | A |
-| Compact `/compact` + auto | Context ring + auto + manual | 🟡 | A |
+| Permission modes | Default/Auto/Full + cards | ✅ | A |
+| Plan `/plan`, set_mode | Plan mode + Apply | 🟡 engine plan quality remains upstream-owned | A |
+| Compact `/compact` + auto | Context ring + auto + manual | 🟡 native availability remains engine-gated | A |
 | Cancel turn | Stop | ✅ | — |
-| Slash + skills | Full pass-through + autocomplete from `available_commands` | 🟡 | A |
-| Attachments / images | Drag-drop + preview | 🟡 | A |
+| Slash + skills | Full pass-through + autocomplete from `available_commands` | ✅ desktop controls remain the primary route | A |
+| Attachments / images | Drag-drop + preview | ✅ bounded local/resource-link/image attachment handling | A |
 | Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
 | Rewind `/rewind` | Rewind UI | ✅ 包内 `0.2.112 (47348d1)` 已在隔离认证会话完成真实两轮对话、无写入预览、明确确认执行与重载；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
-| `/loop` | Scheduler panel | 🟡 本地计划任务真实可用；不是内核原生 `/loop` 控制面 | C |
+| `/loop` | Scheduler panel | ✅ local schedules plus engine-advertised recurring task flow | C |
 | `/btw` | Non-blocking side-question card via `x.ai/btw` | 🟡 路由与独立卡片已接线；仍缺真实模型回答验收 | C |
 | `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
@@ -131,18 +131,18 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
-| `--worktree` / create | Create worktree task | 🟡 | B |
+| `--worktree` / create | Create worktree task | ✅ isolated ACP worktree creation gate | B |
 | `grok worktree list|rm|gc` | Manage panel under project menu | ✅ | B |
-| Diffs / stage | Review Diff tab | 🟡 | B |
-| Plan + tools human labels | Review tabs | 🟡 | B |
+| Diffs / stage | Review Diff tab | ✅ guarded stage/unstage + non-Git preview boundary | B |
+| Plan + tools human labels | Review tabs | ✅ | B |
 
 ### 5.3 Extensions
 
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
-| `grok mcp` / `/mcps` | Full list/add/remove/doctor | 🟡 | B |
-| Skills `/skills` | List + “运行技能”自然语言表单 | 🟡 | B |
-| Plugins + marketplace | Install/enable/update/uninstall | 🟡 | B |
+| `grok mcp` / `/mcps` | Full list/add/remove/doctor | ✅ live inventory, setup and diagnostics; reload boundary stated | B |
+| Skills `/skills` | List + “运行技能”自然语言表单 | ✅ | B |
+| Plugins + marketplace | Install/enable/update/uninstall | ✅ | B |
 | Hooks `/hooks` | View/toggle | ✅ 活动会话 `_x.ai/hooks/list/action` 已接线 | C |
 
 ### 5.4 Memory (Hermes-class UX, Grok engine)
@@ -151,8 +151,8 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 |---------|---------|--------|-------|
 | Enable memory (`config` / env / flag) | Settings toggle | ✅ App-managed Hermes memory | B |
 | `/remember` | “Remember this” | ✅ | B |
-| `/flush` | Write memory now | 🟡 App records durable session memory; kernel-native `/flush` is optional | B |
-| `/dream` | Consolidate | 🟡 Local compact is available; kernel-native `/dream` is optional | B |
+| `/flush` | Write memory now | 🟡 native action when advertised plus durable local memory | B |
+| `/dream` | Consolidate | 🟡 native action when advertised plus local compact | B |
 | `/memory` browse | Memory panel: global + project files, search | ✅ | B |
 | `grok memory clear` | Clear project memory (confirm) | ✅ | B |
 | Auto inject on new session | Kernel when enabled | ✅ App-managed first-prompt injection | B |
@@ -161,11 +161,11 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
-| `login` / `logout` | Account menu | 🟡 | A |
-| Quota / billing | Account chip + menu (auto-refresh) | 🟡 | A |
+| `login` / `logout` | Account menu | ✅ browser OAuth/device flow + App-owned session | A |
+| Quota / billing | Account chip + menu (auto-refresh) | ✅ live xAI billing total, reset and product breakdown | A |
 | `grok update` | Kernel update UI | 🟡 | I |
 | `grok inspect` | Project-menu structured inspection | ✅ | C |
-| Sandbox profiles | Settings | ❌ | C |
+| Sandbox profiles | Settings | ✅ built-in profile picker, applies to new tasks | C |
 | AGENTS.md | Project-root read/create/edit | ✅ | C |
 | Bundle kernel path | Sidecar + App-owned fallback | ✅ | I |
 | App auto-update | GitHub Releases | 🟡 | I |
@@ -174,10 +174,10 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 
 | Surface | Desktop | Status | Phase |
 |---------|---------|--------|-------|
-| Control Chrome | One-click enable Playwright MCP + permission | ❌ | E |
-| In-app page preview | WebviewWindow URL | ❌ | E |
-| Screenshot → chat | Capture + attach | ❌ | E |
-| Computer use | Optional, default off | ❌ | F |
+| Control Chrome | One-click enable Playwright MCP + permission | ✅ isolated, version-pinned MCP and origin allowlist | E |
+| In-app page preview | WebviewWindow URL | ✅ explicit HTTP(S) reading window | E |
+| Screenshot → chat | Capture + attach | ✅ explicit macOS region picker | E |
+| Computer use | Optional, default off | ❌ intentionally not shipped: no background capture or local mouse/keyboard automation | F |
 
 ### 5.7 TUI-only (replace, don’t clone)
 
