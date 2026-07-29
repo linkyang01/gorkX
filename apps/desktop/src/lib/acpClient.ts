@@ -1199,17 +1199,6 @@ export class AcpClient {
   }
 
   /**
-   * Give the currently running kernel turn a concise course correction. Unlike
-   * `/btw`, this is not a side question; unlike the local follow-up queue, it
-   * reaches the active turn immediately through Grok Build's native route.
-   */
-  async interject(sessionId: string, content: string): Promise<void> {
-    const clean = content.trim();
-    if (!sessionId || !clean) throw new Error('A running task and instruction are required');
-    await this.request('x.ai/interject', { sessionId, content: clean }, 30_000);
-  }
-
-  /**
    * Read the engine's live task snapshot. This is a local ACP query, not a
    * model prompt: it exposes the current model, turns and context capacity.
    */
