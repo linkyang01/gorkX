@@ -2,6 +2,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { APP_VERSION } from './appMeta';
+import { parseKernelUpdateOutput, type KernelUpdateInfo } from './kernelUpdate';
+export type { KernelUpdateInfo } from './kernelUpdate';
 
 export const GORKX_GITHUB = {
   owner: 'linkyang01',
@@ -16,15 +18,6 @@ export const GROK_KERNEL_GITHUB = {
   releasesUrl: 'https://github.com/xai-org/grok-build/releases',
   sourceUrl: 'https://github.com/xai-org/grok-build',
 };
-
-export interface KernelUpdateInfo {
-  currentVersion: string;
-  latestVersion: string;
-  updateAvailable: boolean;
-  channel?: string;
-  error?: string | null;
-  raw?: string;
-}
 
 export interface AppUpdateInfo {
   currentVersion: string;
@@ -75,23 +68,16 @@ export async function checkKernelUpdate(grokBin?: string): Promise<KernelUpdateI
   try {
     const r = await invoke<{ stdout: string; stderr: string; exitCode: number | null }>(
       'grok_admin_exec',
-      { args: ['--version'], grokCmd: grokBin || null, cwd: null },
+      { args: ['update', '--check', '--json'], grokCmd: grokBin || null, cwd: null },
     );
     const out = [r.stdout, r.stderr].filter(Boolean).join('\n').trim();
-    const version = r.exitCode === 0 && out ? out.split('\n')[0].trim() : '—';
-    return {
-      currentVersion: version,
-      latestVersion: version,
-      updateAvailable: false,
-      channel: 'source-locked',
-      error: r.exitCode === 0 ? null : out || 'cannot read app kernel version',
-      raw: 'Kernel upgrades are performed only through the locked source build and ACP regression gate.',
-    };
+    return parseKernelUpdateOutput(out, r.exitCode);
   } catch (e) {
     return {
       currentVersion: '—',
       latestVersion: '—',
       updateAvailable: false,
+      runtimeUpdatesDisabled: true,
       error: e instanceof Error ? e.message : String(e),
     };
   }

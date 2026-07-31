@@ -11,6 +11,7 @@
 | 最新内核编译 | `cargo check -p xai-grok-shell -p xai-grok-pager-bin`；`cargo build --release -p xai-grok-pager-bin` | 通过：完整补丁组合可编译，release 二进制成功生成；许可证与第三方声明哈希与锁文件一致 | 未替代 macOS 签名、公证和全新机器安装验收 |
 | ACP 运行时 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | 通过：更新后的包内 `grok 0.2.112 (5da6962)` 完成 ACP initialize | 这是无认证能力门禁；真实登录、额度、模型回复和麦克风听写仍需人工验收 |
 | App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：重新构建的 arm64 App 包含 `grok 0.2.112 (5da6962)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
+| 内核更新检查 | Settings → Updates → Check for updates；后端固定白名单 `grok update --check --json` | 通过源码审阅与 Rust 白名单测试：桌面现在读取 Grok Build 原生 JSON 的当前/最新版本、频道和更新状态，能够区分网络失败；仅报告，不允许运行时替换 App 自带的源码锁定内核 | 当前网络/账户能否取得上游频道结果由 Grok Build 更新服务决定；在服务返回新版本时仍需开发者重新锁源、补丁、构建和 ACP 回归后更新 gorkX |
 | 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在最新上游 API 上编译并进入包内资源 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
 
 ## 2026-07-31 · 桌面动作原生 ACP 化复核

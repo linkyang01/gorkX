@@ -164,7 +164,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 |---------|---------|--------|-------|
 | `login` / `logout` | Account menu | ✅ browser OAuth/device flow + App-owned session | A |
 | Quota / billing | Account chip + menu (auto-refresh) | ✅ live xAI billing total, reset and product breakdown | A |
-| `grok update` | Kernel update UI | 🟡 | I |
+| `grok update --check` | Settings → Updates → native upstream check; source-locked “update gorkX” handoff | ✅ read-only check; install remains developer-controlled | I |
 | `grok inspect` | Project-menu structured inspection | ✅ | C |
 | Sandbox profiles | Settings | ✅ built-in profile picker, applies to new tasks | C |
 | AGENTS.md | Project-root read/create/edit | ✅ | C |

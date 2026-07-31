@@ -986,9 +986,13 @@ export function SettingsPanel({
       const info = await checkKernelUpdate(status?.grokPath || grokCmd);
       setKernelUp(info);
       setMsg(
-        info.channel === 'source-locked'
-          ? t('kernelSourceLocked')
-          : info.updateAvailable
+        info.updateAvailable && info.runtimeUpdatesDisabled
+          ? t('kernelUpdateAvailableSourceLocked')
+              .replace('{cur}', info.currentVersion)
+              .replace('{latest}', info.latestVersion)
+          : info.runtimeUpdatesDisabled && info.error
+            ? `${t('kernelSourceLocked')} · ${info.error}`
+            : info.updateAvailable
           ? t('updateAvailable')
               .replace('{cur}', info.currentVersion)
               .replace('{latest}', info.latestVersion)
@@ -3101,9 +3105,11 @@ export function SettingsPanel({
                     </div>
                     {kernelUp ? (
                       <div className="settings-row-hint">
-                        {kernelUp.channel === 'source-locked'
-                          ? t('kernelSourceLocked')
-                          : kernelUp.updateAvailable
+                        {kernelUp.updateAvailable && kernelUp.runtimeUpdatesDisabled
+                          ? `${kernelUp.currentVersion} → ${kernelUp.latestVersion} · ${t('kernelUpgradeViaApp')}`
+                          : kernelUp.runtimeUpdatesDisabled
+                            ? `${t('kernelSourceLocked')}${kernelUp.error ? ` · ${kernelUp.error}` : ''}`
+                            : kernelUp.updateAvailable
                           ? `${kernelUp.currentVersion} → ${kernelUp.latestVersion}`
                           : t('updateLatest').replace(
                               '{v}',

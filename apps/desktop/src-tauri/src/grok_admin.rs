@@ -41,11 +41,13 @@ fn existing_dir(value: &str) -> bool {
 
 /// `grok_admin_exec` backs fixed UI actions, not a second terminal. Keep its
 /// grammar deliberately small so a compromised renderer cannot invoke `grok
-/// update`, change auth, or pass arbitrary subcommands through this bridge.
+/// install a kernel update, change auth, or pass arbitrary subcommands through this bridge.
 fn allowed_admin_args(args: &[String]) -> bool {
     let words = args.iter().map(String::as_str).collect::<Vec<_>>();
     match words.as_slice() {
         ["--version"]
+        | ["update", "--check", "--json"]
+        | ["update", "--json", "--check"]
         | ["models"]
         | ["setup"]
         | ["setup", "--json"]
@@ -140,6 +142,8 @@ mod tests {
     #[test]
     fn permits_only_ui_backed_admin_commands() {
         assert!(allowed_admin_args(&args(&["--version"])));
+        assert!(allowed_admin_args(&args(&["update", "--check", "--json"])));
+        assert!(allowed_admin_args(&args(&["update", "--json", "--check"])));
         assert!(allowed_admin_args(&args(&["setup"])));
         assert!(allowed_admin_args(&args(&["setup", "--json"])));
         assert!(allowed_admin_args(&args(&["inspect", "--json"])));
@@ -156,6 +160,7 @@ mod tests {
     #[test]
     fn rejects_arbitrary_cli_passthrough() {
         assert!(!allowed_admin_args(&args(&["update"])));
+        assert!(!allowed_admin_args(&args(&["update", "--version"])));
         assert!(!allowed_admin_args(&args(&["logout"])));
         assert!(!allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--dangerous", "query"])));
         assert!(!allowed_admin_args(&args(&["worktree", "rm", "--all"])));
