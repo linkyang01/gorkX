@@ -67,7 +67,9 @@
 ## 正式版 v1.0.0 证据索引 · 2026-07-31
 
 > 执行方案：[`FORMAL_RELEASE_PLAN.md`](FORMAL_RELEASE_PLAN.md)。  
-> 本会话触发语：`按方案做`。未打 tag、未发 Release、未上传 DMG。
+> 本会话触发语：`按方案做`；随后用户批准「推送远端，打包发布」。  
+> **已发布：** tag `v1.0.0` · [Release](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) ·  
+> 资产 `gorkX_1.0.0_aarch64.dmg` · SHA-256 `b24bd3c16a9447a36b17ecb77b5bebc320fec343a2586131a14d9df065f6f88c` · 签名 ad-hoc。
 
 | ID | 结果 | 命令或步骤 | 边界 |
 |---|---|---|---|
@@ -104,7 +106,8 @@
 | Rust | `cd src-tauri && cargo test && cargo check` | PASS · 80 tests |
 | App-only 包 | `cd apps/desktop && npm run build:app` | PASS · `gorkX.app` @ `src-tauri/target/release/bundle/macos/` · 版本 crate `gorkx v1.0.0` |
 | Bundle 结构 | `scripts/verify-macos-app-bundle.sh …/gorkX.app` | PASS · arm64 · 包内 `grok 0.2.112 (47348d1)` · 隔离 `GROK_HOME` |
-| 发布就绪 | `scripts/verify-release-readiness.sh` | `releaseCandidateReady: true` · `canShipPublicArtifacts: false`（无用户批准 + ad-hoc 签名） |
+| 发布就绪 | `scripts/verify-release-readiness.sh` | 发版前：`releaseCandidateReady: true`；用户批准后已 ship |
+| 公开发版 | `git push` · `git tag v1.0.0` · `gh release create` · DMG | 2026-07-31：main@`8471d83` · [v1.0.0](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) · DMG 挂载后 `verify-macos-app-bundle.sh` PASS · 内核 `0.2.112 (47348d1)` · **ad-hoc 非公证** |
 
 ## 发布后的真实体验验收项
 

@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg"><strong>↓ Download gorkX 1.0.0 for macOS Apple Silicon</strong></a><br />
-  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a> · link active after approved ship</sub>
+  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a></sub>
 </p>
 
 <p align="center">
@@ -84,9 +84,8 @@ Reports, research briefs, ops checklists, content drafts, handoffs, and hard dec
 
 **[Download gorkX 1.0.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)** · open the DMG · drag **gorkX** to Applications · open it.
 
-> **Release note:** Until `v1.0.0` is tagged and published, use the latest
-> [GitHub Release](https://github.com/linkyang01/gorkX/releases) or build from
-> source. See [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md).
+Release notes: [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md) ·
+[GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0).
 
 On first launch, macOS may ask you to allow an unrecognized developer under **System Settings → Privacy & Security**. gorkX then guides Grok sign-in in the browser. You can also add API or compatible providers in Settings when you have keys.
 
@@ -237,9 +236,8 @@ Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目�
 
 **[下载 gorkX 1.0.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
 
-> **发布说明：** 在 `v1.0.0` tag 与 Release 公开前，请使用最新
-> [GitHub Release](https://github.com/linkyang01/gorkX/releases) 或从源码构建。
-> 详见 [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)。
+发布说明：[`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md) ·
+[GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0)。
 
 首次打开时，如系统提示开发者未被识别，可在“**系统设置 → 隐私与安全性**”中允许。随后会引导你在浏览器登录 Grok；若你持有提供商密钥，也可在设置中配置 API 或兼容提供商。
 

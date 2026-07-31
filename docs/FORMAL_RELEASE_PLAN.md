@@ -1,6 +1,6 @@
 # gorkX 正式版执行方案（v1.0.0 Stable）
 
-> **状态：** `candidate_ready`（2026-07-31 会话已按阶段 0–3 自动收口；阶段 4 人工项待用户；阶段 5 默认不发版）  
+> **状态：** `shipped`（2026-07-31：用户批准后已 push、`v1.0.0` tag、GitHub Release、DMG）  
 > **触发语（任一句即可）：** `按方案做` · `执行正式版方案` · `做正式版` · `按 FORMAL_RELEASE_PLAN 执行`  
 > **执行者：** 本会话 Agent  
 > **完成定义：** 本文 §3「正式版完成标准」全部满足，并产出 §7 证据包；**打 tag / 发 GitHub Release / 上传 DMG 仅在用户明确批准后执行**。
@@ -195,10 +195,10 @@ cd src-tauri && cargo test && cargo check
 | 1 质量与无假功能 | ✅ done | FEATURES/能力图已对齐；敏感扫描无密钥 schema 字段 |
 | 2 GitHub 安全收口 | ✅ done | 断开清 Keychain；写确认含仓库；scope 披露；审计 connect/disconnect/write |
 | 3 元数据与候选包 | ✅ done | 版本 `1.0.0`；`RELEASE_NOTES_v1.0.0.md`；README 占位链接 |
-| 4 人工闭环 | 🟡 blocked | **[USER]** H1–H4；见 VALIDATION_EVIDENCE 正式版章节 |
-| 5 发布门 | ⬜ blocked on user | 默认不 tag / 不 Release / 不传 DMG |
+| 4 人工闭环 | 🟡 partial | H1–H3 未在干净机重做；用户明确批准以候选证据 ship |
+| 5 发布门 | ✅ shipped | `v1.0.0` tag + Release + `gorkX_1.0.0_aarch64.dmg`（ad-hoc） |
 
-**方案整体状态：** `candidate_ready`（自动阶段完成；发版仍须用户明确批准。人工 H1 强烈建议后再 ship）
+**方案整体状态：** `shipped`（https://github.com/linkyang01/gorkX/releases/tag/v1.0.0）
 
 ---
 
