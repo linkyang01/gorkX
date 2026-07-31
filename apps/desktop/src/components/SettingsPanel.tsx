@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
+  type AutoTopupSnapshot,
+  type BillingSnapshot,
   type CloudEnvironment,
   type CloudEnvironmentInput,
   runKernelDoctor,
@@ -215,6 +217,8 @@ interface Props {
   onCreateCloudEnvironment?: (input: CloudEnvironmentInput) => Promise<CloudEnvironment>;
   onUpdateCloudEnvironment?: (id: string, input: CloudEnvironmentInput) => Promise<CloudEnvironment>;
   onDeleteCloudEnvironment?: (id: string) => Promise<void>;
+  onFetchBilling?: () => Promise<BillingSnapshot>;
+  onFetchAutoTopup?: () => Promise<AutoTopupSnapshot>;
   initialSection?: SettingsSection;
 }
 
@@ -265,6 +269,17 @@ function formatWhen(ts: number): string {
   }
 }
 
+function formatUsd(value?: number): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `$${value.toFixed(2)}`;
+}
+
+function formatBillingDate(value?: string): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+}
+
 
 
 export function SettingsPanel({
@@ -305,6 +320,8 @@ export function SettingsPanel({
   onCreateCloudEnvironment,
   onUpdateCloudEnvironment,
   onDeleteCloudEnvironment,
+  onFetchBilling,
+  onFetchAutoTopup,
   initialSection,
 }: Props) {
   const [section, setSection] = useState<SettingsSection>(initialSection || 'general');
@@ -399,6 +416,10 @@ export function SettingsPanel({
   const [cloudEnvironmentError, setCloudEnvironmentError] = useState<string | null>(null);
   const [cloudEnvironmentDraft, setCloudEnvironmentDraft] = useState<CloudEnvironmentInput>({ name: '' });
   const [editingCloudEnvironmentId, setEditingCloudEnvironmentId] = useState<string | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
+  const [autoTopup, setAutoTopup] = useState<AutoTopupSnapshot | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -437,6 +458,18 @@ export function SettingsPanel({
       .catch((error) => setCloudEnvironmentError(error instanceof Error ? error.message : String(error)))
       .finally(() => setCloudEnvironmentBusy(false));
   }, [isOpen, section, onListCloudEnvironments]);
+
+  useEffect(() => {
+    if (!isOpen || section !== 'usage' || !onFetchBilling) return;
+    setBillingBusy(true);
+    setBillingError(null);
+    void Promise.all([
+      onFetchBilling().then(setBilling),
+      onFetchAutoTopup ? onFetchAutoTopup().then(setAutoTopup) : Promise.resolve(),
+    ])
+      .catch((error) => setBillingError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setBillingBusy(false));
+  }, [isOpen, section, onFetchBilling, onFetchAutoTopup]);
 
   const loadProjectInstructions = () => {
     if (!project) {
@@ -526,6 +559,21 @@ export function SettingsPanel({
       setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
     } finally {
       setCloudEnvironmentBusy(false);
+    }
+  };
+
+  const refreshBilling = async () => {
+    if (!onFetchBilling) return;
+    setBillingBusy(true);
+    setBillingError(null);
+    try {
+      const next = await onFetchBilling();
+      setBilling(next);
+      if (onFetchAutoTopup) setAutoTopup(await onFetchAutoTopup());
+    } catch (error) {
+      setBillingError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBillingBusy(false);
     }
   };
 
@@ -1690,16 +1738,48 @@ export function SettingsPanel({
                   <div>
                     <div className="settings-row-title">{t('quota')}</div>
                     <div className="settings-row-hint">
-                      {account?.creditUsagePercent != null
-                        ? `已用 ${Math.round(account.creditUsagePercent)}% · 剩 ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
+                      {billing?.creditUsagePercent != null
+                        ? `${t('quotaUsed')} ${Math.round(billing.creditUsagePercent)}% · ${t('quotaRemaining')} ${Math.max(0, Math.round(100 - billing.creditUsagePercent))}%`
+                        : account?.creditUsagePercent != null
+                          ? `${t('quotaUsed')} ${Math.round(account.creditUsagePercent)}% · ${t('quotaRemaining')} ${Math.max(0, Math.round(100 - account.creditUsagePercent))}%`
                         : account?.quotaLabel || t('quotaUnknown')}
                     </div>
                   </div>
-                  <button type="button" className="btn" onClick={() => void fetchAccountSummary().then(setAccount)}>
-                    {t('refreshQuota')}
-                  </button>
+                  <div className="field-row">
+                    {onFetchBilling ? (
+                      <button type="button" className="btn primary" disabled={billingBusy} onClick={() => void refreshBilling()}>
+                        {billingBusy ? t('billingRefreshing') : t('billingRefreshReal')}
+                      </button>
+                    ) : null}
+                    <button type="button" className="btn" onClick={() => void fetchAccountSummary().then(setAccount)}>
+                      {t('refreshQuota')}
+                    </button>
+                  </div>
                 </div>
-                {account?.creditUsagePercent == null ? (
+                {billingError ? <div className="settings-row-hint error-text">{billingError}</div> : null}
+                {billing ? (
+                  <div className="settings-card" style={{ marginTop: 10, background: 'var(--panel-soft, transparent)' }}>
+                    <div className="settings-row-title">{t('billingNativeTitle')}</div>
+                    {billing.subscriptionTier ? <div className="settings-row-hint">{t('billingNativePlan')}: {billing.subscriptionTier}</div> : null}
+                    <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                      {t('billingIncludedUsed')}: {formatUsd(billing.includedUsedUsd)}
+                      {billing.monthlyLimitUsd != null ? ` / ${formatUsd(billing.monthlyLimitUsd)}` : ''}
+                      {billing.currentPeriod?.end ? ` · ${t('billingPeriodEnd')} ${formatBillingDate(billing.currentPeriod.end)}` : ''}
+                    </div>
+                    <div className="settings-row-hint">
+                      {t('billingPrepaid')}: {formatUsd(billing.prepaidBalanceUsd)} · {t('billingOnDemand')}: {formatUsd(billing.onDemandUsedUsd)}
+                      {billing.onDemandCapUsd != null ? ` / ${formatUsd(billing.onDemandCapUsd)}` : ''}
+                    </div>
+                    {autoTopup ? (
+                      <div className="settings-row-hint">
+                        {t('billingAutoTopup')}: {autoTopup.enabled ? t('billingAutoTopupOn') : t('billingAutoTopupOff')}
+                        {autoTopup.enabled && autoTopup.topupAmountUsd != null ? ` · ${formatUsd(autoTopup.topupAmountUsd)}` : ''}
+                      </div>
+                    ) : null}
+                    <div className="settings-row-hint" style={{ marginTop: 6 }}>{t('billingNativeHint')}</div>
+                  </div>
+                ) : null}
+                {billing?.creditUsagePercent == null && account?.creditUsagePercent == null ? (
                   <div className="settings-row">
                     <div>
                       <div className="settings-row-title">{t('quotaOpenWebsite')}</div>

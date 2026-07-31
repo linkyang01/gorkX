@@ -8,6 +8,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { APP_VERSION } from './appMeta';
+import { parseAutoTopupSnapshot, parseBillingSnapshot, type AutoTopupSnapshot, type BillingSnapshot } from './billing';
+
+export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
 
 export type PermissionMode = 'default' | 'auto' | 'full';
 
@@ -1466,6 +1469,18 @@ export class AcpClient {
       throw new Error('Kernel returned an empty session usage snapshot');
     }
     return snapshot;
+  }
+
+  /** Fetch the complete authenticated subscription/credits snapshot from Grok Build. */
+  async getBilling(): Promise<BillingSnapshot> {
+    const raw = await this.requestExtension('billing', {}, 30_000);
+    return parseBillingSnapshot(raw);
+  }
+
+  /** Fetch the authenticated account's read-only auto-top-up rule. */
+  async getAutoTopupRule(): Promise<AutoTopupSnapshot> {
+    const raw = await this.requestExtension('auto-topup-rule', {}, 20_000);
+    return parseAutoTopupSnapshot(raw);
   }
 
   /**

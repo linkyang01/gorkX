@@ -8014,6 +8014,8 @@ function App() {
         onCreateCloudEnvironment={(input) => withCloudClient((client) => client.createCloudEnvironment(input))}
         onUpdateCloudEnvironment={(id, input) => withCloudClient((client) => client.updateCloudEnvironment(id, input))}
         onDeleteCloudEnvironment={(id) => withCloudClient((client) => client.deleteCloudEnvironment(id))}
+        onFetchBilling={() => withCloudClient((client) => client.getBilling())}
+        onFetchAutoTopup={() => withCloudClient((client) => client.getAutoTopupRule())}
         initialSection={settingsInitialSection}
       /></Suspense> : null}
 

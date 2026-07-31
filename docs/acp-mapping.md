@@ -58,6 +58,21 @@ secret variables. Create/update/delete are explicit settings actions; delete is
 confirmation-gated. The ACP adapter falls back to the public `x.ai/*` spelling
 for compatible engine builds.
 
+## Billing and quota
+
+The Usage settings surface reads the same authenticated billing extensions used
+by Grok Build's native `/usage` flow:
+
+```
+_x.ai/billing          {}
+_x.ai/auto-topup-rule  {}
+```
+
+The desktop parser converts only the kernel's bounded cents/percentage fields
+to display values. It never turns a missing percentage into `0%`, and the
+auto-top-up route is read-only in gorkX because this kernel exposes no write
+operation for changing the account rule.
+
 ## Plan mode
 
 ```

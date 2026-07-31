@@ -549,6 +549,7 @@ Grok Build 已支持自定义模型（`[model.*]`）：`base_url`、`api_key`/`e
 | 打包脚本捆绑引擎 | ✅ `scripts/mac-build.sh` + tauri resources/grok |
 | 去掉侧栏「内核会话」主入口 | ✅ |
 | 多模型自定义写入 config.toml | ✅ 设置 → 模型与提供商 |
+| 真实订阅额度与计费详情 | ✅ 设置 → 使用情况和计费直接读取 Grok Build `x.ai/billing` / `x.ai/auto-topup-rule` |
 | 登录命令带 `GROK_HOME` | ✅ |
 | 锁定源码内核的本地 app-only bundle | ✅ 包内 `Resources/grok`、LICENSE / THIRD-PARTY-NOTICES 与 ACP `initialize` 已通过 bundle 门禁；不等同于发行 |
 | 受控内核来源、补丁与 ACP 回归 | ✅ lock、补丁序列、构建、隔离 `GROK_HOME`、认证/会话/Plan/worktree/custom-model 门禁已在仓库中；包内 `0.2.112 (47348d1)` 已完成真实资源附件、两轮对话和确认回退执行 |
