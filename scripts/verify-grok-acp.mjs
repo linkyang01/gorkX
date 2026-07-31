@@ -27,6 +27,8 @@
 // --voice-controls verifies native voice ACP routes reach the session control
 // plane without starting capture, requesting microphone permission, or sending
 // audio to a provider.
+// --desktop-controls verifies the desktop action routes reach their native
+// session guards without creating a session or sending a model request.
 // --client-fs-write advertises the same bounded client file-write capability
 // used by a Full-permission desktop task. It only validates ACP initialize;
 // it does not create a session or write a file.
@@ -45,7 +47,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -60,6 +62,7 @@ const hooksControlsSmoke = options.includes('--hooks-controls');
 const btwSmoke = options.includes('--btw');
 const sessionInfoSmoke = options.includes('--session-info');
 const voiceControlsSmoke = options.includes('--voice-controls');
+const desktopControlsSmoke = options.includes('--desktop-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
 const agentProfileSmoke = options.includes('--agent-profile');
@@ -77,7 +80,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
 if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
   console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
@@ -227,6 +230,32 @@ try {
         }
       }
       console.log(`PASS: ACP ${method} (native route, no capture)`);
+    }
+  }
+
+  if (desktopControlsSmoke) {
+    const missingSessionId = `gorkx-desktop-missing-${Date.now().toString(36)}`;
+    const probes = [
+      ['_x.ai/interject', { sessionId: missingSessionId, text: 'gorkX desktop control probe' }],
+      ['_x.ai/btw', { sessionId: missingSessionId, question: 'gorkX desktop side-question probe' }],
+      ['_x.ai/memory/flush', { session_id: missingSessionId }],
+      ['_x.ai/desktop/goal', { sessionId: missingSessionId, objective: 'gorkX desktop control probe' }],
+      ['_x.ai/desktop/command', { sessionId: missingSessionId, command: 'context' }],
+      ['_x.ai/desktop/workflow/launch', { sessionId: missingSessionId, name: 'deep-research', input: 'probe' }],
+      ['_x.ai/desktop/workflow/manage', { sessionId: missingSessionId, runId: 'missing', op: 'pause' }],
+    ];
+    for (const [method, params] of probes) {
+      try {
+        await request(method, params, 15_000);
+        throw new Error(`${method} unexpectedly accepted a missing session`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/unexpectedly accepted|method not found/i.test(message)) throw error;
+        if (!/session.*not found|unknown session|resource.*not found|invalid params|not found/i.test(message)) {
+          throw new Error(`${method} did not reach its native session guard: ${message}`);
+        }
+      }
+      console.log(`PASS: ACP ${method} (native route, no model request)`);
     }
   }
 

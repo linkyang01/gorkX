@@ -1403,6 +1403,41 @@ export class AcpClient {
     }, 600_000);
   }
 
+  /** Queue a user steering note into the currently running Grok Build turn. */
+  async interject(sessionId: string, text: string): Promise<void> {
+    const value = text.trim();
+    if (!sessionId || !value) throw new Error('An interjection is required');
+    const interjectionId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `interject-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    await this.request('_x.ai/interject', {
+      sessionId,
+      text: value,
+      interjectionId,
+    }, 15_000);
+  }
+
+  /** Ask a side question without interrupting the main Grok Build turn. */
+  async askAside(sessionId: string, question: string): Promise<string> {
+    const value = question.trim();
+    if (!sessionId || !value) throw new Error('A side question is required');
+    const raw = await this.request('_x.ai/btw', {
+      sessionId,
+      question: value,
+    }, 120_000) as { answer?: unknown; result?: { answer?: unknown } };
+    const answer = raw.result?.answer ?? raw.answer;
+    if (typeof answer !== 'string' || !answer.trim()) {
+      throw new Error('Grok Build returned no side-question answer');
+    }
+    return answer;
+  }
+
+  /** Ask the kernel to persist the useful context from the current session. */
+  async flushMemory(sessionId: string): Promise<void> {
+    if (!sessionId) throw new Error('A session is required');
+    await this.request('_x.ai/memory/flush', { session_id: sessionId }, 120_000);
+  }
+
   /** Execute an advertised Grok Build action through the desktop bridge. */
   async runDesktopCommand(sessionId: string, command: string, argumentsText = ''): Promise<void> {
     const name = command.trim().replace(/^\//, '');

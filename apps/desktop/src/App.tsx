@@ -730,6 +730,8 @@ function App() {
   const [approvalInboxOpen, setApprovalInboxOpen] = useState(false);
   /** Per-task follow-up text queued until busy ends. */
   const [queuedFollowUps, setQueuedFollowUps] = useState<Record<string, string>>({});
+  /** A side question is independent of the main task's busy state. */
+  const [asideBusyThreadId, setAsideBusyThreadId] = useState<string | null>(null);
   /** User chose "keep waiting" — suppress stall banner until the next heartbeat gap. */
   const [stallSnoozeUntil, setStallSnoozeUntil] = useState<Record<string, number>>({});
   const [stallClock, setStallClock] = useState(() => Date.now());
@@ -2368,6 +2370,17 @@ function App() {
           if (next) {
             setFollowUps((previous) => ({ ...previous, [threadId]: next }));
           }
+          return;
+        }
+        if (method === 'x.ai/session/interjection' || method === '_x.ai/session/interjection') {
+          const params = rawParams && typeof rawParams === 'object'
+            ? rawParams as { sessionId?: unknown; text?: unknown }
+            : null;
+          const sessionId = typeof params?.sessionId === 'string' ? params.sessionId : '';
+          const text = typeof params?.text === 'string' ? params.text.trim() : '';
+          const live = threadsRef.current.find((thread) => thread.id === threadId);
+          if (!text || !sessionId || sessionId !== live?.sessionId) return;
+          appendLine(threadId, { id: nid(), role: 'user', text, at: Date.now() });
           return;
         }
         if (method !== 'x.ai/voice/transcript' && method !== '_x.ai/voice/transcript') return;
@@ -4293,6 +4306,80 @@ function App() {
     }
   };
 
+  /** Add a short steering note to the active Grok Build turn. */
+  const interjectDraft = async () => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const text = draft.trim();
+    // The native interjection route currently accepts text and image blocks;
+    // keep the desktop action text-only until the composer attachment encoder
+    // is shared with this path. Users can still queue an attachment normally.
+    if (!live?.busy || !live.client || !live.sessionId || !text || composerAtts.length) return;
+    setDraft('');
+    setSlashOpen(false);
+    setAtOpen(false);
+    try {
+      await live.client.interject(live.sessionId, text);
+      appendLine(live.id, { id: nid(), role: 'system', text: t('followUpInterjected') });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (/method.?not.?found|unknown.*method/i.test(detail)) {
+        setQueuedFollowUps((previous) => ({ ...previous, [live.id]: text }));
+        appendLine(live.id, {
+          id: nid(),
+          role: 'system',
+          text: `${t('followUpQueue')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
+        });
+      } else {
+        setDraft(text);
+        appendLine(live.id, {
+          id: nid(),
+          role: 'system',
+          text: `${t('followUpInterjectFailed')}: ${detail}`,
+        });
+      }
+    }
+  };
+
+  /** Ask the kernel's side-question channel without stopping the main turn. */
+  const askAsideDraft = async () => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const text = draft.trim();
+    if (!live?.busy || !live.client || !live.sessionId || !text || composerAtts.length || asideBusyThreadId) return;
+    setDraft('');
+    setSlashOpen(false);
+    setAtOpen(false);
+    appendLine(live.id, { id: nid(), role: 'user', text, at: Date.now() });
+    setAsideBusyThreadId(live.id);
+    try {
+      const answer = await live.client.askAside(live.sessionId, text);
+      appendLine(live.id, {
+        id: nid(),
+        role: 'assistant',
+        text: `${t('followUpAsideAnswer')}\n\n${answer}`,
+        at: Date.now(),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (/method.?not.?found|unknown.*method/i.test(detail)) {
+        setQueuedFollowUps((previous) => ({ ...previous, [live.id]: text }));
+        appendLine(live.id, {
+          id: nid(),
+          role: 'system',
+          text: `${t('followUpQueue')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
+        });
+      } else {
+        setDraft(text);
+        appendLine(live.id, {
+          id: nid(),
+          role: 'system',
+          text: `${t('followUpAsideFailed')}: ${detail}`,
+        });
+      }
+    } finally {
+      setAsideBusyThreadId(null);
+    }
+  };
+
   const send = async (submittedText?: string) => {
     const choiceSubmission = typeof submittedText === 'string';
     const text = (submittedText ?? draft).trim();
@@ -4314,8 +4401,12 @@ function App() {
 
     // No thread / brand-new stub without session: create one and send (Codex home composer)
     const live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
-    // While busy, text is queued for the next normal turn.
-    if (live?.busy && text && !choiceSubmission) {
+    // While busy, text is queued for the next normal turn. The expert `/btw`
+    // compatibility path is the one exception: it has its own native side-
+    // question route below. Attachments still use the normal queue because
+    // the side-question encoder is text-only in this desktop surface.
+    const busyAsideCommand = !choiceSubmission && atts.length === 0 && /^\/btw(?:\s|$)/i.test(text);
+    if (live?.busy && text && !choiceSubmission && !busyAsideCommand) {
       setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
       setDraft('');
       setSlashOpen(false);
@@ -4388,7 +4479,26 @@ function App() {
         setSlashOpen(false);
         setAtOpen(false);
         setCapabilityArm(null);
-        appendLine(agent.id, { id: nid(), role: 'system', text: t('btwUnavailable') });
+        if (!arg) {
+          appendLine(agent.id, { id: nid(), role: 'system', text: t('followUpAsideHint') });
+          return;
+        }
+        appendLine(agent.id, { id: nid(), role: 'user', text: arg, at: Date.now() });
+        try {
+          const answer = await client.askAside(sessionId, arg);
+          appendLine(agent.id, {
+            id: nid(),
+            role: 'assistant',
+            text: `${t('followUpAsideAnswer')}\n\n${answer}`,
+            at: Date.now(),
+          });
+        } catch (error) {
+          appendLine(agent.id, {
+            id: nid(),
+            role: 'system',
+            text: `${t('followUpAsideFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
         return;
       }
       if (name === 'compact') {
@@ -7191,6 +7301,28 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {active.busy && composerAtts.length === 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('followUpAsideHint')}
+                        disabled={!draft.trim() || asideBusyThreadId === active.id}
+                        onClick={() => void askAsideDraft()}
+                      >
+                        {asideBusyThreadId === active.id ? t('followUpAsideWorking') : t('followUpAside')}
+                      </button>
+                    ) : null}
+                    {active.busy && composerAtts.length === 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('followUpInterjectHint')}
+                        disabled={!draft.trim()}
+                        onClick={() => void interjectDraft()}
+                      >
+                        {t('followUpInterject')}
+                      </button>
+                    ) : null}
                     {activeFollowUpMode === 'queue' ? (
                       <button
                         type="button"
@@ -7865,7 +7997,9 @@ function App() {
               : 'remember';
           void runNativeDesktopAction(
             visible,
-            (agent) => agent.client!.runDesktopCommand(agent.sessionId!, kernelCommand, note || ''),
+            (agent) => action === 'capture'
+              ? agent.client!.flushMemory(agent.sessionId!)
+              : agent.client!.runDesktopCommand(agent.sessionId!, kernelCommand, note || ''),
             command,
           );
         }}

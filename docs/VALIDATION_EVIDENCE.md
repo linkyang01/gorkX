@@ -7,7 +7,7 @@
 
 | 范围 | 命令 | 结果 | 边界 |
 |---|---|---|---|
-| 上游源码与补丁 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `5da6962e4adb9c857f3def762542b52b4ec3e522`（Grok Build 0.2.112），0001–0004 均可在干净 worktree 顺序应用 | `vendor/grok-build` 为本地忽略的构建输入；不把上游源码复制进 gorkX 仓库 |
+| 上游源码与补丁 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `5da6962e4adb9c857f3def762542b52b4ec3e522`（Grok Build 0.2.112），0001–0005 均可在干净 worktree 顺序应用 | `vendor/grok-build` 为本地忽略的构建输入；不把上游源码复制进 gorkX 仓库 |
 | 最新内核编译 | `cargo check -p xai-grok-shell -p xai-grok-pager-bin`；`cargo build --release -p xai-grok-pager-bin` | 通过：完整补丁组合可编译，release 二进制成功生成；许可证与第三方声明哈希与锁文件一致 | 未替代 macOS 签名、公证和全新机器安装验收 |
 | ACP 运行时 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | 通过：更新后的包内 `grok 0.2.112 (5da6962)` 完成 ACP initialize | 这是无认证能力门禁；真实登录、额度、模型回复和麦克风听写仍需人工验收 |
 | App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：重新构建的 arm64 App 包含 `grok 0.2.112 (5da6962)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
@@ -15,6 +15,9 @@
 
 ## 2026-07-31 · 桌面动作原生 ACP 化复核
 
+| 范围 | 路由/步骤 | 结果 | 边界 |
+|---|---|---|---|
+| 运行中旁问、插入与记忆提炼 | 锁定 Grok Build 0.2.112；`_x.ai/btw`、`_x.ai/interject`、`_x.ai/memory/flush` | 通过：桌面按钮分别调用真实侧问、运行中插入和内核记忆 flush 路由；`scripts/verify-grok-acp.mjs --desktop-controls` 对所有路由完成无模型请求的原生 session guard 探测。 | 真实模型侧问与运行中安全点注入仍需登录后人工点按验收；带附件的插入暂回退到下一轮队列。 |
 | 工作流、Goal 与通用桌面动作 | 锁定 Grok Build 0.2.112 + `0005-acp-desktop-actions.patch`；`_x.ai/desktop/workflow/launch`、`_x.ai/desktop/workflow/manage`、`_x.ai/desktop/goal`、`_x.ai/desktop/command` | 通过编译级验证：工作流入口复用现有 WorkflowManager，Goal 入口复用现有 prompt/Goal orchestrator，通用入口仅把已存在的 Grok Build 命令解析包在结构化 ACP 请求内；桌面动作的 synthetic prompt 回显隐藏，用户会话显示由 gorkX 负责。 | 本轮已通过 `cargo check -p xai-grok-shell`、补丁 series apply-check；真实已认证账户下的工作流执行时间与模型结果仍需人工点按验收，不把“路由可达”写成“任务已完成”。 |
 
 | 范围 | 命令或步骤 | 结果 | 边界 |
@@ -61,7 +64,7 @@
 | 隔离 Worktree / 自定义模型 ACP | `GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-02110-home GORKX_ACP_TEST_CWD=/private/tmp/gorkx-worktree-acp-project node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --worktree --custom-model` | 2026-07-23 通过：cached-token 认证、session/new/load、临时自定义模型公告与 `session/set_model`、Plan mode、Worktree list 与 create；实际创建于临时 home 的 worktrees 目录 | 不发送模型提示，也不构成真实 provider 回复验收；Hooks 与子代理控制由后续独立 `_x.ai/*` 门禁覆盖 |
 | 会话控制 ACP 探测 | `GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-02110-home GORKX_ACP_TEST_CWD=/private/tmp/gorkx-worktree-acp-project node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --session-controls` | 2026-07-23 通过：`_x.ai/session/fork` 创建并加载 durable 子会话、原会话保持可加载；`_x.ai/rewind/points` 返回原生检查点列表。标准 `x.ai/*` 拼写返回 `Method not found`，客户端已改为运行时实际暴露的兼容路由 | 不发送模型提示；完整回退执行需要至少两个已持久化的真实回合，受当前账号余额阻断 |
 | 真实回退执行 | 同上追加 `--resource --rewind-execute` | 2026-07-23 未通过：隔离请求收到 Grok Build `402 Payment Required`（余额耗尽）；在此之前已证明路由可达和检查点读取 | 不把该失败写成回退成功；恢复可用余额后，需用隔离两轮会话复跑，验证 `conversation_only`、`force: false` 与 session reload |
-| 运行中旁问 `/btw` | `GROK_HOME=<临时认证 home> node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --btw` | 2026-07-29：`initialize`、缓存 OAuth、`session/new`、`session/load` 通过；`x.ai/btw` 与 `_x.ai/btw` 均返回 `Method not found` | 包内 `0.2.112 (47348d1)` stdio 当前没有可用旁问 ACP 接口。桌面端已移除独立旁问入口，运行中补充统一进入本地下一回合队列；不把旧源码线索当作可用功能。 |
+| 运行中旁问 `/btw`（历史结果，已被新锁定提交覆盖） | `GROK_HOME=<临时认证 home> node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --btw` | 2026-07-29 的 `0.2.112 (47348d1)` 资源返回 `Method not found`；2026-07-31 以当前锁定提交 `5da6962…` 重建资源后，`--desktop-controls` 已确认 `_x.ai/btw` 路由可达 | 旧二进制结论不再代表当前包；真实模型侧问仍需登录后人工点按验收。 |
 | Agent Profile ACP 创建 | 临时复制 App 登录凭据至一次性认证目录，并运行：`GORKX_ACP_TEST_AUTH_DIR=<temp> GORKX_ACP_TEST_PROJECT_DIR=<temp> node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --agent-profile`，以及 `--agent-profile-name explore` | 2026-07-29：包内 `grok 0.2.112 (47348d1)` 完成 cached-token 认证，接受 `session/new` 的 `_meta.agentProfile` 便携定义和内置 `explore` 名称，随后均可正常 `session/load` 与 `session/set_mode(plan)`。桌面端新建规划任务使用前者；“探索项目”使用后者。 | 未发送模型提示词；只证明会话创建契约和桌面接线，不把 Profile 提示词质量或任意自定义 Profile 文件解析宣传为已验收能力。临时认证副本与项目目录已删除。 |
 | 子代理控制 ACP 探测 | `GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-02110-home GORKX_ACP_TEST_CWD=/private/tmp/gorkx-worktree-acp-project node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --subagent-controls` | 2026-07-23 通过：`_x.ai/subagent/list_running`、`get`、`cancel` 路由均可达；标准 `x.ai/*` 拼写不被当前 stdio 接受，客户端已改为兼容路由 | 探测只使用不存在的子代理 ID，不会启动或取消真实工作；真实委派/取消闭环仍需要有效账户余额验收 |
 | Hooks 控制 ACP 探测 | `GORKX_ACP_TEST_HOME=/private/tmp/gorkx-acp-02110-home GORKX_ACP_TEST_CWD=/private/tmp/gorkx-worktree-acp-project node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --hooks-controls` | 2026-07-23 通过：`_x.ai/hooks/list` 返回 Hook 快照，`_x.ai/hooks/action` 的显式 reload 返回 success | 探测项目没有 Hooks；真实 Hook 配置、信任和启停仍需要真实项目验收，但设置页不再以 Soon 伪装可用性 |
@@ -118,7 +121,7 @@
 | 范围 | 命令 | 结果 |
 |---|---|---|
 | 内核源码 | `scripts/verify-grok-kernel-source.sh` | PASS · `47348d13…` |
-| 补丁 series | `scripts/verify-grok-kernel-patches.sh` | PASS · 含 0001–0004 |
+| 补丁 series | `scripts/verify-grok-kernel-patches.sh` | PASS · 当前 series 含 0001–0005 |
 | ACP | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | PASS initialize |
 | TS | `cd apps/desktop && npx tsc --noEmit` | PASS |
 | Stage 测试 | `npm run test:stages` | PASS（含 taskToolLimits / taskPermissionRules / connectors） |
