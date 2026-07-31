@@ -53,6 +53,8 @@ import {
   type UserQuestionAnnotations,
   type UserQuestionRequest,
   type KernelSessionSearchHit,
+  type PromptQueueEntry,
+  type PromptQueueState,
 } from './lib/acpClient';
 import type { ArchivedTaskRow, HookManagementAction, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
@@ -400,6 +402,8 @@ interface Thread {
   pendingSearchScope?: SearchToolOverrides | null;
   /** Last real ACP stream / tool / approval heartbeat (Stage B stall detection). */
   lastEventAt?: number;
+  /** Grok Build's live, server-authoritative queued prompts. */
+  queue?: PromptQueueState | null;
 }
 
 type PendingApproval =
@@ -2383,6 +2387,15 @@ function App() {
         patchThread(threadId, { commands });
       };
 
+      client.onQueueChanged = (queue) => {
+        const live = threadsRef.current.find((thread) => thread.id === threadId);
+        if (!live?.sessionId || queue.sessionId !== live.sessionId) return;
+        patchThread(threadId, {
+          queue,
+          ...(queue.runningPromptId && !live.busy ? { busy: true } : {}),
+        });
+      };
+
       client.onUsageMeta = (meta, source, eventKey) => {
         const u = usageFromUnknown(meta);
         if (u) {
@@ -2503,6 +2516,7 @@ function App() {
         patchThread(threadId, {
           busy: false,
           client: null,
+          queue: null,
           // If the prompt/session request already gave us a useful reason,
           // do not replace it with the generic process-exit symptom.
           error: live?.error?.trim() || 'Agent process exited',
@@ -4637,6 +4651,121 @@ function App() {
     }
   };
 
+  /** Submit a next-turn prompt to Grok Build's authoritative queue. */
+  const queueNativeFollowUp = async (live: Thread, text: string) => {
+    const value = text.trim();
+    if (!live.client || !live.sessionId || !value) return false;
+    try {
+      await live.client.queuePrompt(
+        live.sessionId,
+        withConversationPresentation(value),
+        [],
+        live.pendingSearchScope,
+      );
+      const current = threadsRef.current.find((thread) => thread.id === live.id);
+      patchThread(live.id, {
+        busy: Boolean(current?.queue?.runningPromptId),
+        userTurnCount: (current?.userTurnCount || 0) + 1,
+      });
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setQueuedFollowUps((previous) => ({ ...previous, [live.id]: value }));
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueFallback')}: ${detail}`,
+      });
+      return false;
+    }
+  };
+
+  const editNativeQueueEntry = async (entry: PromptQueueEntry) => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!live?.client || !live.sessionId || !live.queue) return;
+    const nextText = await askAction({
+      title: t('followUpEditQueue'),
+      message: t('followUpEditQueueHint'),
+      placeholder: t('followUpQueuePlaceholder'),
+      submitLabel: t('confirm'),
+      initialValue: entry.text,
+      allowEmpty: false,
+    });
+    if (nextText === null || !nextText.trim()) return;
+    try {
+      await live.client.editQueuedPrompt(live.sessionId, entry.id, nextText, entry.version);
+    } catch (error) {
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
+  const removeNativeQueueEntry = async (entry: PromptQueueEntry) => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!live?.client || !live.sessionId) return;
+    try {
+      await live.client.removeQueuedPrompt(live.sessionId, entry.id, entry.version);
+    } catch (error) {
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
+  const reorderNativeQueue = async (entry: PromptQueueEntry, delta: -1 | 1) => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    const entries = live?.queue?.entries ?? [];
+    if (!live?.client || !live.sessionId || entries.length < 2) return;
+    const index = entries.findIndex((item) => item.id === entry.id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= entries.length) return;
+    const ids = entries.map((item) => item.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    try {
+      await live.client.reorderQueuedPrompts(live.sessionId, ids);
+    } catch (error) {
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
+  const clearNativeQueue = async () => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!live?.client || !live.sessionId || !(live.queue?.entries.length)) return;
+    if (!window.confirm(t('followUpClearQueueConfirm'))) return;
+    try {
+      await live.client.clearQueuedPrompts(live.sessionId);
+    } catch (error) {
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
+  const interjectNativeQueueEntry = async (entry: PromptQueueEntry) => {
+    const live = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+    if (!live?.client || !live.sessionId) return;
+    try {
+      await live.client.interjectQueuedPrompt(live.sessionId, entry.id, entry.version);
+    } catch (error) {
+      appendLine(live.id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  };
+
   const send = async (submittedText?: string) => {
     const choiceSubmission = typeof submittedText === 'string';
     const text = (submittedText ?? draft).trim();
@@ -4664,7 +4793,11 @@ function App() {
     // the side-question encoder is text-only in this desktop surface.
     const busyAsideCommand = !choiceSubmission && atts.length === 0 && /^\/btw(?:\s|$)/i.test(text);
     if (live?.busy && text && !choiceSubmission && !busyAsideCommand) {
-      setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
+      if (live.client && live.sessionId) {
+        void queueNativeFollowUp(live, text);
+      } else {
+        setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
+      }
       setDraft('');
       setSlashOpen(false);
       appendLine(live.id, {
@@ -7506,6 +7639,73 @@ function App() {
                     </div>
                   </div>
                 ) : null}
+                {active.queue?.entries.length ? (
+                  <div className="follow-up-queued native-prompt-queue" role="status">
+                    <div className="follow-up-queued-head">
+                      <strong>{t('followUpNativeQueue')}</strong>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => void clearNativeQueue()}
+                      >
+                        {t('followUpClearQueue')}
+                      </button>
+                    </div>
+                    {active.queue.entries.map((entry, index) => (
+                      <div className="native-queue-row" key={entry.id}>
+                        <span className="native-queue-text" title={entry.text}>
+                          {index + 1}. {entry.text}
+                        </span>
+                        <div className="follow-up-queued-actions">
+                          {active.busy ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              title={t('followUpSendNowHint')}
+                              onClick={() => void interjectNativeQueueEntry(entry)}
+                            >
+                              {t('followUpSendNow')}
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            title={t('followUpEditQueueHint')}
+                            onClick={() => void editNativeQueueEntry(entry)}
+                          >
+                            {t('followUpEditQueue')}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            disabled={index === 0}
+                            onClick={() => void reorderNativeQueue(entry, -1)}
+                            title={t('followUpMoveQueueUp')}
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            disabled={index === active.queue!.entries.length - 1}
+                            onClick={() => void reorderNativeQueue(entry, 1)}
+                            title={t('followUpMoveQueueDown')}
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => void removeNativeQueueEntry(entry)}
+                            title={t('followUpRemoveQueue')}
+                          >
+                            {t('followUpRemoveQueue')}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 {promptSuggestion?.threadId === active.id ? (
                   <div className="prompt-suggestion-card" role="status">
                     <span className="prompt-suggestion-label">{t('promptSuggestionLabel')}</span>
@@ -7685,7 +7885,11 @@ function App() {
                         onClick={() => {
                           const text = draft.trim();
                           if (!text) return;
-                          setQueuedFollowUps((prev) => ({ ...prev, [active.id]: text }));
+                          if (active.client && active.sessionId) {
+                            void queueNativeFollowUp(active, text);
+                          } else {
+                            setQueuedFollowUps((prev) => ({ ...prev, [active.id]: text }));
+                          }
                           setDraft('');
                           appendLine(active.id, {
                             id: nid(),

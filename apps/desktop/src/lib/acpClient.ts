@@ -11,9 +11,11 @@ import { APP_VERSION } from './appMeta';
 import { parseAutoTopupSnapshot, parseBillingSnapshot, type AutoTopupSnapshot, type BillingSnapshot } from './billing';
 import { parsePromptHistory } from './promptHistory';
 import { parsePromptSuggestion, type PromptSuggestionReply } from './promptSuggestion';
+import { parsePromptQueueChanged, type PromptQueueState } from './promptQueue';
 import { createSessionBundle, type SessionBundle } from './sessionBundle';
 
 export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
+export type { PromptQueueEntry, PromptQueueState } from './promptQueue';
 
 export type PermissionMode = 'default' | 'auto' | 'full';
 
@@ -856,6 +858,7 @@ export class AcpClient {
   onStderr: ((line: string) => void) | null = null;
   onExit: (() => void) | null = null;
   onNotification: ((method: string, params: unknown) => void) | null = null;
+  onQueueChanged: ((queue: PromptQueueState) => void) | null = null;
   onWorktreeStatus:
     | ((status: {
         status?: string;
@@ -1020,6 +1023,11 @@ export class AcpClient {
       method === '_x.ai/session_notification'
     ) {
       this.onUsageMeta?.(msg.params, 'snapshot');
+    }
+
+    if (method === 'x.ai/queue/changed' || method === '_x.ai/queue/changed') {
+      const queue = parsePromptQueueChanged(msg.params);
+      if (queue) this.onQueueChanged?.(queue);
     }
 
     if (
@@ -1224,6 +1232,12 @@ export class AcpClient {
     });
     await invoke('agent_write', { agentId: this.agentId, line: payload });
     return promise;
+  }
+
+  /** Send a Grok Build ACP extension notification (no response is expected). */
+  private async notify(method: string, params: unknown): Promise<void> {
+    const payload = JSON.stringify({ jsonrpc: '2.0', method, params });
+    await invoke('agent_write', { agentId: this.agentId, line: payload });
   }
 
   /**
@@ -2276,8 +2290,15 @@ export class AcpClient {
     text: string,
     resources: PromptResourceLink[] = [],
     searchOverrides?: SearchToolOverrides | null,
+    displayText?: string,
   ): Promise<PromptResult> {
-    const prompt: unknown[] = [{ type: 'text', text }];
+    const prompt: unknown[] = [{
+      type: 'text',
+      text,
+      ...(displayText?.trim()
+        ? { meta: { displayText: displayText.trim().slice(0, 20_000) } }
+        : {}),
+    }];
     for (const resource of resources) {
       const path = resource.path.trim();
       if (!path) continue;
@@ -2299,21 +2320,24 @@ export class AcpClient {
       sessionId,
       messageId,
       prompt,
-      ...(searchOverrides !== undefined && this.supportsSearchToolOverrides
-        ? { _meta: { toolOverrides: searchOverrides === null
-          ? { xSearch: null, webSearch: null }
-          : {
-              ...(searchOverrides.fromDate || searchOverrides.toDate
-                ? { xSearch: { dateBound: {
-                    ...(searchOverrides.fromDate ? { fromDate: searchOverrides.fromDate } : {}),
-                    ...(searchOverrides.toDate ? { toDate: searchOverrides.toDate } : {}),
-                  } } }
-                : {}),
-              ...(searchOverrides.allowedDomains?.length
-                ? { webSearch: { allowedDomains: searchOverrides.allowedDomains } }
-                : {}),
-            } } }
-        : {}),
+      _meta: {
+        clientIdentifier: 'grok-desktop',
+        ...(searchOverrides !== undefined && this.supportsSearchToolOverrides
+          ? { toolOverrides: searchOverrides === null
+            ? { xSearch: null, webSearch: null }
+            : {
+                ...(searchOverrides.fromDate || searchOverrides.toDate
+                  ? { xSearch: { dateBound: {
+                      ...(searchOverrides.fromDate ? { fromDate: searchOverrides.fromDate } : {}),
+                      ...(searchOverrides.toDate ? { toDate: searchOverrides.toDate } : {}),
+                    } } }
+                  : {}),
+                ...(searchOverrides.allowedDomains?.length
+                  ? { webSearch: { allowedDomains: searchOverrides.allowedDomains } }
+                  : {}),
+              } }
+          : {}),
+      },
     })) as PromptResult;
     if (result) {
       const resultId = result.userMessageId
@@ -2322,6 +2346,66 @@ export class AcpClient {
       this.onUsageMeta?.(result, 'prompt-result', `${sessionId}:${resultId}`);
     }
     return result;
+  }
+
+  /** Queue a normal prompt through Grok Build's native pending-input queue. */
+  async queuePrompt(
+    sessionId: string,
+    text: string,
+    resources: PromptResourceLink[] = [],
+    searchOverrides?: SearchToolOverrides | null,
+  ): Promise<PromptResult> {
+    return this.prompt(sessionId, text, resources, searchOverrides, text);
+  }
+
+  /** Edit one native queued prompt, guarded by the version last observed. */
+  async editQueuedPrompt(sessionId: string, id: string, newText: string, version = 0): Promise<void> {
+    const text = newText.trim();
+    if (!sessionId || !id || !text) throw new Error('A queued prompt and replacement text are required');
+    await this.notify('x.ai/queue/edit', {
+      sessionId,
+      id,
+      newText: text.slice(0, 20_000),
+      owner: 'grok-desktop',
+      expectedVersion: Math.max(0, Math.trunc(version)),
+    });
+  }
+
+  /** Remove one native queued prompt, guarded by the version last observed. */
+  async removeQueuedPrompt(sessionId: string, id: string, version = 0): Promise<void> {
+    if (!sessionId || !id) throw new Error('A queued prompt is required');
+    await this.notify('x.ai/queue/remove', {
+      sessionId,
+      id,
+      owner: 'grok-desktop',
+      expectedVersion: Math.max(0, Math.trunc(version)),
+    });
+  }
+
+  /** Reorder the native queue using the complete ordered id list. */
+  async reorderQueuedPrompts(sessionId: string, orderedIds: string[]): Promise<void> {
+    if (!sessionId) throw new Error('A session is required');
+    await this.notify('x.ai/queue/reorder', {
+      sessionId,
+      orderedIds: orderedIds.filter((id) => typeof id === 'string' && id.trim()).slice(0, 128),
+    });
+  }
+
+  /** Clear this client's queued prompts without touching other ACP clients. */
+  async clearQueuedPrompts(sessionId: string): Promise<void> {
+    if (!sessionId) throw new Error('A session is required');
+    await this.notify('x.ai/queue/clear', { sessionId, owner: 'grok-desktop' });
+  }
+
+  /** Promote a queued prompt into the running turn without losing its text. */
+  async interjectQueuedPrompt(sessionId: string, id: string, version = 0): Promise<void> {
+    if (!sessionId || !id) throw new Error('A queued prompt is required');
+    await this.notify('x.ai/queue/interject', {
+      sessionId,
+      id,
+      owner: 'grok-desktop',
+      expectedVersion: Math.max(0, Math.trunc(version)),
+    });
   }
 
   async cancel(sessionId: string) {

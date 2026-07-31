@@ -124,6 +124,37 @@ The result is a short editable chip. It is never auto-sent; the user can insert,
 edit, or dismiss it. Because this is a model-backed prediction, the button tells
 the user that it may consume provider quota.
 
+## Native prompt queue
+
+When a task is already running, the desktop sends an ordinary `session/prompt`
+through Grok Build's pending-input queue instead of maintaining a private
+single-string shadow queue. Grok Build broadcasts the authoritative state:
+
+```
+x.ai/queue/changed
+  { sessionId, entries: [{ id, version, owner, lastEditor, kind, text, position, combinedTexts? }],
+    runningPromptId?, runningText?, runningKind?, runningCombinedTexts? }
+```
+
+The composer renders every bounded native entry and exposes desktop controls for
+edit, remove, reorder, clear, and send-now (interject). Those controls send the
+kernel notifications below; they do not execute slash commands or mutate a
+client-only queue:
+
+```
+x.ai/queue/edit     { sessionId, id, newText, owner, expectedVersion }
+x.ai/queue/remove   { sessionId, id, owner, expectedVersion }
+x.ai/queue/reorder  { sessionId, orderedIds }
+x.ai/queue/clear    { sessionId, owner }
+x.ai/queue/interject { sessionId, id, owner, expectedVersion }
+```
+
+Queue notifications are scoped to the matching live session and bounded before
+rendering. Attachments still use the next-turn fallback until the shared native
+queue content encoder supports resource links. If the live route fails, gorkX
+keeps the submitted text in its recoverable local fallback and labels that
+degradation instead of claiming native queue control succeeded.
+
 ## Portable task bundles
 
 The **导出可恢复任务包 / Export portable task package** and **导入任务包 /

@@ -29,6 +29,13 @@
 | 原生会话读取 | `_x.ai/session/state`、`_x.ai/session/updates { offset, limit }`；`verify-grok-acp.mjs --session-bundle` | 通过：锁定 Grok Build 0.2.112 对缺失会话返回合法 state 守卫，updates 返回分页空结果；桌面分页最多 100,000 条更新 | 未用用户主目录读取真实任务；真实已认证导出需人工确认内容边界 |
 | 原生会话恢复 | `_x.ai/session/import`；`verify-grok-acp.mjs --session-bundle` | 通过：缺少 summary 的无效包在内核原生校验处被拒绝；桌面导入要求 JSON 文件、目标项目和二次确认，成功后用正常 `session/load` 重连 | 探针不写入会话；跨设备真实导出→导入仍需用户登录后手动验收，不把路由守卫写成完整恢复成功 |
 
+## 2026-07-31 · 原生提示队列复核
+
+| 范围 | 命令或证据 | 结果 | 边界 |
+|---|---|---|---|
+| 队列状态解析 | `cd apps/desktop && npm run test:stage-a`；`promptQueue.test.ts` | 通过：`x.ai/queue/changed` 的多项条目、位置排序、版本、运行中提示和组合文本均做有界解析；重复 ID、畸形条目和超限输入被拒绝或丢弃 | 纯解析门禁不证明用户账号已排队或模型已执行；真实队列需要登录后的运行中任务 |
+| 桌面队列接线 | `AcpClient` 的 `x.ai/queue/changed` 监听与 `x.ai/queue/edit|remove|reorder|clear|interject` 通知；运行中 composer 原生队列卡片 | 通过源码与 TypeScript 门禁：普通文本排队走 `session/prompt`，队列卡片的编辑、删除、重排、清空、立即插入均发送真实 Grok Build 路由；状态按 sessionId 隔离 | 当前不把附件伪装成原生队列内容；附件仍走下一轮本地回退。真实账号下的多项排队、版本冲突和立即插入仍需人工点按验收 |
+
 ## 2026-07-31 · 桌面动作原生 ACP 化复核
 
 | 范围 | 路由/步骤 | 结果 | 边界 |

@@ -931,6 +931,37 @@ body {
   gap: 6px;
 }
 
+.native-prompt-queue {
+  display: block;
+  padding: 8px 10px;
+}
+
+.follow-up-queued-head,
+.native-queue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.follow-up-queued-head {
+  margin-bottom: 6px;
+}
+
+.native-queue-row + .native-queue-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+
+.native-queue-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Project/session menus: icon + label in a row */
 .project-pop-menu .pop-menu-item {
   display: flex;
