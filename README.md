@@ -80,23 +80,83 @@ Reports, research briefs, ops checklists, content drafts, handoffs, and hard dec
 
 ## Install
 
-### Get the app
+### Requirements
 
-**[Download gorkX 1.0.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)** · open the DMG · drag **gorkX** to Applications · open it.
+| Item | Requirement |
+|---|---|
+| OS | **macOS 12** or later |
+| Chip | **Apple Silicon** (M1 / M2 / M3 / M4 …) — not Intel Mac |
+| Account | A **Grok** account for sign-in (browser OAuth inside the app) |
+| Optional | Your own API / OpenAI-compatible provider keys in Settings |
 
-Release notes: [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md) ·
-[GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0).
+Windows and Linux are not GA in this release.
 
-On first launch, macOS may ask you to allow an unrecognized developer under **System Settings → Privacy & Security**. gorkX then guides Grok sign-in in the browser. You can also add API or compatible providers in Settings when you have keys.
+### Install from the DMG (recommended)
 
-> **Tip:** If Gatekeeper blocks a first open, allow it in System Settings, or run:
-> `xattr -dr com.apple.quarantine /Applications/gorkX.app`
+**Release:** [gorkX 1.0.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) ·
+full notes: [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)
 
-> **Signing boundary:** Public builds may be ad-hoc until Developer ID + notarization
-> credentials are available. That is honest and expected — not a “download and open
-> with zero Gatekeeper steps” claim.
+1. **Download** the installer:
+   - **[gorkX_1.0.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**
+   - Or open [All releases](https://github.com/linkyang01/gorkX/releases) and pick the latest `*.dmg`.
+2. **Open the DMG** (double-click in Finder).
+3. **Drag `gorkX` into Applications** (the Applications shortcut in the window).
+4. **Eject** the disk image when finished (optional).
+5. Open **Applications → gorkX**.
 
-### Run from source
+#### If macOS blocks first open (“unidentified developer” / damaged / can’t be opened)
+
+Current public builds use **ad-hoc signing** (not Apple notarized Developer ID). That is expected; it is not malware. Pick one:
+
+**A — System Settings (GUI)**
+
+1. Open **System Settings → Privacy & Security**.
+2. Scroll to the message about **gorkX** being blocked.
+3. Click **Open Anyway** / **Allow**, then confirm.
+
+**B — Terminal (one-shot quarantine clear)**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/gorkX.app
+```
+
+Then open gorkX again from Applications (or Spotlight).
+
+#### First launch
+
+1. When prompted, complete **Grok sign-in in the browser**.
+2. Return to gorkX; the app stores sessions under its own App Support data (not your CLI `~/.grok`).
+3. Open a **project folder** (or start a free-standing task) and describe what you want done.
+4. Optional: **Settings → Models** to add API / compatible providers; secrets go to **macOS Keychain**.
+
+#### Optional: verify the download
+
+```bash
+shasum -a 256 ~/Downloads/gorkX_1.0.0_aarch64.dmg
+# expected:
+# b24bd3c16a9447a36b17ecb77b5bebc320fec343a2586131a14d9df065f6f88c
+```
+
+### Update / rollback
+
+- **Update:** download a newer DMG from [Releases](https://github.com/linkyang01/gorkX/releases), drag over the old app in Applications.
+- **Rollback:** keep an older DMG; replace `/Applications/gorkX.app` with the previous version.
+- App data stays under `~/Library/Application Support/gorkX/` unless you delete it yourself.
+- Do **not** run a generic `grok update` CLI to “upgrade” the desktop app kernel.
+
+### Uninstall
+
+1. Quit gorkX.
+2. Move `/Applications/gorkX.app` to Trash.
+3. (Optional) remove local data:
+
+```bash
+rm -rf ~/Library/Application\ Support/gorkX
+```
+
+### Run from source (developers)
+
+Needs Node.js, Rust, and Xcode command-line tools.
 
 ```bash
 git clone https://github.com/linkyang01/gorkX.git
@@ -110,6 +170,13 @@ Optional development engine path:
 ```bash
 export GORKX_GROK_CMD=/path/to/grok
 npm run tauri dev
+```
+
+To build a local `.app` only:
+
+```bash
+npm run build:app
+# output: src-tauri/target/release/bundle/macos/gorkX.app
 ```
 
 ## Private by architecture
@@ -232,22 +299,83 @@ Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目�
 
 ## 安装
 
-### 下载应用
+### 环境要求
 
-**[下载 gorkX 1.0.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
+| 项目 | 要求 |
+|---|---|
+| 系统 | **macOS 12** 及以上 |
+| 芯片 | **Apple Silicon**（M1 / M2 / M3 / M4 等），**不支持** Intel Mac |
+| 账号 | 需要 **Grok** 账号（应用内浏览器登录） |
+| 可选 | 在「设置」里配置自己的 API / OpenAI 兼容提供商密钥 |
 
-发布说明：[`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md) ·
-[GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0)。
+本版本 Windows / Linux 尚未正式支持。
 
-首次打开时，如系统提示开发者未被识别，可在“**系统设置 → 隐私与安全性**”中允许。随后会引导你在浏览器登录 Grok；若你持有提供商密钥，也可在设置中配置 API 或兼容提供商。
+### 用 DMG 安装（推荐）
 
-> **提示：** 若首次打开被拦截，可在系统设置中允许，或执行：  
-> `xattr -dr com.apple.quarantine /Applications/gorkX.app`
+**版本：** [gorkX 1.0.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) ·
+完整说明见 [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)
 
-> **签名边界：** 在完成 Developer ID 与公证前，公开构建可能是 ad-hoc 签名；
-> 不宣称「下载即可开、无需绕过 Gatekeeper」。
+1. **下载**安装包：
+   - **[gorkX_1.0.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**
+   - 或打开 [全部版本](https://github.com/linkyang01/gorkX/releases)，选择最新的 `*.dmg`
+2. **双击打开 DMG**。
+3. 把窗口里的 **gorkX** **拖到「应用程序」**（Applications）里。
+4. 可按需弹出（推出）磁盘映像。
+5. 打开 **启动台 / 访达 → 应用程序 → gorkX**。
 
-### 从源码运行
+#### 若首次打开被拦截（“无法验证开发者” / “已损坏” / 打不开）
+
+当前公开发布包是 **ad-hoc 签名**（尚未 Apple Developer ID 公证）。这是预期情况，不是病毒。任选一种方式：
+
+**方式 A — 系统设置（图形界面）**
+
+1. 打开 **系统设置 → 隐私与安全性**。
+2. 找到关于 **gorkX** 被拦截的提示。
+3. 点 **仍要打开** / **允许**，再确认一次。
+
+**方式 B — 终端一次清除隔离属性**
+
+```bash
+xattr -dr com.apple.quarantine /Applications/gorkX.app
+```
+
+然后从「应用程序」或 Spotlight 再打开 gorkX。
+
+#### 第一次启动
+
+1. 按提示在浏览器完成 **Grok 登录**。
+2. 回到 gorkX；会话与登录数据在应用自管目录（**不会**继承你本机 CLI 的 `~/.grok`）。
+3. 打开一个**项目文件夹**（或直接开自由任务），用自然语言描述要做的事。
+4. 可选：到 **设置 → 模型** 添加 API / 兼容提供商；密钥保存在 **macOS 钥匙串**。
+
+#### 可选：校验下载文件
+
+```bash
+shasum -a 256 ~/Downloads/gorkX_1.0.0_aarch64.dmg
+# 期望值为：
+# b24bd3c16a9447a36b17ecb77b5bebc320fec343a2586131a14d9df065f6f88c
+```
+
+### 更新与回滚
+
+- **更新：** 从 [Releases](https://github.com/linkyang01/gorkX/releases) 下载新 DMG，覆盖拖入「应用程序」。
+- **回滚：** 保留旧 DMG，用旧版替换 `/Applications/gorkX.app`。
+- 应用数据在 `~/Library/Application Support/gorkX/`，除非你手动删除，否则会保留。
+- **不要**用通用的 `grok update` 命令去“升级”桌面版内核。
+
+### 卸载
+
+1. 退出 gorkX。
+2. 将 `/Applications/gorkX.app` 移到废纸篓。
+3. （可选）删除本地数据：
+
+```bash
+rm -rf ~/Library/Application\ Support/gorkX
+```
+
+### 从源码运行（开发者）
+
+需要 Node.js、Rust 与 Xcode 命令行工具。
 
 ```bash
 git clone https://github.com/linkyang01/gorkX.git
@@ -256,11 +384,18 @@ npm install
 npm run tauri dev
 ```
 
-开发时如需指定自己的内核：
+开发时指定自己的内核：
 
 ```bash
 export GORKX_GROK_CMD=/path/to/grok
 npm run tauri dev
+```
+
+仅本地打 `.app` 包：
+
+```bash
+npm run build:app
+# 产物：src-tauri/target/release/bundle/macos/gorkX.app
 ```
 
 ## 数据与隐私
