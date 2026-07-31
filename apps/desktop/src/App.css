@@ -479,6 +479,80 @@ body {
   max-width: 540px;
 }
 
+.conversation-timeline-modal {
+  width: min(620px, 94vw);
+  max-height: min(720px, 88vh);
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-timeline-list {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  padding-right: 2px;
+}
+
+.conversation-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--glass-soft);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.conversation-timeline-item:hover,
+.conversation-timeline-item:focus-visible {
+  border-color: var(--hairline-strong);
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.conversation-timeline-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 99px;
+  background: var(--bg-active);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.conversation-timeline-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.conversation-timeline-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.conversation-timeline-preview {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
 .onboard-steps {
   list-style: none;
   margin: 12px 0 0;

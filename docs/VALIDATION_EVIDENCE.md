@@ -17,6 +17,8 @@
 | 内核更新检查 | Settings → Updates → Check for updates；后端固定白名单 `grok update --check --json` | 通过源码审阅与 Rust 白名单测试：桌面现在读取 Grok Build 原生 JSON 的当前/最新版本、频道和更新状态，能够区分网络失败；仅报告，不允许运行时替换 App 自带的源码锁定内核 | 当前网络/账户能否取得上游频道结果由 Grok Build 更新服务决定；在服务返回新版本时仍需开发者重新锁源、补丁、构建和 ACP 回归后更新 gorkX |
 | 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在 0.2.116 上编译并进入包内资源；桌面快捷键设置继续控制 gorkX 窗口内的原生语音入口 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
 
+| 会话时间线 | `+ → 会话时间线`；`npx tsc --noEmit`；`npm run test:stages`；`npm run build` | 通过：面板索引当前已挂载的用户消息、Grok 回复、计划、工作流和计划任务；点击后只滚动到对应本地 DOM 位置，不发送模型请求、不改写会话 | 只导航当前已加载的会话；跨任务搜索仍使用任务搜索面板，内核历史不会被伪装成本地时间线 |
+
 ### v0.2.116 桌面化审计
 
 官方 changelog 的 `/undo` 是 `/rewind` 的内核别名，gorkX 已将它加入 `+` 菜单和会话 slash 选择；两条路径都进入同一套“选择检查点 → 非写入预览 → 冲突时二次确认 → 提交”的安全流程。串流 JSON 输出和最小/全屏 slash 隐藏属于 Grok Build CLI/TUI 行为；gorkX 的 ACP 会话已经持续接收结构化工具、状态和用量更新，因此不重复做终端专属开关。

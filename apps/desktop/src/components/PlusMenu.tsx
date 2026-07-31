@@ -28,6 +28,7 @@ export type PlusAction =
   | { type: 'rewind-session' }
   | { type: 'undo-session' }
   | { type: 'task-info' }
+  | { type: 'timeline' }
   | { type: 'prompt-history' }
   | { type: 'export-session-bundle' }
   | { type: 'import-session-bundle' }
@@ -372,6 +373,13 @@ export function PlusMenu({
       title: t('taskInfoTitle'),
       desc: t('taskInfoMenuHint'),
       action: { type: 'task-info' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'timeline',
+      title: t('timelineTitle'),
+      desc: t('timelineMenuHint'),
+      action: { type: 'timeline' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,

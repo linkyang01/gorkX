@@ -326,7 +326,7 @@ export function MessageList({
         {visible.map((line) => {
           if (line.role === 'system' && isNoiseSystem(line.text)) return null;
           return (
-            <div key={line.id} className="msg-flow-item">
+            <div key={line.id} id={`message-line-${encodeURIComponent(line.id)}`} className="msg-flow-item">
               <LineView
                 line={line}
                 onTogglePlanEntry={onTogglePlanEntry}

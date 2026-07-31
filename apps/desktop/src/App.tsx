@@ -62,6 +62,7 @@ import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { TaskSearchDialog } from './components/TaskSearchDialog';
 import { MessageList, type ChatLine } from './components/MessageList';
+import { ConversationTimelinePanel } from './components/ConversationTimelinePanel';
 import { AttachmentStrip } from './components/AttachmentStrip';
 import { AttachmentPreview } from './components/AttachmentPreview';
 import {
@@ -581,6 +582,7 @@ function App() {
   const [projectMenuPath, setProjectMenuPath] = useState<string | null>(null);
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
   const [taskInfoOpen, setTaskInfoOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>();
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -3735,6 +3737,9 @@ function App() {
         return;
       case 'task-info':
         setTaskInfoOpen(true);
+        return;
+      case 'timeline':
+        setTimelineOpen(true);
         return;
       case 'prompt-history':
         setPromptHistoryOpen(true);
@@ -8690,6 +8695,18 @@ function App() {
           setKernelOpen(true);
         }}
       /></Suspense> : null}
+
+      {timelineOpen ? <ConversationTimelinePanel
+        open
+        lines={active?.lines ?? []}
+        onClose={() => setTimelineOpen(false)}
+        onJump={(lineId) => {
+          setTimelineOpen(false);
+          requestAnimationFrame(() => {
+            document.getElementById(`message-line-${encodeURIComponent(lineId)}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }}
+      /> : null}
 
       {activeApproval?.kind === 'permission' ? (
         <PermissionPrompt request={activeApproval.request} onAnswer={(optionId) => void answerPermission(optionId)} />
