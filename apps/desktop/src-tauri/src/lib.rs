@@ -130,6 +130,7 @@ pub fn run() {
             workspace::workspace_read_agents_md,
             workspace::workspace_write_agents_md,
             workspace::workspace_write_client_text,
+            workspace::workspace_write_hook_definition,
             workspace::workspace_validate_resource_attachment,
             workspace::workspace_read_text_file,
             workspace::workspace_write_text_if_mtime,

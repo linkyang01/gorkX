@@ -132,6 +132,7 @@ import {
   type ComputerWorkspaceAction,
 } from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
+import { HookBuilder } from './HookBuilder';
 
 
 /** Codex-style sections. Skip voice/pets; map rest to Grok/gorkX. */
@@ -2690,6 +2691,7 @@ export function SettingsPanel({
                 )}
               </div>
               <h3 className="subhead">{t('settingsHooksTitle')}</h3>
+              {project ? <HookBuilder project={project} onSaved={() => { void refreshHooks(); }} /> : null}
               <div className="settings-card">
                 <p className="settings-row-hint">{t('settingsHooksHint')}</p>
                 {!hooksAvailable ? (

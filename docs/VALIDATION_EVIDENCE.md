@@ -89,6 +89,7 @@
 | 会话丰富结果展示 | `cd apps/desktop && npx tsc --noEmit && npm run test:stages && npm run build`；`conversationPresentation.test.ts` | 2026-07-29 通过：普通用户回合自动携带非命令式展示偏好；保留原始 Markdown 表格并对小型两列数值比较自动附图；安全的 `chart`、`mermaid` 与 `diff` fenced block 分别进入本地受限 SVG/HTML 渲染；`choices` / `options` block 只在模型明确输出时成为点击后才发送的选择按钮。 | 未发送模型提示词制造样本；渲染不执行 HTML、脚本、远程资源或任意 Mermaid 指令。模型仍决定何时使用表、图或选择，不保证每条回复都可视化。 |
 | 账户状态与额度真实窗口 | `cd apps/desktop && npm run build:app`；打开本地 `.app` 并查看账户菜单 | 已纠正：CLI 账单响应中的 `used/monthlyLimit` 是另一类月度/额外额度，不能映射为 SuperGrok 网页的每周限额。gorkX 仅接受 API 明确提供的 `creditUsagePercent` 或 Grok Build 产品百分比；缺失时不保存、换算或显示网页截图值，而是提供一键打开已登录 Grok 官方使用量页的入口 | 官方网页的 SuperGrok 周额度是当前权威来源；当前 CLI/ACP 没有提供该字段。桌面端只有在未来收到对应实时字段时才显示百分比。 |
 | 每日 Token 本地记录 | `cd apps/desktop && npx tsc --noEmit && npm run test:stages`；`cd src-tauri && cargo check && cargo test`；本机新构建 App 打开“设置 → 使用情况和计费” | 通过：界面显示今日累计、输入/输出拆分和近 7 天趋势；缺失日期显示为零。0.2.116 的 ACP 回合响应含 `usage` 时，gorkX 仅在完成响应出现时按消息 ID 去重写入本机 SQLite，快照只更新当前上下文显示。前端阶段测试通过，Rust 81 项测试通过 | 未发起模型提示以制造计数；首次真实任务收到 PromptResponse usage 后才会形成今日累计。该数不是订阅额度、账单金额或估算值 |
+| 项目 Hook 创作 | `cd apps/desktop && npx tsc --noEmit && npm run test:stage-a`；`cd src-tauri && cargo check && cargo test` | 通过：设置中的引导表单只允许固定事件、`command`/HTTPS handler、受限超时和安全文件名；Tauri 后端只在当前项目 `.grok/hooks` 下原子写入并拒绝 symlink，Rust/TS 测试覆盖 JSON、HTTPS、路径和文件名边界。保存不会授信或执行 Hook | 仍需在一个真实已授信项目中运行一次 Hook，验证由 Grok Build 执行而不是 App 自行执行 |
 
 ## 2026-07-23 · 桌面端本地构建与浏览器链路
 

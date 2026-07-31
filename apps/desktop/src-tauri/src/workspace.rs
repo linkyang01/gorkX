@@ -34,6 +34,7 @@ const MAX_AGENTS_BYTES: usize = 200_000;
 /// the engine's normal tools, which have their own streaming/audit surface.
 const MAX_CLIENT_WRITE_BYTES: usize = 1_000_000;
 const MAX_RESOURCE_ATTACHMENT_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_HOOK_DEFINITION_BYTES: usize = 200_000;
 
 fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(cwd.trim());
@@ -209,6 +210,66 @@ fn write_client_text_file(root: &Path, raw_path: &str, content: &str) -> Result<
         let _ = fs::remove_file(&tmp);
     }
     write_result
+}
+
+fn safe_hook_file_name(raw: &str) -> Result<String, String> {
+    let name = raw.trim();
+    if name.len() < 6 || name.len() > 96 || !name.ends_with(".json") {
+        return Err("Hook file name must be 1–90 characters and end in .json".into());
+    }
+    let stem = &name[..name.len() - ".json".len()];
+    if stem.is_empty()
+        || !stem
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err("Hook file name may contain only letters, numbers, ., _ and -".into());
+    }
+    Ok(name.to_string())
+}
+
+fn ensure_project_hooks_dir(root: &Path) -> Result<PathBuf, String> {
+    let grok_dir = root.join(".grok");
+    let hooks_dir = grok_dir.join("hooks");
+    for dir in [&grok_dir, &hooks_dir] {
+        match fs::symlink_metadata(dir) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                return Err("Refusing to write project Hooks through a symlink".into())
+            }
+            Ok(meta) if !meta.is_dir() => return Err("Project Hook path is not a directory".into()),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(dir).map_err(|e| format!("create project Hook directory: {e}"))?;
+            }
+            Err(error) => return Err(format!("inspect project Hook directory: {error}")),
+        }
+    }
+    Ok(hooks_dir)
+}
+
+/// Create or replace one project-local Grok Build Hook definition. The
+/// renderer supplies a guided, validated JSON document; this backend adds a
+/// second boundary around the project path and refuses symlinked .grok/hooks.
+#[tauri::command]
+pub fn workspace_write_hook_definition(
+    cwd: String,
+    file_name: String,
+    content: String,
+) -> Result<String, String> {
+    if content.len() > MAX_HOOK_DEFINITION_BYTES || content.as_bytes().contains(&0) {
+        return Err("Hook definition must be plain text up to 200 KB".into());
+    }
+    let parsed: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("invalid Hook JSON: {e}"))?;
+    if !parsed.get("hooks").is_some_and(serde_json::Value::is_object) {
+        return Err("Hook JSON must contain a hooks object".into());
+    }
+    let root = workspace_root(&cwd)?;
+    let name = safe_hook_file_name(&file_name)?;
+    ensure_project_hooks_dir(&root)?;
+    let relative = format!(".grok/hooks/{name}");
+    write_client_text_file(&root, &relative, &content)?;
+    Ok(root.join(relative).display().to_string())
 }
 
 /// ACP client-side text-file write. This is only called by the renderer when
@@ -550,7 +611,7 @@ pub fn read_workspace_file_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::{read_agents_file, walk, workspace_validate_resource_attachment, write_agents_file, write_client_text_file, FileHit};
+    use super::{read_agents_file, safe_hook_file_name, walk, workspace_validate_resource_attachment, write_agents_file, write_client_text_file, FileHit};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -618,6 +679,34 @@ mod tests {
         assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
 
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn hook_definition_name_is_bounded() {
+        assert_eq!(safe_hook_file_name("check-shell.json").unwrap(), "check-shell.json");
+        assert!(safe_hook_file_name("../unsafe.json").is_err());
+        assert!(safe_hook_file_name("hook.toml").is_err());
+        assert!(safe_hook_file_name("hook file.json").is_err());
+    }
+
+    #[test]
+    fn project_hook_definition_is_written_under_grok_hooks() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("gorkx-hook-{nonce}"));
+        fs::create_dir_all(&project).unwrap();
+        let content = r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"printf ok"}]}]}}"#;
+        let path = super::workspace_write_hook_definition(
+            project.display().to_string(),
+            "startup.json".into(),
+            content.into(),
+        )
+        .unwrap();
+        assert!(path.ends_with("/.grok/hooks/startup.json"));
+        assert_eq!(fs::read_to_string(path).unwrap(), content);
+        fs::remove_dir_all(project).unwrap();
     }
 
     #[test]

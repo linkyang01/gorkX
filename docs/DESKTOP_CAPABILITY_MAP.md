@@ -36,6 +36,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | `always-approve` | Composer permission selector | Explicit user-controlled task permission mode. |
 | `flush`, `dream`, `memory` | Memory panel | Local Hermes data plus kernel actions where advertised. |
 | `hooks-*` | Settings: Hooks & project instructions | Native file/folder picker; the engine validates paths and executes Hooks. |
+| Project Hook authoring | Settings: Hooks & project instructions → Create project Hook | Writes a bounded `.grok/hooks/*.json` definition under the active project using fixed event names and command/HTTPS handler validation. Saving does not trust or execute it; Grok Build remains the executor after explicit project trust. |
 | `plugins`, `reload-plugins`, `plugin details/validate`, `plugin marketplace add/remove/update` | Extensions: Plugins and Marketplace | Install, enable/disable, update one/all and uninstall controls; each installed plugin exposes its kernel component inventory and local-folder manifest validation. Marketplace adds trusted Git/GitHub/local sources, refreshes them, and requires a destructive-action warning before removing a source and its plugins. |
 | `feedback` | Add menu: Send feedback | Shown only when the live command catalogue advertises it. |
 | `deep-research` | Add menu: Deep research | Plain-language brief; kernel owns parallel research and citations. |

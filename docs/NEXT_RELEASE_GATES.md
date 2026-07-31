@@ -41,7 +41,7 @@ gorkX，就能登录 Grok、打开真实项目、由 Agent 读取/修改并审�
 
 - GitHub 一键网页授权：gorkX 已使用 GitHub 官方 Device Flow；用户已完成一次浏览器确认并由应用实际验证 GitHub API 连接，也已在当前 gorkX 项目读取开放 PR（当前为空），并在公开测试仓库完成 PR、Checks 与评论详情的只读闭环。授权后的令牌只进入 macOS Keychain。仍需验收断开及每次远端写入确认。当前 OAuth scope 为 `read:user public_repo`；`public_repo` 可能允许公开仓库写入，故授权前 UI 必须明确披露，创建 PR 或评论仍必须逐次确认。私有仓库、组织策略或更细粒度范围继续使用用户创建的 fine-grained Token。
 - Computer 自动化：需要 macOS TCC/Accessibility、可见动作和紧急停止的完整安全链路。
-- Hooks：设置已提供真实的项目 `AGENTS.md` 指令编辑，以及内核 Hook 的读取、信任、启停、重载和移除控制；App 不自己执行 Hooks。仍需在包含真实 Hook 的项目中完成一次实际执行验收，才可将 Hook 自动化作为发布宣传重点。
+- Hooks：设置已提供真实的项目 `AGENTS.md` 指令编辑、项目 `.grok/hooks/*.json` 引导创建，以及内核 Hook 的读取、信任、启停、重载和移除控制；App 不自己执行 Hooks。仍需在包含真实 Hook 的项目中完成一次实际执行验收，才可将 Hook 自动化作为发布宣传重点。
 - 直接使用 ChatGPT Plus / Claude Pro 网页订阅：不等同于 API 或合法的官方授权通道。
 
 这些能力可继续开发，但未完成时不能放入 v0.5.0 的“已支持”宣传；界面必须说明真实边界。
