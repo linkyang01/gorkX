@@ -1489,6 +1489,39 @@ export class AcpClient {
     return { success: value.success, affectedCount, ...(errorText ? { error: errorText } : {}) };
   }
 
+  /** Accept or reject every tracked agent hunk for one file through the kernel. */
+  async applyHunkFileAction(
+    sessionId: string,
+    path: string,
+    action: 'accept' | 'reject',
+  ): Promise<HunkActionResult> {
+    const selectedPath = path.trim().slice(0, 2_000);
+    if (!sessionId || !selectedPath) throw new Error('A session and file are required');
+    const params = { sessionId, path: selectedPath, action };
+    let raw: unknown;
+    try {
+      raw = await this.request('_x.ai/hunk-tracker/file-action', params, 30_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('x.ai/hunk-tracker/file-action', params, 30_000);
+    }
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const first = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const value = first.result && typeof first.result === 'object'
+      ? first.result as Record<string, unknown>
+      : first;
+    if (typeof value.success !== 'boolean') throw new Error('Kernel returned an incomplete file hunk action result');
+    const affected = value.affectedCount ?? value.affected_count;
+    const affectedCount = typeof affected === 'number' && Number.isFinite(affected) && affected >= 0
+      ? Math.floor(affected)
+      : 0;
+    const errorText = typeof value.error === 'string' ? value.error.trim().slice(0, 1_000) : undefined;
+    if (!value.success && errorText) throw new Error(errorText);
+    return { success: value.success, affectedCount, ...(errorText ? { error: errorText } : {}) };
+  }
+
   /** Read the kernel's current VCS information for the active project. */
   async getGitInfo(sessionId: string, gitRoot: string): Promise<unknown> {
     if (!sessionId || !gitRoot) throw new Error('A project and session are required');

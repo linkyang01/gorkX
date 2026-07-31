@@ -416,6 +416,25 @@ export function ReviewPanel({
       .finally(() => setGitActionBusy(false));
   };
 
+  const applyAgentFileAction = (file: HunkFileSummary, action: 'accept' | 'reject') => {
+    if (!client || !sessionId || taskBusy || agentChangesBusy) return;
+    const path = agentPath(file.path);
+    const confirmText = action === 'accept'
+      ? t('reviewAgentAcceptFileConfirm').replace('{path}', path)
+      : t('reviewAgentRejectFileConfirm').replace('{path}', path);
+    if (!window.confirm(confirmText)) return;
+    setAgentChangesBusy(true);
+    setAgentChangesError(null);
+    void client.applyHunkFileAction(sessionId, file.path, action)
+      .then((result) => {
+        const message = action === 'accept' ? t('reviewAgentFileAccepted') : t('reviewAgentFileRejected');
+        setMsg(message.replace('{path}', path).replace('{n}', String(result.affectedCount)));
+        refreshAgentChanges();
+      })
+      .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setAgentChangesBusy(false));
+  };
+
   return (
     <aside className="review-panel" aria-label={t('reviewTitle')}>
       <div className="review-head">
@@ -831,6 +850,24 @@ export function ReviewPanel({
                       .replace('{add}', String(file.additions))
                       .replace('{del}', String(file.deletions))}
                     {file.staged ? ` · ${t('reviewAgentStaged')}` : ''}
+                  </div>
+                  <div className="review-plan-actions" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={agentChangesBusy || taskBusy}
+                      onClick={() => applyAgentFileAction(file, 'accept')}
+                    >
+                      {t('reviewAgentAcceptFile')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={agentChangesBusy || taskBusy}
+                      onClick={() => applyAgentFileAction(file, 'reject')}
+                    >
+                      {t('reviewAgentRejectFile')}
+                    </button>
                   </div>
                 </li>
               ))}
