@@ -1162,8 +1162,9 @@ function App() {
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name)) {
       throw new Error(t('workflowManagementUnavailable'));
     }
-    await live.client.prompt(live.sessionId, `/workflow ${action} ${workflow.name}`);
-  }, []);
+    const result = await live.client.manageWorkflow(live.sessionId, workflow.runId, action);
+    appendLine(live.id, { id: nid(), role: 'system', text: result.message });
+  }, [t]);
 
   const deleteKernelScheduledTask = useCallback(async (task: KernelScheduledTaskUpdate) => {
     const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
@@ -2951,26 +2952,27 @@ function App() {
     }
   };
 
-  /**
-   * Sends a real engine capability while keeping its implementation command
-   * out of the user's desktop workflow and visible conversation wording.
-   */
-  const runDesktopAction = async (
-    command: string,
+  /** Run a structured ACP desktop action without routing through prompt text. */
+  const runNativeDesktopAction = async (
     visibleText: string,
-    onReady?: (agent: Thread) => void,
+    action: (agent: Thread) => Promise<string | void>,
+    fallbackPrompt?: string,
   ) => {
     const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
     if (!agent?.client || !agent.sessionId) {
-      await createThreadRef.current?.({ initialPrompt: command, initialDisplay: visibleText });
+      if (fallbackPrompt) {
+        await createThreadRef.current?.({ initialPrompt: fallbackPrompt, initialDisplay: visibleText });
+      }
       return;
     }
     if (agent.busy) return;
-    onReady?.(agent);
     appendLine(agent.id, { id: nid(), role: 'user', text: visibleText });
     patchThread(agent.id, { busy: true, error: null });
     try {
-      await agent.client.prompt(agent.sessionId, command);
+      const result = await action(agent);
+      if (typeof result === 'string' && result.trim()) {
+        appendLine(agent.id, { id: nid(), role: 'system', text: result });
+      }
     } catch (error) {
       markTaskFailed(agent.id, error);
     } finally {
@@ -2986,9 +2988,10 @@ function App() {
       submitLabel: t('goalDialogSubmit'),
     });
     if (!objective) return;
-    await runDesktopAction(`/goal ${objective}`, `${t('goalDialogVisible')}: ${objective}`, (agent) => {
+    await runNativeDesktopAction(`${t('goalDialogVisible')}: ${objective}`, async (agent) => {
       patchThread(agent.id, { sessionGoal: makeGoal(objective) });
-    });
+      await agent.client!.startGoal(agent.sessionId!, objective);
+    }, `/goal ${objective}`);
   };
 
   const openMediaAction = async (media: 'image' | 'video') => {
@@ -3002,7 +3005,10 @@ function App() {
     if (!prompt) return;
     const command = image ? `/imagine ${prompt}` : `/imagine-video ${prompt}`;
     const visible = `${image ? t('imageDialogVisible') : t('videoDialogVisible')}: ${prompt}`;
-    await runDesktopAction(command, visible);
+    await runNativeDesktopAction(visible, (agent) =>
+      agent.client!.runDesktopCommand(agent.sessionId!, image ? 'imagine' : 'imagine-video', prompt),
+      command,
+    );
   };
 
   /**
@@ -3037,7 +3043,10 @@ function App() {
       submitLabel: t('deepResearchDialogSubmit'),
     });
     if (!query) return;
-    await runDesktopAction(`/deep-research ${query}`, `${t('deepResearchStarted')}: ${query}`);
+    await runNativeDesktopAction(`${t('deepResearchStarted')}: ${query}`, (current) =>
+      current.client!.launchWorkflow(current.sessionId!, 'deep-research', query).then((result) => result.message),
+      `/deep-research ${query}`,
+    );
   };
 
   /** Send feedback through the kernel route, never through an invented endpoint. */
@@ -3079,7 +3088,10 @@ function App() {
       submitLabel: t('kernelLoopDialogSubmit'),
     });
     if (!request) return;
-    await runDesktopAction(`/loop ${request}`, `${t('kernelLoopStarted')}: ${request}`);
+    await runNativeDesktopAction(`${t('kernelLoopStarted')}: ${request}`,
+      (current) => current.client!.runDesktopCommand(current.sessionId!, 'loop', request),
+      `/loop ${request}`,
+    );
   };
 
   const openWebSourceAction = async () => {
@@ -3105,7 +3117,11 @@ function App() {
       submitLabel: t('skillDialogSubmit'),
     });
     if (!request) return;
-    await runDesktopAction(`/${skill.name} ${request}`, `${t('skillDialogVisible').replace('{name}', skill.name)}: ${request}`);
+    await runNativeDesktopAction(
+      `${t('skillDialogVisible').replace('{name}', skill.name)}: ${request}`,
+      (current) => current.client!.runDesktopCommand(current.sessionId!, skill.name, request),
+      `/${skill.name} ${request}`,
+    );
   };
 
   /** Start only a saved workflow advertised by the active kernel session. */
@@ -3124,8 +3140,11 @@ function App() {
       allowEmpty: true,
     });
     if (context === null) return;
-    const command = `/${safeName}${context ? ` ${context}` : ''}`;
-    await runDesktopAction(command, `${t('workflowRunStarted').replace('{name}', safeName)}${context ? `: ${context}` : ''}`);
+    await runNativeDesktopAction(
+      `${t('workflowRunStarted').replace('{name}', safeName)}${context ? `: ${context}` : ''}`,
+      (current) => current.client!.launchWorkflow(current.sessionId!, safeName, context).then((result) => result.message),
+      `/${safeName}${context ? ` ${context}` : ''}`,
+    );
   };
 
   /** A newly advertised engine action gets a desktop form until it earns a
@@ -3146,7 +3165,11 @@ function App() {
       allowEmpty: true,
     });
     if (request === null) return;
-    await runDesktopAction(`/${safeName}${request ? ` ${request}` : ''}`, `${title}${request ? `: ${request}` : ''}`);
+    await runNativeDesktopAction(
+      `${title}${request ? `: ${request}` : ''}`,
+      (current) => current.client!.runDesktopCommand(current.sessionId!, safeName, request),
+      `/${safeName}${request ? ` ${request}` : ''}`,
+    );
   };
 
   /** Compress through the native ACP endpoint, without exposing `/compact`. */
@@ -4464,7 +4487,7 @@ function App() {
         })();
         return;
       }
-      // Capture goal for banner + persist; still send full /goal line to the agent.
+      // Keep the local Goal banner in sync; the actual action is routed through ACP below.
       if (name === 'goal') {
         const parsed = parseGoalCommand(text);
         if (parsed?.sub === 'clear') {
@@ -4632,7 +4655,7 @@ function App() {
     appendLine(active.id, { id: nid(), role: 'system', text: t('stop') });
   };
 
-  /** Send /goal subcommand; optimistic local status when applicable. */
+  /** Run a Goal console action through the native ACP bridge. */
   const runGoalCommand = async (
     sub: 'status' | 'pause' | 'resume' | 'clear',
   ) => {
@@ -4650,7 +4673,6 @@ function App() {
         sessionGoal: { ...g, status: 'active', updatedAt: Date.now() },
       });
     }
-    const line = `/goal ${sub}`;
     if (!active.client || !active.sessionId) {
       appendLine(active.id, {
         id: nid(),
@@ -4659,19 +4681,18 @@ function App() {
       });
       return;
     }
-    appendLine(active.id, { id: nid(), role: 'user', text: line });
-    patchThread(active.id, { busy: true, error: null });
-    try {
-      await active.client.prompt(active.sessionId, line);
-    } catch (e) {
-      appendLine(active.id, {
-        id: nid(),
-        role: 'system',
-        text: `${t('goalCmdFail')}: ${e instanceof Error ? e.message : String(e)}`,
-      });
-    } finally {
-      patchThread(active.id, { busy: false });
-    }
+    const label = sub === 'status'
+      ? t('goalStatusBtn')
+      : sub === 'pause'
+        ? t('goalPause')
+        : sub === 'resume'
+          ? t('goalResume')
+          : t('goalClear');
+    await runNativeDesktopAction(
+      label,
+      (agent) => agent.client!.runDesktopCommand(agent.sessionId!, 'goal', sub),
+      `/goal ${sub}`,
+    );
   };
 
   /** Plan gate: leave plan mode → agent mode, then prompt to implement selected steps. */
@@ -6601,7 +6622,7 @@ function App() {
                 </>
               ) : null}
             </header>
-            {/* Goal console: persist + /goal subcommands + plan-based progress */}
+            {/* Goal console: persist + native actions + plan-based progress */}
             {active.sessionGoal ? (
               <div
                 className={`goal-banner goal-banner-active goal-status-${active.sessionGoal.status}${
@@ -7837,7 +7858,16 @@ function App() {
               ? t('memoryDreamVisible')
               : `${t('memoryKernelRememberVisible')}: ${note || ''}`;
           setMemoryOpen(false);
-          void runDesktopAction(command, visible);
+          const kernelCommand = action === 'capture'
+            ? 'flush'
+            : action === 'organize'
+              ? 'dream'
+              : 'remember';
+          void runNativeDesktopAction(
+            visible,
+            (agent) => agent.client!.runDesktopCommand(agent.sessionId!, kernelCommand, note || ''),
+            command,
+          );
         }}
       /></Suspense> : null}
 

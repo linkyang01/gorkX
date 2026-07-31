@@ -5,3 +5,4 @@
 0002-acp-native-voice.patch
 0003-acp-session-auth-source.patch
 0004-acp-agent-stdio-cli-overrides.patch
+0005-acp-desktop-actions.patch

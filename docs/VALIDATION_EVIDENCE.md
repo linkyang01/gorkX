@@ -15,6 +15,8 @@
 
 ## 2026-07-31 · 桌面动作原生 ACP 化复核
 
+| 工作流、Goal 与通用桌面动作 | 锁定 Grok Build 0.2.112 + `0005-acp-desktop-actions.patch`；`_x.ai/desktop/workflow/launch`、`_x.ai/desktop/workflow/manage`、`_x.ai/desktop/goal`、`_x.ai/desktop/command` | 通过编译级验证：工作流入口复用现有 WorkflowManager，Goal 入口复用现有 prompt/Goal orchestrator，通用入口仅把已存在的 Grok Build 命令解析包在结构化 ACP 请求内；桌面动作的 synthetic prompt 回显隐藏，用户会话显示由 gorkX 负责。 | 本轮已通过 `cargo check -p xai-grok-shell`、补丁 series apply-check；真实已认证账户下的工作流执行时间与模型结果仍需人工点按验收，不把“路由可达”写成“任务已完成”。 |
+
 | 范围 | 命令或步骤 | 结果 | 边界 |
 |---|---|---|---|
 | Feedback 桌面入口 | `+` 菜单 → “发送反馈”；`AcpClient.sendFeedback()` → `_x.ai/feedback` | 通过：按钮不再把 `/feedback ...` 当作会话提示发送，改为 Grok Build 原生反馈扩展；提交成功后只在本地会话显示确认，不污染模型对话 | 反馈是否上报到远端由 Grok Build 账户/反馈配置决定；本次未伪造反馈内容或远端统计 |

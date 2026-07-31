@@ -222,6 +222,11 @@ export interface WorkflowRunUpdate {
   pauseMessage?: string | null;
 }
 
+/** Result returned by a structured desktop workflow action. */
+export interface WorkflowActionResult {
+  message: string;
+}
+
 /** A native Grok Build conversation recap notification. */
 export interface SessionRecapUpdate {
   summary: string;
@@ -1348,6 +1353,65 @@ export class AcpClient {
   async requestRecap(sessionId: string): Promise<void> {
     if (!sessionId) throw new Error('A session is required for recap');
     await this.request('_x.ai/recap', { sessionId, auto: false }, 15_000);
+  }
+
+  /** Launch a saved workflow through Grok Build's structured desktop route. */
+  async launchWorkflow(
+    sessionId: string,
+    name: string,
+    input = '',
+  ): Promise<WorkflowActionResult> {
+    if (!sessionId || !name.trim()) throw new Error('A workflow name is required');
+    const raw = await this.request('_x.ai/desktop/workflow/launch', {
+      sessionId,
+      name: name.trim(),
+      input: input.trim(),
+    }, 30_000) as { message?: unknown; result?: { message?: unknown } };
+    const message = typeof raw.result?.message === 'string' ? raw.result.message : raw.message;
+    if (typeof message !== 'string' || !message.trim()) {
+      throw new Error('Grok Build returned no workflow action result');
+    }
+    return { message };
+  }
+
+  /** Manage a workflow run without sending a slash command through the prompt. */
+  async manageWorkflow(
+    sessionId: string,
+    runId: string,
+    op: 'pause' | 'resume' | 'stop' | 'save',
+  ): Promise<WorkflowActionResult> {
+    if (!sessionId || !runId.trim()) throw new Error('A workflow run is required');
+    const raw = await this.request('_x.ai/desktop/workflow/manage', {
+      sessionId,
+      runId: runId.trim(),
+      op,
+    }, 30_000) as { message?: unknown; result?: { message?: unknown } };
+    const message = typeof raw.result?.message === 'string' ? raw.result.message : raw.message;
+    if (typeof message !== 'string' || !message.trim()) {
+      throw new Error('Grok Build returned no workflow action result');
+    }
+    return { message };
+  }
+
+  /** Start Grok Build's real Goal orchestrator from a desktop form. */
+  async startGoal(sessionId: string, objective: string): Promise<void> {
+    const text = objective.trim();
+    if (!sessionId || !text) throw new Error('A goal objective is required');
+    await this.request('_x.ai/desktop/goal', {
+      sessionId,
+      objective: text,
+    }, 600_000);
+  }
+
+  /** Execute an advertised Grok Build action through the desktop bridge. */
+  async runDesktopCommand(sessionId: string, command: string, argumentsText = ''): Promise<void> {
+    const name = command.trim().replace(/^\//, '');
+    if (!sessionId || !name) throw new Error('A desktop action is required');
+    await this.request('_x.ai/desktop/command', {
+      sessionId,
+      command: name,
+      arguments: argumentsText.trim(),
+    }, 600_000);
   }
 
   /**

@@ -1,0 +1,508 @@
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
+index 2ad8ec6..027b2a1 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
+@@ -3452,6 +3452,16 @@ impl acp::Agent for MvpAgent {
+                 crate::extensions::feedback::handle(self, &args).await
+             }
+             "x.ai/recap" => crate::extensions::recap::handle(self, &args).await,
++            "x.ai/desktop/workflow/launch" => {
++                crate::extensions::desktop_actions::launch(self, &args).await
++            }
++            "x.ai/desktop/workflow/manage" => {
++                crate::extensions::desktop_actions::manage(self, &args).await
++            }
++            "x.ai/desktop/goal" => crate::extensions::desktop_actions::goal(self, &args).await,
++            "x.ai/desktop/command" => {
++                crate::extensions::desktop_actions::command(self, &args).await
++            }
+             "x.ai/cloud/terminate" => {
+                 crate::extensions::auth_gate::require_xai_auth(
+                     &self.auth_manager,
+diff --git a/crates/codegen/xai-grok-shell/src/extensions/mod.rs b/crates/codegen/xai-grok-shell/src/extensions/mod.rs
+index b1f4286..fae8fb6 100644
+--- a/crates/codegen/xai-grok-shell/src/extensions/mod.rs
++++ b/crates/codegen/xai-grok-shell/src/extensions/mod.rs
+@@ -5,6 +5,7 @@ pub mod bundle;
+ pub mod chat_conversation_history;
+ pub mod code_nav;
+ pub mod debug;
++pub mod desktop_actions;
+ pub mod feedback;
+ pub mod fs;
+ pub mod git;
+diff --git a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/reminders.rs b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/reminders.rs
+index e70f355..a15b60b 100644
+--- a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/reminders.rs
++++ b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/reminders.rs
+@@ -195,6 +195,37 @@ fn workflow_completion_detail(detail: &str) -> std::borrow::Cow<'_, str> {
+     }
+ }
+ impl SessionActor {
++    /// Persist a workflow reminder for desktop-originated actions without
++    /// leaking the slash-command compatibility spelling into the user-facing
++    /// conversation context.
++    pub(super) fn push_workflow_launch_reminder_desktop(
++        &self,
++        display_name: &str,
++        run_id: &str,
++        objective: &str,
++        resumed: bool,
++    ) {
++        let verb = if resumed { "resumed" } else { "started" };
++        let mut body = format!(
++            "The user {verb} background workflow '{display_name}' from the desktop action (run id {run_id}).\n\
++             This was handled host-side; no tool call was involved."
++        );
++        let objective = objective.split_whitespace().collect::<Vec<_>>().join(" ");
++        if !objective.is_empty() {
++            body.push_str(&format!(
++                "\nObjective: {}",
++                xai_grok_tools::util::truncate_str(&objective, WORKFLOW_OBJECTIVE_REMINDER_CAP)
++            ));
++        }
++        body.push_str(&format!(
++            "\nIt runs in the background: status snapshots and the final result arrive as \
++             reminders at turn starts, and the user can watch it in the desktop workflow panel. \
++             Keep run ids internal — the user knows runs by display name. No action needed unless \
++             the user asks."
++        ));
++        self.push_system_reminder(&body);
++    }
++
+     pub(super) fn push_workflow_launch_reminder(
+         &self,
+         display_name: &str,
+diff --git a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
+index b2fba3b..b184b77 100644
+--- a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
++++ b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
+@@ -1896,6 +1896,27 @@ pub(super) async fn run_session(
+                                 s.handle_recap(auto).await;
+                             });
+                         }
++                        SessionCommand::DesktopWorkflowLaunch {
++                            name,
++                            input,
++                            respond_to,
++                        } => {
++                            let (registry, _) = session.named_workflow_snapshot();
++                            let message = session
++                                .launch_named_workflow_desktop(&registry, &name, &input)
++                                .await;
++                            let _ = respond_to.send(message);
++                        }
++                        SessionCommand::DesktopWorkflowManage {
++                            run_id,
++                            op,
++                            respond_to,
++                        } => {
++                            let message = session
++                                .manage_workflow_run_desktop(&run_id, &op)
++                                .await;
++                            let _ = respond_to.send(message);
++                        }
+                         SessionCommand::AISuggest { prefix, cwd, model_override, respond_to } => {
+                             let s = session.clone();
+                             tokio::task::spawn_local(async move {
+diff --git a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs
+index 3eba52a..8851d61 100644
+--- a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs
++++ b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/turn.rs
+@@ -768,6 +768,9 @@ impl SessionActor {
+                 super::super::PromptOrigin::SchedulerFired => {
+                     ConversationItem::scheduler_fired(user_message)
+                 }
++                super::super::PromptOrigin::DesktopAction => {
++                    ConversationItem::user(user_message)
++                }
+                 super::super::PromptOrigin::PlanResume => ConversationItem::user(user_message),
+                 super::super::PromptOrigin::User => {
+                     let mut item = ConversationItem::user(user_message);
+diff --git a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/workflow.rs b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/workflow.rs
+index 9f6ea4e..702a9cd 100644
+--- a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/workflow.rs
++++ b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/workflow.rs
+@@ -19,6 +19,31 @@ impl SessionActor {
+         registry: &crate::session::workflow::registry::WorkflowRegistry,
+         name: &str,
+         input: &str,
++    ) -> String {
++        self.launch_named_workflow_with_source(registry, name, input, false)
++            .await
++    }
++
++    /// Structured desktop equivalent of [`Self::launch_named_workflow`].
++    /// Execution still goes through the same Grok Build workflow manager; the
++    /// only difference is that the reminder describes the desktop action
++    /// instead of exposing a slash command in the conversation context.
++    pub(crate) async fn launch_named_workflow_desktop(
++        self: &Arc<Self>,
++        registry: &crate::session::workflow::registry::WorkflowRegistry,
++        name: &str,
++        input: &str,
++    ) -> String {
++        self.launch_named_workflow_with_source(registry, name, input, true)
++            .await
++    }
++
++    async fn launch_named_workflow_with_source(
++        self: &Arc<Self>,
++        registry: &crate::session::workflow::registry::WorkflowRegistry,
++        name: &str,
++        input: &str,
++        desktop: bool,
+     ) -> String {
+         let resolved = match registry.resolve_by_name(name) {
+             Ok(r) => r,
+@@ -41,18 +66,27 @@ impl SessionActor {
+                     .get(&run_id)
+                     .map(|r| (r.name.clone(), r.objective.clone()))
+                     .unwrap_or_else(|| (name.to_string(), String::new()));
+-                let command_line = if input.trim().is_empty() {
+-                    format!("/{name}")
++                if desktop {
++                    self.push_workflow_launch_reminder_desktop(
++                        &display,
++                        &run_id,
++                        &objective,
++                        false,
++                    );
+                 } else {
+-                    format!("/{name} {}", input.trim())
+-                };
+-                self.push_workflow_launch_reminder(
+-                    &display,
+-                    &run_id,
+-                    &objective,
+-                    &command_line,
+-                    false,
+-                );
++                    let command_line = if input.trim().is_empty() {
++                        format!("/{name}")
++                    } else {
++                        format!("/{name} {}", input.trim())
++                    };
++                    self.push_workflow_launch_reminder(
++                        &display,
++                        &run_id,
++                        &objective,
++                        &command_line,
++                        false,
++                    );
++                }
+                 tokio::spawn(async move {
+                     if let Ok(outcome) = outcome_rx.await {
+                         tracing::info!(run_id, ?outcome, "named workflow finished");
+@@ -68,6 +102,24 @@ impl SessionActor {
+     }
+ 
+     pub(crate) async fn manage_workflow_run(self: &Arc<Self>, run_id: &str, op: &str) -> String {
++        self.manage_workflow_run_with_source(run_id, op, false).await
++    }
++
++    /// Structured desktop equivalent of [`Self::manage_workflow_run`].
++    pub(crate) async fn manage_workflow_run_desktop(
++        self: &Arc<Self>,
++        run_id: &str,
++        op: &str,
++    ) -> String {
++        self.manage_workflow_run_with_source(run_id, op, true).await
++    }
++
++    async fn manage_workflow_run_with_source(
++        self: &Arc<Self>,
++        run_id: &str,
++        op: &str,
++        desktop: bool,
++    ) -> String {
+         use crate::session::workflow::tracker::WorkflowRunStatus;
+ 
+         const USAGE: &str = "Usage: /workflow <name> [args] to launch a saved workflow, or \
+@@ -203,13 +255,22 @@ impl SessionActor {
+                                 tracing::info!(run_id = rid, ?outcome, "resumed workflow finished");
+                             }
+                         });
+-                        self.push_workflow_launch_reminder(
+-                            &name,
+-                            &full_id,
+-                            &objective_echo,
+-                            &format!("/workflow resume {name}"),
+-                            true,
+-                        );
++                        if desktop {
++                            self.push_workflow_launch_reminder_desktop(
++                                &name,
++                                &full_id,
++                                &objective_echo,
++                                true,
++                            );
++                        } else {
++                            self.push_workflow_launch_reminder(
++                                &name,
++                                &full_id,
++                                &objective_echo,
++                                &format!("/workflow resume {name}"),
++                                true,
++                            );
++                        }
+                         format!("Resumed {name} from its journal.")
+                     }
+                     Err(e) => format!("Could not resume '{name}': {e}"),
+diff --git a/crates/codegen/xai-grok-shell/src/session/commands.rs b/crates/codegen/xai-grok-shell/src/session/commands.rs
+index e709507..a081363 100644
+--- a/crates/codegen/xai-grok-shell/src/session/commands.rs
++++ b/crates/codegen/xai-grok-shell/src/session/commands.rs
+@@ -682,6 +682,21 @@ pub enum SessionCommand {
+         /// `false` for an explicit `/recap`.
+         auto: bool,
+     },
++    /// Launch a named workflow from a structured desktop action.  The desktop
++    /// must not synthesize `/workflow ...` text just to reach the kernel's
++    /// workflow manager; this command keeps the existing manager as the sole
++    /// execution path while returning its real status message to ACP.
++    DesktopWorkflowLaunch {
++        name: String,
++        input: String,
++        respond_to: oneshot::Sender<String>,
++    },
++    /// Manage a kernel-owned workflow run from a structured desktop action.
++    DesktopWorkflowManage {
++        run_id: String,
++        op: String,
++        respond_to: oneshot::Sender<String>,
++    },
+     /// Request an AI-generated shell command suggestion.
+     ///
+     /// The session actor builds a minimal prompt from `prefix` + `cwd`,
+diff --git a/crates/codegen/xai-grok-shell/src/session/mod.rs b/crates/codegen/xai-grok-shell/src/session/mod.rs
+index 79b9796..e591666 100644
+--- a/crates/codegen/xai-grok-shell/src/session/mod.rs
++++ b/crates/codegen/xai-grok-shell/src/session/mod.rs
+@@ -87,6 +87,10 @@ pub enum PromptOrigin {
+     GoalClassifierNudge,
+     /// Scheduled task (`/loop`) prompt fired by the scheduler via the pager.
+     SchedulerFired,
++    /// Prompt submitted by a structured desktop action.  The compatibility
++    /// spelling may still be parsed internally, but its synthetic echo is
++    /// hidden because the desktop already rendered the friendly action label.
++    DesktopAction,
+     /// Turn injected after a resumed plan-approval decision: the
+     /// shell re-parked `exit_plan_mode` on resume, the user approved/revised,
+     /// and the shell injects the follow-up turn. Synthetic so the user never
+@@ -116,6 +120,8 @@ impl PromptOrigin {
+             Self::GoalClassifierNudge
+         } else if prompt_id.starts_with("scheduler-fired-") {
+             Self::SchedulerFired
++        } else if prompt_id.starts_with("desktop-action-") {
++            Self::DesktopAction
+         } else if prompt_id.starts_with("plan-resume-") {
+             Self::PlanResume
+         } else {
+@@ -140,7 +146,8 @@ impl PromptOrigin {
+             | Self::WorkflowCompleted { .. }
+             | Self::NotificationDrain
+             | Self::GoalSummary
+-            | Self::GoalClassifierNudge => true,
++            | Self::GoalClassifierNudge
++            | Self::DesktopAction => true,
+         }
+     }
+     pub fn completion_id(&self) -> Option<&str> {
+@@ -153,6 +160,7 @@ impl PromptOrigin {
+             | Self::GoalSummary
+             | Self::GoalClassifierNudge
+             | Self::SchedulerFired
++            | Self::DesktopAction
+             | Self::PlanResume => None,
+         }
+     }
+diff --git a/crates/codegen/xai-grok-shell/src/extensions/desktop_actions.rs b/crates/codegen/xai-grok-shell/src/extensions/desktop_actions.rs
+new file mode 100644
+index 0000000..b0364b7
+--- /dev/null
++++ b/crates/codegen/xai-grok-shell/src/extensions/desktop_actions.rs
+@@ -0,0 +1,183 @@
++//! Structured actions used by desktop clients.
++//!
++//! These routes are intentionally thin adapters over the existing session
++//! actor.  They do not implement a second workflow engine or synthesize a
++//! second agent loop: the actor still owns validation, persistence, execution,
++//! status updates, and reminders.
++
++use super::{ExtResult, parse_params, to_raw_response};
++use crate::agent::mvp_agent::MvpAgent;
++use crate::session::SessionCommand;
++use crate::session::plan_mode::PromptMode;
++use agent_client_protocol as acp;
++use serde::Deserialize;
++use serde_json::json;
++use tokio::sync::oneshot;
++
++#[derive(Debug, Deserialize)]
++struct WorkflowLaunchRequest {
++    #[serde(rename = "sessionId")]
++    session_id: String,
++    name: String,
++    #[serde(default)]
++    input: String,
++}
++
++#[derive(Debug, Deserialize)]
++struct WorkflowManageRequest {
++    #[serde(rename = "sessionId")]
++    session_id: String,
++    #[serde(rename = "runId")]
++    run_id: String,
++    op: String,
++}
++
++#[derive(Debug, Deserialize)]
++struct GoalRequest {
++    #[serde(rename = "sessionId")]
++    session_id: String,
++    objective: String,
++}
++
++#[derive(Debug, Deserialize)]
++struct DesktopCommandRequest {
++    #[serde(rename = "sessionId")]
++    session_id: String,
++    command: String,
++    #[serde(default)]
++    arguments: String,
++}
++
++async fn session_handle(
++    agent: &MvpAgent,
++    session_id: &str,
++) -> Result<crate::session::SessionHandle, acp::Error> {
++    if session_id.trim().is_empty() {
++        return Err(acp::Error::invalid_params().data("missing sessionId"));
++    }
++    agent
++        .session_handle_waiting_for_load(&acp::SessionId::new(session_id.trim()))
++        .await
++        .ok_or_else(|| acp::Error::invalid_params().data("unknown session id"))
++}
++
++/// Launch a saved workflow through the session's real WorkflowManager.
++pub async fn launch(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
++    let request: WorkflowLaunchRequest = parse_params(args)?;
++    let handle = session_handle(agent, &request.session_id).await?;
++    let (respond_to, response) = oneshot::channel();
++    handle
++        .cmd_tx
++        .send(SessionCommand::DesktopWorkflowLaunch {
++            name: request.name.trim().to_string(),
++            input: request.input,
++            respond_to,
++        })
++        .map_err(|_| acp::Error::internal_error().data("session actor is unavailable"))?;
++    let message = response
++        .await
++        .map_err(|_| acp::Error::internal_error().data("session actor dropped workflow response"))?;
++    to_raw_response(&json!({ "message": message }))
++}
++
++/// Manage a workflow run (pause, resume, stop, save) through the same actor
++/// path used by Grok Build's slash compatibility layer.
++pub async fn manage(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
++    let request: WorkflowManageRequest = parse_params(args)?;
++    let handle = session_handle(agent, &request.session_id).await?;
++    let (respond_to, response) = oneshot::channel();
++    handle
++        .cmd_tx
++        .send(SessionCommand::DesktopWorkflowManage {
++            run_id: request.run_id.trim().to_string(),
++            op: request.op.trim().to_string(),
++            respond_to,
++        })
++        .map_err(|_| acp::Error::internal_error().data("session actor is unavailable"))?;
++    let message = response
++        .await
++        .map_err(|_| acp::Error::internal_error().data("session actor dropped workflow response"))?;
++    to_raw_response(&json!({ "message": message }))
++}
++
++/// Start a Goal through the existing prompt/goal orchestrator while keeping
++/// the compatibility slash spelling entirely inside the kernel.  This is a
++/// real agent turn, not a UI-only goal record.
++pub async fn goal(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
++    let request: GoalRequest = parse_params(args)?;
++    let objective = request.objective.trim();
++    if objective.is_empty() {
++        return Err(acp::Error::invalid_params().data("missing objective"));
++    }
++    let handle = session_handle(agent, &request.session_id).await?;
++    let outcome = send_desktop_prompt(&handle, &format!("/goal {}", objective)).await?;
++    match outcome {
++        Ok(result) => to_raw_response(&json!({
++            "stopReason": format!("{:?}", result.stop_reason),
++        })),
++        Err(error) => Err(error),
++    }
++}
++
++/// Run an advertised kernel command from a desktop control.  This is the
++/// compatibility bridge for capabilities whose Grok Build release still
++/// exposes prompt parsing rather than a dedicated ACP method (for example
++/// `/loop`, skills, and image generation).  The command is never rendered in
++/// the desktop transcript; the existing kernel parser and capability gates
++/// remain authoritative.
++pub async fn command(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
++    let request: DesktopCommandRequest = parse_params(args)?;
++    let command = request.command.trim().trim_start_matches('/');
++    if command.is_empty()
++        || command.len() > 128
++        || !command
++            .chars()
++            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
++    {
++        return Err(acp::Error::invalid_params().data("invalid desktop command"));
++    }
++    let handle = session_handle(agent, &request.session_id).await?;
++    let prompt = if request.arguments.trim().is_empty() {
++        format!("/{command}")
++    } else {
++        format!("/{command} {}", request.arguments.trim())
++    };
++    let outcome = send_desktop_prompt(&handle, &prompt).await?;
++    match outcome {
++        Ok(result) => to_raw_response(&json!({
++            "stopReason": format!("{:?}", result.stop_reason),
++        })),
++        Err(error) => Err(error),
++    }
++}
++
++async fn send_desktop_prompt(
++    handle: &crate::session::SessionHandle,
++    prompt: &str,
++) -> Result<crate::session::PromptTurnResult, acp::Error> {
++    let (respond_to, response) = oneshot::channel();
++    let prompt_id = format!("desktop-action-{}", uuid::Uuid::now_v7());
++    handle
++        .cmd_tx
++        .send(SessionCommand::Prompt {
++            prompt_id,
++            prompt_blocks: vec![acp::ContentBlock::Text(acp::TextContent::new(prompt.to_string()))],
++            prompt_mode: PromptMode::Agent,
++            artifact_upload_ctx: None,
++            client_identifier: Some("grok-desktop".to_string()),
++            screen_mode: None,
++            verbatim: false,
++            traceparent: None,
++            json_schema: None,
++            send_now: false,
++            admission: None,
++            tool_overrides_update: None,
++            respond_to,
++            persist_ack: None,
++            parsed_prompt_tx: None,
++        })
++        .map_err(|_| acp::Error::internal_error().data("session actor is unavailable"))?;
++    response
++        .await
++        .map_err(|_| acp::Error::internal_error().data("session actor dropped desktop response"))
++}
