@@ -48,7 +48,7 @@
 | 范围 | 路由/步骤 | 结果 | 边界 |
 |---|---|---|---|
 | 运行中旁问、插入与记忆提炼 | 锁定 Grok Build 0.2.112；`_x.ai/btw`、`_x.ai/interject`、`_x.ai/memory/flush` | 通过：桌面按钮分别调用真实侧问、运行中插入和内核记忆 flush 路由；`scripts/verify-grok-acp.mjs --desktop-controls` 对所有路由完成无模型请求的原生 session guard 探测。 | 真实模型侧问与运行中安全点注入仍需登录后人工点按验收；带附件的插入暂回退到下一轮队列。 |
-| 工作流、Goal 与通用桌面动作 | 锁定 Grok Build 0.2.112 + `0005-acp-desktop-actions.patch`；`_x.ai/desktop/workflow/launch`、`_x.ai/desktop/workflow/manage`、`_x.ai/desktop/goal`、`_x.ai/desktop/command` | 通过编译级验证：工作流入口复用现有 WorkflowManager，Goal 入口复用现有 prompt/Goal orchestrator，通用入口仅把已存在的 Grok Build 命令解析包在结构化 ACP 请求内；桌面动作的 synthetic prompt 回显隐藏，用户会话显示由 gorkX 负责。 | 本轮已通过 `cargo check -p xai-grok-shell`、补丁 series apply-check；真实已认证账户下的工作流执行时间与模型结果仍需人工点按验收，不把“路由可达”写成“任务已完成”。 |
+| 工作流、Goal 与通用桌面动作 | 锁定 Grok Build 0.2.116 + `0005-acp-desktop-actions.patch`；`_x.ai/desktop/workflow/launch`、`_x.ai/desktop/workflow/manage`、`_x.ai/desktop/goal`、`_x.ai/desktop/command` | 通过编译级验证：工作流入口复用现有 WorkflowManager，桌面工作流卡片已提供真实运行、暂停/继续、停止、保存按钮；停止/保存由 UI 明确确认后调用原生 manage 路由。Goal 入口复用现有 prompt/Goal orchestrator，通用入口仅把已存在的 Grok Build 命令解析包在结构化 ACP 请求内；桌面动作的 synthetic prompt 回显隐藏，用户会话显示由 gorkX 负责。 | 本轮已通过 `cargo check -p xai-grok-shell`、补丁 series apply-check；真实已认证账户下的工作流执行时间、停止取消结果和项目保存结果仍需人工点按验收，不把“路由可达”写成“任务已完成”。 |
 | 损坏会话修复 | 认证态 `--session-controls` 追加 `_x.ai/session/repair {dryRun:true}`；错误面板的预览/确认/修复入口 | 通过：当前 0.2.112 真实路由返回结构化 dry-run 报告；桌面只在工具配对/历史损坏错误上显示修复按钮，并在写入前展示修复计数、要求明确确认。 | 本次探针使用干净会话，不修改任何历史；真实损坏会话的恢复仍需在用户确认后人工验收。 |
 
 | 范围 | 命令或步骤 | 结果 | 边界 |

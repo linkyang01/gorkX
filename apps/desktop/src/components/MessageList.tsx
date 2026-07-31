@@ -5,7 +5,7 @@ import { PlanCard } from './PlanCard';
 import { WorkflowCard } from './WorkflowCard';
 import { KernelScheduleCard } from './KernelScheduleCard';
 import { AttachmentStrip } from './AttachmentStrip';
-import type { KernelScheduledTaskUpdate, PlanEntry, WorkflowRunUpdate } from '../lib/acpClient';
+import type { KernelScheduledTaskUpdate, PlanEntry, WorkflowManageAction, WorkflowRunUpdate } from '../lib/acpClient';
 import type { ComposerAttachment } from '../lib/attachments';
 import {
   isInjectedUserPromptEcho,
@@ -53,7 +53,7 @@ interface Props {
   footer?: ReactNode;
   /** Server-suggested next questions from the current Grok Build response. */
   followUps?: string[];
-  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
+  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: WorkflowManageAction) => void;
   workflowActionDisabled?: boolean;
   onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
   scheduledTaskDeleteDisabled?: boolean;
@@ -153,7 +153,7 @@ function LineView({
   onOpenAttachment?: (a: ComposerAttachment) => void;
   onSelectChoice?: (value: string) => void;
   choiceDisabled?: boolean;
-  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => void;
+  onWorkflowAction?: (workflow: WorkflowRunUpdate, action: WorkflowManageAction) => void;
   workflowActionDisabled?: boolean;
   onScheduledTaskDelete?: (task: KernelScheduledTaskUpdate) => void;
   scheduledTaskDeleteDisabled?: boolean;

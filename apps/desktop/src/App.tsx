@@ -47,6 +47,7 @@ import {
   type AvailableCommandInfo,
   type AgentProfile,
   type WorkflowRunUpdate,
+  type WorkflowManageAction,
   type KernelScheduledTaskUpdate,
   type SessionUpdate,
   type UserQuestionAnswers,
@@ -1223,7 +1224,7 @@ function App() {
     return live.client!.manageHooks(live.sessionId!, action);
   }, [requireLiveHooksTask]);
 
-  const manageWorkflow = useCallback(async (workflow: WorkflowRunUpdate, action: 'pause' | 'resume') => {
+  const manageWorkflow = useCallback(async (workflow: WorkflowRunUpdate, action: WorkflowManageAction) => {
     const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
     const available = live?.commands?.some((command) => command.name.replace(/^\//, '').toLowerCase() === 'workflow');
     if (!live?.client || !live.sessionId || !available) throw new Error(t('workflowManagementUnavailable'));
@@ -1232,6 +1233,8 @@ function App() {
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name)) {
       throw new Error(t('workflowManagementUnavailable'));
     }
+    if (action === 'stop' && !window.confirm(t('workflowStopConfirm').replace('{name}', workflow.name))) return;
+    if (action === 'save' && !window.confirm(t('workflowSaveConfirm').replace('{name}', workflow.name))) return;
     const result = await live.client.manageWorkflow(live.sessionId, workflow.runId, action);
     appendLine(live.id, { id: nid(), role: 'system', text: result.message });
   }, [t]);

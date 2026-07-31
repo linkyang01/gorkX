@@ -1,4 +1,4 @@
-import type { WorkflowRunUpdate } from '../lib/acpClient';
+import type { WorkflowManageAction, WorkflowRunUpdate } from '../lib/acpClient';
 import { t } from '../lib/i18n';
 
 function elapsed(ms: number) {
@@ -9,7 +9,7 @@ function elapsed(ms: number) {
 }
 
 function statusClass(status: string) {
-  if (/complete|success|done/.test(status)) return 'done';
+  if (/complete|success|done|cancelled|stopped/.test(status)) return 'done';
   if (/fail|error|interrupt/.test(status)) return 'failed';
   if (/pause/.test(status)) return 'paused';
   return 'running';
@@ -24,7 +24,7 @@ export function WorkflowCard({
 }: {
   workflow?: WorkflowRunUpdate;
   fallback?: string;
-  onAction?: (action: 'pause' | 'resume') => void;
+  onAction?: (action: WorkflowManageAction) => void;
   actionDisabled?: boolean;
 }) {
   if (!workflow) {
@@ -38,6 +38,7 @@ export function WorkflowCard({
     : String(workflow.agentsUsed);
   const canManage = Boolean(onAction) && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(workflow.name);
   const canResume = /paused|failed|interrupted/.test(workflow.status);
+  const isTerminal = /complete|success|done|cancelled|stopped/.test(workflow.status);
   return (
     <section className={`workflow-card workflow-${statusClass(workflow.status)}`} aria-label={t('workflowTitle')}>
       <div className="workflow-card-head">
@@ -82,10 +83,26 @@ export function WorkflowCard({
           <button
             type="button"
             className="btn btn-sm"
-            disabled={actionDisabled || /complete|success|done|cancelled/.test(workflow.status)}
+            disabled={actionDisabled || isTerminal}
             onClick={() => onAction?.(canResume ? 'resume' : 'pause')}
           >
             {canResume ? t('workflowResume') : t('workflowPause')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={actionDisabled || isTerminal}
+            onClick={() => onAction?.('stop')}
+          >
+            {t('workflowStop')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            disabled={actionDisabled}
+            onClick={() => onAction?.('save')}
+          >
+            {t('workflowSave')}
           </button>
         </div>
       ) : null}

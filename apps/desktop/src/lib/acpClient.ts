@@ -365,6 +365,9 @@ export interface WorkflowActionResult {
   message: string;
 }
 
+/** Operations supported by Grok Build's native workflow manager. */
+export type WorkflowManageAction = 'pause' | 'resume' | 'stop' | 'save';
+
 /** A native Grok Build conversation recap notification. */
 export interface SessionRecapUpdate {
   summary: string;
@@ -2015,7 +2018,7 @@ export class AcpClient {
   async manageWorkflow(
     sessionId: string,
     runId: string,
-    op: 'pause' | 'resume' | 'stop' | 'save',
+    op: WorkflowManageAction,
   ): Promise<WorkflowActionResult> {
     if (!sessionId || !runId.trim()) throw new Error('A workflow run is required');
     const raw = await this.request('_x.ai/desktop/workflow/manage', {
