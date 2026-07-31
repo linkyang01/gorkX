@@ -1,7 +1,7 @@
 {
   "name": "gorkx-desktop",
   "private": true,
-  "version": "0.5.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "dev:app": "tauri dev",
     "build:app": "tauri build --bundles app",
     "typecheck": "tsc --noEmit",
-    "test:stage-a": "node --experimental-strip-types src/lib/panelLayout.test.ts && node --experimental-strip-types src/lib/designTokens.test.ts && node --experimental-strip-types src/lib/conversationPresentation.test.ts",
+    "test:stage-a": "node --experimental-strip-types src/lib/panelLayout.test.ts && node --experimental-strip-types src/lib/designTokens.test.ts && node --experimental-strip-types src/lib/conversationPresentation.test.ts && node --experimental-strip-types src/lib/taskToolLimits.test.ts && node --experimental-strip-types src/lib/taskPermissionRules.test.ts",
     "test:stage-b": "node --experimental-strip-types src/lib/taskRunStatus.test.ts",
     "test:stage-c": "node --experimental-strip-types src/lib/deliverables.test.ts",
     "test:stage-d": "node --experimental-strip-types src/lib/connectors.test.ts",

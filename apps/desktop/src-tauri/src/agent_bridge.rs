@@ -80,6 +80,29 @@ fn sanitize_engine_diagnostic(raw: &str) -> String {
     }
 }
 
+/// Sanitize Grok Build built-in tool ids for `--disallowed-tools`.
+/// Only stable identifier characters are accepted so shell metacharacters never
+/// reach the engine argv.
+fn sanitize_disallowed_tools(tools: Option<&[String]>) -> Option<String> {
+    let cleaned: Vec<String> = tools?
+        .iter()
+        .map(|tool| tool.trim().to_string())
+        .filter(|tool| {
+            !tool.is_empty()
+                && tool.len() <= 64
+                && tool
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '(' || c == ')')
+        })
+        .take(32)
+        .collect();
+    if cleaned.is_empty() {
+        None
+    } else {
+        Some(cleaned.join(","))
+    }
+}
+
 /// Map gorkX permission modes → grok agent CLI flags.
 /// Codex-inspired trio:
 /// - `default`  → ask (interactive ACP permissions)
@@ -87,6 +110,28 @@ fn sanitize_engine_diagnostic(raw: &str) -> String {
 /// - `full`     → Full Access (`--always-approve`)
 /// Reasoning effort and web research are real CLI flags. Keep them at process
 /// start: ACP opens a session inside an already running engine process.
+///
+/// Root flags (`--no-memory`, `--max-turns`, `--disallowed-tools`, …) must
+/// precede the `agent` subcommand. The maintained kernel patch
+/// `0004-acp-agent-stdio-cli-overrides` forwards them into stdio ACP; without
+/// that patch, gorkX also sets `GROK_MEMORY` / `GROK_SUBAGENTS` env clamps.
+/// Keep only compact Grok permission-rule strings for `--allow` / `--deny`.
+fn sanitize_permission_rule_list(rules: Option<&[String]>) -> Vec<String> {
+    rules
+        .unwrap_or(&[])
+        .iter()
+        .map(|rule| rule.trim().to_string())
+        .filter(|rule| {
+            !rule.is_empty()
+                && rule.len() <= 200
+                && rule != "*"
+                && rule != "**"
+                && !rule.chars().any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '\n' | '\r'))
+        })
+        .take(32)
+        .collect()
+}
+
 fn agent_cli_args(
     permission_mode: &str,
     reasoning_effort: Option<&str>,
@@ -95,6 +140,9 @@ fn agent_cli_args(
     memory_enabled: bool,
     subagents_enabled: bool,
     planning_enabled: bool,
+    disallowed_tools: Option<&str>,
+    allow_rules: &[String],
+    deny_rules: &[String],
 ) -> Vec<String> {
     // `--disable-web-search` and `--no-memory` are root Grok flags (not agent
     // flags), so
@@ -116,6 +164,18 @@ fn agent_cli_args(
     if let Some(limit) = max_turns.filter(|value| (1..=200).contains(value)) {
         args.push("--max-turns".into());
         args.push(limit.to_string());
+    }
+    if let Some(tools) = disallowed_tools.filter(|value| !value.is_empty()) {
+        args.push("--disallowed-tools".into());
+        args.push(tools.to_string());
+    }
+    for rule in allow_rules {
+        args.push("--allow".into());
+        args.push(rule.clone());
+    }
+    for rule in deny_rules {
+        args.push("--deny".into());
+        args.push(rule.clone());
     }
     args.push("agent".into());
     match permission_mode {
@@ -162,6 +222,9 @@ pub async fn agent_start(
     memory_enabled: Option<bool>,
     subagents_enabled: Option<bool>,
     planning_enabled: Option<bool>,
+    disallowed_tools: Option<Vec<String>>,
+    allow_rules: Option<Vec<String>>,
+    deny_rules: Option<Vec<String>>,
 ) -> Result<AgentInfo, String> {
     let mode = match permission_mode.as_str() {
         "auto" | "full" => permission_mode.clone(),
@@ -177,15 +240,24 @@ pub async fn agent_start(
         }
     }
 
+    let memory_on = memory_enabled.unwrap_or(true);
+    let subagents_on = subagents_enabled.unwrap_or(true);
+    let planning_on = planning_enabled.unwrap_or(true);
+    let disallowed = sanitize_disallowed_tools(disallowed_tools.as_deref());
+    let allow = sanitize_permission_rule_list(allow_rules.as_deref());
+    let deny = sanitize_permission_rule_list(deny_rules.as_deref());
     let bin = resolve_grok_bin(grok_cmd.as_deref());
     let args = agent_cli_args(
         &mode,
         reasoning_effort.as_deref(),
         web_search_enabled.unwrap_or(true),
         max_turns,
-        memory_enabled.unwrap_or(true),
-        subagents_enabled.unwrap_or(true),
-        planning_enabled.unwrap_or(true),
+        memory_on,
+        subagents_on,
+        planning_on,
+        disallowed.as_deref(),
+        &allow,
+        &deny,
     );
     let _ = paths::ensure_dirs();
     let working_directory = resolve_agent_working_directory(working_directory)?;
@@ -200,6 +272,14 @@ pub async fn agent_start(
         .kill_on_drop(true);
     paths::apply_engine_env_tokio(&mut command);
     models_config::apply_keychain_env_tokio(&mut command);
+    // Belt-and-suspenders for kernels that accept the root flags but do not yet
+    // apply them on the agent stdio path: documented env force-disables.
+    if !memory_on {
+        command.env("GROK_MEMORY", "0");
+    }
+    if !subagents_on {
+        command.env("GROK_SUBAGENTS", "0");
+    }
 
     #[cfg(unix)]
     unsafe {
@@ -720,7 +800,10 @@ fn dunce_canonicalize(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{agent_cli_args, resolve_agent_working_directory, safe_doctor_fix_id, sanitize_engine_diagnostic};
+    use super::{
+        agent_cli_args, resolve_agent_working_directory, safe_doctor_fix_id,
+        sanitize_disallowed_tools, sanitize_engine_diagnostic, sanitize_permission_rule_list,
+    };
 
     #[test]
     fn engine_stderr_never_exposes_credential_derived_fields() {
@@ -760,10 +843,78 @@ mod tests {
 
     #[test]
     fn agent_args_disable_web_search_only_when_user_turns_it_off() {
-        let enabled = agent_cli_args("default", Some("high"), true, None, true, true, true);
+        let enabled = agent_cli_args(
+            "default",
+            Some("high"),
+            true,
+            None,
+            true,
+            true,
+            true,
+            None,
+            &[],
+            &[],
+        );
         assert_eq!(enabled, vec!["agent", "--reasoning-effort", "high", "stdio"]);
 
-        let disabled = agent_cli_args("full", None, false, Some(12), false, false, false);
-        assert_eq!(disabled, vec!["--disable-web-search", "--no-memory", "--no-subagents", "--no-plan", "--max-turns", "12", "agent", "--always-approve", "stdio"]);
+        let disabled = agent_cli_args(
+            "full",
+            None,
+            false,
+            Some(12),
+            false,
+            false,
+            false,
+            Some("bash,web_search"),
+            &["Read".into()],
+            &["Bash".into()],
+        );
+        assert_eq!(
+            disabled,
+            vec![
+                "--disable-web-search",
+                "--no-memory",
+                "--no-subagents",
+                "--no-plan",
+                "--max-turns",
+                "12",
+                "--disallowed-tools",
+                "bash,web_search",
+                "--allow",
+                "Read",
+                "--deny",
+                "Bash",
+                "agent",
+                "--always-approve",
+                "stdio",
+            ]
+        );
+    }
+
+    #[test]
+    fn disallowed_tools_reject_shell_metacharacters() {
+        assert_eq!(
+            sanitize_disallowed_tools(Some(&[
+                "bash".into(),
+                "web_search".into(),
+                "rm -rf /".into(),
+                "".into(),
+            ])),
+            Some("bash,web_search".into())
+        );
+        assert_eq!(sanitize_disallowed_tools(Some(&["$(evil)".into()])), None);
+    }
+
+    #[test]
+    fn permission_rules_reject_injection_and_catch_all() {
+        assert_eq!(
+            sanitize_permission_rule_list(Some(&[
+                "Bash".into(),
+                "Read(src/**)".into(),
+                "*".into(),
+                "Bash; id".into(),
+            ])),
+            vec!["Bash".to_string(), "Read(src/**)".to_string()]
+        );
     }
 }

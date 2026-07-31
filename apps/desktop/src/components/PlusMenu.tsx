@@ -21,6 +21,8 @@ export type PlusAction =
   | { type: 'task-memory'; on: boolean }
   | { type: 'task-subagents'; on: boolean }
   | { type: 'task-planning'; on: boolean }
+  | { type: 'task-tool-limits' }
+  | { type: 'task-permission-rules' }
   | { type: 'search-scope' }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
@@ -66,6 +68,10 @@ interface Props {
   taskSubagentsEnabled?: boolean;
   /** New task only: disable kernel plan mode with --no-plan. */
   taskPlanningEnabled?: boolean;
+  /** New task only: count of built-in tools denied via --disallowed-tools. */
+  taskToolLimitCount?: number;
+  /** New task only: count of Grok --allow/--deny rules. */
+  taskPermissionRuleCount?: number;
   /** Current kernel explicitly supports ACP search tool overrides. */
   searchScopeAvailable?: boolean;
   skills: SkillInfo[];
@@ -101,6 +107,8 @@ export function PlusMenu({
   taskMemoryEnabled = true,
   taskSubagentsEnabled = true,
   taskPlanningEnabled = true,
+  taskToolLimitCount = 0,
+  taskPermissionRuleCount = 0,
   searchScopeAvailable = false,
   skills,
   hasActiveSession,
@@ -247,6 +255,24 @@ export function PlusMenu({
       title: taskMemoryEnabled ? t('plusTaskMemoryOff') : t('plusTaskMemoryOn'),
       desc: taskMemoryEnabled ? t('plusTaskMemoryOffHint') : t('plusTaskMemoryOnHint'),
       action: { type: 'task-memory', on: !taskMemoryEnabled } as PlusAction,
+    }] as Row[]) : []),
+    ...(home ? ([{
+      kind: 'action' as const,
+      id: 'task-tool-limits',
+      title: taskToolLimitCount > 0
+        ? t('plusTaskToolsLimited').replace('{n}', String(taskToolLimitCount))
+        : t('plusTaskToolsDefault'),
+      desc: t('plusTaskToolsHint'),
+      action: { type: 'task-tool-limits' } as PlusAction,
+    }] as Row[]) : []),
+    ...(home ? ([{
+      kind: 'action' as const,
+      id: 'task-permission-rules',
+      title: taskPermissionRuleCount > 0
+        ? t('plusPermRulesLimited').replace('{n}', String(taskPermissionRuleCount))
+        : t('plusPermRulesDefault'),
+      desc: t('plusPermRulesHint'),
+      action: { type: 'task-permission-rules' } as PlusAction,
     }] as Row[]) : []),
     {
       kind: 'action',

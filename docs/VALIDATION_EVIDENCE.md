@@ -64,6 +64,45 @@
 | ACP 客户端文本写入 | `cd apps/desktop/src-tauri && cargo test && cargo check`；`node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --client-fs-write` | 2026-07-24 通过：52 项 Rust 测试包含项目内原子替换、`..` 越界拒绝与符号链接拒绝；锁定内核在无认证 initialize 中接受 Full 任务才会声明的 `writeTextFile` 能力 | 门禁不创建会话或写项目文件；真实模型回合仍需有额度账号。Default/Auto 任务不宣告客户端写入能力 |
 | 本地任务与会话搜索 | `cd apps/desktop && npx tsc --noEmit && npm run verify:web-bundle && npm run build:app`；`cd src-tauri && cargo test && cargo check`；本机新构建 App 点击侧栏“搜索全部任务” | 2026-07-25 通过：第 53 项 Rust 测试覆盖标题、中文对话、跨项目和归档任务检索；实际 UI 以“读取”命中任务标题与已保存对话内容，点击后恢复原项目及完整本地快照 | 不扫描项目文件、附件、用户 CLI home，也不发送模型提示词；只检索 gorkX SQLite 中的自有任务与最近快照 |
 
+## 正式版 v1.0.0 证据索引 · 2026-07-31
+
+> 执行方案：[`FORMAL_RELEASE_PLAN.md`](FORMAL_RELEASE_PLAN.md)。  
+> 本会话触发语：`按方案做`。未打 tag、未发 Release、未上传 DMG。
+
+| ID | 结果 | 命令或步骤 | 边界 |
+|---|---|---|---|
+| R1 | 部分 | 既有包内内核隔离证据 + 本会话 `verify-grok-kernel-*` / ACP initialize | 干净机安装→登录→首任务→重开仍待 **[USER] H1** |
+| R2 | 历史通过 | 见上文真实 ACP / Review / 任务链路条目 | 本会话未重复完整人工编码循环 |
+| R3 | 历史通过 | fork / rewind 预览与确认条目 | 同上 |
+| R4 | 未通过（诚实） | 用户未提供第三方 endpoint | 宣传不得写「多 Provider 已验收」 |
+| R5 | 通过 | `cargo test`（含 Keychain/隔离）；`store` schema 仅有 ACP **用量** token 计数，无 API 密钥列；connector audit 脱敏测试 | — |
+| R6 | 通过 | `FEATURES.md` / `DESKTOP_CAPABILITY_MAP.md` 写入任务工具 denylist 与 allow/deny；+ 菜单入口为真链路 | Soon 连接器仍不可执行连接 |
+| R7 | 通过 | 见下表「本会话门禁」 | — |
+| R8 | 通过 | `package.json` / `package-lock` / `Cargo.toml` / `Cargo.lock` gorkx / `tauri.conf.json` / `appMeta.ts` = `1.0.0`；`releaseGates.test.ts` 锁定一致性 | 候选包构建后需再验 bundle 版本字符串 |
+| R9 | 通过 | `docs/RELEASE_NOTES_v1.0.0.md`；README 中英下载链与签名边界 | 下载 URL 在 tag 后才真实可点 |
+| F1 | 通过 | `kernel/patches/0004-acp-agent-stdio-cli-overrides.patch` 在 series；`verify-grok-kernel-patches.sh` PASS | 资源二进制若需强制刷新：`build-grok-kernel.sh` |
+| F2 | 通过 | `taskToolLimits.ts` + UI + SQLite `disallowed_tools` + reconnect 路径 | 单元测试覆盖 sanitize |
+| F3 | 通过 | `taskPermissionRules.ts` + UI + SQLite `permission_rules`；拒绝 `*`/`**` 与注入字符 | Rust + TS 测试 |
+| F4 | 历史通过 | 过期登录恢复既有修复与证据 | 正式版可再人工点一次 |
+| F5 | 通过 | `github_disconnect` 删 Keychain；写确认含目标仓库；scope 展示；审计 connect/disconnect/write | 本会话未持用户 token 做 live 写 |
+| F6 | 通过 | FEATURES / README / 发布说明边界一致 | — |
+| H1 | 阻塞 | **[USER]** 干净 macOS 或书面接受开发机等价验收 | 未伪造 |
+| H2 | 阻塞/放弃可选 | **[USER]** 提供 endpoint 或书面降级 | 默认 R4 未通过 |
+| H3 | 阻塞 | **[USER]** 麦克风 TCC 听写 | 未伪造 |
+| H4 | 可选 | **[USER]** Developer ID + 公证 | 无则 ad-hoc + README Gatekeeper 说明 |
+
+### 本会话门禁（R7）
+
+| 范围 | 命令 | 结果 |
+|---|---|---|
+| 内核源码 | `scripts/verify-grok-kernel-source.sh` | PASS · `47348d13…` |
+| 补丁 series | `scripts/verify-grok-kernel-patches.sh` | PASS · 含 0001–0004 |
+| ACP | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | PASS initialize |
+| TS | `cd apps/desktop && npx tsc --noEmit` | PASS |
+| Stage 测试 | `npm run test:stages` | PASS（含 taskToolLimits / taskPermissionRules / connectors） |
+| Web bundle | `npm run verify:web-bundle` | PASS |
+| Rust | `cd src-tauri && cargo test && cargo check` | PASS · 80 tests |
+
 ## 发布后的真实体验验收项
 
 1. 一台没有既有 Grok 数据的 macOS：只安装 gorkX → App 内登录 → 真实项目首轮 → 退出重开恢复。

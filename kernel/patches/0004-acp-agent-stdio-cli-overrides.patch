@@ -1,0 +1,75 @@
+diff --git a/crates/codegen/xai-grok-pager-bin/src/main.rs b/crates/codegen/xai-grok-pager-bin/src/main.rs
+index f52d448..57ac195 100644
+--- a/crates/codegen/xai-grok-pager-bin/src/main.rs
++++ b/crates/codegen/xai-grok-pager-bin/src/main.rs
+@@ -1007,6 +1007,12 @@ async fn run_agent_command(
+     trust: bool,
+     no_auto_update: bool,
+     disable_web_search: bool,
++    no_memory: bool,
++    no_subagents: bool,
++    max_turns: Option<u32>,
++    cli_disallowed_tools: Option<String>,
++    allow_rules: Vec<String>,
++    deny_rules: Vec<String>,
+     update_config: &UpdateConfig,
+ ) -> Result<()> {
+     let _signal_flush = tokio::spawn(async {
+@@ -1101,16 +1107,42 @@ async fn run_agent_command(
+         raw_config: &raw_config,
+         remote_settings: remote_settings.as_ref(),
+         is_headless: !is_leader,
+-        cli_subagents: None,
++        // `--no-subagents` is a force-disable for desktop ACP; `--subagents`
++        // force-enable is not used on this path.
++        cli_subagents: if no_subagents { Some(false) } else { None },
+         cli_web_search_model: None,
+         cli_session_summary_model: None,
+         cli_experimental_memory: false,
+-        cli_no_memory: false,
++        cli_no_memory: no_memory,
+         disable_web_search,
+         todo_gate: false,
+         laziness_debug_log: None,
+         storage_mode: None,
+     });
++    // Root CLI tool limits are normally headless-only; forward them into the
++    // stdio ACP agent so desktop clients can pass the documented root flags.
++    let disallowed = cli_disallowed_tools.as_deref().and_then(|raw| {
++        let tools: Vec<String> = raw
++            .split(',')
++            .map(|t| t.trim().to_string())
++            .filter(|t| !t.is_empty())
++            .collect();
++        if tools.is_empty() { None } else { Some(tools) }
++    });
++    if max_turns.is_some() || disallowed.is_some() || !allow_rules.is_empty() || !deny_rules.is_empty() {
++        agent_config.cli_agent_overrides.max_turns = max_turns;
++        agent_config.cli_agent_overrides.disallowed_tools = disallowed;
++        if !allow_rules.is_empty() || !deny_rules.is_empty() {
++            agent_config.cli_agent_overrides.permission_rules =
++                xai_grok_pager::headless::parse_permission_rules_lenient(&allow_rules, &deny_rules);
++        }
++    }
++    // `--no-subagents` must force-disable even when config defaults to enabled.
++    // `cli_subagents: Some(false)` alone is treated as "no enable flag" by
++    // SubagentsConfig::resolve, so clamp the resolved runtime field here.
++    if no_subagents {
++        agent_config.subagents_enabled = false;
++    }
+     let agent_memory_config = agent_config.memory_config.clone();
+     let leader_eligible = matches!(
+         &agent_args.mode,
+@@ -1835,6 +1867,12 @@ async fn async_main(args: PagerArgs) -> Result<()> {
+                     args.trust,
+                     args.no_auto_update,
+                     args.disable_web_search,
++                    args.no_memory,
++                    args.no_subagents,
++                    args.max_turns,
++                    args.cli_disallowed_tools.clone(),
++                    args.allow_rules.clone(),
++                    args.deny_rules.clone(),
+                     &update_config,
+                 )
+                 .await;

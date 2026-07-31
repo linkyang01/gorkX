@@ -7,6 +7,7 @@ import {
   CONNECTOR_CATALOG,
   deriveConnectorUiState,
   getConnector,
+  githubRepositoryFromUrl,
   githubWriteConfirmSummary,
   isDeclaredWriteAction,
   realConnectors,
@@ -41,10 +42,28 @@ const summary = githubWriteConfirmSummary({
   titleOrBody: 'Fix login',
   base: 'main',
   draft: true,
+  repository: 'acme/widget',
 });
 assert.match(summary, /pull request/);
 assert.match(summary, /main/);
 assert.match(summary, /draft/i);
+assert.match(summary, /acme\/widget/);
+
+const comment = githubWriteConfirmSummary({
+  action: 'create_pr_comment',
+  titleOrBody: 'LGTM',
+  prNumber: 12,
+  repository: 'acme/widget',
+});
+assert.match(comment, /#12/);
+assert.match(comment, /acme\/widget/);
+assert.match(comment, /LGTM/);
+
+assert.equal(
+  githubRepositoryFromUrl('https://github.com/acme/widget/pull/12'),
+  'acme/widget',
+);
+assert.equal(githubRepositoryFromUrl('https://evil.example/acme/widget'), undefined);
 
 // Audit: no tokens in storage
 const mem: Record<string, string> = {};

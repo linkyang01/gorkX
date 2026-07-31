@@ -86,6 +86,21 @@ import {
 import { fetchMemoryInjection, recordSessionMemory } from './lib/memory';
 import { listCustomModels } from './lib/modelsConfig';
 import {
+  parseTaskToolLimitsForm,
+  sanitizeTaskToolLimits,
+  TASK_TOOL_LIMIT_OPTIONS,
+  withSessionToolConstraints,
+  type TaskToolLimitId,
+} from './lib/taskToolLimits';
+import {
+  decodePermissionRules,
+  parsePermissionRulesForm,
+  permissionRulesToForm,
+  sanitizePermissionRules,
+  splitPermissionRules,
+  type PermissionRule,
+} from './lib/taskPermissionRules';
+import {
   formatTaskModelDisplay,
   resolveProviderForModelId,
 } from './lib/modelVerify';
@@ -298,9 +313,16 @@ function projectRoleNameForCwd(profile: NewTaskProfile, cwd: string): string | n
   try { return decodeURIComponent(match[1]) === cwd ? match[2] : null; } catch { return null; }
 }
 
-function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile, cwd: string): AgentProfile | undefined {
+function agentProfileForNewTask(
+  mode: ChatMode,
+  profile: NewTaskProfile,
+  cwd: string,
+  maxTurns?: number | null,
+  disallowedTools?: string[],
+): AgentProfile | undefined {
+  let base: AgentProfile | undefined;
   if (mode === 'plan') {
-    return {
+    base = {
       name: 'gorkx-plan',
       description: 'A plan-first assistant for a gorkX desktop task.',
       promptMode: 'extend',
@@ -308,14 +330,14 @@ function agentProfileForNewTask(mode: ChatMode, profile: NewTaskProfile, cwd: st
       promptBody:
         'Work plan-first. Understand the request and relevant project context, then present a clear, actionable plan before proposing changes. Keep the user in control of consequential actions.',
     };
+  } else if (profile.startsWith('project:')) {
+    // `explore` and project roles are kernel-owned names; the desktop only
+    // selects them for a new task and does not recreate their toolsets.
+    base = projectRoleNameForCwd(profile, cwd) ?? undefined;
+  } else {
+    base = profile !== 'default' ? profile : undefined;
   }
-  // `explore` is a bundled Grok Build profile with its own smaller read-only
-  // toolset and Plan permission mode. The desktop only selects it for a new
-  // task; it does not recreate those restrictions in the shell.
-  if (profile.startsWith('project:')) {
-    return projectRoleNameForCwd(profile, cwd) ?? undefined;
-  }
-  return profile !== 'default' ? profile : undefined;
+  return withSessionToolConstraints(base, { maxTurns, disallowedTools }) as AgentProfile | undefined;
 }
 
 interface Thread {
@@ -352,6 +374,10 @@ interface Thread {
   subagentsEnabled?: boolean;
   /** This task was started with Grok Build planning disabled. */
   planningEnabled?: boolean;
+  /** Built-in tool ids denied for this task at process start. */
+  disallowedTools?: string[];
+  /** Grok `--allow` / `--deny` rules applied at process start. */
+  permissionRules?: PermissionRule[];
   /** This exact ACP process advertised native search tool overrides. */
   searchScopeAvailable?: boolean;
   /** Applied to the next prompt; the engine then retains it for the session. */
@@ -519,6 +545,8 @@ function metaToStub(m: ThreadMeta, lines?: ChatLine[]): Thread {
     memoryEnabled: m.memoryEnabled !== false,
     subagentsEnabled: m.subagentsEnabled !== false,
     planningEnabled: m.planningEnabled !== false,
+    disallowedTools: sanitizeTaskToolLimits(m.disallowedTools),
+    permissionRules: sanitizePermissionRules(m.permissionRules),
     updatedAt: m.updatedAt || Date.now(),
     sessionGoal: fromMeta || fromLines,
   };
@@ -574,6 +602,22 @@ function App() {
       return localStorage.getItem('gorkx.newTaskPlanningEnabled') !== '0';
     } catch {
       return true;
+    }
+  });
+  /** New-task denylist of built-in Grok tools (`--disallowed-tools`). */
+  const [newTaskDisallowedTools, setNewTaskDisallowedTools] = useState<TaskToolLimitId[]>(() => {
+    try {
+      return sanitizeTaskToolLimits(JSON.parse(localStorage.getItem('gorkx.newTaskDisallowedTools') || '[]'));
+    } catch {
+      return [];
+    }
+  });
+  /** New-task Grok `--allow` / `--deny` permission rules. */
+  const [newTaskPermissionRules, setNewTaskPermissionRules] = useState<PermissionRule[]>(() => {
+    try {
+      return decodePermissionRules(localStorage.getItem('gorkx.newTaskPermissionRules'));
+    } catch {
+      return [];
     }
   });
   const [effort, setEffort] = useState<ReasoningEffort>(() => {
@@ -1847,6 +1891,8 @@ function App() {
       memoryEnabled: th.memoryEnabled !== false,
       subagentsEnabled: th.subagentsEnabled !== false,
       planningEnabled: th.planningEnabled !== false,
+      disallowedTools: sanitizeTaskToolLimits(th.disallowedTools),
+      permissionRules: sanitizePermissionRules(th.permissionRules),
       updatedAt: Date.now(),
       archived: Boolean(th.archived),
       project: th.projectKey,
@@ -2521,7 +2567,15 @@ function App() {
     [],
   );
 
-  const bootstrapClient = useCallback(async (workingDirectory?: string, memoryEnabled = true, subagentsEnabled = true, planningEnabled = true) => {
+  const bootstrapClient = useCallback(async (
+    workingDirectory?: string,
+    memoryEnabled = true,
+    subagentsEnabled = true,
+    planningEnabled = true,
+    disallowedTools: string[] = [],
+    permissionRules: PermissionRule[] = [],
+  ) => {
+    const { allow, deny } = splitPermissionRules(permissionRules);
     const client = await AcpClient.start(
       perm,
       grokCmd || undefined,
@@ -2532,6 +2586,9 @@ function App() {
       memoryEnabled,
       subagentsEnabled,
       planningEnabled,
+      disallowedTools,
+      allow,
+      deny,
     );
     await client.initialize();
     await client.authenticate('cached_token');
@@ -3264,6 +3321,47 @@ function App() {
           await changeChatMode('agent');
         }
         return;
+      case 'task-tool-limits': {
+        setPlusMenuOpen(false);
+        const labels = TASK_TOOL_LIMIT_OPTIONS.map((option) => `${option.id} — ${t(option.labelKey)}`).join('\n');
+        const answer = await askAction({
+          title: t('taskToolLimitsTitle'),
+          message: `${t('taskToolLimitsMessage')}\n\n${labels}`,
+          placeholder: t('taskToolLimitsPlaceholder'),
+          submitLabel: t('taskToolLimitsApply'),
+          allowEmpty: true,
+          initialValue: newTaskDisallowedTools.join(', '),
+        });
+        if (answer === null) return;
+        const next = parseTaskToolLimitsForm(answer);
+        setNewTaskDisallowedTools(next);
+        try {
+          localStorage.setItem('gorkx.newTaskDisallowedTools', JSON.stringify(next));
+        } catch {
+          /* local preference is optional */
+        }
+        return;
+      }
+      case 'task-permission-rules': {
+        setPlusMenuOpen(false);
+        const answer = await askAction({
+          title: t('permRulesTitle'),
+          message: t('permRulesMessage'),
+          placeholder: t('permRulesPlaceholder'),
+          submitLabel: t('permRulesApply'),
+          allowEmpty: true,
+          initialValue: permissionRulesToForm(newTaskPermissionRules),
+        });
+        if (answer === null) return;
+        try {
+          const next = parsePermissionRulesForm(answer);
+          setNewTaskPermissionRules(next);
+          localStorage.setItem('gorkx.newTaskPermissionRules', JSON.stringify(next));
+        } catch (error) {
+          alert(error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
       case 'search-scope': {
         setPlusMenuOpen(false);
         const current = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
@@ -3681,6 +3779,8 @@ function App() {
     const memoryEnabled = newTaskMemoryEnabled;
     const subagentsEnabled = newTaskSubagentsEnabled;
     const planningEnabled = newTaskPlanningEnabled;
+    const disallowedTools = sanitizeTaskToolLimits(newTaskDisallowedTools);
+    const permissionRules = sanitizePermissionRules(newTaskPermissionRules);
     const cwdOverride = (opts?.cwdOverride || '').trim();
     if (useWorktree && !project && !cwdOverride) {
       alert(t('worktreeNeedProject'));
@@ -3720,15 +3820,27 @@ function App() {
         memoryEnabled,
         subagentsEnabled,
         planningEnabled,
+        disallowedTools,
+        permissionRules,
         archived: false,
         updatedAt: createdAt,
       },
     ]);
     selectThread(id);
     try {
-      const client = await bootstrapClient(cwdBase, memoryEnabled, subagentsEnabled, planningEnabled);
+      const client = await bootstrapClient(
+        cwdBase,
+        memoryEnabled,
+        subagentsEnabled,
+        planningEnabled,
+        disallowedTools,
+        permissionRules,
+      );
       wireClient(id, client);
-      const session = await client.newSession(cwdBase, agentProfileForNewTask(chatMode, selectedProfile, cwdBase));
+      const session = await client.newSession(
+        cwdBase,
+        agentProfileForNewTask(chatMode, selectedProfile, cwdBase, maxAgentTurns, disallowedTools),
+      );
       rememberModels(session);
       let sessionId = session.sessionId;
       let cwd = cwdBase;
@@ -3816,6 +3928,8 @@ function App() {
         memoryEnabled,
         subagentsEnabled,
         planningEnabled,
+        disallowedTools,
+        permissionRules,
         searchScopeAvailable: client.supportsSearchToolOverrides,
       });
 
@@ -4752,6 +4866,7 @@ function App() {
     });
     try {
       await active.client.stop();
+      const rules = splitPermissionRules(sanitizePermissionRules(active.permissionRules));
       const client = await AcpClient.start(
         perm,
         grokCmd || undefined,
@@ -4762,6 +4877,9 @@ function App() {
         active.memoryEnabled !== false,
         active.subagentsEnabled !== false,
         active.planningEnabled !== false,
+        sanitizeTaskToolLimits(active.disallowedTools),
+        rules.allow,
+        rules.deny,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -4866,6 +4984,7 @@ function App() {
     if (th.client) return th.client;
     patchThread(id, { busy: true, error: null });
     try {
+      const rules = splitPermissionRules(sanitizePermissionRules(th.permissionRules));
       const client = await AcpClient.start(
         perm,
         grokCmd || undefined,
@@ -4876,6 +4995,9 @@ function App() {
         th.memoryEnabled !== false,
         th.subagentsEnabled !== false,
         th.planningEnabled !== false,
+        sanitizeTaskToolLimits(th.disallowedTools),
+        rules.allow,
+        rules.deny,
       );
       await client.initialize();
       await client.authenticate('cached_token');
@@ -6148,6 +6270,8 @@ function App() {
                         taskMemoryEnabled={newTaskMemoryEnabled}
                         taskSubagentsEnabled={newTaskSubagentsEnabled}
                         taskPlanningEnabled={newTaskPlanningEnabled}
+                        taskToolLimitCount={newTaskDisallowedTools.length}
+                        taskPermissionRuleCount={newTaskPermissionRules.length}
                         skills={extSnap?.skills ?? []}
                         hasActiveSession={false}
                         hasImageAttachment={composerAtts.some((attachment) => attachment.kind === 'image')}
@@ -6211,6 +6335,26 @@ function App() {
                         onClick={() => void handlePlusAction({ type: 'task-planning', on: true })}
                       >
                         {t('plusTaskPlanningOff')}
+                      </button>
+                    ) : null}
+                    {newTaskDisallowedTools.length ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={`${t('plusTaskToolsHint')}: ${newTaskDisallowedTools.join(', ')}`}
+                        onClick={() => void handlePlusAction({ type: 'task-tool-limits' })}
+                      >
+                        {t('plusTaskToolsLimited').replace('{n}', String(newTaskDisallowedTools.length))}
+                      </button>
+                    ) : null}
+                    {newTaskPermissionRules.length ? (
+                      <button
+                        type="button"
+                        className="composer-mode-pill"
+                        title={permissionRulesToForm(newTaskPermissionRules)}
+                        onClick={() => void handlePlusAction({ type: 'task-permission-rules' })}
+                      >
+                        {t('plusPermRulesLimited').replace('{n}', String(newTaskPermissionRules.length))}
                       </button>
                     ) : null}
                     {newTaskProfile !== 'default' && newTaskProfile !== 'explore' && chatMode !== 'plan' && (!newTaskProfile.startsWith('project:') || Boolean(projectRoleNameForCwd(newTaskProfile, project))) ? (
@@ -7136,6 +7280,28 @@ function App() {
                       >
                         {t('modePlan')}
                       </button>
+                    ) : null}
+                    {sanitizeTaskToolLimits(active.disallowedTools).length ? (
+                      <span
+                        className="composer-mode-pill"
+                        title={`${t('taskToolLimitsActiveHint')}: ${sanitizeTaskToolLimits(active.disallowedTools).join(', ')}`}
+                      >
+                        {t('plusTaskToolsLimited').replace(
+                          '{n}',
+                          String(sanitizeTaskToolLimits(active.disallowedTools).length),
+                        )}
+                      </span>
+                    ) : null}
+                    {sanitizePermissionRules(active.permissionRules).length ? (
+                      <span
+                        className="composer-mode-pill"
+                        title={`${t('permRulesActiveHint')}\n${permissionRulesToForm(active.permissionRules ?? [])}`}
+                      >
+                        {t('plusPermRulesLimited').replace(
+                          '{n}',
+                          String(sanitizePermissionRules(active.permissionRules).length),
+                        )}
+                      </span>
                     ) : null}
                   </div>
                   <div className="composer-toolbar-right">

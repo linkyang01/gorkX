@@ -12,7 +12,7 @@ import {
   type GithubComment,
   type GithubPullRequest,
 } from '../lib/github';
-import { githubWriteConfirmSummary } from '../lib/connectors';
+import { githubRepositoryFromUrl, githubWriteConfirmSummary } from '../lib/connectors';
 import { appendConnectorAudit } from '../lib/connectorAudit';
 import { openUrlSafe } from '../lib/updates';
 import type { ToolEvent } from './ToolTimeline';
@@ -170,10 +170,16 @@ export function ReviewPanel({
     if (!cwd) return;
     const body = (commentDrafts[prNumber] || '').trim();
     if (!body) return;
+    const listed = remotePrs.find((pr) => pr.number === prNumber);
+    const repository =
+      githubRepositoryFromUrl(listed?.url)
+      || githubRepositoryFromUrl(remotePrs[0]?.url)
+      || (cwd ? cwd.split('/').filter(Boolean).slice(-2).join('/') : undefined);
     const confirmLine = githubWriteConfirmSummary({
       action: 'create_pr_comment',
       titleOrBody: body,
       prNumber,
+      repository,
     });
     if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
     setRemoteBusy(true);

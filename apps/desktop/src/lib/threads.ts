@@ -30,6 +30,10 @@ export interface ThreadMeta {
   subagentsEnabled?: boolean;
   /** Whether this task may enter Grok Build plan mode. */
   planningEnabled?: boolean;
+  /** Built-in tool ids denied for this task via `--disallowed-tools`. */
+  disallowedTools?: string[];
+  /** Grok `--allow` / `--deny` rules applied at process start. */
+  permissionRules?: Array<{ action: 'allow' | 'deny'; rule: string }>;
   updatedAt: number;
   /** optional project path when loaded from sqlite */
   project?: string;
@@ -102,6 +106,8 @@ async function migrateLocalStorageOnce(): Promise<void> {
             memoryEnabled: m.memoryEnabled !== false,
             subagentsEnabled: m.subagentsEnabled !== false,
             planningEnabled: m.planningEnabled !== false,
+            disallowedTools: encodeDisallowedTools(m.disallowedTools),
+            permissionRules: encodePermissionRulesJson(m.permissionRules),
             updatedAt: m.updatedAt || Date.now(),
           },
         });
@@ -111,6 +117,65 @@ async function migrateLocalStorageOnce(): Promise<void> {
   } catch {
     /* ignore migration errors */
   }
+}
+
+function decodeDisallowedTools(raw: unknown): string[] | undefined {
+  if (Array.isArray(raw)) {
+    const tools = raw
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return tools.length ? tools : undefined;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const tools = raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return tools.length ? tools : undefined;
+  }
+  return undefined;
+}
+
+function encodeDisallowedTools(tools?: string[] | null): string | null {
+  if (!tools?.length) return null;
+  const cleaned = tools.map((item) => item.trim()).filter(Boolean);
+  return cleaned.length ? cleaned.join(',') : null;
+}
+
+function encodePermissionRulesJson(
+  rules?: Array<{ action: 'allow' | 'deny'; rule: string }> | null,
+): string | null {
+  if (!rules?.length) return null;
+  try {
+    return JSON.stringify(rules);
+  } catch {
+    return null;
+  }
+}
+
+function decodePermissionRulesJson(
+  raw: unknown,
+): Array<{ action: 'allow' | 'deny'; rule: string }> | undefined {
+  if (Array.isArray(raw)) {
+    const out = raw.filter(
+      (item): item is { action: 'allow' | 'deny'; rule: string } =>
+        !!item
+        && typeof item === 'object'
+        && ((item as { action?: string }).action === 'allow'
+          || (item as { action?: string }).action === 'deny')
+        && typeof (item as { rule?: unknown }).rule === 'string',
+    );
+    return out.length ? out : undefined;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      return decodePermissionRulesJson(JSON.parse(raw));
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function rowToMeta(r: {
@@ -126,6 +191,8 @@ function rowToMeta(r: {
   memoryEnabled?: boolean;
   subagentsEnabled?: boolean;
   planningEnabled?: boolean;
+  disallowedTools?: string | string[] | null;
+  permissionRules?: string | Array<{ action: 'allow' | 'deny'; rule: string }> | null;
   updatedAt: number;
   archived?: boolean;
   sessionGoalText?: string | null;
@@ -145,6 +212,8 @@ function rowToMeta(r: {
     memoryEnabled: r.memoryEnabled !== false,
     subagentsEnabled: r.subagentsEnabled !== false,
     planningEnabled: r.planningEnabled !== false,
+    disallowedTools: decodeDisallowedTools(r.disallowedTools),
+    permissionRules: decodePermissionRulesJson(r.permissionRules),
     updatedAt: r.updatedAt,
     archived: Boolean(r.archived),
     sessionGoalText: r.sessionGoalText ?? null,
@@ -172,6 +241,8 @@ export async function loadThreadMetas(project: string): Promise<ThreadMeta[]> {
           memoryEnabled?: boolean;
           subagentsEnabled?: boolean;
           planningEnabled?: boolean;
+          disallowedTools?: string | null;
+          permissionRules?: string | null;
           updatedAt: number;
           archived?: boolean;
           sessionGoalText?: string | null;
@@ -239,6 +310,8 @@ export async function upsertThreadMeta(project: string, meta: ThreadMeta): Promi
     memoryEnabled: meta.memoryEnabled !== false,
     subagentsEnabled: meta.subagentsEnabled !== false,
     planningEnabled: meta.planningEnabled !== false,
+    disallowedTools: encodeDisallowedTools(meta.disallowedTools),
+    permissionRules: encodePermissionRulesJson(meta.permissionRules),
     updatedAt: Date.now(),
     archived: Boolean(meta.archived),
     sessionGoalText: meta.sessionGoalText ?? null,

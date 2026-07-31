@@ -728,6 +728,9 @@ export class AcpClient {
     memoryEnabled = true,
     subagentsEnabled = true,
     planningEnabled = true,
+    disallowedTools?: string[] | null,
+    allowRules?: string[] | null,
+    denyRules?: string[] | null,
   ): Promise<AcpClient> {
     const info = await invoke<AgentInfo>('agent_start', {
       permissionMode,
@@ -739,6 +742,9 @@ export class AcpClient {
       memoryEnabled,
       subagentsEnabled,
       planningEnabled,
+      disallowedTools: Array.isArray(disallowedTools) && disallowedTools.length ? disallowedTools : null,
+      allowRules: Array.isArray(allowRules) && allowRules.length ? allowRules : null,
+      denyRules: Array.isArray(denyRules) && denyRules.length ? denyRules : null,
     });
     const client = new AcpClient(info.id, permissionMode === 'full');
     await client.attachListener();

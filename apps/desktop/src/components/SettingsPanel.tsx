@@ -95,6 +95,7 @@ import {
   CONNECTOR_CATALOG,
   deriveConnectorUiState,
   getConnector,
+  githubRepositoryFromUrl,
   githubWriteConfirmSummary,
 } from '../lib/connectors';
 import {
@@ -711,11 +712,15 @@ export function SettingsPanel({
       setMsg(t('githubPrTitleRequired'));
       return;
     }
+    const repository =
+      githubRepositoryFromUrl(githubPrs[0]?.url)
+      || (project ? project.split('/').filter(Boolean).slice(-2).join('/') : undefined);
     const confirmLine = githubWriteConfirmSummary({
       action: 'create_pull_request',
       titleOrBody: title,
       base: githubPrBase,
       draft: githubPrDraft,
+      repository,
     });
     if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
     setGithubBusy(true);
@@ -751,10 +756,16 @@ export function SettingsPanel({
       setMsg(t('githubCommentRequired'));
       return;
     }
+    const listed = githubPrs.find((pr) => pr.number === prNumber);
+    const repository =
+      githubRepositoryFromUrl(listed?.url)
+      || githubRepositoryFromUrl(githubPrs[0]?.url)
+      || (project ? project.split('/').filter(Boolean).slice(-2).join('/') : undefined);
     const confirmLine = githubWriteConfirmSummary({
       action: 'create_pr_comment',
       titleOrBody: body,
       prNumber,
+      repository,
     });
     if (!window.confirm(`${t('githubWriteConfirm')}\n\n${confirmLine}`)) return;
     setGithubBusy(true);

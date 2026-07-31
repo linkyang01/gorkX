@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.5.1/gorkX_0.5.1_aarch64.dmg"><strong>↓ Download gorkX 0.5.1 for macOS Apple Silicon</strong></a><br />
-  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg"><strong>↓ Download gorkX 1.0.0 for macOS Apple Silicon</strong></a><br />
+  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a> · link active after approved ship</sub>
 </p>
 
 <p align="center">
@@ -82,12 +82,20 @@ Reports, research briefs, ops checklists, content drafts, handoffs, and hard dec
 
 ### Get the app
 
-**[Download gorkX 0.5.1 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v0.5.1/gorkX_0.5.1_aarch64.dmg)** · open the DMG · drag **gorkX** to Applications · open it.
+**[Download gorkX 1.0.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)** · open the DMG · drag **gorkX** to Applications · open it.
+
+> **Release note:** Until `v1.0.0` is tagged and published, use the latest
+> [GitHub Release](https://github.com/linkyang01/gorkX/releases) or build from
+> source. See [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md).
 
 On first launch, macOS may ask you to allow an unrecognized developer under **System Settings → Privacy & Security**. gorkX then guides Grok sign-in in the browser. You can also add API or compatible providers in Settings when you have keys.
 
 > **Tip:** If Gatekeeper blocks a first open, allow it in System Settings, or run:
 > `xattr -dr com.apple.quarantine /Applications/gorkX.app`
+
+> **Signing boundary:** Public builds may be ad-hoc until Developer ID + notarization
+> credentials are available. That is honest and expected — not a “download and open
+> with zero Gatekeeper steps” claim.
 
 ### Run from source
 
@@ -132,6 +140,11 @@ gorkX ships a focused, production-ready path for **macOS Apple Silicon** today. 
 
 For auditable detail, see the [feature matrix](docs/FEATURES.md). For product direction, see the [product development plan](docs/PRODUCT_DEVELOPMENT_PLAN.md).
 
+**Formal release (v1.0.0 Stable):** the single executable plan is
+[`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md). In a development
+session, say **「按方案做」** to run it end-to-end to a release candidate
+(tag / Release / DMG still need your explicit approval).
+
 ## Development
 
 ```bash
@@ -163,7 +176,7 @@ If gorkX helps, please **star the repository** and share it with someone ready t
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v0.5.1/gorkX_0.5.1_aarch64.dmg"><strong>↓ 下载 gorkX 0.5.1（macOS Apple Silicon）</strong></a><br />
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.0.0（macOS Apple Silicon）</strong></a><br />
   <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
@@ -222,12 +235,19 @@ Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目�
 
 ### 下载应用
 
-**[下载 gorkX 0.5.1（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v0.5.1/gorkX_0.5.1_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
+**[下载 gorkX 1.0.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**，打开 DMG，将 **gorkX** 拖入“应用程序”，然后启动。
+
+> **发布说明：** 在 `v1.0.0` tag 与 Release 公开前，请使用最新
+> [GitHub Release](https://github.com/linkyang01/gorkX/releases) 或从源码构建。
+> 详见 [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)。
 
 首次打开时，如系统提示开发者未被识别，可在“**系统设置 → 隐私与安全性**”中允许。随后会引导你在浏览器登录 Grok；若你持有提供商密钥，也可在设置中配置 API 或兼容提供商。
 
 > **提示：** 若首次打开被拦截，可在系统设置中允许，或执行：  
 > `xattr -dr com.apple.quarantine /Applications/gorkX.app`
+
+> **签名边界：** 在完成 Developer ID 与公证前，公开构建可能是 ad-hoc 签名；
+> 不宣称「下载即可开、无需绕过 Gatekeeper」。
 
 ### 从源码运行
 
@@ -271,6 +291,11 @@ React + Tauri 2 桌面应用
 gorkX 当前以 **macOS Apple Silicon** 为主力交付路径。更多工作平台对接与跨平台覆盖会按同一原则推进：真实授权、逐次确认、从不假装“已连接”。
 
 如需逐项核对，见[功能矩阵](docs/FEATURES.md)；产品方向见[产品开发计划](docs/PRODUCT_DEVELOPMENT_PLAN.md)。
+
+**正式版（v1.0.0 Stable）唯一执行方案：**
+[`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md)。  
+在开发会话中说 **「按方案做」**，即可按该方案连续执行到发布候选完成  
+（打 tag / 发 Release / 上传 DMG 仍须你明确批准）。
 
 ## 开发与验证
 

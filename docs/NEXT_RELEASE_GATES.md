@@ -1,8 +1,11 @@
 # 下一版本发布门槛（v0.5.0 Beta）
 
-> 状态：执行中。本文定义「可以发下一版」的最低真实门槛；它不是把
+> 状态：执行中（Beta 线）。  
+> **正式稳定版 v1.0.0 的唯一执行方案见 [`FORMAL_RELEASE_PLAN.md`](FORMAL_RELEASE_PLAN.md)**  
+> （触发语：`按方案做` / `执行正式版方案`）。  
+> 本文定义「可以发下一版」的最低真实门槛；它不是把
 > gorkX 宣布为“已完全对齐 Codex”。完整路线与 1.0 门槛仍以
-> `INDEPENDENT_APP_PLAN.md` 和 `CODEX_PARITY_ROADMAP.md` 为准。
+> `INDEPENDENT_APP_PLAN.md`、`CODEX_PARITY_ROADMAP.md` 与 **`FORMAL_RELEASE_PLAN.md`** 为准。
 > 已完成的可复跑本地证据记录在 `VALIDATION_EVIDENCE.md`；它不能替代
 > 本文要求的干净机器与真实账号人工闭环。
 
