@@ -20,6 +20,7 @@ import {
   parsePlanUpdate,
   parseSubagentUpdate,
   parseWorkflowUpdate,
+  parseSessionRecapUpdate,
   parseKernelScheduledTaskDeletion,
   parseKernelScheduledTaskUpdate,
   isToolCallIdLike,
@@ -2130,6 +2131,21 @@ function App() {
           return;
         }
 
+        const recap = parseSessionRecapUpdate(update);
+        if (recap) {
+          setThreads((previous) => previous.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            const text = recap.summary ? `${t('recapLabel')}: ${recap.summary}` : t('recapUnavailable');
+            return {
+              ...thread,
+              lines: [...thread.lines, { id: nid(), role: 'system', text, at: Date.now() }],
+              lastEventAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+          }));
+          return;
+        }
+
         const plan = parsePlanUpdate(update);
         if (plan) {
           setThreads((prev) =>
@@ -3038,7 +3054,12 @@ function App() {
       submitLabel: t('feedbackDialogSubmit'),
     });
     if (!feedback) return;
-    await runDesktopAction(`/feedback ${feedback}`, `${t('feedbackSent')}: ${feedback}`);
+    try {
+      await agent.client.sendFeedback(agent.sessionId, feedback);
+      appendLine(agent.id, { id: nid(), role: 'system', text: `${t('feedbackSent')}: ${feedback}` });
+    } catch (error) {
+      markTaskFailed(agent.id, error);
+    }
   };
 
   /**
@@ -3150,7 +3171,15 @@ function App() {
       (command) => command.name.replace(/^\//, '').toLowerCase() === 'recap',
     );
     if (!agent?.client || !agent.sessionId || agent.busy || !available) return;
-    await runDesktopAction('/recap', t('recapStarted'));
+    patchThread(agent.id, { busy: true, error: null });
+    appendLine(agent.id, { id: nid(), role: 'system', text: t('recapStarted') });
+    try {
+      await agent.client.requestRecap(agent.sessionId);
+    } catch (error) {
+      markTaskFailed(agent.id, error);
+    } finally {
+      patchThread(agent.id, { busy: false });
+    }
   };
 
   /** Sharing may publish conversation content, so explicit confirmation is

@@ -222,6 +222,12 @@ export interface WorkflowRunUpdate {
   pauseMessage?: string | null;
 }
 
+/** A native Grok Build conversation recap notification. */
+export interface SessionRecapUpdate {
+  summary: string;
+  auto: boolean;
+}
+
 export type SessionUpdate = {
   sessionUpdate: string;
   content?: { type?: string; text?: string } | string;
@@ -376,6 +382,21 @@ export function parseWorkflowUpdate(update: SessionUpdate): WorkflowRunUpdate | 
     resultSummary: workflowText(raw.resultSummary ?? raw.result_summary, 2_000) || null,
     pauseMessage: workflowText(raw.pauseMessage ?? raw.pause_message, 800) || null,
   };
+}
+
+/**
+ * Normalize the kernel-owned recap event before it reaches the conversation.
+ * Recaps are informational output, not assistant text and never become part
+ * of the model transcript.
+ */
+export function parseSessionRecapUpdate(update: SessionUpdate): SessionRecapUpdate | null {
+  const raw = update as Record<string, unknown>;
+  const event = String(update.sessionUpdate ?? '');
+  if (event === 'session_recap_unavailable') return { summary: '', auto: false };
+  if (event !== 'session_recap' && event !== 'sessionRecap') return null;
+  const summary = commandText(raw.summary, 4_000);
+  if (!summary) return null;
+  return { summary, auto: raw.auto === true };
 }
 
 export interface PermissionRequest {
@@ -1307,6 +1328,26 @@ export class AcpClient {
       throw new Error('share link was not returned by Grok Build');
     }
     return url;
+  }
+
+  /**
+   * Submit user feedback through Grok Build's native extension route. The
+   * compact payload is the documented slash-command-compatible fallback that
+   * the kernel expands into its full feedback submission record.
+   */
+  async sendFeedback(sessionId: string, feedbackText: string): Promise<void> {
+    const text = feedbackText.trim().slice(0, 4_000);
+    if (!sessionId || !text) throw new Error('Feedback text is required');
+    await this.request('_x.ai/feedback', {
+      session_id: sessionId,
+      feedback_text: text,
+    }, 30_000);
+  }
+
+  /** Trigger Grok Build's native asynchronous conversation recap. */
+  async requestRecap(sessionId: string): Promise<void> {
+    if (!sessionId) throw new Error('A session is required for recap');
+    await this.request('_x.ai/recap', { sessionId, auto: false }, 15_000);
   }
 
   /**

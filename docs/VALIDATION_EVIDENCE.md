@@ -13,6 +13,14 @@
 | App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：重新构建的 arm64 App 包含 `grok 0.2.112 (5da6962)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
 | 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在最新上游 API 上编译并进入包内资源 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
 
+## 2026-07-31 · 桌面动作原生 ACP 化复核
+
+| 范围 | 命令或步骤 | 结果 | 边界 |
+|---|---|---|---|
+| Feedback 桌面入口 | `+` 菜单 → “发送反馈”；`AcpClient.sendFeedback()` → `_x.ai/feedback` | 通过：按钮不再把 `/feedback ...` 当作会话提示发送，改为 Grok Build 原生反馈扩展；提交成功后只在本地会话显示确认，不污染模型对话 | 反馈是否上报到远端由 Grok Build 账户/反馈配置决定；本次未伪造反馈内容或远端统计 |
+| Recap 桌面入口 | `+` 菜单 → “总结本次会话”；`AcpClient.requestRecap()` → `_x.ai/recap`；实际包内二进制缺失会话探针 | 通过：参数按 0.2.112 的 `sessionId` 契约发送，路由抵达真实会话守卫；异步 `session_recap` / `session_recap_unavailable` 被桌面解析并显示在当前会话 | 回顾是内核异步模型调用；未认证/无真实会话探针不发送模型请求，真实摘要质量仍属于账号和模型行为 |
+| 桌面回归 | `cd apps/desktop && npx tsc --noEmit && npm run test:stages && npm run build`；`cd apps/desktop/src-tauri && cargo test && cargo check`；`scripts/verify-grok-kernel-patches.sh`；无认证 ACP initialize | 通过：前端、80 项 Rust 测试、内核补丁 series、包内 ACP initialize 均通过 | 未生成新 DMG、未打 tag、未发布；仅更新源码与证据台账 |
+
 ## 2026-07-26 · 受控内核 0.2.112 与成果中心回归
 
 | 范围 | 命令 | 结果 | 边界 |
