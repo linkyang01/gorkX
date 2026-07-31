@@ -1307,6 +1307,41 @@ export function SettingsPanel({
     }
   };
 
+  /** Verify one real response first, then persist the provider only on success. */
+  const verifyAndSaveCustomModel = async () => {
+    setModelBusy(true);
+    setMsg(null);
+    try {
+      const row: CustomModelRow = {
+        id: modelForm.id.trim() || modelForm.name.trim() || modelForm.model.trim(),
+        model: modelForm.model.trim(),
+        name: modelForm.name.trim() || modelForm.model.trim(),
+        baseUrl: modelForm.baseUrl.trim(),
+        apiKey: modelForm.apiKey.trim(),
+        apiBackend: modelForm.apiBackend,
+        providerLabel: modelForm.providerLabel.trim(),
+        queryParams: requestMapFromText(modelForm.queryParams, '查询参数'),
+        extraHeaders: requestMapFromText(modelForm.extraHeaders, '静态请求头'),
+        envHttpHeaders: requestMapFromText(modelForm.envHttpHeaders, '环境变量请求头'),
+      };
+      const result = await testCustomModel(row);
+      recordModelTest(row, result);
+      if (!result.ok) {
+        setMsg(`${t('settingsModelsConnectFailed')}: ${result.note}`);
+        return;
+      }
+      const snap = await upsertCustomModel(row);
+      setModelsSnap(snap);
+      setModelForm((f) => ({ ...f, apiKey: '' }));
+      onModelsRefreshed?.();
+      setMsg(t('settingsModelsConnected').replace('{model}', row.model));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setModelBusy(false);
+    }
+  };
+
   const chooseModelPreset = (preset: ModelPreset) => {
     setModelPreset(preset);
     setModelCatalog([]);
@@ -2129,6 +2164,14 @@ export function SettingsPanel({
                   <button
                     type="button"
                     className="btn primary"
+                    disabled={modelBusy || !modelForm.model.trim() || !modelForm.baseUrl.trim()}
+                    onClick={() => void verifyAndSaveCustomModel()}
+                  >
+                    {t('settingsModelsConnectAdd')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
                     disabled={modelBusy || !modelForm.model.trim() || !modelForm.baseUrl.trim()}
                     onClick={() => void saveCustomModel()}
                   >
