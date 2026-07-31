@@ -216,6 +216,14 @@ export interface HunkActionResult {
   error?: string;
 }
 
+export type GitDiscardScope = 'working' | 'staged' | 'both';
+
+export interface GitCommitResult {
+  hash?: string;
+  branch?: string;
+  message?: string;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -1116,6 +1124,24 @@ export class AcpClient {
     return promise;
   }
 
+  /**
+   * Grok Build's stdio bridge exposes some native extensions under the
+   * underscored spelling. Keep the normal route as a compatibility fallback
+   * for bundles that expose the public spelling instead.
+   */
+  private async requestExtension(
+    method: string,
+    params: unknown,
+    timeoutMs = 600_000,
+  ): Promise<unknown> {
+    try {
+      return await this.request(`_x.ai/${method}`, params, timeoutMs);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      return this.request(`x.ai/${method}`, params, timeoutMs);
+    }
+  }
+
   async respond(id: number | string, result: unknown) {
     const payload = JSON.stringify({ jsonrpc: '2.0', id, result });
     await invoke('agent_write', { agentId: this.agentId, line: payload });
@@ -1461,6 +1487,75 @@ export class AcpClient {
     const errorText = typeof value.error === 'string' ? value.error.trim().slice(0, 1_000) : undefined;
     if (!value.success && errorText) throw new Error(errorText);
     return { success: value.success, affectedCount, ...(errorText ? { error: errorText } : {}) };
+  }
+
+  /** Read the kernel's current VCS information for the active project. */
+  async getGitInfo(sessionId: string, gitRoot: string): Promise<unknown> {
+    if (!sessionId || !gitRoot) throw new Error('A project and session are required');
+    const raw = await this.requestExtension('git/info', { sessionId, gitRoot }, 15_000);
+    const value = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    if (!value || typeof value !== 'object') throw new Error('Kernel returned an invalid Git info snapshot');
+    return value;
+  }
+
+  /**
+   * Discard selected paths through Grok Build's native VCS extension.
+   * The caller must show the destructive confirmation; this method never
+   * widens a user-selected path list.
+   */
+  async discardGitPaths(
+    sessionId: string,
+    gitRoot: string,
+    paths: string[],
+    scope: GitDiscardScope = 'both',
+    includeUntracked = true,
+  ): Promise<void> {
+    const selected = paths.map((path) => path.trim()).filter(Boolean).slice(0, 200);
+    if (!sessionId || !gitRoot || selected.length === 0) throw new Error('A project, session and path are required');
+    await this.requestExtension('git/discard', {
+      sessionId,
+      gitRoot,
+      paths: selected,
+      scope,
+      includeUntracked,
+    }, 30_000);
+  }
+
+  /** Stash the current project changes using the kernel's VCS boundary. */
+  async stashGit(sessionId: string, gitRoot: string, includeUntracked = true): Promise<void> {
+    if (!sessionId || !gitRoot) throw new Error('A project and session are required');
+    await this.requestExtension('git/stash', { sessionId, gitRoot, includeUntracked }, 30_000);
+  }
+
+  /** Commit staged changes through the native route; push/sync stay disabled. */
+  async commitGit(
+    sessionId: string,
+    gitRoot: string,
+    message: string,
+    amend = false,
+  ): Promise<GitCommitResult> {
+    const text = message.trim().slice(0, 500);
+    if (!sessionId || !gitRoot || !text) throw new Error('A commit message is required');
+    const raw = await this.requestExtension('git/commit', {
+      sessionId,
+      gitRoot,
+      message: text,
+      amend,
+      signoff: false,
+      push: false,
+      sync: false,
+    }, 60_000);
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const value = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    return {
+      ...(typeof value.hash === 'string' ? { hash: value.hash } : {}),
+      ...(typeof value.branch === 'string' ? { branch: value.branch } : {}),
+      ...(typeof value.message === 'string' ? { message: value.message } : {}),
+    };
   }
 
   /** Create a kernel-managed share link. Callers must confirm with the user

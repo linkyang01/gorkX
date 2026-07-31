@@ -136,6 +136,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | `grok worktree list|rm|gc` | Manage panel under project menu | ✅ | B |
 | Diffs / stage | Review Diff tab | ✅ guarded stage/unstage + non-Git preview boundary | B |
 | Agent hunk review | Review Agent changes tab | ✅ native hunk ledger, confirmed accept/reject-all; hidden when the live kernel does not advertise it | C |
+| Git discard / stash / commit | Review Diff actions | ✅ native ACP routes with per-action confirmation; commit never pushes or syncs | C |
 | Plan + tools human labels | Review tabs | ✅ | B |
 
 ### 5.3 Extensions

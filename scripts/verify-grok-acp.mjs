@@ -252,14 +252,28 @@ try {
       ['_x.ai/desktop/workflow/launch', { sessionId: missingSessionId, name: 'deep-research', input: 'probe' }],
       ['_x.ai/desktop/workflow/manage', { sessionId: missingSessionId, runId: 'missing', op: 'pause' }],
       ['_x.ai/hunk-tracker/get-files', { sessionId: missingSessionId }],
+      ['_x.ai/git/info', { sessionId: missingSessionId }],
+      ['_x.ai/git/discard', { sessionId: missingSessionId, paths: ['missing'], scope: 'both', includeUntracked: true }],
+      ['_x.ai/git/stash', { sessionId: missingSessionId, includeUntracked: true }],
+      ['_x.ai/git/commit', { sessionId: missingSessionId, message: 'gorkX route probe', push: false, sync: false }],
     ];
     for (const [method, params] of probes) {
+      const gitRoute = method.startsWith('_x.ai/git/');
       try {
         await request(method, params, 15_000);
+        if (gitRoute) {
+          console.log(`PASS: ACP ${method} (native route, no model request)`);
+          continue;
+        }
         throw new Error(`${method} unexpectedly accepted a missing session`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (/unexpectedly accepted|method not found/i.test(message)) throw error;
+        if (/method not found/i.test(message)) throw error;
+        if (gitRoute) {
+          console.log(`PASS: ACP ${method} (native route, no model request)`);
+          continue;
+        }
+        if (/unexpectedly accepted/i.test(message)) throw error;
         if (!/session.*not found|unknown session|resource.*not found|invalid params|not found/i.test(message)) {
           throw new Error(`${method} did not reach its native session guard: ${message}`);
         }

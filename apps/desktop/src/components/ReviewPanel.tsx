@@ -118,6 +118,9 @@ export function ReviewPanel({
   const [agentChanges, setAgentChanges] = useState<HunkFileSummary[]>([]);
   const [agentChangesBusy, setAgentChangesBusy] = useState(false);
   const [agentChangesError, setAgentChangesError] = useState<string | null>(null);
+  const [gitActionsAvailable, setGitActionsAvailable] = useState(false);
+  const [gitActionBusy, setGitActionBusy] = useState(false);
+  const [commitDraft, setCommitDraft] = useState('');
 
   const refreshAgentChanges = () => {
     if (!client || !sessionId) {
@@ -258,6 +261,24 @@ export function ReviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client, sessionId]);
 
+  useEffect(() => {
+    if (!open || !client || !sessionId || !cwd || snap?.isGit !== true) {
+      setGitActionsAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void client.getGitInfo(sessionId, cwd)
+      .then(() => {
+        if (!cancelled) setGitActionsAvailable(true);
+      })
+      .catch(() => {
+        if (!cancelled) setGitActionsAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, client, sessionId, cwd, snap?.isGit]);
+
   // PR data is scoped to the repository's origin. Never show a previous
   // project's anonymous/API error or review data after the user changes cwd.
   useEffect(() => {
@@ -344,6 +365,55 @@ export function ReviewPanel({
   const agentPath = (path: string) => {
     const prefix = cwd ? `${cwd.replace(/\/+$/, '')}/` : '';
     return prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+  };
+
+  const discardSelected = () => {
+    if (!client || !sessionId || !cwd || !selected || taskBusy || gitActionBusy) return;
+    const displayPath = agentPath(selected);
+    if (!window.confirm(t('reviewGitDiscardConfirm').replace('{path}', displayPath))) return;
+    setGitActionBusy(true);
+    setMsg(null);
+    void client.discardGitPaths(sessionId, cwd, [selected], 'both', true)
+      .then(() => {
+        setMsg(t('reviewGitDiscarded').replace('{path}', displayPath));
+        setSelected(null);
+        refresh();
+      })
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setGitActionBusy(false));
+  };
+
+  const stashChanges = () => {
+    if (!client || !sessionId || !cwd || taskBusy || gitActionBusy) return;
+    if (!window.confirm(t('reviewGitStashConfirm'))) return;
+    setGitActionBusy(true);
+    setMsg(null);
+    void client.stashGit(sessionId, cwd, true)
+      .then(() => {
+        setMsg(t('reviewGitStashed'));
+        refresh();
+      })
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setGitActionBusy(false));
+  };
+
+  const commitStaged = () => {
+    if (!client || !sessionId || !cwd || taskBusy || gitActionBusy) return;
+    const message = commitDraft.trim();
+    if (!message) return;
+    if (!window.confirm(t('reviewGitCommitConfirm').replace('{message}', message))) return;
+    setGitActionBusy(true);
+    setMsg(null);
+    void client.commitGit(sessionId, cwd, message)
+      .then((result) => {
+        setMsg(result.hash
+          ? t('reviewGitCommitted').replace('{hash}', result.hash.slice(0, 10))
+          : t('reviewGitCommittedNoHash'));
+        setCommitDraft('');
+        refresh();
+      })
+      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .finally(() => setGitActionBusy(false));
   };
 
   return (
@@ -540,6 +610,28 @@ export function ReviewPanel({
                     </button>
                   </>
                 ) : null}
+                {isGit && gitActionsAvailable ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t('reviewGitDiscard')}
+                      disabled={!selected || taskBusy || gitActionBusy}
+                      onClick={discardSelected}
+                    >
+                      {t('reviewGitDiscard')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t('reviewGitStash')}
+                      disabled={taskBusy || gitActionBusy || !snap?.dirty}
+                      onClick={stashChanges}
+                    >
+                      {t('reviewGitStash')}
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -596,6 +688,29 @@ export function ReviewPanel({
                   {t('openFolder')}
                 </button>
               </div>
+              {isGit && gitActionsAvailable ? (
+                <div className="field-row" style={{ margin: '8px 10px 0' }}>
+                  <input
+                    value={commitDraft}
+                    onChange={(event) => setCommitDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') commitStaged();
+                    }}
+                    placeholder={t('reviewGitCommitPlaceholder')}
+                    aria-label={t('reviewGitCommitPlaceholder')}
+                    disabled={taskBusy || gitActionBusy}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm primary-sm"
+                    title={t('reviewGitCommit')}
+                    disabled={!commitDraft.trim() || taskBusy || gitActionBusy}
+                    onClick={commitStaged}
+                  >
+                    {t('reviewGitCommit')}
+                  </button>
+                </div>
+              ) : null}
               <div
                 className={`diff-body colored-diff${
                   !loading && diffSrc.trim() ? ' has-diff' : ' is-empty'
