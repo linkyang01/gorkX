@@ -35,6 +35,8 @@
 // it never mutates billing settings or sends a model request.
 // --session-search verifies the native cross-session FTS search route without
 // loading or mutating a session.
+// --prompt-history verifies the native durable prompt-history read route without
+// sending a model request or changing session state.
 // --hunk-controls reads the native agent-change ledger for an isolated session;
 // it does not accept or reject files.
 // --client-fs-write advertises the same bounded client file-write capability
@@ -55,7 +57,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--cloud-controls] [--billing-controls] [--session-search] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--cloud-controls] [--billing-controls] [--session-search] [--prompt-history] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -74,6 +76,7 @@ const desktopControlsSmoke = options.includes('--desktop-controls');
 const cloudControlsSmoke = options.includes('--cloud-controls');
 const billingControlsSmoke = options.includes('--billing-controls');
 const sessionSearchSmoke = options.includes('--session-search');
+const promptHistorySmoke = options.includes('--prompt-history');
 const hunkControlsSmoke = options.includes('--hunk-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
@@ -92,7 +95,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--cloud-controls', '--billing-controls', '--session-search', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--cloud-controls', '--billing-controls', '--session-search', '--prompt-history', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
 if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
   console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
@@ -353,6 +356,16 @@ try {
       throw new Error(`session search returned an unexpected shape: ${JSON.stringify(result)}`);
     }
     console.log(`PASS: ACP _x.ai/session/search (${result.results.length} results, no model request)`);
+  }
+
+  if (promptHistorySmoke) {
+    const result = unwrapResult(await request('_x.ai/prompt_history', {
+      cwd: cwd,
+    }, 15_000));
+    if (!result || !Array.isArray(result.prompts) || result.prompts.some((item) => typeof item !== 'string')) {
+      throw new Error(`prompt history returned an unexpected shape: ${JSON.stringify(result)}`);
+    }
+    console.log(`PASS: ACP _x.ai/prompt_history (${result.prompts.length} prompts, no model request)`);
   }
 
   if (!authenticated) {

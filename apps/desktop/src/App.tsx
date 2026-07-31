@@ -753,6 +753,9 @@ function App() {
   /** Local projection of Grok Build's current-session prompt history. */
   const [promptHistoryOpen, setPromptHistoryOpen] = useState(false);
   const [promptHistoryIndex, setPromptHistoryIndex] = useState(-1);
+  const [kernelPromptHistory, setKernelPromptHistory] = useState<string[]>([]);
+  const [kernelPromptHistoryLoading, setKernelPromptHistoryLoading] = useState(false);
+  const [kernelPromptHistoryError, setKernelPromptHistoryError] = useState<string | null>(null);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -2696,6 +2699,46 @@ function App() {
     },
     [active?.client, bootstrapClient],
   );
+
+  const loadKernelPromptHistory = useCallback(async () => {
+    const cwd = active?.cwd || project;
+    if (!cwd) {
+      setKernelPromptHistory([]);
+      setKernelPromptHistoryError(null);
+      return;
+    }
+    setKernelPromptHistoryLoading(true);
+    setKernelPromptHistoryError(null);
+    let client: AcpClient | null = active?.client ?? null;
+    let owned = false;
+    try {
+      if (!client) {
+        client = await bootstrapClient(cwd, false, false, false);
+        owned = true;
+      }
+      setKernelPromptHistory(await client.promptHistory(cwd));
+    } catch (error) {
+      setKernelPromptHistory([]);
+      setKernelPromptHistoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (owned && client) await client.stop().catch(() => {});
+      setKernelPromptHistoryLoading(false);
+    }
+  }, [active?.client, active?.cwd, bootstrapClient, project]);
+
+  useEffect(() => {
+    if (!promptHistoryOpen) return;
+    void loadKernelPromptHistory();
+  }, [loadKernelPromptHistory, promptHistoryOpen]);
+
+  const visiblePromptHistory = useMemo(() => {
+    const seen = new Set<string>();
+    return [...activePromptHistory, ...kernelPromptHistory].filter((text) => {
+      if (seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
+  }, [activePromptHistory, kernelPromptHistory]);
 
   const searchKernelSessions = useCallback(
     async (query: string): Promise<KernelSessionSearchHit[]> => {
@@ -7792,9 +7835,14 @@ function App() {
               </button>
             </div>
             <p className="text-prompt-msg">{t('promptHistoryHint')}</p>
-            {activePromptHistory.length ? (
+            {kernelPromptHistoryLoading ? <div className="hint">{t('promptHistoryLoading')}</div> : null}
+            {kernelPromptHistoryError ? (
+              <div className="hint">{t('promptHistoryKernelUnavailable')}: {kernelPromptHistoryError}</div>
+            ) : null}
+            {kernelPromptHistory.length ? <div className="hint">{t('promptHistoryKernelHint')}</div> : null}
+            {visiblePromptHistory.length ? (
               <div style={{ display: 'grid', gap: 6, maxHeight: 360, overflow: 'auto' }}>
-                {activePromptHistory.map((text, index) => (
+                {visiblePromptHistory.map((text, index) => (
                   <button
                     key={`${index}:${text}`}
                     type="button"
@@ -7802,7 +7850,7 @@ function App() {
                     style={{ textAlign: 'left' }}
                     onClick={() => {
                       setDraft(text);
-                      setPromptHistoryIndex(index);
+                      setPromptHistoryIndex(index < activePromptHistory.length ? index : -1);
                       setPromptHistoryOpen(false);
                     }}
                   >
@@ -7811,7 +7859,7 @@ function App() {
                 ))}
               </div>
             ) : (
-              <div className="hint">{t('promptHistoryEmpty')}</div>
+              !kernelPromptHistoryLoading ? <div className="hint">{t('promptHistoryEmpty')}</div> : null
             )}
           </div>
         </div>

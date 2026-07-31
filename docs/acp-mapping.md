@@ -88,6 +88,24 @@ Opening a native hit writes only bounded session metadata into the gorkX task
 index and reconnects with the normal `session/load` path. It never imports raw
 transcript files just to render search results.
 
+## Prompt history
+
+The **最近提问 / Recent prompts** panel reads Grok Build's durable per-directory
+history and merges it with the current task's visible prompts:
+
+```
+_x.ai/prompt_history {
+  cwd,
+  sessionId?,
+  filterSessionId?
+}
+→ { prompts: string[] }
+```
+
+The desktop bounds and de-duplicates strings, puts the selected prompt back into
+the composer, and waits for the user to press Send. It never sends a model
+request, imports raw transcripts, or treats history as a provider quota.
+
 ## Plan mode
 
 ```

@@ -9,6 +9,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { APP_VERSION } from './appMeta';
 import { parseAutoTopupSnapshot, parseBillingSnapshot, type AutoTopupSnapshot, type BillingSnapshot } from './billing';
+import { parsePromptHistory } from './promptHistory';
 
 export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
 
@@ -1409,6 +1410,18 @@ export class AcpClient {
         ...(snippet ? { snippet } : {}),
       }];
     });
+  }
+
+  /** Load Grok Build's durable prompt history for a working directory. */
+  async promptHistory(cwd: string, sessionId?: string, filterSessionId?: string): Promise<string[]> {
+    const workingDirectory = cwd.trim();
+    if (!workingDirectory) return [];
+    const raw = await this.requestExtension('prompt_history', {
+      cwd: workingDirectory,
+      ...(sessionId ? { sessionId } : {}),
+      ...(filterSessionId ? { filterSessionId } : {}),
+    }, 20_000);
+    return parsePromptHistory(raw);
   }
 
   /**
