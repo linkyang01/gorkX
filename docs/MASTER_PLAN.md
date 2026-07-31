@@ -316,6 +316,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | C4 | Hooks panel |
 | C5 | `inspect` diagnostics |
 | C6 | Sandbox + AGENTS.md affordances |
+| C7 | Cloud workspace panel over native Grok Build `cloud/env/*` ACP routes |
 
 **Exit:** Power features discoverable.
 

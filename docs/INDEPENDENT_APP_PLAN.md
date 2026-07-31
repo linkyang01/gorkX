@@ -526,7 +526,7 @@ Grok Build 已支持自定义模型（`[model.*]`）：`base_url`、`api_key`/`e
 | 钩子 | 原生 Hook 生命周期 | 🟡 `_x.ai/hooks/list/action` 已接入当前活动会话，可加载/重载/信任/启停；Hook 创作和真实项目执行仍需验收 |
 | 连接 | MCP → 扩展中心 | ✅ 跳转 |
 | Git | 当前项目的状态、Diff、暂存 / 取消暂存与非 Git 文件预览 | ✅ Review 中真实执行 |
-| 环境 | App 数据 + Grok home 说明 | ✅ 诚实路径 |
+| 环境 | App 数据 + Grok home 说明；云端工作区管理 | ✅ 本地路径 + 原生 ACP 云端环境 CRUD |
 | 工作树 | 跳转 worktree 面板 | ✅ |
 | 已归档任务 | **归档 / 恢复**（非导入内核） | ✅ |
 

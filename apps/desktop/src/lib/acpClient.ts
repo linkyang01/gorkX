@@ -238,6 +238,69 @@ export interface CodeNavStatus {
   fileCount?: number;
 }
 
+/** A Grok Build cloud workspace environment exposed by the native cloud ACP routes. */
+export interface CloudEnvironment {
+  id: string;
+  name: string;
+  description?: string;
+  repository?: string;
+  defaultBranch?: string;
+  containerImage?: string;
+  setupScript?: string;
+  workspaceDirectory?: string;
+  internetEnabled?: boolean;
+  userRole?: string;
+  createdAt?: string;
+  modifiedAt?: string;
+}
+
+export interface CloudEnvironmentInput {
+  name: string;
+  description?: string;
+  repository?: string;
+  defaultBranch?: string;
+  containerImage?: string;
+  setupScript?: string;
+}
+
+function textFrom(row: Record<string, unknown>, camel: string, snake: string): string | undefined {
+  const value = row[camel] ?? row[snake];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function parseCloudEnvironmentResponse(raw: unknown): CloudEnvironment {
+  const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const root = outer.result && typeof outer.result === 'object'
+    ? outer.result as Record<string, unknown>
+    : outer;
+  const meta = root.environment && typeof root.environment === 'object'
+    ? root.environment as Record<string, unknown>
+    : root;
+  const env = meta.environment && typeof meta.environment === 'object'
+    ? meta.environment as Record<string, unknown>
+    : meta;
+  const id = textFrom(env, 'environmentId', 'environment_id');
+  if (!id) throw new Error('Grok Build returned an environment without an id');
+  const bool = (camel: string, snake: string) => {
+    const value = env[camel] ?? env[snake];
+    return typeof value === 'boolean' ? value : undefined;
+  };
+  return {
+    id,
+    name: textFrom(env, 'name', 'name') || id,
+    description: textFrom(env, 'description', 'description'),
+    repository: textFrom(env, 'repository', 'repository'),
+    defaultBranch: textFrom(env, 'defaultBranch', 'default_branch'),
+    containerImage: textFrom(env, 'containerImage', 'container_image'),
+    setupScript: textFrom(env, 'setupScript', 'setup_script'),
+    workspaceDirectory: textFrom(env, 'workspaceDirectory', 'workspace_directory'),
+    internetEnabled: bool('internetEnabled', 'internet_enabled'),
+    userRole: textFrom(meta, 'userRole', 'user_role'),
+    createdAt: textFrom(env, 'createTime', 'create_time'),
+    modifiedAt: textFrom(env, 'modifyTime', 'modify_time'),
+  };
+}
+
 export type GitDiscardScope = 'working' | 'staged' | 'both';
 
 export interface GitCommitResult {
@@ -1832,6 +1895,93 @@ export class AcpClient {
   async flushMemory(sessionId: string): Promise<void> {
     if (!sessionId) throw new Error('A session is required');
     await this.request('_x.ai/memory/flush', { session_id: sessionId }, 120_000);
+  }
+
+  /** List Grok Build cloud environments through the native authenticated ACP route. */
+  async listCloudEnvironments(): Promise<CloudEnvironment[]> {
+    const raw = await this.requestExtension('cloud/env/list', {}, 30_000);
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const value = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const entries = Array.isArray(value.environments) ? value.environments : [];
+    return entries.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const meta = entry as Record<string, unknown>;
+      const env = meta.environment && typeof meta.environment === 'object'
+        ? meta.environment as Record<string, unknown>
+        : meta;
+      const id = typeof env.environmentId === 'string'
+        ? env.environmentId
+        : typeof env.environment_id === 'string'
+          ? env.environment_id
+          : '';
+      if (!id) return [];
+      const text = (camel: string, snake: string) => {
+        const value = env[camel] ?? env[snake];
+        return typeof value === 'string' && value.trim() ? value : undefined;
+      };
+      const bool = (camel: string, snake: string) => {
+        const value = env[camel] ?? env[snake];
+        return typeof value === 'boolean' ? value : undefined;
+      };
+      return [{
+        id,
+        name: text('name', 'name') || id,
+        description: text('description', 'description'),
+        repository: text('repository', 'repository'),
+        defaultBranch: text('defaultBranch', 'default_branch'),
+        containerImage: text('containerImage', 'container_image'),
+        setupScript: text('setupScript', 'setup_script'),
+        workspaceDirectory: text('workspaceDirectory', 'workspace_directory'),
+        internetEnabled: bool('internetEnabled', 'internet_enabled'),
+        userRole: text('userRole', 'user_role') || textFrom(meta, 'userRole', 'user_role'),
+        createdAt: text('createTime', 'create_time'),
+        modifiedAt: text('modifyTime', 'modify_time'),
+      } satisfies CloudEnvironment];
+    });
+  }
+
+  /** Create a Grok Build cloud environment with the kernel's safe defaults. */
+  async createCloudEnvironment(input: CloudEnvironmentInput): Promise<CloudEnvironment> {
+    const name = input.name.trim();
+    if (!name) throw new Error('Environment name is required');
+    const raw = await this.requestExtension('cloud/env/create', {
+      name,
+      description: input.description?.trim() || undefined,
+      repository: input.repository?.trim() || undefined,
+      default_branch: input.defaultBranch?.trim() || undefined,
+      container_image: input.containerImage?.trim() || undefined,
+      setup_script: input.setupScript?.trim() || undefined,
+    }, 60_000);
+    return parseCloudEnvironmentResponse(raw);
+  }
+
+  /** Update only the editable cloud environment fields exposed by Grok Build. */
+  async updateCloudEnvironment(environmentId: string, input: CloudEnvironmentInput): Promise<CloudEnvironment> {
+    const id = environmentId.trim();
+    const name = input.name.trim();
+    if (!id || !name) throw new Error('Environment id and name are required');
+    const raw = await this.requestExtension('cloud/env/update', {
+      environment_id: id,
+      name,
+      // Empty strings deliberately clear editable fields. The native route
+      // accepts Option<String>; omitting a field would leave stale remote
+      // configuration behind when the user removes it in the form.
+      description: input.description?.trim() ?? '',
+      repository: input.repository?.trim() ?? '',
+      default_branch: input.defaultBranch?.trim() ?? '',
+      container_image: input.containerImage?.trim() ?? '',
+      setup_script: input.setupScript?.trim() ?? '',
+    }, 60_000);
+    return parseCloudEnvironmentResponse(raw);
+  }
+
+  /** Delete a cloud environment after the desktop has obtained user confirmation. */
+  async deleteCloudEnvironment(environmentId: string): Promise<void> {
+    const id = environmentId.trim();
+    if (!id) throw new Error('Environment id is required');
+    await this.requestExtension('cloud/env/delete', { environment_id: id }, 60_000);
   }
 
   /** Execute an advertised Grok Build action through the desktop bridge. */

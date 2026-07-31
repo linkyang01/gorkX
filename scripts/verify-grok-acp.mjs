@@ -29,6 +29,8 @@
 // audio to a provider.
 // --desktop-controls verifies the desktop action routes reach their native
 // session guards without creating a session or sending a model request.
+// --cloud-controls verifies the native cloud-environment route and its
+// authentication guard without creating, updating or deleting a resource.
 // --hunk-controls reads the native agent-change ledger for an isolated session;
 // it does not accept or reject files.
 // --client-fs-write advertises the same bounded client file-write capability
@@ -49,7 +51,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--cloud-controls] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -65,6 +67,7 @@ const btwSmoke = options.includes('--btw');
 const sessionInfoSmoke = options.includes('--session-info');
 const voiceControlsSmoke = options.includes('--voice-controls');
 const desktopControlsSmoke = options.includes('--desktop-controls');
+const cloudControlsSmoke = options.includes('--cloud-controls');
 const hunkControlsSmoke = options.includes('--hunk-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
@@ -83,7 +86,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--cloud-controls', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
 if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
   console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
@@ -295,6 +298,23 @@ try {
         }
       }
       console.log(`PASS: ACP ${method} (native route, no model request)`);
+    }
+  }
+
+  if (cloudControlsSmoke) {
+    try {
+      const result = unwrapResult(await request('_x.ai/cloud/env/list', {}, 15_000));
+      if (!result || !Array.isArray(result.environments)) {
+        throw new Error(`cloud environment list returned an unexpected shape: ${JSON.stringify(result)}`);
+      }
+      console.log(`PASS: ACP _x.ai/cloud/env/list (native route, ${result.environments.length} environments, no mutation)`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/method not found/i.test(message)) throw error;
+      if (!/authentication required|run .*login|not authenticated|auth/i.test(message)) {
+        throw new Error(`cloud environment route did not reach its native auth guard: ${message}`);
+      }
+      console.log('PASS: ACP _x.ai/cloud/env/list (native route and auth guard, no mutation)');
     }
   }
 

@@ -2635,6 +2635,25 @@ function App() {
     return client;
   }, [perm, grokCmd, effort, project, webSearchEnabled, maxAgentTurns]);
 
+  /**
+   * Cloud environments are authenticated ACP resources, not a local config
+   * file. Reuse the active agent when possible; otherwise create a short-lived
+   * authenticated ACP control client so the Settings page also works before a
+   * task has been opened. No session or model turn is created here.
+   */
+  const withCloudClient = useCallback(
+    async function withClient<T>(action: (client: AcpClient) => Promise<T>): Promise<T> {
+      if (active?.client) return action(active.client);
+      const client = await bootstrapClient(undefined, false, false, false);
+      try {
+        return await action(client);
+      } finally {
+        await client.stop().catch(() => {});
+      }
+    },
+    [active?.client, bootstrapClient],
+  );
+
   const rememberModels = useCallback(
     (session: { models?: { currentModelId?: string; availableModels?: ModelInfo[] } }) => {
       const models = session.models?.availableModels ?? [];
@@ -7991,6 +8010,10 @@ function App() {
         hooksAvailable={Boolean(active?.client && active?.sessionId)}
         onRefreshHooks={active?.client && active?.sessionId ? refreshLiveHooks : undefined}
         onManageHooks={active?.client && active?.sessionId ? manageLiveHooks : undefined}
+        onListCloudEnvironments={() => withCloudClient((client) => client.listCloudEnvironments())}
+        onCreateCloudEnvironment={(input) => withCloudClient((client) => client.createCloudEnvironment(input))}
+        onUpdateCloudEnvironment={(id, input) => withCloudClient((client) => client.updateCloudEnvironment(id, input))}
+        onDeleteCloudEnvironment={(id) => withCloudClient((client) => client.deleteCloudEnvironment(id))}
         initialSection={settingsInitialSection}
       /></Suspense> : null}
 

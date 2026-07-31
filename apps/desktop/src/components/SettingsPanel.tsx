@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
+  type CloudEnvironment,
+  type CloudEnvironmentInput,
   runKernelDoctor,
   runKernelDoctorFix,
   type GrokStatus,
@@ -208,6 +210,11 @@ interface Props {
   hooksAvailable?: boolean;
   onRefreshHooks?: () => Promise<HooksSnapshot>;
   onManageHooks?: (action: HookManagementAction) => Promise<HooksSnapshot>;
+  /** Native Grok Build cloud-environment operations. Omitted when the engine is unavailable. */
+  onListCloudEnvironments?: () => Promise<CloudEnvironment[]>;
+  onCreateCloudEnvironment?: (input: CloudEnvironmentInput) => Promise<CloudEnvironment>;
+  onUpdateCloudEnvironment?: (id: string, input: CloudEnvironmentInput) => Promise<CloudEnvironment>;
+  onDeleteCloudEnvironment?: (id: string) => Promise<void>;
   initialSection?: SettingsSection;
 }
 
@@ -294,6 +301,10 @@ export function SettingsPanel({
   hooksAvailable,
   onRefreshHooks,
   onManageHooks,
+  onListCloudEnvironments,
+  onCreateCloudEnvironment,
+  onUpdateCloudEnvironment,
+  onDeleteCloudEnvironment,
   initialSection,
 }: Props) {
   const [section, setSection] = useState<SettingsSection>(initialSection || 'general');
@@ -383,6 +394,11 @@ export function SettingsPanel({
   const [agentRoleDescription, setAgentRoleDescription] = useState('');
   const [agentRoleInstructions, setAgentRoleInstructions] = useState('');
   const [editingAgentName, setEditingAgentName] = useState<string | null>(null);
+  const [cloudEnvironments, setCloudEnvironments] = useState<CloudEnvironment[]>([]);
+  const [cloudEnvironmentBusy, setCloudEnvironmentBusy] = useState(false);
+  const [cloudEnvironmentError, setCloudEnvironmentError] = useState<string | null>(null);
+  const [cloudEnvironmentDraft, setCloudEnvironmentDraft] = useState<CloudEnvironmentInput>({ name: '' });
+  const [editingCloudEnvironmentId, setEditingCloudEnvironmentId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -411,6 +427,16 @@ export function SettingsPanel({
     setConnectorAudit(loadConnectorAudit());
     void getTodayTokenUsage().then(setTodayTokenUsage).catch(() => setTodayTokenUsage(null));
   }, [isOpen, initialSection]);
+
+  useEffect(() => {
+    if (!isOpen || section !== 'environment' || !onListCloudEnvironments) return;
+    setCloudEnvironmentBusy(true);
+    setCloudEnvironmentError(null);
+    void onListCloudEnvironments()
+      .then(setCloudEnvironments)
+      .catch((error) => setCloudEnvironmentError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setCloudEnvironmentBusy(false));
+  }, [isOpen, section, onListCloudEnvironments]);
 
   const loadProjectInstructions = () => {
     if (!project) {
@@ -488,6 +514,104 @@ export function SettingsPanel({
     } finally {
       setComputerHubBusy(false);
     }
+  };
+
+  const refreshCloudEnvironments = async () => {
+    if (!onListCloudEnvironments) return;
+    setCloudEnvironmentBusy(true);
+    setCloudEnvironmentError(null);
+    try {
+      setCloudEnvironments(await onListCloudEnvironments());
+    } catch (error) {
+      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCloudEnvironmentBusy(false);
+    }
+  };
+
+  const cloudInput = (): CloudEnvironmentInput => ({
+    name: cloudEnvironmentDraft.name.trim(),
+    description: editingCloudEnvironmentId
+      ? cloudEnvironmentDraft.description?.trim() ?? ''
+      : cloudEnvironmentDraft.description?.trim() || undefined,
+    repository: editingCloudEnvironmentId
+      ? cloudEnvironmentDraft.repository?.trim() ?? ''
+      : cloudEnvironmentDraft.repository?.trim() || undefined,
+    defaultBranch: editingCloudEnvironmentId
+      ? cloudEnvironmentDraft.defaultBranch?.trim() ?? ''
+      : cloudEnvironmentDraft.defaultBranch?.trim() || undefined,
+    containerImage: editingCloudEnvironmentId
+      ? cloudEnvironmentDraft.containerImage?.trim() ?? ''
+      : cloudEnvironmentDraft.containerImage?.trim() || undefined,
+    setupScript: editingCloudEnvironmentId
+      ? cloudEnvironmentDraft.setupScript?.trim() ?? ''
+      : cloudEnvironmentDraft.setupScript?.trim() || undefined,
+  });
+
+  const saveCloudEnvironment = async () => {
+    const input = cloudInput();
+    if (!input.name) {
+      setCloudEnvironmentError(t('settingsCloudEnvironmentNameRequired'));
+      return;
+    }
+    const action = editingCloudEnvironmentId && onUpdateCloudEnvironment
+      ? () => onUpdateCloudEnvironment(editingCloudEnvironmentId, input)
+      : onCreateCloudEnvironment
+        ? () => onCreateCloudEnvironment(input)
+        : null;
+    if (!action) return;
+    const confirmation = editingCloudEnvironmentId
+      ? t('settingsCloudEnvironmentUpdateConfirm').replace('{name}', input.name)
+      : t('settingsCloudEnvironmentCreateConfirm').replace('{name}', input.name);
+    if (!window.confirm(confirmation)) return;
+    setCloudEnvironmentBusy(true);
+    setCloudEnvironmentError(null);
+    try {
+      const saved = await action();
+      setCloudEnvironments((current) => {
+        const without = current.filter((item) => item.id !== saved.id);
+        return [saved, ...without];
+      });
+      setEditingCloudEnvironmentId(null);
+      setCloudEnvironmentDraft({ name: '' });
+      setMsg(editingCloudEnvironmentId ? t('settingsCloudEnvironmentUpdated') : t('settingsCloudEnvironmentCreated'));
+    } catch (error) {
+      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCloudEnvironmentBusy(false);
+    }
+  };
+
+  const deleteCloudEnvironment = async (environment: CloudEnvironment) => {
+    if (!onDeleteCloudEnvironment) return;
+    if (!window.confirm(t('settingsCloudEnvironmentDeleteConfirm').replace('{name}', environment.name))) return;
+    setCloudEnvironmentBusy(true);
+    setCloudEnvironmentError(null);
+    try {
+      await onDeleteCloudEnvironment(environment.id);
+      setCloudEnvironments((current) => current.filter((item) => item.id !== environment.id));
+      if (editingCloudEnvironmentId === environment.id) {
+        setEditingCloudEnvironmentId(null);
+        setCloudEnvironmentDraft({ name: '' });
+      }
+      setMsg(t('settingsCloudEnvironmentDeleted'));
+    } catch (error) {
+      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCloudEnvironmentBusy(false);
+    }
+  };
+
+  const editCloudEnvironment = (environment: CloudEnvironment) => {
+    setEditingCloudEnvironmentId(environment.id);
+    setCloudEnvironmentDraft({
+      name: environment.name,
+      description: environment.description || '',
+      repository: environment.repository || '',
+      defaultBranch: environment.defaultBranch || '',
+      containerImage: environment.containerImage || '',
+      setupScript: environment.setupScript || '',
+    });
   };
 
   const controlComputerHub = async (action: 'start' | ComputerWorkspaceAction) => {
@@ -2989,6 +3113,105 @@ export function SettingsPanel({
                 <p className="settings-row-hint" style={{ marginTop: 10 }}>
                   {t('settingsSandboxRestartHint')}
                 </p>
+              </div>
+              <h3 className="subhead" style={{ marginTop: 18 }}>{t('settingsCloudEnvironmentTitle')}</h3>
+              <div className="settings-card">
+                <p className="hint">{t('settingsCloudEnvironmentHint')}</p>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <input
+                    value={cloudEnvironmentDraft.name}
+                    onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder={t('settingsCloudEnvironmentNamePlaceholder')}
+                    aria-label={t('settingsCloudEnvironmentNamePlaceholder')}
+                    style={{ minWidth: 180, flex: '1 1 180px' }}
+                  />
+                  <input
+                    value={cloudEnvironmentDraft.repository || ''}
+                    onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, repository: event.target.value }))}
+                    placeholder={t('settingsCloudEnvironmentRepositoryPlaceholder')}
+                    aria-label={t('settingsCloudEnvironmentRepositoryPlaceholder')}
+                    style={{ minWidth: 220, flex: '2 1 220px' }}
+                  />
+                  <input
+                    value={cloudEnvironmentDraft.defaultBranch || ''}
+                    onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, defaultBranch: event.target.value }))}
+                    placeholder={t('settingsCloudEnvironmentBranchPlaceholder')}
+                    aria-label={t('settingsCloudEnvironmentBranchPlaceholder')}
+                    style={{ maxWidth: 150, flex: '1 1 120px' }}
+                  />
+                </div>
+                <textarea
+                  value={cloudEnvironmentDraft.description || ''}
+                  onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, description: event.target.value }))}
+                  placeholder={t('settingsCloudEnvironmentDescriptionPlaceholder')}
+                  aria-label={t('settingsCloudEnvironmentDescriptionPlaceholder')}
+                  rows={2}
+                  style={{ width: '100%', marginTop: 8, font: 'inherit' }}
+                />
+                <div className="field-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                  <input
+                    value={cloudEnvironmentDraft.containerImage || ''}
+                    onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, containerImage: event.target.value }))}
+                    placeholder={t('settingsCloudEnvironmentImagePlaceholder')}
+                    aria-label={t('settingsCloudEnvironmentImagePlaceholder')}
+                    style={{ minWidth: 260, flex: '1 1 260px' }}
+                  />
+                </div>
+                <textarea
+                  value={cloudEnvironmentDraft.setupScript || ''}
+                  onChange={(event) => setCloudEnvironmentDraft((current) => ({ ...current, setupScript: event.target.value }))}
+                  placeholder={t('settingsCloudEnvironmentSetupPlaceholder')}
+                  aria-label={t('settingsCloudEnvironmentSetupPlaceholder')}
+                  rows={3}
+                  style={{ width: '100%', marginTop: 8, font: 'inherit', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                />
+                <div className="field-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={cloudEnvironmentBusy || !onCreateCloudEnvironment || (Boolean(editingCloudEnvironmentId) && !onUpdateCloudEnvironment)}
+                    onClick={() => void saveCloudEnvironment()}
+                  >
+                    {editingCloudEnvironmentId ? t('settingsCloudEnvironmentSave') : t('settingsCloudEnvironmentCreate')}
+                  </button>
+                  {editingCloudEnvironmentId ? (
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={cloudEnvironmentBusy}
+                      onClick={() => { setEditingCloudEnvironmentId(null); setCloudEnvironmentDraft({ name: '' }); }}
+                    >
+                      {t('cancel')}
+                    </button>
+                  ) : null}
+                  <button type="button" className="btn" disabled={cloudEnvironmentBusy || !onListCloudEnvironments} onClick={() => void refreshCloudEnvironments()}>
+                    {cloudEnvironmentBusy ? t('settingsCloudEnvironmentLoading') : t('settingsCloudEnvironmentRefresh')}
+                  </button>
+                </div>
+                {cloudEnvironmentError ? <p className="error-text" style={{ marginTop: 10 }}>{cloudEnvironmentError}</p> : null}
+                {!cloudEnvironmentBusy && !cloudEnvironmentError && !cloudEnvironments.length ? (
+                  <p className="settings-row-hint" style={{ marginTop: 12 }}>{t('settingsCloudEnvironmentEmpty')}</p>
+                ) : null}
+                {cloudEnvironments.length ? (
+                  <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+                    {cloudEnvironments.map((environment) => (
+                      <div key={environment.id} className="settings-row" style={{ alignItems: 'flex-start' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="settings-row-title">{environment.name}</div>
+                          <div className="settings-row-hint">
+                            {environment.repository || t('settingsCloudEnvironmentNoRepository')}
+                            {environment.defaultBranch ? ` · ${environment.defaultBranch}` : ''}
+                          </div>
+                          <div className="settings-row-hint mono" style={{ marginTop: 3, overflowWrap: 'anywhere' }}>{environment.id}</div>
+                        </div>
+                        <div className="field-row" style={{ flexShrink: 0 }}>
+                          <button type="button" className="btn btn-sm" disabled={cloudEnvironmentBusy} onClick={() => editCloudEnvironment(environment)}>{t('settingsEdit')}</button>
+                          <button type="button" className="btn btn-sm" disabled={cloudEnvironmentBusy} onClick={() => void deleteCloudEnvironment(environment)}>{t('settingsRemove')}</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </>
           ) : null}

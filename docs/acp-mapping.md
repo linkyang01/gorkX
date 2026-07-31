@@ -42,6 +42,22 @@ Current grok `agent stdio` does **not** expose plain `x.ai/git/status|diffs` RPC
 (`Method not found`). gorkX Diff dock uses **local `git`** via Tauri
 (`git status --porcelain`, `git diff`, `git diff --cached`).
 
+## Cloud environments
+
+Settings → Environment uses the authenticated Grok Build cloud control plane:
+
+```
+_x.ai/cloud/env/list    {}
+_x.ai/cloud/env/create  { name, description?, repository?, default_branch?, container_image?, setup_script? }
+_x.ai/cloud/env/update  { environment_id, name, description?, repository?, default_branch?, container_image?, setup_script? }
+_x.ai/cloud/env/delete  { environment_id }
+```
+
+The desktop shows only bounded environment metadata and never handles tokens or
+secret variables. Create/update/delete are explicit settings actions; delete is
+confirmation-gated. The ACP adapter falls back to the public `x.ai/*` spelling
+for compatible engine builds.
+
 ## Plan mode
 
 ```
