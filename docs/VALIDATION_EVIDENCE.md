@@ -102,6 +102,9 @@
 | Stage 测试 | `npm run test:stages` | PASS（含 taskToolLimits / taskPermissionRules / connectors） |
 | Web bundle | `npm run verify:web-bundle` | PASS |
 | Rust | `cd src-tauri && cargo test && cargo check` | PASS · 80 tests |
+| App-only 包 | `cd apps/desktop && npm run build:app` | PASS · `gorkX.app` @ `src-tauri/target/release/bundle/macos/` · 版本 crate `gorkx v1.0.0` |
+| Bundle 结构 | `scripts/verify-macos-app-bundle.sh …/gorkX.app` | PASS · arm64 · 包内 `grok 0.2.112 (47348d1)` · 隔离 `GROK_HOME` |
+| 发布就绪 | `scripts/verify-release-readiness.sh` | `releaseCandidateReady: true` · `canShipPublicArtifacts: false`（无用户批准 + ad-hoc 签名） |
 
 ## 发布后的真实体验验收项
 
