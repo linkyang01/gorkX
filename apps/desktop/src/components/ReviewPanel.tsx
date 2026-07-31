@@ -16,7 +16,7 @@ import { githubRepositoryFromUrl, githubWriteConfirmSummary } from '../lib/conne
 import { appendConnectorAudit } from '../lib/connectorAudit';
 import { openUrlSafe } from '../lib/updates';
 import type { ToolEvent } from './ToolTimeline';
-import type { PlanEntry } from '../lib/acpClient';
+import type { AcpClient, HunkFileSummary, PlanEntry } from '../lib/acpClient';
 import {
   humanFileName,
   humanPlanStatus,
@@ -26,7 +26,7 @@ import {
 } from '../lib/toolHuman';
 import { IconClose, IconRefresh } from './UiIcons';
 
-type Tab = 'diff' | 'plan' | 'tools' | 'remote';
+type Tab = 'diff' | 'agent' | 'plan' | 'tools' | 'remote';
 
 /** Porcelain-ish status → short Chinese label for the file list. */
 function gitStatusLabel(st: string): string {
@@ -76,6 +76,9 @@ interface Props {
   allowWorkspacePreview?: boolean;
   tools: ToolEvent[];
   planEntries: PlanEntry[];
+  client?: AcpClient | null;
+  sessionId?: string | null;
+  taskBusy?: boolean;
   onClose: () => void;
   onApplyPlan?: () => void;
   onTogglePlanEntry?: (entryId: string) => void;
@@ -88,6 +91,9 @@ export function ReviewPanel({
   allowWorkspacePreview = false,
   tools,
   planEntries,
+  client = null,
+  sessionId = null,
+  taskBusy = false,
   onClose,
   onApplyPlan,
   onTogglePlanEntry,
@@ -108,6 +114,38 @@ export function ReviewPanel({
   const [remoteLoadedCwd, setRemoteLoadedCwd] = useState<string | null>(null);
   const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
   const [remoteReceipt, setRemoteReceipt] = useState<string | null>(null);
+  const [agentChangesAvailable, setAgentChangesAvailable] = useState<boolean | null>(null);
+  const [agentChanges, setAgentChanges] = useState<HunkFileSummary[]>([]);
+  const [agentChangesBusy, setAgentChangesBusy] = useState(false);
+  const [agentChangesError, setAgentChangesError] = useState<string | null>(null);
+
+  const refreshAgentChanges = () => {
+    if (!client || !sessionId) {
+      setAgentChangesAvailable(false);
+      setAgentChanges([]);
+      setTab((current) => (current === 'agent' ? 'diff' : current));
+      return;
+    }
+    setAgentChangesBusy(true);
+    setAgentChangesError(null);
+    void client.listHunkFiles(sessionId)
+      .then((files) => {
+        setAgentChangesAvailable(true);
+        setAgentChanges(files);
+      })
+      .catch((error) => {
+        const text = error instanceof Error ? error.message : String(error);
+        // Older or non-Grok ACP sessions may not advertise this extension;
+        // keep the Review surface honest by hiding the tab in that case.
+        setAgentChangesAvailable(false);
+        setAgentChanges([]);
+        setTab((current) => (current === 'agent' ? 'diff' : current));
+        if (!/method not found|not supported|session not found/i.test(text)) {
+          setAgentChangesError(text);
+        }
+      })
+      .finally(() => setAgentChangesBusy(false));
+  };
 
   const refresh = () => {
     if (!cwd) {
@@ -212,6 +250,14 @@ export function ReviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cwd, allowWorkspacePreview]);
 
+  useEffect(() => {
+    if (!open) return;
+    refreshAgentChanges();
+    // The active client/session are the only dependencies that should trigger
+    // a new native read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, client, sessionId]);
+
   // PR data is scoped to the repository's origin. Never show a previous
   // project's anonymous/API error or review data after the user changes cwd.
   useEffect(() => {
@@ -295,6 +341,10 @@ export function ReviewPanel({
   const visibleFiles = (snap?.files ?? []).filter((f) =>
     f.path.toLocaleLowerCase().includes(fileQuery.trim().toLocaleLowerCase()),
   );
+  const agentPath = (path: string) => {
+    const prefix = cwd ? `${cwd.replace(/\/+$/, '')}/` : '';
+    return prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+  };
 
   return (
     <aside className="review-panel" aria-label={t('reviewTitle')}>
@@ -332,6 +382,7 @@ export function ReviewPanel({
         {(
           [
             ['diff', t('diffTitle'), snap?.files.length ?? 0],
+            ...(agentChangesAvailable ? [['agent', t('reviewAgentTab'), agentChanges.length] as const] : []),
             ['plan', t('reviewPlanTab'), planEntries.length],
             ['tools', t('reviewToolsTab'), tools.length],
             ['remote', t('reviewRemoteTab'), remotePrs.length],
@@ -346,6 +397,7 @@ export function ReviewPanel({
               if (id === 'remote' && cwd && !remoteBusy && remoteLoadedCwd !== cwd) {
                 refreshRemote();
               }
+              if (id === 'agent') refreshAgentChanges();
             }}
           >
             {label}
@@ -581,6 +633,94 @@ export function ReviewPanel({
               </div>
             </>
           )}
+        </div>
+      ) : null}
+
+      {tab === 'agent' ? (
+        <div className="review-body pad">
+          <div className="review-explain">
+            <strong>{t('reviewAgentTitle')}</strong>
+            <p>{t('reviewAgentExplain')}</p>
+          </div>
+          <div className="review-plan-actions">
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={agentChangesBusy || !client || !sessionId}
+              onClick={refreshAgentChanges}
+            >
+              {agentChangesBusy ? t('reviewAgentLoading') : t('reviewAgentRefresh')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={agentChangesBusy || taskBusy || agentChanges.length === 0 || !client || !sessionId}
+              onClick={() => {
+                if (!client || !sessionId) return;
+                if (!window.confirm(t('reviewAgentAcceptConfirm'))) return;
+                setAgentChangesBusy(true);
+                setAgentChangesError(null);
+                void client.applyAllHunkAction(sessionId, 'accept')
+                  .then((result) => {
+                    setMsg(t('reviewAgentAccepted').replace('{n}', String(result.affectedCount)));
+                    refreshAgentChanges();
+                  })
+                  .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+                  .finally(() => setAgentChangesBusy(false));
+              }}
+            >
+              {t('reviewAgentAcceptAll')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={agentChangesBusy || taskBusy || agentChanges.length === 0 || !client || !sessionId}
+              onClick={() => {
+                if (!client || !sessionId) return;
+                if (!window.confirm(t('reviewAgentRejectConfirm'))) return;
+                setAgentChangesBusy(true);
+                setAgentChangesError(null);
+                void client.applyAllHunkAction(sessionId, 'reject')
+                  .then((result) => {
+                    setMsg(t('reviewAgentRejected').replace('{n}', String(result.affectedCount)));
+                    refreshAgentChanges();
+                  })
+                  .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+                  .finally(() => setAgentChangesBusy(false));
+              }}
+            >
+              {t('reviewAgentRejectAll')}
+            </button>
+          </div>
+          {agentChangesError ? (
+            <div className="review-empty" style={{ textAlign: 'left' }}>
+              <strong>{t('reviewAgentUnavailable')}</strong>
+              <p className="hint">{agentChangesError}</p>
+            </div>
+          ) : null}
+          {!agentChangesBusy && !agentChangesError && agentChanges.length === 0 ? (
+            <div className="review-empty">{t('reviewAgentEmpty')}</div>
+          ) : null}
+          {agentChanges.length ? (
+            <ul className="tool-human-list">
+              {agentChanges.map((file) => (
+                <li key={file.path} className="tool-human-item tone-idle">
+                  <div className="tool-human-top">
+                    <span className="tool-human-title" title={file.path}>{agentPath(file.path)}</span>
+                    <span className="tool-human-badge idle">
+                      {t('reviewAgentHunks').replace('{n}', String(file.hunkCount))}
+                    </span>
+                  </div>
+                  <div className="hint">
+                    {t('reviewAgentChangesCount')
+                      .replace('{add}', String(file.additions))
+                      .replace('{del}', String(file.deletions))}
+                    {file.staged ? ` · ${t('reviewAgentStaged')}` : ''}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

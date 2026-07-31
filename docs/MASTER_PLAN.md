@@ -135,6 +135,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | `--worktree` / create | Create worktree task | ✅ isolated ACP worktree creation gate | B |
 | `grok worktree list|rm|gc` | Manage panel under project menu | ✅ | B |
 | Diffs / stage | Review Diff tab | ✅ guarded stage/unstage + non-Git preview boundary | B |
+| Agent hunk review | Review Agent changes tab | ✅ native hunk ledger, confirmed accept/reject-all; hidden when the live kernel does not advertise it | C |
 | Plan + tools human labels | Review tabs | ✅ | B |
 
 ### 5.3 Extensions

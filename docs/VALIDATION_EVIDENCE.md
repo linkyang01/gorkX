@@ -28,6 +28,14 @@
 | Recap 桌面入口 | `+` 菜单 → “总结本次会话”；`AcpClient.requestRecap()` → `_x.ai/recap`；实际包内二进制缺失会话探针 | 通过：参数按 0.2.112 的 `sessionId` 契约发送，路由抵达真实会话守卫；异步 `session_recap` / `session_recap_unavailable` 被桌面解析并显示在当前会话 | 回顾是内核异步模型调用；未认证/无真实会话探针不发送模型请求，真实摘要质量仍属于账号和模型行为 |
 | 桌面回归 | `cd apps/desktop && npx tsc --noEmit && npm run test:stages && npm run build`；`cd apps/desktop/src-tauri && cargo test && cargo check`；`scripts/verify-grok-kernel-patches.sh`；无认证 ACP initialize | 通过：前端、80 项 Rust 测试、内核补丁 series、包内 ACP initialize 均通过 | 未生成新 DMG、未打 tag、未发布；仅更新源码与证据台账 |
 
+## 2026-07-31 · Review 代理变更审阅复核
+
+| 范围 | 路由/步骤 | 结果 | 边界 |
+|---|---|---|---|
+| Hunk Tracker 能力声明 | ACP initialize 的 clientCapabilities.meta.x.ai/hunkTracker = { mode: agent_only } | 通过源码与包内内核 0.2.112 扩展复核；gorkX 不从 Git 时间戳推断代理归属 | 只跟踪内核登记的 agent hunks；外部修改不会被误标成代理变更 |
+| Review 文件摘要 | Review → Agent changes → x.ai/hunk-tracker/get-files（首选 _x.ai 兼容路由） | 已接入真实 ACP 调用，展示路径、变更块数、增删行数和暂存状态；无能力或旧内核时隐藏页签 | 认证态一次性 --hunk-controls 探针需使用明确的隔离 GROK_HOME 与项目目录；本次未用用户主目录做破坏性测试 |
+| 接受/撤销 | Review → Agent changes → “全部接受/全部撤销” → 明确确认 → x.ai/hunk-tracker/all-action | 已接入原生内核动作；接受写入新的 tracker baseline，撤销由内核恢复旧内容；运行中任务禁用按钮 | 真实文件写入仍需用户在登录后的临时项目人工点按验收；gorkX 不提供假装可恢复的本地回滚 |
+
 ## 2026-07-26 · 受控内核 0.2.112 与成果中心回归
 
 | 范围 | 命令 | 结果 | 边界 |

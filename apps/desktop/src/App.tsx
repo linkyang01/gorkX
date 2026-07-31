@@ -7880,6 +7880,9 @@ function App() {
         allowWorkspacePreview={Boolean(active && active.projectKey !== NO_PROJECT_KEY ? active.cwd || project : project)}
         tools={activeTools}
         planEntries={activePlanEntries}
+        client={active?.client}
+        sessionId={active?.sessionId}
+        taskBusy={Boolean(active?.busy)}
         onClose={() => setReviewOpen(false)}
         onApplyPlan={
           active && activePlanEntries.length > 0 && !active.busy

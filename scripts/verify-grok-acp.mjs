@@ -29,6 +29,8 @@
 // audio to a provider.
 // --desktop-controls verifies the desktop action routes reach their native
 // session guards without creating a session or sending a model request.
+// --hunk-controls reads the native agent-change ledger for an isolated session;
+// it does not accept or reject files.
 // --client-fs-write advertises the same bounded client file-write capability
 // used by a Full-permission desktop task. It only validates ACP initialize;
 // it does not create a session or write a file.
@@ -47,7 +49,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -63,6 +65,7 @@ const btwSmoke = options.includes('--btw');
 const sessionInfoSmoke = options.includes('--session-info');
 const voiceControlsSmoke = options.includes('--voice-controls');
 const desktopControlsSmoke = options.includes('--desktop-controls');
+const hunkControlsSmoke = options.includes('--hunk-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
 const agentProfileSmoke = options.includes('--agent-profile');
@@ -72,15 +75,15 @@ if (agentProfileNameIndex >= 0 && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(age
   console.error('--agent-profile-name requires one safe profile name');
   process.exit(2);
 }
-if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke || agentProfileSmoke || agentProfileName) && !authenticated) {
-  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw, --session-info and agent-profile checks require --authenticated with explicit disposable auth and project directories');
+if ((worktreeSmoke || resourceSmoke || customModelSmoke || sessionControlsSmoke || runtimeControlsSmoke || rewindExecuteSmoke || subagentControlsSmoke || hooksControlsSmoke || btwSmoke || sessionInfoSmoke || hunkControlsSmoke || agentProfileSmoke || agentProfileName) && !authenticated) {
+  console.error('--worktree, --resource, --custom-model, --session-controls, --runtime-controls, --rewind-execute, --subagent-controls, --hooks-controls, --btw, --session-info, --hunk-controls and agent-profile checks require --authenticated with explicit disposable auth and project directories');
   process.exit(2);
 }
 if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
 if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
   console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
@@ -208,7 +211,11 @@ try {
   await request('initialize', {
     protocolVersion: 1,
     clientInfo: { name: 'gorkX-kernel-smoke', version: '0' },
-    clientCapabilities: { fs: { readTextFile: true, writeTextFile: clientFileWriteSmoke }, terminal: true },
+    clientCapabilities: {
+      fs: { readTextFile: true, writeTextFile: clientFileWriteSmoke },
+      terminal: true,
+      meta: { 'x.ai/hunkTracker': { mode: 'agent_only' } },
+    },
   }, 30_000);
   console.log(`PASS: ACP initialize (${bin})${clientFileWriteSmoke ? ' with client fs write capability' : ''}${disableWebSearchSmoke ? ' with web research disabled' : ''}`);
 
@@ -244,6 +251,7 @@ try {
       ['_x.ai/desktop/command', { sessionId: missingSessionId, command: 'context' }],
       ['_x.ai/desktop/workflow/launch', { sessionId: missingSessionId, name: 'deep-research', input: 'probe' }],
       ['_x.ai/desktop/workflow/manage', { sessionId: missingSessionId, runId: 'missing', op: 'pause' }],
+      ['_x.ai/hunk-tracker/get-files', { sessionId: missingSessionId }],
     ];
     for (const [method, params] of probes) {
       try {
@@ -309,6 +317,24 @@ try {
       throw new Error(`session/load did not restore ${sessionId}: ${JSON.stringify(loaded)}`);
     }
     console.log('PASS: ACP session/load');
+
+    if (hunkControlsSmoke) {
+      const readHunkFiles = async (method) => {
+        const payload = unwrapResult(await request(method, { sessionId }, 15_000));
+        if (!payload || !Array.isArray(payload.files)) {
+          throw new Error(`${method} returned invalid payload: ${JSON.stringify(payload)}`);
+        }
+        return payload;
+      };
+      let files;
+      try {
+        files = await readHunkFiles('_x.ai/hunk-tracker/get-files');
+      } catch (error) {
+        if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+        files = await readHunkFiles('x.ai/hunk-tracker/get-files');
+      }
+      console.log(`PASS: ACP hunk-tracker/get-files (agent ledger, ${files.files.length} files; no mutation)`);
+    }
 
     // A real prompt must remain in the ordinary conversation mode. On 0.2.112
     // switching a fresh session to Plan before the first prompt can close the

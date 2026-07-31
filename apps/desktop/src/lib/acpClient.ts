@@ -200,6 +200,22 @@ export interface SessionRepairReport {
   syntheticResultsInserted: number;
 }
 
+/** A file-level summary from Grok Build's native agent hunk tracker. */
+export interface HunkFileSummary {
+  path: string;
+  isAgentFile: boolean;
+  staged: boolean;
+  hunkCount: number;
+  additions: number;
+  deletions: number;
+}
+
+export interface HunkActionResult {
+  success: boolean;
+  affectedCount: number;
+  error?: string;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -1123,7 +1139,12 @@ export class AcpClient {
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: this.allowClientFileWrites },
           terminal: true,
-          meta: { 'x.ai/folderTrust': { interactive: true } },
+          meta: {
+            'x.ai/folderTrust': { interactive: true },
+            // Activate the kernel-owned tracker for agent edits only. The
+            // desktop never reconstructs attribution from git timestamps.
+            'x.ai/hunkTracker': { mode: 'agent_only' },
+          },
         },
       },
       30_000,
@@ -1368,6 +1389,78 @@ export class AcpClient {
       strippedToolResultIds: ids,
       syntheticResultsInserted: integer('syntheticResultsInserted'),
     };
+  }
+
+  /**
+   * Read the native agent-change ledger used by Review → Agent changes.
+   * This is intentionally separate from git status: the kernel knows which
+   * hunks came from the current agent turn and which were external edits.
+   */
+  async listHunkFiles(sessionId: string): Promise<HunkFileSummary[]> {
+    if (!sessionId) throw new Error('A session is required');
+    let raw: unknown;
+    try {
+      raw = await this.request('_x.ai/hunk-tracker/get-files', { sessionId }, 15_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('x.ai/hunk-tracker/get-files', { sessionId }, 15_000);
+    }
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const first = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const value = first.result && typeof first.result === 'object'
+      ? first.result as Record<string, unknown>
+      : first;
+    const files = Array.isArray(value.files) ? value.files : [];
+    const integer = (row: Record<string, unknown>, camel: string, snake: string) => {
+      const value = row[camel] ?? row[snake];
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0
+        ? Math.floor(value)
+        : 0;
+    };
+    return files.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return [];
+      const row = entry as Record<string, unknown>;
+      const path = typeof row.path === 'string' ? row.path.trim().slice(0, 2_000) : '';
+      if (!path) return [];
+      return [{
+        path,
+        isAgentFile: row.isAgentFile === true || row.is_agent_file === true,
+        staged: row.staged === true,
+        hunkCount: integer(row, 'hunkCount', 'hunk_count'),
+        additions: integer(row, 'additions', 'additions'),
+        deletions: integer(row, 'deletions', 'deletions'),
+      }];
+    }).slice(0, 200);
+  }
+
+  /** Accept or reject every currently tracked agent hunk through the kernel. */
+  async applyAllHunkAction(sessionId: string, action: 'accept' | 'reject'): Promise<HunkActionResult> {
+    if (!sessionId) throw new Error('A session is required');
+    let raw: unknown;
+    const params = { sessionId, action };
+    try {
+      raw = await this.request('_x.ai/hunk-tracker/all-action', params, 30_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('x.ai/hunk-tracker/all-action', params, 30_000);
+    }
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const first = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const value = first.result && typeof first.result === 'object'
+      ? first.result as Record<string, unknown>
+      : first;
+    if (typeof value.success !== 'boolean') throw new Error('Kernel returned an incomplete hunk action result');
+    const affected = value.affectedCount ?? value.affected_count;
+    const affectedCount = typeof affected === 'number' && Number.isFinite(affected) && affected >= 0
+      ? Math.floor(affected)
+      : 0;
+    const errorText = typeof value.error === 'string' ? value.error.trim().slice(0, 1_000) : undefined;
+    if (!value.success && errorText) throw new Error(errorText);
+    return { success: value.success, affectedCount, ...(errorText ? { error: errorText } : {}) };
   }
 
   /** Create a kernel-managed share link. Callers must confirm with the user
