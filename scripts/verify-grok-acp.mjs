@@ -239,6 +239,7 @@ try {
       ['_x.ai/interject', { sessionId: missingSessionId, text: 'gorkX desktop control probe' }],
       ['_x.ai/btw', { sessionId: missingSessionId, question: 'gorkX desktop side-question probe' }],
       ['_x.ai/memory/flush', { session_id: missingSessionId }],
+      ['_x.ai/session/repair', { sessionId: missingSessionId, dryRun: true }],
       ['_x.ai/desktop/goal', { sessionId: missingSessionId, objective: 'gorkX desktop control probe' }],
       ['_x.ai/desktop/command', { sessionId: missingSessionId, command: 'context' }],
       ['_x.ai/desktop/workflow/launch', { sessionId: missingSessionId, name: 'deep-research', input: 'probe' }],
@@ -419,6 +420,18 @@ try {
           throw error;
         }
       }
+
+      // History repair is a non-model, dry-run inspection. A clean new
+      // session should return a typed no-op report, proving the route exists
+      // before the desktop offers the destructive confirmed repair action.
+      const repair = unwrapResult(await request('_x.ai/session/repair', {
+        sessionId,
+        dryRun: true,
+      }, 30_000));
+      if (!repair || typeof repair.repaired !== 'boolean' || repair.dryRun !== true) {
+        throw new Error(`_x.ai/session/repair returned invalid dry-run payload: ${JSON.stringify(repair)}`);
+      }
+      console.log('PASS: ACP _x.ai/session/repair (dry-run, no model request)');
 
       // A new session has no prompt checkpoint. A well-typed empty response
       // proves the native list endpoint is available without inventing a

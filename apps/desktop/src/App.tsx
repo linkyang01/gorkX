@@ -341,6 +341,15 @@ function agentProfileForNewTask(
   return withSessionToolConstraints(base, { maxTurns, disallowedTools }) as AgentProfile | undefined;
 }
 
+/**
+ * The kernel's history-repair extension is only offered for the corruption
+ * signature it can actually fix. Keep the action out of ordinary tool errors
+ * so a repair button never suggests rewriting a healthy session.
+ */
+function isRepairableSessionError(raw: string): boolean {
+  return /(tool_use_id|tool_call_id|tool_result|unexpected .*tool|orphan(?:ed)? .*result|corrupt(?:ed)? .*history|history .*corrupt)/i.test(raw);
+}
+
 interface Thread {
   id: string;
   title: string;
@@ -739,6 +748,7 @@ function App() {
   /** An engine failure must remain inspectable; a red badge alone is not useful. */
   const [taskErrorOpen, setTaskErrorOpen] = useState(false);
   const [taskReauthBusy, setTaskReauthBusy] = useState(false);
+  const [sessionRepairBusyId, setSessionRepairBusyId] = useState<string | null>(null);
   /** Local projection of Grok Build's current-session prompt history. */
   const [promptHistoryOpen, setPromptHistoryOpen] = useState(false);
   const [promptHistoryIndex, setPromptHistoryIndex] = useState(-1);
@@ -5225,6 +5235,46 @@ function App() {
     }
   };
 
+  /** Preview, confirm, and apply Grok Build's real corrupted-history repair. */
+  const repairBrokenSession = async (id: string) => {
+    if (sessionRepairBusyId) return;
+    const initial = threadsRef.current.find((item) => item.id === id);
+    if (!initial?.sessionId || !isRepairableSessionError(initial.error || '')) return;
+    setSessionRepairBusyId(id);
+    try {
+      const client = initial.client ?? await reconnectThread(id);
+      const sessionId = initial.sessionId;
+      if (!client) throw new Error('The task is not connected');
+      const preview = await client.repairSession(sessionId, true);
+      if (!preview.repaired) {
+        appendLine(id, { id: nid(), role: 'system', text: t('sessionRepairNoop') });
+        return;
+      }
+      const summary = [
+        `${t('sessionRepairDuplicates')}: ${preview.duplicatesRemoved}`,
+        `${t('sessionRepairStripped')}: ${preview.strippedToolResultIds.length}`,
+        `${t('sessionRepairSynthetic')}: ${preview.syntheticResultsInserted}`,
+      ].join(' · ');
+      if (!confirm(`${t('sessionRepairConfirm')}\n\n${summary}`)) return;
+      const result = await client.repairSession(sessionId, false);
+      if (!result.repaired) {
+        appendLine(id, { id: nid(), role: 'system', text: t('sessionRepairNoop') });
+        return;
+      }
+      appendLine(id, { id: nid(), role: 'system', text: `${t('sessionRepairDone')} · ${summary}` });
+      patchThread(id, { error: null, busy: false });
+      setTaskErrorOpen(false);
+    } catch (error) {
+      appendLine(id, {
+        id: nid(),
+        role: 'system',
+        text: `${t('sessionRepairFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    } finally {
+      setSessionRepairBusyId(null);
+    }
+  };
+
   const answerPermission = async (prefer: 'allow' | 'reject' | string) => {
     if (!activeApproval || activeApproval.kind !== 'permission') return;
     try {
@@ -6896,6 +6946,16 @@ function App() {
                       {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
                     </button>
                   ) : null}
+                  {isRepairableSessionError(active.error) ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      disabled={sessionRepairBusyId === active.id || active.busy}
+                      onClick={() => void repairBrokenSession(active.id)}
+                    >
+                      {sessionRepairBusyId === active.id ? t('sessionRepairRunning') : t('sessionRepair')}
+                    </button>
+                  ) : null}
                   <button type="button" className="btn btn-sm" onClick={() => setTaskErrorOpen(true)}>
                     {t('taskErrorDetails')}
                   </button>
@@ -7711,6 +7771,16 @@ function App() {
                   onClick={() => void reauthenticateTask(active.id)}
                 >
                   {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
+                </button>
+              ) : null}
+              {isRepairableSessionError(active.error) ? (
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  disabled={sessionRepairBusyId === active.id || active.busy}
+                  onClick={() => void repairBrokenSession(active.id)}
+                >
+                  {sessionRepairBusyId === active.id ? t('sessionRepairRunning') : t('sessionRepair')}
                 </button>
               ) : null}
               {!active.client ? (

@@ -190,6 +190,16 @@ export interface SessionUsageSnapshot {
   usageIsIncomplete?: boolean;
 }
 
+/** Report returned by Grok Build's history-repair extension. */
+export interface SessionRepairReport {
+  repaired: boolean;
+  dryRun: boolean;
+  resident: boolean;
+  duplicatesRemoved: number;
+  strippedToolResultIds: string[];
+  syntheticResultsInserted: number;
+}
+
 export interface HooksSnapshot {
   hooks: HookInfo[];
   projectTrusted: boolean;
@@ -1319,6 +1329,45 @@ export class AcpClient {
       throw new Error('Kernel returned an empty session usage snapshot');
     }
     return snapshot;
+  }
+
+  /**
+   * Inspect or repair a session whose persisted tool-call history is broken.
+   * The desktop always previews first and only sends `dryRun: false` after an
+   * explicit confirmation, because the latter atomically rewrites local
+   * Grok Build history.
+   */
+  async repairSession(sessionId: string, dryRun = true): Promise<SessionRepairReport> {
+    if (!sessionId) throw new Error('A session is required');
+    let raw: unknown;
+    try {
+      raw = await this.request('_x.ai/session/repair', { sessionId, dryRun }, 30_000);
+    } catch (error) {
+      if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;
+      raw = await this.request('x.ai/session/repair', { sessionId, dryRun }, 30_000);
+    }
+    const value = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    if (!value || typeof value !== 'object') throw new Error('Kernel returned an invalid session-repair report');
+    const row = value as Record<string, unknown>;
+    const integer = (key: string, snakeKey = key.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`)) => {
+      const n = row[key] ?? row[snakeKey];
+      return typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : 0;
+    };
+    const rawIds = row.strippedToolResultIds ?? row.stripped_tool_result_ids;
+    const ids = Array.isArray(rawIds)
+      ? rawIds.filter((id): id is string => typeof id === 'string').slice(0, 200)
+      : [];
+    if (typeof row.repaired !== 'boolean') throw new Error('Kernel returned an incomplete session-repair report');
+    return {
+      repaired: row.repaired,
+      dryRun: row.dryRun === true || row.dry_run === true,
+      resident: row.resident === true,
+      duplicatesRemoved: integer('duplicatesRemoved'),
+      strippedToolResultIds: ids,
+      syntheticResultsInserted: integer('syntheticResultsInserted'),
+    };
   }
 
   /** Create a kernel-managed share link. Callers must confirm with the user
