@@ -100,7 +100,13 @@ export function parseBillingSnapshot(raw: unknown): BillingSnapshot {
     onDemandUsedUsd: centsFrom(config, 'onDemandUsed', 'on_demand_used'),
     prepaidBalanceUsd: centsFrom(config, 'prepaidBalance', 'prepaid_balance'),
     currentPeriod: period ? {
-      type: typeof period.type === 'string' ? period.type : undefined,
+      type: typeof period.type === 'string'
+        ? period.type
+        : typeof period.periodType === 'string'
+          ? period.periodType
+          : typeof period.period_type === 'string'
+            ? period.period_type
+            : undefined,
       start: typeof period.start === 'string' ? period.start : undefined,
       end: typeof period.end === 'string' ? period.end : undefined,
     } : undefined,

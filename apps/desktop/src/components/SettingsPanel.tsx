@@ -280,6 +280,13 @@ function formatBillingDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
+function formatBillingPeriodType(type?: string): string | undefined {
+  if (!type) return undefined;
+  if (/weekly/i.test(type)) return t('billingPeriodWeekly');
+  if (/monthly/i.test(type)) return t('billingPeriodMonthly');
+  return type.replace(/^USAGE_PERIOD_TYPE_/i, '').toLowerCase();
+}
+
 
 
 export function SettingsPanel({
@@ -1764,6 +1771,8 @@ export function SettingsPanel({
                     <div className="settings-row-hint" style={{ marginTop: 6 }}>
                       {t('billingIncludedUsed')}: {formatUsd(billing.includedUsedUsd)}
                       {billing.monthlyLimitUsd != null ? ` / ${formatUsd(billing.monthlyLimitUsd)}` : ''}
+                      {formatBillingPeriodType(billing.currentPeriod?.type) ? ` · ${formatBillingPeriodType(billing.currentPeriod?.type)}` : ''}
+                      {billing.currentPeriod?.start ? ` · ${t('billingPeriodFrom')} ${formatBillingDate(billing.currentPeriod.start)}` : ''}
                       {billing.currentPeriod?.end ? ` · ${t('billingPeriodEnd')} ${formatBillingDate(billing.currentPeriod.end)}` : ''}
                     </div>
                     <div className="settings-row-hint">

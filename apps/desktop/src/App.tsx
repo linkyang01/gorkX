@@ -6534,6 +6534,12 @@ function App() {
                       </div>
                       {account?.periodEnd ? (
                         <div className="account-menu-quota-reset">
+                          {account.periodType && /weekly/i.test(account.periodType)
+                            ? `${t('billingPeriodWeekly')} · `
+                            : account.periodType && /monthly/i.test(account.periodType)
+                              ? `${t('billingPeriodMonthly')} · `
+                              : ''}
+                          {account.periodStart ? `${t('billingPeriodFrom')} ${formatPeriodEnd(account.periodStart)} · ` : ''}
                           {t('quotaResetAt')} {formatPeriodEnd(account.periodEnd)}
                         </div>
                       ) : null}

@@ -15,6 +15,8 @@ export interface AccountSummary {
   prepaidBalance?: number | null;
   onDemandUsed?: number | null;
   onDemandCap?: number | null;
+  periodType?: string | null;
+  periodStart?: string | null;
   periodEnd?: string | null;
   productUsage?: Array<{ product: string; usagePercent?: number | null }> | null;
   /** Server-confirmed cached preference; true means coding data sharing is off. */

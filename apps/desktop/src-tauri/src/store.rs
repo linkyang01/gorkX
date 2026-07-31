@@ -687,6 +687,8 @@ pub struct AccountSummary {
     pub prepaid_balance: Option<f64>,
     pub on_demand_used: Option<f64>,
     pub on_demand_cap: Option<f64>,
+    pub period_type: Option<String>,
+    pub period_start: Option<String>,
     pub period_end: Option<String>,
     pub product_usage: Option<Vec<ProductUsageRow>>,
     /// Server-confirmed cached choice; true means coding data sharing is off.
@@ -753,6 +755,8 @@ fn account_shell(
         prepaid_balance: None,
         on_demand_used: None,
         on_demand_cap: None,
+        period_type: None,
+        period_start: None,
         period_end: None,
         product_usage: None,
         coding_data_retention_opt_out: crate::auth::coding_data_retention_opt_out_from_auth_file(),
@@ -961,8 +965,18 @@ fn parse_billing_body(
     let prepaid = cfg.get("prepaidBalance").and_then(money_val);
     let on_used = cfg.get("onDemandUsed").and_then(money_val);
     let on_cap = cfg.get("onDemandCap").and_then(money_val);
-    let period_end = cfg
+    let period = cfg
         .get("currentPeriod")
+        .or_else(|| cfg.get("current_period"));
+    let period_type = period
+        .and_then(|p| p.get("type").or_else(|| p.get("periodType")).or_else(|| p.get("period_type")))
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string());
+    let period_start = period
+        .and_then(|p| p.get("start"))
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string());
+    let period_end = period
         .and_then(|p| p.get("end"))
         .and_then(|x| x.as_str())
         .or_else(|| cfg.get("billingPeriodEnd").and_then(|x| x.as_str()))
@@ -1003,6 +1017,8 @@ fn parse_billing_body(
         // A billing-period end belongs to the same payload family as the
         // percentage. Do not show an on-demand reset date beside a missing
         // subscription quota.
+        period_type: if pct.is_some() { period_type } else { None },
+        period_start: if pct.is_some() { period_start } else { None },
         period_end: if pct.is_some() { period_end } else { None },
         product_usage: if products.is_empty() {
             None
@@ -1376,7 +1392,11 @@ mod model_cache_tests {
         let body = serde_json::json!({
             "config": {
                 "creditUsagePercent": 17,
-                "currentPeriod": { "end": "2026-08-01T12:51:38+00:00" },
+                "currentPeriod": {
+                    "type": "USAGE_PERIOD_TYPE_WEEKLY",
+                    "start": "2026-07-25T12:51:38+00:00",
+                    "end": "2026-08-01T12:51:38+00:00"
+                },
                 "productUsage": [
                     { "product": "GrokBuild", "usagePercent": 16 },
                     { "product": "GrokChat", "usagePercent": 1 }
@@ -1392,6 +1412,8 @@ mod model_cache_tests {
         ).unwrap();
         assert_eq!(summary.credit_usage_percent, Some(17.0));
         assert_eq!(summary.quota_label.as_deref(), Some("已用 17% · 剩 83%"));
+        assert_eq!(summary.period_type.as_deref(), Some("USAGE_PERIOD_TYPE_WEEKLY"));
+        assert_eq!(summary.period_start.as_deref(), Some("2026-07-25T12:51:38+00:00"));
         assert_eq!(summary.period_end.as_deref(), Some("2026-08-01T12:51:38+00:00"));
         let product_usage = summary.product_usage.unwrap();
         assert_eq!(product_usage.len(), 2);
