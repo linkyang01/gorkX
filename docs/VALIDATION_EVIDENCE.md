@@ -14,6 +14,13 @@
 | 内核更新检查 | Settings → Updates → Check for updates；后端固定白名单 `grok update --check --json` | 通过源码审阅与 Rust 白名单测试：桌面现在读取 Grok Build 原生 JSON 的当前/最新版本、频道和更新状态，能够区分网络失败；仅报告，不允许运行时替换 App 自带的源码锁定内核 | 当前网络/账户能否取得上游频道结果由 Grok Build 更新服务决定；在服务返回新版本时仍需开发者重新锁源、补丁、构建和 ACP 回归后更新 gorkX |
 | 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在最新上游 API 上编译并进入包内资源 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
 
+## 2026-07-31 · 原生提示历史与下一步建议复核
+
+| 范围 | 路由/步骤 | 结果 | 边界 |
+|---|---|---|---|
+| 持久提示历史 | `+ → 最近提问`；`_x.ai/prompt_history { cwd }` | 通过：桌面合并当前任务与当前项目的 Grok Build 历史，边界化、去重后只回填输入框；隔离 ACP 返回合法空列表 | 不导入原始 transcript，也不把历史当作额度 |
+| 下一步建议 | Composer → `建议下一步`；`_x.ai/suggestPrompt { sessionId, generation }` | 通过：按钮仅在用户点击时调用；隔离 ACP 的缺失会话守卫返回 `suggestion: null`，纯解析测试通过 | 真实建议是模型调用，可能消耗额度；建议永不自动发送，需用户插入/编辑/发送 |
+
 ## 2026-07-31 · 桌面动作原生 ACP 化复核
 
 | 范围 | 路由/步骤 | 结果 | 边界 |

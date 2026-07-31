@@ -106,6 +106,24 @@ The desktop bounds and de-duplicates strings, puts the selected prompt back into
 the composer, and waits for the user to press Send. It never sends a model
 request, imports raw transcripts, or treats history as a provider quota.
 
+## Next-prompt suggestion
+
+The composer exposes a user-triggered **建议下一步 / Suggest next step** button
+after a completed assistant turn. It calls Grok Build's prediction extension only
+when clicked:
+
+```
+_x.ai/suggestPrompt {
+  sessionId,
+  generation
+}
+→ { suggestion: string | null, generation }
+```
+
+The result is a short editable chip. It is never auto-sent; the user can insert,
+edit, or dismiss it. Because this is a model-backed prediction, the button tells
+the user that it may consume provider quota.
+
 ## Plan mode
 
 ```

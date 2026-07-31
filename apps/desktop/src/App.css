@@ -6305,6 +6305,42 @@ button.pill:hover {
   border-color: color-mix(in srgb, var(--plan) 34%, var(--hairline));
 }
 
+.prompt-suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--plan) 35%, var(--hairline));
+  border-radius: var(--radius-xs, 8px);
+  background: color-mix(in srgb, var(--plan) 8%, var(--meta-surface, var(--bg-elevated)));
+  color: var(--text-2);
+  font-size: var(--type-sm, 12.5px);
+}
+
+.prompt-suggestion-label {
+  flex: 0 0 auto;
+  color: var(--plan);
+  font-weight: 600;
+}
+
+.prompt-suggestion-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text-1);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-suggestion-text:hover { color: var(--plan); }
+.prompt-suggestion-error { margin: 0 0 8px; }
+
 /* Shortcuts */
 .shortcuts-table {
   width: 100%;

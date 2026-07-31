@@ -10,6 +10,7 @@ import { readTextFile } from '@tauri-apps/plugin-fs';
 import { APP_VERSION } from './appMeta';
 import { parseAutoTopupSnapshot, parseBillingSnapshot, type AutoTopupSnapshot, type BillingSnapshot } from './billing';
 import { parsePromptHistory } from './promptHistory';
+import { parsePromptSuggestion, type PromptSuggestionReply } from './promptSuggestion';
 
 export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
 
@@ -1422,6 +1423,16 @@ export class AcpClient {
       ...(filterSessionId ? { filterSessionId } : {}),
     }, 20_000);
     return parsePromptHistory(raw);
+  }
+
+  /** Ask Grok Build for an optional next-prompt suggestion; never sends it. */
+  async suggestNextPrompt(sessionId: string, generation: number): Promise<PromptSuggestionReply> {
+    if (!sessionId) return { suggestion: null, generation };
+    const raw = await this.requestExtension('suggestPrompt', {
+      sessionId,
+      generation: Number.isInteger(generation) && generation >= 0 ? generation : 0,
+    }, 60_000);
+    return parsePromptSuggestion(raw, generation);
   }
 
   /**

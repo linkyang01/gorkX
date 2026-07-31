@@ -756,6 +756,9 @@ function App() {
   const [kernelPromptHistory, setKernelPromptHistory] = useState<string[]>([]);
   const [kernelPromptHistoryLoading, setKernelPromptHistoryLoading] = useState(false);
   const [kernelPromptHistoryError, setKernelPromptHistoryError] = useState<string | null>(null);
+  const [promptSuggestion, setPromptSuggestion] = useState<{ threadId: string; text: string } | null>(null);
+  const [promptSuggestionBusy, setPromptSuggestionBusy] = useState(false);
+  const [promptSuggestionError, setPromptSuggestionError] = useState<string | null>(null);
   const [rewindDialog, setRewindDialog] = useState<{
     threadId: string;
     points: RewindPoint[];
@@ -2740,6 +2743,27 @@ function App() {
     });
   }, [activePromptHistory, kernelPromptHistory]);
 
+  useEffect(() => {
+    setPromptSuggestion(null);
+    setPromptSuggestionError(null);
+  }, [activeId]);
+
+  const requestPromptSuggestion = useCallback(async () => {
+    const thread = active;
+    if (!thread?.client || !thread.sessionId || thread.busy) return;
+    setPromptSuggestionBusy(true);
+    setPromptSuggestionError(null);
+    setPromptSuggestion(null);
+    try {
+      const reply = await thread.client.suggestNextPrompt(thread.sessionId, Date.now());
+      if (reply.suggestion) setPromptSuggestion({ threadId: thread.id, text: reply.suggestion });
+    } catch (error) {
+      setPromptSuggestionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPromptSuggestionBusy(false);
+    }
+  }, [active]);
+
   const searchKernelSessions = useCallback(
     async (query: string): Promise<KernelSessionSearchHit[]> => {
       // Native history search is useful only when the App has an authenticated
@@ -4563,6 +4587,11 @@ function App() {
     const agent = live;
     const client = agent.client!;
     const sessionId = agent.sessionId!;
+
+    // A new user turn invalidates a suggestion generated for the previous
+    // response; never leave a stale next-step chip beside fresh work.
+    setPromptSuggestion(null);
+    setPromptSuggestionError(null);
 
     // Suggestions belong to the prior response. A user-authored send (or a
     // clicked suggestion) starts the next turn, so they must not linger.
@@ -7369,6 +7398,36 @@ function App() {
                     </div>
                   </div>
                 ) : null}
+                {promptSuggestion?.threadId === active.id ? (
+                  <div className="prompt-suggestion-card" role="status">
+                    <span className="prompt-suggestion-label">{t('promptSuggestionLabel')}</span>
+                    <button
+                      type="button"
+                      className="prompt-suggestion-text"
+                      title={t('promptSuggestionUseHint')}
+                      onClick={() => {
+                        setDraft(promptSuggestion.text);
+                        setPromptHistoryIndex(-1);
+                        setPromptSuggestion(null);
+                      }}
+                    >
+                      {promptSuggestion.text}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t('promptSuggestionDismissHint')}
+                      onClick={() => setPromptSuggestion(null)}
+                    >
+                      {t('cancel')}
+                    </button>
+                  </div>
+                ) : null}
+                {promptSuggestionError ? (
+                  <div className="hint prompt-suggestion-error" role="alert">
+                    {t('promptSuggestionUnavailable')}: {promptSuggestionError}
+                  </div>
+                ) : null}
                 <SlashMenu
                   open={slashOpen}
                   items={slashMenuItems(draft)}
@@ -7476,6 +7535,17 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {active.sessionId && active.client && !active.busy && active.lines.some((line) => line.role === 'assistant') ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('promptSuggestionButtonHint')}
+                        disabled={promptSuggestionBusy}
+                        onClick={() => void requestPromptSuggestion()}
+                      >
+                        {promptSuggestionBusy ? t('promptSuggestionWorking') : t('promptSuggestionButton')}
+                      </button>
+                    ) : null}
                     {active.busy && composerAtts.length === 0 ? (
                       <button
                         type="button"

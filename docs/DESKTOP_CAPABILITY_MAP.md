@@ -9,6 +9,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | `login`, `logout` | Settings: Account | Browser OAuth/device sign-in is initiated from the app; the ordinary flow never asks a user to type a CLI command. |
 | `models` | Settings: Models & providers; composer model selector | App-owned provider configuration and live ACP model selection; web subscriptions are never represented as API credentials. |
 | `sessions list/search/delete` | Other sessions panel; local task search | Kernel history is searched/restored through its bounded CLI adapter; gorkX-owned task search stays local and separate. |
+| `prompt_history`, `suggestPrompt` | `+ → 最近提问`; Composer → 建议下一步 | Prompt history is bounded and only backfills the composer. Suggestion is explicitly user-triggered, bounded, editable and never auto-sent; the UI warns it may use model quota. |
 | `export` | Add menu: Export transcript | Native Markdown save picker with clipboard fallback. |
 | `inspect` | Add menu: Project inspection | Read-only normalized project configuration view. |
 | `worktree list/show/rm/gc/db` | Worktrees panel | Creation and task association use the live kernel ACP path; removal and GC remain explicit user actions. A collapsed Maintenance area shows local index status/location and asks for confirmation before rebuilding the index from a filesystem scan. |
