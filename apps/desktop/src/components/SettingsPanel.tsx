@@ -22,7 +22,18 @@ import {
   storeDataDir,
   storeDbPath,
 } from '../lib/threads';
-import { revealInFinder } from '../lib/host';
+import {
+  computerAccessibilityStatus,
+  computerClick,
+  computerPressKey,
+  computerTypeText,
+  emergencyStopComputerControl,
+  openComputerAccessibilitySettings,
+  revealInFinder,
+  setComputerControlEnabled,
+  type ComputerAccessibilityStatus,
+  type ComputerActionResult,
+} from '../lib/host';
 import { APP_VERSION } from '../lib/appMeta';
 import {
   checkAppUpdate,
@@ -408,6 +419,13 @@ export function SettingsPanel({
   const [tokenUsageHistory, setTokenUsageHistory] = useState<DailyTokenUsage[]>([]);
   const [computerHubStatus, setComputerHubStatus] = useState<string | null>(null);
   const [computerHubBusy, setComputerHubBusy] = useState(false);
+  const [computerAccess, setComputerAccess] = useState<ComputerAccessibilityStatus | null>(null);
+  const [computerControlBusy, setComputerControlBusy] = useState(false);
+  const [computerKey, setComputerKey] = useState('enter');
+  const [computerText, setComputerText] = useState('');
+  const [computerX, setComputerX] = useState('');
+  const [computerY, setComputerY] = useState('');
+  const [computerActionResult, setComputerActionResult] = useState<ComputerActionResult | null>(null);
   const [managedSetup, setManagedSetup] = useState<string | null>(null);
   const [managedSetupBusy, setManagedSetupBusy] = useState(false);
   const [managedSetupReady, setManagedSetupReady] = useState(false);
@@ -565,6 +583,60 @@ export function SettingsPanel({
       setComputerHubBusy(false);
     }
   };
+
+  const refreshComputerAccess = async () => {
+    setComputerControlBusy(true);
+    try {
+      setComputerAccess(await computerAccessibilityStatus());
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerControlBusy(false);
+    }
+  };
+
+  const toggleComputerControl = async (enabled: boolean) => {
+    if (enabled && !window.confirm(t('settingsComputerControlEnableConfirm'))) return;
+    setComputerControlBusy(true);
+    try {
+      setComputerAccess(await setComputerControlEnabled(enabled));
+      if (!enabled) setComputerActionResult(null);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerControlBusy(false);
+    }
+  };
+
+  const stopComputerControl = async () => {
+    setComputerControlBusy(true);
+    try {
+      setComputerAccess(await emergencyStopComputerControl());
+      setComputerActionResult(null);
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerControlBusy(false);
+    }
+  };
+
+  const runComputerAction = async (action: () => Promise<ComputerActionResult>) => {
+    setComputerControlBusy(true);
+    try {
+      setComputerActionResult(await action());
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerControlBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || section !== 'computer') return;
+    void refreshComputerAccess();
+    // Computer permission is read when the section is shown, not on every app render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, section]);
 
   const refreshCloudEnvironments = async () => {
     if (!onListCloudEnvironments) return;
@@ -2527,6 +2599,98 @@ export function SettingsPanel({
                 >
                   {t('settingsComputerCapture')}
                 </button>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsComputerControlTitle')}</div>
+                    <div className="settings-row-hint">{t('settingsComputerControlHint')}</div>
+                  </div>
+                </div>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn" disabled={computerControlBusy} onClick={() => void refreshComputerAccess()}>
+                    {t('settingsComputerControlCheck')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={computerControlBusy}
+                    onClick={() => void openComputerAccessibilitySettings().catch((error) => setMsg(error instanceof Error ? error.message : String(error)))}
+                  >
+                    {t('settingsComputerControlOpenSettings')}
+                  </button>
+                  {computerAccess?.enabled ? (
+                    <button type="button" className="btn" disabled={computerControlBusy} onClick={() => void toggleComputerControl(false)}>
+                      {t('settingsComputerControlDisable')}
+                    </button>
+                  ) : (
+                    <button type="button" className="btn primary" disabled={computerControlBusy || !computerAccess?.granted} onClick={() => void toggleComputerControl(true)}>
+                      {t('settingsComputerControlEnable')}
+                    </button>
+                  )}
+                  <button type="button" className="btn" disabled={computerControlBusy || !computerAccess?.enabled} onClick={() => void stopComputerControl()}>
+                    {t('settingsComputerControlEmergencyStop')}
+                  </button>
+                </div>
+                {computerAccess ? (
+                  <p className="hint" style={{ marginTop: 10 }}>
+                    {computerAccess.granted ? t('settingsComputerControlPermissionGranted') : t('settingsComputerControlPermissionMissing')}
+                    {' · '}{computerAccess.enabled ? t('settingsComputerControlStateEnabled') : t('settingsComputerControlStateDisabled')}
+                  </p>
+                ) : null}
+                <div className="field-row" style={{ marginTop: 8 }}>
+                  <label className="field" style={{ margin: 0, minWidth: 150 }}>
+                    {t('settingsComputerControlKey')}
+                    <select value={computerKey} onChange={(event) => setComputerKey(event.target.value)} disabled={!computerAccess?.enabled || computerControlBusy}>
+                      {['enter', 'escape', 'tab', 'space', 'backspace', 'delete', 'left', 'right', 'up', 'down', 'home', 'end'].map((key) => (
+                        <option key={key} value={key}>{key}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="button" className="btn" disabled={!computerAccess?.enabled || computerControlBusy} onClick={() => void runComputerAction(() => computerPressKey(computerKey))}>
+                    {t('settingsComputerControlSendKey')}
+                  </button>
+                </div>
+                <div className="field-row" style={{ marginTop: 8, alignItems: 'flex-end' }}>
+                  <label className="field" style={{ margin: 0, minWidth: 260, flex: 1 }}>
+                    {t('settingsComputerControlText')}
+                    <input value={computerText} onChange={(event) => setComputerText(event.target.value)} maxLength={2000} placeholder={t('settingsComputerControlTextPlaceholder')} disabled={!computerAccess?.enabled || computerControlBusy} />
+                  </label>
+                  <button type="button" className="btn" disabled={!computerAccess?.enabled || computerControlBusy || !computerText.trim()} onClick={() => void runComputerAction(() => computerTypeText(computerText))}>
+                    {t('settingsComputerControlType')}
+                  </button>
+                </div>
+                <div className="field-row" style={{ marginTop: 8, alignItems: 'flex-end' }}>
+                  <label className="field" style={{ margin: 0, width: 100 }}>
+                    {t('settingsComputerControlX')}
+                    <input inputMode="numeric" value={computerX} onChange={(event) => setComputerX(event.target.value)} placeholder="0" disabled={!computerAccess?.enabled || computerControlBusy} />
+                  </label>
+                  <label className="field" style={{ margin: 0, width: 100 }}>
+                    {t('settingsComputerControlY')}
+                    <input inputMode="numeric" value={computerY} onChange={(event) => setComputerY(event.target.value)} placeholder="0" disabled={!computerAccess?.enabled || computerControlBusy} />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!computerAccess?.enabled || computerControlBusy || !computerX.trim() || !computerY.trim()}
+                    onClick={() => {
+                      const x = Number(computerX);
+                      const y = Number(computerY);
+                      if (!Number.isInteger(x) || !Number.isInteger(y)) {
+                        setMsg(t('settingsComputerControlCoordinatesInvalid'));
+                        return;
+                      }
+                      void runComputerAction(() => computerClick(x, y));
+                    }}
+                  >
+                    {t('settingsComputerControlClick')}
+                  </button>
+                </div>
+                {computerActionResult ? (
+                  <p className="hint" style={{ marginTop: 10 }}>
+                    {t('settingsComputerControlLastAction')}: {computerActionResult.action} · {computerActionResult.foregroundApp}
+                  </p>
+                ) : null}
               </div>
               <div className="settings-card" style={{ marginTop: 12 }}>
                 <div className="settings-row">

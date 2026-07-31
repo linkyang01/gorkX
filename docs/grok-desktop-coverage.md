@@ -67,7 +67,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Source preview | Explicit HTTP(S) link opens in a separate native gorkX reading window | ✅ validates the URL and has no gorkX credential bridge; it is separate from the Agent's MCP Chrome profile |
 | Screenshot attach | Explicit macOS region picker → local PNG attachment | ✅ |
 | Computer Hub workspace | Settings → Screen capture → Computer Hub workspace | 🟡 fixed `workspace status/start/pause/resume/stop` actions are wired to the bundled Grok Build binary, require confirmation, and are still server/account-gated; exposing a project can make its content available to the remote service. |
-| Computer automation | — | ❌ no background screen capture or local mouse/keyboard control is shipped. Computer Hub workspace exposure is not represented as local computer control; gorkX keeps explicit screenshot capture for that use case. |
+| Computer automation | Settings → Computer → foreground controls | 🟡 real user-triggered foreground click / fixed-key / bounded text actions with macOS Accessibility permission and emergency stop; no background capture, arbitrary script, hidden-window control, or agent ACP auto-call. Computer Hub exposure is still a separate remote workspace feature. |
 
 ## Scheduling
 

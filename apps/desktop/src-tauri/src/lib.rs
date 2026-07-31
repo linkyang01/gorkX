@@ -3,6 +3,7 @@ mod agent_profiles;
 mod app_update;
 mod auth;
 mod capture;
+mod computer;
 mod extensions;
 mod git_panel;
 mod github;
@@ -41,6 +42,7 @@ pub fn run() {
     let pool = Arc::new(AgentPool::new());
     let terminals = Arc::new(TerminalPool::new());
     let ptys = Arc::new(pty::PtyPool::new());
+    let computer_control = Arc::new(computer::ComputerControlState::default());
     let app_store = store::AppStore::open().expect("open gorkX sqlite store");
 
     tauri::Builder::default()
@@ -51,6 +53,7 @@ pub fn run() {
         .manage(pool.clone())
         .manage(terminals)
         .manage(ptys)
+        .manage(computer_control)
         .manage(app_store)
         .setup(|app| {
             // System tray: Show / Quit (agents cleaned on quit)
@@ -202,6 +205,13 @@ pub fn run() {
             app_update::app_update_install,
             app_update::app_current_version,
             capture::capture_screen_region,
+            computer::computer_accessibility_status,
+            computer::computer_open_accessibility_settings,
+            computer::computer_control_set_enabled,
+            computer::computer_control_emergency_stop,
+            computer::computer_press_key,
+            computer::computer_type_text,
+            computer::computer_click,
             memory::memory_status,
             memory::memory_set_enabled,
             memory::memory_set_auto_learn,

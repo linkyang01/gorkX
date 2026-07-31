@@ -6000,7 +6000,8 @@ button.pill:hover {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   border: 1px solid var(--glass-border-dim);
   border-radius: 10px;
   padding: 8px 10px;
