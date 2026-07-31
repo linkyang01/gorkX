@@ -210,11 +210,15 @@ try {
   // GROK_HOME can load catalogs and credential state before initialize replies.
   await request('initialize', {
     protocolVersion: 1,
+    _meta: { clientIdentifier: 'grok-desktop' },
     clientInfo: { name: 'gorkX-kernel-smoke', version: '0' },
     clientCapabilities: {
       fs: { readTextFile: true, writeTextFile: clientFileWriteSmoke },
       terminal: true,
-      meta: { 'x.ai/hunkTracker': { mode: 'agent_only' } },
+      meta: {
+        'x.ai/hunkTracker': { mode: 'agent_only' },
+        'x.ai/codeNavigation': { enabled: true },
+      },
     },
   }, 30_000);
   console.log(`PASS: ACP initialize (${bin})${clientFileWriteSmoke ? ' with client fs write capability' : ''}${disableWebSearchSmoke ? ' with web research disabled' : ''}`);
@@ -253,6 +257,9 @@ try {
       ['_x.ai/desktop/workflow/manage', { sessionId: missingSessionId, runId: 'missing', op: 'pause' }],
       ['_x.ai/hunk-tracker/get-files', { sessionId: missingSessionId }],
       ['_x.ai/hunk-tracker/file-action', { sessionId: missingSessionId, path: 'missing', action: 'accept' }],
+      ['_x.ai/code/status', { sessionId: missingSessionId, cwd: home }],
+      ['_x.ai/code/find-definitions', { sessionId: missingSessionId, cwd: home, symbol: 'missing' }],
+      ['_x.ai/code/find-references', { sessionId: missingSessionId, cwd: home, symbol: 'missing' }],
       ['_x.ai/git/info', { sessionId: missingSessionId }],
       ['_x.ai/git/discard', { sessionId: missingSessionId, paths: ['missing'], scope: 'both', includeUntracked: true }],
       ['_x.ai/git/stash', { sessionId: missingSessionId, includeUntracked: true }],
@@ -260,9 +267,16 @@ try {
     ];
     for (const [method, params] of probes) {
       const routeWithoutSessionGuard = method.startsWith('_x.ai/git/')
-        || method === '_x.ai/hunk-tracker/file-action';
+        || method === '_x.ai/hunk-tracker/file-action'
+        || method === '_x.ai/code/status';
       try {
-        await request(method, params, 15_000);
+        const result = await request(method, params, 15_000);
+        if (method === '_x.ai/code/status') {
+          const status = unwrapResult(result);
+          if (status?.eligible !== false || status?.reason !== 'sessionRequired') {
+            throw new Error(`${method} returned an unexpected missing-session status: ${JSON.stringify(status)}`);
+          }
+        }
         if (routeWithoutSessionGuard) {
           console.log(`PASS: ACP ${method} (native route, no model request)`);
           continue;

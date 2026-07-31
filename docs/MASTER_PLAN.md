@@ -137,6 +137,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Diffs / stage | Review Diff tab | ✅ guarded stage/unstage + non-Git preview boundary | B |
 | Agent hunk review | Review Agent changes tab | ✅ native hunk ledger, confirmed per-file and all-file accept/reject; hidden when the live kernel does not advertise it | C |
 | Git discard / stash / commit | Review Diff actions | ✅ native ACP routes with per-action confirmation; commit never pushes or syncs | C |
+| Code navigation | Review Code navigation tab | ✅ native Grok Build index status, definitions and references; hidden when the active session/project is not eligible | C |
 | Plan + tools human labels | Review tabs | ✅ | B |
 
 ### 5.3 Extensions

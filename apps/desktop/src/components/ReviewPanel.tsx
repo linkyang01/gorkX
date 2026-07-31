@@ -16,7 +16,13 @@ import { githubRepositoryFromUrl, githubWriteConfirmSummary } from '../lib/conne
 import { appendConnectorAudit } from '../lib/connectorAudit';
 import { openUrlSafe } from '../lib/updates';
 import type { ToolEvent } from './ToolTimeline';
-import type { AcpClient, HunkFileSummary, PlanEntry } from '../lib/acpClient';
+import type {
+  AcpClient,
+  CodeNavLocation,
+  CodeNavStatus,
+  HunkFileSummary,
+  PlanEntry,
+} from '../lib/acpClient';
 import {
   humanFileName,
   humanPlanStatus,
@@ -26,7 +32,7 @@ import {
 } from '../lib/toolHuman';
 import { IconClose, IconRefresh } from './UiIcons';
 
-type Tab = 'diff' | 'agent' | 'plan' | 'tools' | 'remote';
+type Tab = 'diff' | 'agent' | 'code' | 'plan' | 'tools' | 'remote';
 
 /** Porcelain-ish status → short Chinese label for the file list. */
 function gitStatusLabel(st: string): string {
@@ -121,6 +127,13 @@ export function ReviewPanel({
   const [gitActionsAvailable, setGitActionsAvailable] = useState(false);
   const [gitActionBusy, setGitActionBusy] = useState(false);
   const [commitDraft, setCommitDraft] = useState('');
+  const [codeNavAvailable, setCodeNavAvailable] = useState<boolean | null>(null);
+  const [codeNavStatus, setCodeNavStatus] = useState<CodeNavStatus | null>(null);
+  const [codeNavBusy, setCodeNavBusy] = useState(false);
+  const [codeNavError, setCodeNavError] = useState<string | null>(null);
+  const [codeNavSymbol, setCodeNavSymbol] = useState('');
+  const [codeNavMode, setCodeNavMode] = useState<'definitions' | 'references'>('definitions');
+  const [codeNavResults, setCodeNavResults] = useState<CodeNavLocation[]>([]);
 
   const refreshAgentChanges = () => {
     if (!client || !sessionId) {
@@ -148,6 +161,48 @@ export function ReviewPanel({
         }
       })
       .finally(() => setAgentChangesBusy(false));
+  };
+
+  const refreshCodeNav = () => {
+    if (!client || !sessionId || !cwd || snap?.isGit !== true) {
+      setCodeNavAvailable(false);
+      setCodeNavStatus(null);
+      setCodeNavResults([]);
+      setTab((current) => (current === 'code' ? 'diff' : current));
+      return;
+    }
+    setCodeNavBusy(true);
+    setCodeNavError(null);
+    void client.codeNavStatus(sessionId, cwd)
+      .then((status) => {
+        setCodeNavStatus(status);
+        setCodeNavAvailable(status.eligible);
+        if (!status.eligible) setTab((current) => (current === 'code' ? 'diff' : current));
+      })
+      .catch((error) => {
+        const text = error instanceof Error ? error.message : String(error);
+        setCodeNavAvailable(false);
+        setCodeNavStatus(null);
+        setCodeNavResults([]);
+        setTab((current) => (current === 'code' ? 'diff' : current));
+        if (!/method not found|not supported|session required|session not found/i.test(text)) {
+          setCodeNavError(text);
+        }
+      })
+      .finally(() => setCodeNavBusy(false));
+  };
+
+  const searchCodeNav = () => {
+    if (!client || !sessionId || !cwd || !codeNavSymbol.trim() || codeNavBusy) return;
+    setCodeNavBusy(true);
+    setCodeNavError(null);
+    const request = codeNavMode === 'definitions'
+      ? client.findCodeDefinitions(sessionId, cwd, codeNavSymbol)
+      : client.findCodeReferences(sessionId, cwd, codeNavSymbol);
+    void request
+      .then((result) => setCodeNavResults(result.locations))
+      .catch((error) => setCodeNavError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setCodeNavBusy(false));
   };
 
   const refresh = () => {
@@ -277,6 +332,14 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
+  }, [open, client, sessionId, cwd, snap?.isGit]);
+
+  useEffect(() => {
+    if (!open) return;
+    refreshCodeNav();
+    // The active client/session/project and the Git snapshot determine whether
+    // the native index can be queried. The kernel remains authoritative.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client, sessionId, cwd, snap?.isGit]);
 
   // PR data is scoped to the repository's origin. Never show a previous
@@ -472,6 +535,7 @@ export function ReviewPanel({
           [
             ['diff', t('diffTitle'), snap?.files.length ?? 0],
             ...(agentChangesAvailable ? [['agent', t('reviewAgentTab'), agentChanges.length] as const] : []),
+            ...(codeNavAvailable ? [['code', t('reviewCodeTab'), codeNavResults.length] as const] : []),
             ['plan', t('reviewPlanTab'), planEntries.length],
             ['tools', t('reviewToolsTab'), tools.length],
             ['remote', t('reviewRemoteTab'), remotePrs.length],
@@ -487,6 +551,7 @@ export function ReviewPanel({
                 refreshRemote();
               }
               if (id === 'agent') refreshAgentChanges();
+              if (id === 'code') refreshCodeNav();
             }}
           >
             {label}
@@ -871,6 +936,104 @@ export function ReviewPanel({
                   </div>
                 </li>
               ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab === 'code' ? (
+        <div className="review-body pad">
+          <div className="review-explain">
+            <strong>{t('reviewCodeTitle')}</strong>
+            <p>{t('reviewCodeExplain')}</p>
+          </div>
+          <div className="review-plan-actions">
+            <button
+              type="button"
+              className={codeNavMode === 'definitions' ? 'btn btn-sm primary-sm' : 'btn btn-sm'}
+              disabled={codeNavBusy}
+              onClick={() => setCodeNavMode('definitions')}
+            >
+              {t('reviewCodeDefinitions')}
+            </button>
+            <button
+              type="button"
+              className={codeNavMode === 'references' ? 'btn btn-sm primary-sm' : 'btn btn-sm'}
+              disabled={codeNavBusy}
+              onClick={() => setCodeNavMode('references')}
+            >
+              {t('reviewCodeReferences')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={codeNavBusy || !client || !sessionId}
+              onClick={refreshCodeNav}
+            >
+              {t('reviewCodeRefresh')}
+            </button>
+          </div>
+          <div className="field-row" style={{ marginTop: 10 }}>
+            <input
+              value={codeNavSymbol}
+              onChange={(event) => setCodeNavSymbol(event.target.value.slice(0, 160))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') searchCodeNav();
+              }}
+              placeholder={t('reviewCodeSymbolPlaceholder')}
+              aria-label={t('reviewCodeSymbolPlaceholder')}
+              disabled={codeNavBusy}
+            />
+            <button
+              type="button"
+              className="btn btn-sm primary-sm"
+              disabled={codeNavBusy || !codeNavSymbol.trim() || !client || !sessionId}
+              onClick={searchCodeNav}
+            >
+              {codeNavBusy ? t('reviewCodeLoading') : t('send')}
+            </button>
+          </div>
+          {codeNavStatus ? (
+            <p className="hint" style={{ margin: '10px 0 0' }}>
+              {codeNavStatus.indexed && codeNavStatus.fileCount !== undefined
+                ? t('reviewCodeIndexed').replace('{n}', String(codeNavStatus.fileCount))
+                : t('reviewCodeIndexing')}
+            </p>
+          ) : null}
+          {codeNavError ? (
+            <div className="review-empty" style={{ textAlign: 'left', marginTop: 10 }}>
+              <strong>{t('reviewCodeUnavailable')}</strong>
+              <p className="hint">{codeNavError}</p>
+            </div>
+          ) : null}
+          {!codeNavBusy && !codeNavError && codeNavResults.length === 0 ? (
+            <div className="review-empty" style={{ marginTop: 10 }}>{t('reviewCodeNoResults')}</div>
+          ) : null}
+          {codeNavResults.length ? (
+            <ul className="tool-human-list" style={{ marginTop: 10 }}>
+              {codeNavResults.map((location, index) => {
+                const abs = location.path.startsWith('/')
+                  ? location.path
+                  : [cwd.replace(/\/+$/, ''), location.path.replace(/^\.\//, '')].join('/');
+                return (
+                  <li key={location.path + ':' + location.line + ':' + location.column + ':' + index} className="tool-human-item tone-idle">
+                    <div className="tool-human-top">
+                      <button
+                        type="button"
+                        className="link-btn tool-human-title"
+                        title={abs}
+                        onClick={() => void revealInFinder(abs).catch(() => {})}
+                      >
+                        {agentPath(location.path)}:{location.line}:{location.column}
+                      </button>
+                      {location.matchedSymbol ? (
+                        <span className="tool-human-badge idle">{location.matchedSymbol}</span>
+                      ) : null}
+                    </div>
+                    <div className="hint">{t('reviewCodeOpenFile')}</div>
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
         </div>

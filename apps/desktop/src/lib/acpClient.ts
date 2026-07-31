@@ -216,6 +216,28 @@ export interface HunkActionResult {
   error?: string;
 }
 
+/** A symbol location returned by Grok Build's native codebase index. */
+export interface CodeNavLocation {
+  path: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+  matchedSymbol?: string;
+}
+
+export interface CodeNavResult {
+  symbol: string;
+  locations: CodeNavLocation[];
+}
+
+export interface CodeNavStatus {
+  indexed: boolean;
+  eligible: boolean;
+  reason: string;
+  fileCount?: number;
+}
+
 export type GitDiscardScope = 'working' | 'staged' | 'both';
 
 export interface GitCommitResult {
@@ -1161,6 +1183,7 @@ export class AcpClient {
       'initialize',
       {
         protocolVersion: 1,
+        _meta: { clientIdentifier: 'grok-desktop' },
         clientInfo: { name: 'gorkX', version: APP_VERSION },
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: this.allowClientFileWrites },
@@ -1170,6 +1193,10 @@ export class AcpClient {
             // Activate the kernel-owned tracker for agent edits only. The
             // desktop never reconstructs attribution from git timestamps.
             'x.ai/hunkTracker': { mode: 'agent_only' },
+            // Opt into Grok Build's native codebase index. The Review panel
+            // only exposes it after the kernel confirms the workspace is
+            // eligible; the desktop never builds a parallel symbol index.
+            'x.ai/codeNavigation': { enabled: true },
           },
         },
       },
@@ -1520,6 +1547,105 @@ export class AcpClient {
     const errorText = typeof value.error === 'string' ? value.error.trim().slice(0, 1_000) : undefined;
     if (!value.success && errorText) throw new Error(errorText);
     return { success: value.success, affectedCount, ...(errorText ? { error: errorText } : {}) };
+  }
+
+  /** Read the native Grok Build codebase-index status for a project. */
+  async codeNavStatus(sessionId: string, cwd: string): Promise<CodeNavStatus> {
+    if (!sessionId || !cwd) throw new Error('A project and session are required');
+    const raw = await this.requestExtension('code/status', { sessionId, cwd }, 30_000);
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const first = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const value = first.result && typeof first.result === 'object'
+      ? first.result as Record<string, unknown>
+      : first;
+    if (typeof value.eligible !== 'boolean' || typeof value.indexed !== 'boolean') {
+      throw new Error('Kernel returned an incomplete code-navigation status');
+    }
+    const reason = typeof value.reason === 'string' ? value.reason.trim().slice(0, 120) : 'unknown';
+    const count = value.fileCount ?? value.file_count;
+    const fileCount = typeof count === 'number' && Number.isFinite(count) && count >= 0
+      ? Math.floor(count)
+      : undefined;
+    return { indexed: value.indexed, eligible: value.eligible, reason, ...(fileCount !== undefined ? { fileCount } : {}) };
+  }
+
+  /** Find symbol definitions through Grok Build's native codebase index. */
+  async findCodeDefinitions(
+    sessionId: string,
+    cwd: string,
+    symbol: string,
+    contextPath?: string,
+  ): Promise<CodeNavResult> {
+    return this.findCodeSymbols('code/find-definitions', sessionId, cwd, symbol, contextPath);
+  }
+
+  /** Find symbol references through Grok Build's native codebase index. */
+  async findCodeReferences(
+    sessionId: string,
+    cwd: string,
+    symbol: string,
+    contextPath?: string,
+  ): Promise<CodeNavResult> {
+    return this.findCodeSymbols('code/find-references', sessionId, cwd, symbol, contextPath);
+  }
+
+  private async findCodeSymbols(
+    method: string,
+    sessionId: string,
+    cwd: string,
+    symbol: string,
+    contextPath?: string,
+  ): Promise<CodeNavResult> {
+    const name = symbol.trim().slice(0, 160);
+    if (!sessionId || !cwd || !name) throw new Error('A project, session and symbol are required');
+    const params = {
+      sessionId,
+      cwd,
+      symbol: name,
+      ...(contextPath?.trim() ? { contextPath: contextPath.trim().slice(0, 2_000) } : {}),
+    };
+    const raw = await this.requestExtension(method, params, 60_000);
+    const outer = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const first = outer.result && typeof outer.result === 'object'
+      ? outer.result as Record<string, unknown>
+      : outer;
+    const value = first.result && typeof first.result === 'object'
+      ? first.result as Record<string, unknown>
+      : first;
+    const locations = Array.isArray(value.locations) ? value.locations : [];
+    const integer = (row: Record<string, unknown>, camel: string, snake: string) => {
+      const candidate = row[camel] ?? row[snake];
+      return typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0
+        ? Math.floor(candidate)
+        : 0;
+    };
+    const parsed = locations.flatMap((entry): CodeNavLocation[] => {
+      if (!entry || typeof entry !== 'object') return [];
+      const row = entry as Record<string, unknown>;
+      const path = typeof row.path === 'string' ? row.path.trim().slice(0, 2_000) : '';
+      if (!path) return [];
+      const line = integer(row, 'line', 'line');
+      const column = integer(row, 'column', 'column');
+      const endLine = integer(row, 'endLine', 'end_line');
+      const endColumn = integer(row, 'endColumn', 'end_column');
+      const matchedSymbol = typeof row.matchedSymbol === 'string'
+        ? row.matchedSymbol.trim().slice(0, 240)
+        : typeof row.matched_symbol === 'string'
+          ? row.matched_symbol.trim().slice(0, 240)
+          : '';
+      return [{
+        path,
+        line,
+        column,
+        ...(endLine ? { endLine } : {}),
+        ...(endColumn ? { endColumn } : {}),
+        ...(matchedSymbol ? { matchedSymbol } : {}),
+      }];
+    }).slice(0, 200);
+    const responseSymbol = typeof value.symbol === 'string' ? value.symbol.trim().slice(0, 160) : name;
+    return { symbol: responseSymbol || name, locations: parsed };
   }
 
   /** Read the kernel's current VCS information for the active project. */
