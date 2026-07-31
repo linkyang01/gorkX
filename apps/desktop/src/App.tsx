@@ -3043,6 +3043,13 @@ function App() {
       setSlashIndex(0);
       return;
     }
+    if (name === 'undo') {
+      void openRewindDialog();
+      setDraft('');
+      setSlashOpen(false);
+      setSlashIndex(0);
+      return;
+    }
     insertSlash(name);
   };
 
@@ -3719,6 +3726,10 @@ function App() {
         setPlusMenuOpen(false);
         await openRewindDialog();
         return;
+      case 'undo-session':
+        setPlusMenuOpen(false);
+        await openRewindDialog();
+        return;
       case 'task-info':
         setTaskInfoOpen(true);
         return;
@@ -3809,6 +3820,7 @@ function App() {
       { name: 'remember', description: t('slashDescRemember'), source: 'agent' as const },
       { name: 'fork', description: t('slashDescFork'), source: 'agent' as const },
       { name: 'rewind', description: t('slashDescRewind'), source: 'agent' as const },
+      { name: 'undo', description: t('plusUndoHint'), source: 'agent' as const },
       { name: 'model', description: t('slashDescModel'), source: 'agent' as const },
       { name: 'effort', description: t('slashDescEffort'), source: 'agent' as const },
       { name: 'context', description: t('slashDescContext'), source: 'agent' as const },

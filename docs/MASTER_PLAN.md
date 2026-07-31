@@ -120,7 +120,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Attachments / images | Drag-drop + preview | ✅ bounded local/resource-link/image attachment handling | A |
 | Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
-| Rewind `/rewind` | Rewind UI | ✅ 包内 `0.2.112 (47348d1)` 已在隔离认证会话完成真实两轮对话、无写入预览、明确确认执行与重载；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
+| Rewind `/rewind` + `/undo` | Rewind / Undo UI | ✅ 包内 `0.2.116 (dd04f39)` 已完成 ACP 路由与 App-only bundle 验收；`+ → 撤销上一回合` 与 `/undo` 进入同一套预览/冲突确认流程；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
 | 损坏会话修复 | 错误面板 → 修复会话历史 | ✅ `_x.ai/session/repair` 先 dry-run 显示修复范围，再经确认原子修复工具调用历史；仅对内核报告的工具配对/历史损坏错误显示 | C |
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |

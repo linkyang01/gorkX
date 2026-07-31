@@ -3,16 +3,20 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
-## 2026-07-31 · Grok Build 最新锁定提交复核
+## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |
 |---|---|---|---|
-| 上游源码与补丁 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `5da6962e4adb9c857f3def762542b52b4ec3e522`（Grok Build 0.2.112），0001–0005 均可在干净 worktree 顺序应用 | `vendor/grok-build` 为本地忽略的构建输入；不把上游源码复制进 gorkX 仓库 |
-| 最新内核编译 | `cargo check -p xai-grok-shell -p xai-grok-pager-bin`；`cargo build --release -p xai-grok-pager-bin` | 通过：完整补丁组合可编译，release 二进制成功生成；许可证与第三方声明哈希与锁文件一致 | 未替代 macOS 签名、公证和全新机器安装验收 |
-| ACP 运行时 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | 通过：更新后的包内 `grok 0.2.112 (5da6962)` 完成 ACP initialize | 这是无认证能力门禁；真实登录、额度、模型回复和麦克风听写仍需人工验收 |
-| App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：重新构建的 arm64 App 包含 `grok 0.2.112 (5da6962)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
+| 上游源码与补丁 | `scripts/verify-grok-kernel-source.sh vendor/grok-build`；`scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `dd04f397b1d02f2272b092555669dfba1f01bc85`（Grok Build 0.2.116），0001–0006 均可在干净 worktree 顺序应用 | `vendor/grok-build` 为本地忽略的构建输入；不把上游源码复制进 gorkX 仓库 |
+| 最新内核编译 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok` | 通过：完整补丁组合可编译，包内资源为 `grok 0.2.116 (dd04f39)`；许可证与第三方声明哈希与锁文件一致 | 未替代 macOS 签名、公证和全新机器安装验收 |
+| ACP 运行时 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --desktop-controls --billing-controls --session-search --prompt-history --prompt-suggestion --session-bundle` | 通过：包内 `grok 0.2.116 (dd04f39)` 完成 ACP initialize、桌面动作、账单、会话搜索、提示历史、建议和任务包守卫探针 | 这是无认证能力门禁；真实登录、额度、模型回复和麦克风听写仍需人工验收 |
+| App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：arm64 App-only 包已包含 `grok 0.2.116 (dd04f39)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
 | 内核更新检查 | Settings → Updates → Check for updates；后端固定白名单 `grok update --check --json` | 通过源码审阅与 Rust 白名单测试：桌面现在读取 Grok Build 原生 JSON 的当前/最新版本、频道和更新状态，能够区分网络失败；仅报告，不允许运行时替换 App 自带的源码锁定内核 | 当前网络/账户能否取得上游频道结果由 Grok Build 更新服务决定；在服务返回新版本时仍需开发者重新锁源、补丁、构建和 ACP 回归后更新 gorkX |
-| 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在最新上游 API 上编译并进入包内资源 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
+| 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在 0.2.116 上编译并进入包内资源；桌面快捷键设置继续控制 gorkX 窗口内的原生语音入口 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
+
+### v0.2.116 桌面化审计
+
+官方 changelog 的 `/undo` 是 `/rewind` 的内核别名，gorkX 已将它加入 `+` 菜单和会话 slash 选择；两条路径都进入同一套“选择检查点 → 非写入预览 → 冲突时二次确认 → 提交”的安全流程。串流 JSON 输出和最小/全屏 slash 隐藏属于 Grok Build CLI/TUI 行为；gorkX 的 ACP 会话已经持续接收结构化工具、状态和用量更新，因此不重复做终端专属开关。
 
 ## 2026-07-31 · 原生提示历史与下一步建议复核
 

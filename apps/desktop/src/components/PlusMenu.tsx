@@ -26,6 +26,7 @@ export type PlusAction =
   | { type: 'search-scope' }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
+  | { type: 'undo-session' }
   | { type: 'task-info' }
   | { type: 'prompt-history' }
   | { type: 'export-session-bundle' }
@@ -144,7 +145,7 @@ export function PlusMenu({
   // live catalogue is still useful after kernel upgrades, but must never be
   // shown as a raw slash-command list to ordinary users.
   const handled = new Set([
-    'btw', 'compact', 'clear', 'new', 'worktree', 'fork', 'rewind', 'recap',
+    'btw', 'compact', 'clear', 'new', 'worktree', 'fork', 'rewind', 'undo', 'recap',
     'share', 'feedback', 'loop', 'deep-research', 'imagine', 'imagine-video',
     'goal', 'plan', 'memory', 'flush', 'dream', 'export', 'model', 'effort',
     'context', 'review', 'diff', 'skills', 'mcp', 'plugins', 'sessions', 'resume',
@@ -406,6 +407,15 @@ export function PlusMenu({
       title: t('plusRewind'),
       desc: t('slashDescRewind'),
       action: { type: 'rewind-session' } as PlusAction,
+    }] as Row[]) : []),
+    // `/undo` is a kernel alias for `/rewind`; keep the desktop button visible
+    // on runtimes that expose the native rewind route before advertising the alias.
+    ...(hasActiveSession && (slashAllowed('/undo', availableCommandNames) || slashAllowed('/rewind', availableCommandNames)) ? ([{
+      kind: 'action' as const,
+      id: 'undo',
+      title: t('plusUndo'),
+      desc: t('plusUndoHint'),
+      action: { type: 'undo-session' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession && slashAllowed('/feedback', availableCommandNames) ? ([{
       kind: 'action' as const,
