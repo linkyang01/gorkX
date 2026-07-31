@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { projectDisplayName } from '../lib/projects';
 import { searchThreadHistory, type ThreadSearchHit } from '../lib/threads';
+import type { KernelSessionSearchHit } from '../lib/acpClient';
 import { t } from '../lib/i18n';
 
 interface Props {
@@ -8,12 +9,15 @@ interface Props {
   aliases: Record<string, string>;
   onClose: () => void;
   onOpenTask: (hit: ThreadSearchHit) => void;
+  onSearchKernel?: (query: string) => Promise<KernelSessionSearchHit[]>;
+  onOpenKernelSession?: (hit: KernelSessionSearchHit) => void | Promise<void>;
 }
 
 /** Local task/history search. No model request, project scan, or network call. */
-export function TaskSearchDialog({ open, aliases, onClose, onOpenTask }: Props) {
+export function TaskSearchDialog({ open, aliases, onClose, onOpenTask, onSearchKernel, onOpenKernelSession }: Props) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<ThreadSearchHit[] | null>(null);
+  const [kernelHits, setKernelHits] = useState<KernelSessionSearchHit[] | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,20 +32,38 @@ export function TaskSearchDialog({ open, aliases, onClose, onOpenTask }: Props) 
     const needle = query.trim();
     if (!needle) {
       setHits(null);
+      setKernelHits(null);
       setBusy(false);
       return;
     }
     setHits(null);
+    setKernelHits(null);
     setBusy(true);
     const handle = window.setTimeout(() => {
+      let pending = 1;
+      const done = () => {
+        pending -= 1;
+        if (pending <= 0) setBusy(false);
+      };
       void searchThreadHistory(needle)
         .then(setHits)
-        .finally(() => setBusy(false));
+        .catch(() => setHits([]))
+        .finally(done);
+      if (onSearchKernel) {
+        pending += 1;
+        void onSearchKernel(needle)
+          .then(setKernelHits)
+          .catch(() => setKernelHits([]))
+          .finally(done);
+      }
     }, 160);
     return () => window.clearTimeout(handle);
-  }, [open, query]);
+  }, [open, query, onSearchKernel]);
 
   if (!open) return null;
+  const visibleKernelHits = (kernelHits ?? []).filter(
+    (hit) => !hits?.some((local) => local.sessionId === hit.sessionId),
+  );
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section
@@ -75,7 +97,7 @@ export function TaskSearchDialog({ open, aliases, onClose, onOpenTask }: Props) 
         <div style={{ marginTop: 12, maxHeight: '52vh', overflow: 'auto' }}>
           {!query.trim() ? <p className="hint">{t('taskSearchAllStart')}</p> : null}
           {busy ? <p className="hint">{t('reviewLoading')}</p> : null}
-          {!busy && hits?.length === 0 ? <p className="hint">{t('taskSearchAllEmpty')}</p> : null}
+          {!busy && hits?.length === 0 && !kernelHits?.length ? <p className="hint">{t('taskSearchAllEmpty')}</p> : null}
           {hits?.map((hit) => {
             const project = hit.project === '__none__' ? t('noProjectInbox') : projectDisplayName(hit.project, aliases);
             return (
@@ -95,6 +117,28 @@ export function TaskSearchDialog({ open, aliases, onClose, onOpenTask }: Props) 
               </button>
             );
           })}
+          {visibleKernelHits.length ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="settings-row-title" style={{ padding: '0 4px 6px' }}>{t('taskSearchKernelTitle')}</div>
+              <div className="hint" style={{ padding: '0 4px 8px' }}>{t('taskSearchKernelHint')}</div>
+              {visibleKernelHits.map((hit) => (
+                  <button
+                    type="button"
+                    key={`kernel:${hit.sessionId}`}
+                    className="slash-item"
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px' }}
+                    onClick={() => void onOpenKernelSession?.(hit)}
+                  >
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                      <strong style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hit.summary}</strong>
+                      <span className="hint" style={{ flex: '0 0 auto' }}>{t('taskSearchKernelBadge')}</span>
+                    </div>
+                    <div className="hint" style={{ marginTop: 3, overflowWrap: 'anywhere' }}>{projectDisplayName(hit.cwd, aliases)}</div>
+                    {hit.snippet ? <div className="hint" style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{hit.snippet}</div> : null}
+                  </button>
+                ))}
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

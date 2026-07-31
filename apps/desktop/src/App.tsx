@@ -52,6 +52,7 @@ import {
   type UserQuestionAnswers,
   type UserQuestionAnnotations,
   type UserQuestionRequest,
+  type KernelSessionSearchHit,
 } from './lib/acpClient';
 import type { ArchivedTaskRow, HookManagementAction, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
@@ -866,6 +867,48 @@ function App() {
     // Wait for the project scope and restored row to reach state before using
     // the normal task-opening path (including its usual session reconnect).
     window.setTimeout(() => selectThread(opened.id), 0);
+  }, [selectThread]);
+
+  /** Open a native Grok Build history hit by indexing it into gorkX's task list. */
+  const openKernelSearchHit = useCallback(async (hit: KernelSessionSearchHit) => {
+    const sessionId = hit.sessionId.trim();
+    const cwd = hit.cwd.trim();
+    if (!sessionId || !cwd) return;
+    const existing = threadsRef.current.find((thread) => thread.sessionId === sessionId);
+    if (existing) {
+      setProject(existing.projectKey === NO_PROJECT_KEY ? '' : existing.projectKey);
+      setTaskSearchOpen(false);
+      window.setTimeout(() => selectThread(existing.id), 0);
+      return;
+    }
+    const id = `kernel_${sessionId}`;
+    const parsedUpdatedAt = Date.parse(hit.updatedAt);
+    const meta: ThreadMeta = {
+      id,
+      title: hit.summary || t('newThread'),
+      sessionId,
+      modelId: null,
+      cwd,
+      effort: 'high',
+      chatMode: 'agent',
+      memoryEnabled: true,
+      subagentsEnabled: true,
+      planningEnabled: true,
+      updatedAt: Number.isFinite(parsedUpdatedAt) ? parsedUpdatedAt : Date.now(),
+      project: cwd,
+      archived: false,
+    };
+    await upsertThreadMeta(cwd, meta);
+    const stub = metaToStub(meta);
+    setThreads((previous) => [
+      ...previous.filter((thread) => thread.sessionId !== sessionId && thread.id !== id),
+      stub,
+    ]);
+    setProject(cwd);
+    setRecentProjects(pushRecentProject(cwd));
+    setTaskSearchOpen(false);
+    // Let the project scope and restored row commit before the normal reconnect path.
+    window.setTimeout(() => selectThread(id), 0);
   }, [selectThread]);
 
   const canNavBack = navIdxRef.current > 0;
@@ -2652,6 +2695,16 @@ function App() {
       }
     },
     [active?.client, bootstrapClient],
+  );
+
+  const searchKernelSessions = useCallback(
+    async (query: string): Promise<KernelSessionSearchHit[]> => {
+      // Native history search is useful only when the App has an authenticated
+      // Grok home; local gorkX SQLite search remains available offline.
+      if (!status?.authenticated && !active?.client) return [];
+      return withCloudClient((client) => client.searchSessions(query, project || undefined, 20));
+    },
+    [status?.authenticated, active?.client, withCloudClient, project],
   );
 
   const rememberModels = useCallback(
@@ -7930,6 +7983,8 @@ function App() {
         aliases={projectAliases}
         onClose={() => setTaskSearchOpen(false)}
         onOpenTask={(hit) => void openTaskSearchHit(hit)}
+        onSearchKernel={searchKernelSessions}
+        onOpenKernelSession={(hit) => void openKernelSearchHit(hit)}
       />
 
       {kernelOpen ? <Suspense fallback={<DeferredPanelFallback />}><SettingsPanel

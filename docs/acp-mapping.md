@@ -73,6 +73,21 @@ to display values. It never turns a missing percentage into `0%`, and the
 auto-top-up route is read-only in gorkX because this kernel exposes no write
 operation for changing the account rule.
 
+## Cross-session search
+
+The global task search dialog keeps its local SQLite index as the offline path,
+then asks the authenticated kernel for additional history hits:
+
+```
+_x.ai/session/search {
+  query, cwd?, limit, offset: 0, includeContent: true
+}
+```
+
+Opening a native hit writes only bounded session metadata into the gorkX task
+index and reconnects with the normal `session/load` path. It never imports raw
+transcript files just to render search results.
+
 ## Plan mode
 
 ```

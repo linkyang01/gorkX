@@ -180,6 +180,17 @@ export interface SessionSnapshot {
   };
 }
 
+/** A ranked result from Grok Build's native cross-session FTS index. */
+export interface KernelSessionSearchHit {
+  sessionId: string;
+  cwd: string;
+  summary: string;
+  updatedAt: string;
+  score?: number;
+  matchedFields: string[];
+  snippet?: string;
+}
+
 /** Read-only aggregate returned by Grok Build's native session-usage extension. */
 export interface SessionUsageSnapshot {
   totalTokens?: number;
@@ -1359,6 +1370,45 @@ export class AcpClient {
       modelId: s.modelId as string | undefined,
       lastChangeUnixMs: s.lastChangeUnixMs as number | undefined,
     }));
+  }
+
+  /** Search Grok Build's native cross-session FTS index without a model request. */
+  async searchSessions(
+    query: string,
+    cwd?: string,
+    limit = 20,
+  ): Promise<KernelSessionSearchHit[]> {
+    const text = query.trim().slice(0, 256);
+    if (!text) return [];
+    const raw = await this.requestExtension('session/search', {
+      query: text,
+      ...(cwd ? { cwd } : {}),
+      limit: Math.max(1, Math.min(50, Math.trunc(limit))),
+      offset: 0,
+      includeContent: true,
+    }, 30_000) as {
+      result?: { results?: Array<Record<string, unknown>> };
+      results?: Array<Record<string, unknown>>;
+    };
+    const list = raw?.result?.results ?? raw?.results ?? [];
+    return list.flatMap((row) => {
+      const sessionId = typeof row.sessionId === 'string' ? row.sessionId.trim() : '';
+      const hitCwd = typeof row.cwd === 'string' ? row.cwd.trim() : '';
+      if (!sessionId || !hitCwd) return [];
+      const matchedFields = Array.isArray(row.matchedFields)
+        ? row.matchedFields.filter((item): item is string => typeof item === 'string').slice(0, 12)
+        : [];
+      const snippet = typeof row.snippet === 'string' ? row.snippet.trim().slice(0, 500) : undefined;
+      return [{
+        sessionId,
+        cwd: hitCwd,
+        summary: typeof row.summary === 'string' && row.summary.trim() ? row.summary.trim().slice(0, 240) : sessionId.slice(0, 8),
+        updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
+        score: typeof row.score === 'number' && Number.isFinite(row.score) ? row.score : undefined,
+        matchedFields,
+        ...(snippet ? { snippet } : {}),
+      }];
+    });
   }
 
   /**
