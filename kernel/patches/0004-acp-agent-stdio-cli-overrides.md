@@ -2,7 +2,7 @@
 
 | Field | Value |
 |------|--------|
-| Upstream commit | `47348d13ec4508dcfe440e34c6d511bb02998fb2` (Grok Build 0.2.112) |
+| Upstream commit | `5da6962e4adb9c857f3def762542b52b4ec3e522` (Grok Build 0.2.112) |
 | Patch file | `0004-acp-agent-stdio-cli-overrides.patch` |
 | Affected surface | `grok agent stdio` process startup |
 

@@ -3,6 +3,16 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-07-31 · Grok Build 最新锁定提交复核
+
+| 范围 | 命令 | 结果 | 边界 |
+|---|---|---|---|
+| 上游源码与补丁 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `5da6962e4adb9c857f3def762542b52b4ec3e522`（Grok Build 0.2.112），0001–0004 均可在干净 worktree 顺序应用 | `vendor/grok-build` 为本地忽略的构建输入；不把上游源码复制进 gorkX 仓库 |
+| 最新内核编译 | `cargo check -p xai-grok-shell -p xai-grok-pager-bin`；`cargo build --release -p xai-grok-pager-bin` | 通过：完整补丁组合可编译，release 二进制成功生成；许可证与第三方声明哈希与锁文件一致 | 未替代 macOS 签名、公证和全新机器安装验收 |
+| ACP 运行时 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok` | 通过：更新后的包内 `grok 0.2.112 (5da6962)` 完成 ACP initialize | 这是无认证能力门禁；真实登录、额度、模型回复和麦克风听写仍需人工验收 |
+| App-only 包 | `cd apps/desktop && npm run build:app`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：重新构建的 arm64 App 包含 `grok 0.2.112 (5da6962)`、许可证、NOTICE 与隔离 `GROK_HOME` | 未生成 DMG、未签名/公证，也不替代干净 Mac 安装验收 |
+| 原生语音适配 | ACP `_x.ai/voice/start|stop|shutdown` 路由编译并保留，沿用 Grok Build 自带低内存 macOS voice pipeline | 通过：语音适配在最新上游 API 上编译并进入包内资源 | 本次不触发麦克风 TCC、不采集或上传音频；真实转写仍需用户授权后的 macOS 验收 |
+
 ## 2026-07-26 · 受控内核 0.2.112 与成果中心回归
 
 | 范围 | 命令 | 结果 | 边界 |
