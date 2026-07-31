@@ -11,10 +11,33 @@ interface Props {
 /** Native `exit_plan_mode` gate: user sees the engine's plan before execution can begin. */
 export function PlanApprovalPrompt({ request, onAnswer }: Props) {
   const [feedback, setFeedback] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => setFeedback(''), [request.jsonrpcId]);
+  useEffect(() => {
+    setFeedback('');
+    setCopied(false);
+  }, [request.jsonrpcId]);
 
   const hasPlan = Boolean(request.planContent?.trim());
+  const copyPlan = async () => {
+    const plan = request.planContent?.trim();
+    if (!plan) return;
+    try {
+      await navigator.clipboard.writeText(plan);
+    } catch {
+      const area = document.createElement('textarea');
+      area.value = plan;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      const copiedByFallback = document.execCommand('copy');
+      area.remove();
+      if (!copiedByFallback) throw new Error(t('copyFailed'));
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
   return (
     <div className="modal-backdrop plan-approval-backdrop" role="presentation">
       <section className="modal plan-approval-modal" role="dialog" aria-modal="true" aria-labelledby="plan-approval-title">
@@ -33,6 +56,13 @@ export function PlanApprovalPrompt({ request, onAnswer }: Props) {
             <div className="plan-approval-empty">{t('planApprovalEmpty')}</div>
           )}
         </div>
+        {hasPlan ? (
+          <div className="plan-approval-copy-row">
+            <button type="button" className="btn btn-sm" onClick={() => void copyPlan()}>
+              {copied ? t('planApprovalCopied') : t('planApprovalCopy')}
+            </button>
+          </div>
+        ) : null}
         <label className="plan-approval-feedback">
           <span>{t('planApprovalFeedback')}</span>
           <textarea

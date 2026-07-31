@@ -3651,6 +3651,7 @@ button.pill:hover {
 .plan-approval-content { min-height: 130px; overflow: auto; margin: 18px 24px 0; padding: 4px 17px 14px; border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--glass) 72%, var(--panel)); }
 .plan-approval-markdown { font-size: 13px; line-height: 1.55; }
 .plan-approval-empty { padding: 18px 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.plan-approval-copy-row { display: flex; justify-content: flex-end; margin: 10px 24px 0; }
 .plan-approval-feedback { display: grid; gap: 6px; margin: 14px 24px 0; color: var(--text-2); font-size: 12px; font-weight: 600; }
 .plan-approval-feedback textarea { width: 100%; min-height: 70px; resize: vertical; padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 9px; color: var(--text); background: var(--glass); font: inherit; font-size: 13px; line-height: 1.45; }
 .plan-approval-feedback textarea:focus { outline: 2px solid color-mix(in srgb, var(--plan) 58%, transparent); border-color: var(--plan); }
@@ -3772,6 +3773,7 @@ button.pill:hover {
   .plan-approval-head { padding: 18px 16px 9px; }
   .plan-approval-explain { padding: 0 16px 14px; }
   .plan-approval-content { margin: 14px 16px 0; }
+  .plan-approval-copy-row { margin: 10px 16px 0; }
   .plan-approval-feedback { margin: 12px 16px 0; }
   .plan-approval-actions { padding: 12px 16px 14px; }
 }
