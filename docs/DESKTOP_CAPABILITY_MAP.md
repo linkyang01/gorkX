@@ -10,6 +10,7 @@ control; `/` remains an expert compatibility shortcut, not the primary path.
 | `models` | Settings: Models & providers; composer model selector | App-owned provider configuration and live ACP model selection; web subscriptions are never represented as API credentials. |
 | `sessions list/search/delete` | Other sessions panel; local task search | Kernel history is searched/restored through its bounded CLI adapter; gorkX-owned task search stays local and separate. |
 | `prompt_history`, `suggestPrompt` | `+ → 最近提问`; Composer → 建议下一步 | Prompt history is bounded and only backfills the composer. Suggestion is explicitly user-triggered, bounded, editable and never auto-sent; the UI warns it may use model quota. |
+| `x.ai/session/state`, `x.ai/session/updates`, `x.ai/session/import` | `+ → 导出可恢复任务包` / `导入任务包` | Export reads native metadata and paginated update envelopes into a bounded local `.gorkx-task.json`; import requires a selected project and explicit confirmation, and the kernel leaves an existing same-id session unchanged. |
 | `export` | Add menu: Export transcript | Native Markdown save picker with clipboard fallback. |
 | `inspect` | Add menu: Project inspection | Read-only normalized project configuration view. |
 | `worktree list/show/rm/gc/db` | Worktrees panel | Creation and task association use the live kernel ACP path; removal and GC remain explicit user actions. A collapsed Maintenance area shows local index status/location and asks for confirmation before rebuilding the index from a filesystem scan. |

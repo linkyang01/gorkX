@@ -11,6 +11,7 @@ import { APP_VERSION } from './appMeta';
 import { parseAutoTopupSnapshot, parseBillingSnapshot, type AutoTopupSnapshot, type BillingSnapshot } from './billing';
 import { parsePromptHistory } from './promptHistory';
 import { parsePromptSuggestion, type PromptSuggestionReply } from './promptSuggestion';
+import { createSessionBundle, type SessionBundle } from './sessionBundle';
 
 export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
 
@@ -1433,6 +1434,80 @@ export class AcpClient {
       generation: Number.isInteger(generation) && generation >= 0 ? generation : 0,
     }, 60_000);
     return parsePromptSuggestion(raw, generation);
+  }
+
+  /** Read the native metadata columns used by Grok Build session import. */
+  async getSessionState(sessionId: string, cwd: string): Promise<Record<string, unknown>> {
+    if (!sessionId || !cwd.trim()) throw new Error('A session and project are required');
+    const raw = await this.requestExtension('session/state', { sessionId, cwd: cwd.trim() }, 30_000);
+    const result = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      throw new Error('Kernel returned invalid session state');
+    }
+    return result as Record<string, unknown>;
+  }
+
+  /** Read one bounded native session-update page for portable export. */
+  async getSessionUpdatesPage(
+    sessionId: string,
+    cwd: string,
+    offset = 0,
+    limit = 500,
+  ): Promise<{ updates: Array<Record<string, unknown>>; totalCount: number; hasMore: boolean }> {
+    const raw = await this.requestExtension('session/updates', {
+      sessionId,
+      cwd: cwd.trim(),
+      offset: Math.max(0, Math.trunc(offset)),
+      limit: Math.max(1, Math.min(500, Math.trunc(limit))),
+    }, 60_000);
+    const result = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    const row = result && typeof result === 'object' ? result as Record<string, unknown> : {};
+    const updates = Array.isArray(row.updates)
+      ? row.updates.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item)))
+      : [];
+    const totalCount = typeof row.totalCount === 'number' && Number.isFinite(row.totalCount)
+      ? Math.max(0, Math.trunc(row.totalCount))
+      : updates.length;
+    return { updates, totalCount, hasMore: row.hasMore === true };
+  }
+
+  /** Export the complete durable session state and transcript envelopes. */
+  async exportSessionBundle(sessionId: string, cwd: string): Promise<SessionBundle> {
+    const state = await this.getSessionState(sessionId, cwd);
+    const updates: Array<Record<string, unknown>> = [];
+    let offset = 0;
+    for (let page = 0; page < 200; page += 1) {
+      const result = await this.getSessionUpdatesPage(sessionId, cwd, offset, 500);
+      updates.push(...result.updates);
+      offset += result.updates.length;
+      if (!result.hasMore || result.updates.length === 0 || offset >= result.totalCount) break;
+    }
+    if (updates.length >= 100_000) throw new Error('Session is too large to export as one task package');
+    return createSessionBundle({ sessionId, cwd: cwd.trim(), state, updates });
+  }
+
+  /** Import a previously exported native session into a selected project. */
+  async importSessionBundle(bundle: SessionBundle, targetCwd: string): Promise<{ imported: boolean; sessionId: string; cwd: string }> {
+    const cwd = targetCwd.trim();
+    if (!cwd) throw new Error('A target project is required');
+    const raw = await this.requestExtension('session/import', {
+      sessionId: bundle.sessionId,
+      cwd,
+      state: bundle.state,
+      updates: bundle.updates,
+    }, 60_000);
+    const result = raw && typeof raw === 'object' && 'result' in raw
+      ? (raw as { result?: unknown }).result
+      : raw;
+    const imported = result && typeof result === 'object' && typeof (result as Record<string, unknown>).imported === 'boolean'
+      ? Boolean((result as Record<string, unknown>).imported)
+      : null;
+    if (imported === null) throw new Error('Kernel returned invalid session-import result');
+    return { imported, sessionId: bundle.sessionId, cwd };
   }
 
   /**

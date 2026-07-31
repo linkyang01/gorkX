@@ -149,6 +149,11 @@ import {
   uploadSessionTrace,
 } from './lib/grokAdmin';
 import {
+  parseSessionBundleText,
+  serializeSessionBundle,
+  type SessionBundle,
+} from './lib/sessionBundle';
+import {
   attachmentsPromptBlock,
   attachmentResourceLinks,
   buildAttachment,
@@ -3417,6 +3422,101 @@ function App() {
     }
   };
 
+  /** Export the native durable session, not just a rendered Markdown copy. */
+  const exportPortableSession = async () => {
+    const agent = active;
+    if (!agent?.client || !agent.sessionId || agent.busy || !agent.cwd) return;
+    const proceed = await askAction({
+      title: t('sessionBundleExportTitle'),
+      message: t('sessionBundleExportHint'),
+      placeholder: '',
+      submitLabel: t('confirm'),
+      allowEmpty: true,
+    });
+    if (proceed === null) return;
+    try {
+      const bundle = await agent.client.exportSessionBundle(agent.sessionId, agent.cwd);
+      const path = await save({
+        defaultPath: `gorkx-${agent.sessionId.slice(0, 8)}.gorkx-task.json`,
+        filters: [{ name: 'gorkX task package', extensions: ['gorkx-task.json', 'json'] }],
+      });
+      if (typeof path !== 'string' || !path) return;
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      await writeTextFile(path, serializeSessionBundle(bundle));
+      alert(`${t('sessionBundleExportDone')}: ${path}`);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  /** Import a native session package into the currently selected project. */
+  const importPortableSession = async () => {
+    const targetCwd = project.trim();
+    if (!targetCwd) {
+      alert(t('sessionBundleChooseProject'));
+      return;
+    }
+    try {
+      const path = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'gorkX task package', extensions: ['gorkx-task.json', 'json'] }],
+      });
+      if (typeof path !== 'string' || !path) return;
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      let bundle: SessionBundle;
+      try {
+        bundle = parseSessionBundleText(await readTextFile(path));
+      } catch (error) {
+        alert(`${t('sessionBundleInvalid')}: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+      const proceed = await askAction({
+        title: t('sessionBundleImportTitle'),
+        message: `${t('sessionBundleImportHint')}\n\n${bundle.sessionId} → ${targetCwd}`,
+        placeholder: '',
+        submitLabel: t('confirm'),
+        allowEmpty: true,
+      });
+      if (proceed === null) return;
+
+      let client: AcpClient | null = active?.client && !active.busy && active.cwd === targetCwd
+        ? active.client
+        : null;
+      let owned = false;
+      if (!client) {
+        client = await bootstrapClient(targetCwd, false, false, false);
+        owned = true;
+      }
+      try {
+        const result = await client.importSessionBundle(bundle, targetCwd);
+        if (!result.imported) {
+          await openKernelSearchHit({
+            sessionId: bundle.sessionId,
+            cwd: targetCwd,
+            summary: t('importedSessionTitle'),
+            updatedAt: bundle.exportedAt,
+            matchedFields: [],
+          });
+          alert(t('sessionBundleAlreadyPresent'));
+          return;
+        }
+        await openKernelSearchHit({
+          sessionId: bundle.sessionId,
+          cwd: targetCwd,
+          summary: t('importedSessionTitle'),
+          updatedAt: bundle.exportedAt,
+          matchedFields: [],
+        });
+        alert(t('sessionBundleImportDone'));
+      } finally {
+        if (owned) await client.stop().catch(() => {});
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   /** Local-only support archive, with a plain-language privacy gate. */
   const exportActiveTrace = async () => {
     if (!active?.sessionId || active.busy) return;
@@ -3610,6 +3710,14 @@ function App() {
         return;
       case 'prompt-history':
         setPromptHistoryOpen(true);
+        return;
+      case 'export-session-bundle':
+        setPlusMenuOpen(false);
+        await exportPortableSession();
+        return;
+      case 'import-session-bundle':
+        setPlusMenuOpen(false);
+        await importPortableSession();
         return;
       case 'compact-session':
         await compactActiveSession();

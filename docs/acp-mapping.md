@@ -124,6 +124,27 @@ The result is a short editable chip. It is never auto-sent; the user can insert,
 edit, or dismiss it. Because this is a model-backed prediction, the button tells
 the user that it may consume provider quota.
 
+## Portable task bundles
+
+The **导出可恢复任务包 / Export portable task package** and **导入任务包 /
+Import task package** actions use Grok Build's durable session storage rather
+than exporting a rendered transcript:
+
+```
+_x.ai/session/state   { sessionId, cwd }
+_x.ai/session/updates { sessionId, cwd, offset, limit }
+_x.ai/session/import  { sessionId, cwd, state, updates }
+```
+
+Export is paginated and bounded at the desktop boundary. The resulting local
+`.gorkx-task.json` file includes the native metadata columns and update
+envelopes, so it can be restored into a selected project on another gorkX
+installation. Import is picker-, project-selection- and confirmation-gated;
+the file is treated as sensitive project data, and an existing session with the
+same id is left unchanged by the kernel. The ACP smoke gate probes the read and
+invalid-import guards without mutating a real session; authenticated export and
+import remain a manual acceptance path because they read/write user task data.
+
 ## Plan mode
 
 ```

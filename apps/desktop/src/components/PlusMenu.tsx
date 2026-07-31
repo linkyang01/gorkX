@@ -28,6 +28,8 @@ export type PlusAction =
   | { type: 'rewind-session' }
   | { type: 'task-info' }
   | { type: 'prompt-history' }
+  | { type: 'export-session-bundle' }
+  | { type: 'import-session-bundle' }
   | { type: 'compact-session' }
   | { type: 'recap-session' }
   | { type: 'share-session' }
@@ -376,6 +378,20 @@ export function PlusMenu({
       title: t('plusPromptHistory'),
       desc: t('plusPromptHistoryHint'),
       action: { type: 'prompt-history' } as PlusAction,
+    }] as Row[]) : []),
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'export-session-bundle',
+      title: t('plusExportSessionBundle'),
+      desc: t('plusExportSessionBundleHint'),
+      action: { type: 'export-session-bundle' } as PlusAction,
+    }] as Row[]) : []),
+    ...((home || hasActiveSession) ? ([{
+      kind: 'action' as const,
+      id: 'import-session-bundle',
+      title: t('plusImportSessionBundle'),
+      desc: t('plusImportSessionBundleHint'),
+      action: { type: 'import-session-bundle' } as PlusAction,
     }] as Row[]) : []),
     ...(hasActiveSession && slashAllowed('/fork', availableCommandNames) ? ([{
       kind: 'action' as const,

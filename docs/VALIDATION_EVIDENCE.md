@@ -21,6 +21,14 @@
 | 持久提示历史 | `+ → 最近提问`；`_x.ai/prompt_history { cwd }` | 通过：桌面合并当前任务与当前项目的 Grok Build 历史，边界化、去重后只回填输入框；隔离 ACP 返回合法空列表 | 不导入原始 transcript，也不把历史当作额度 |
 | 下一步建议 | Composer → `建议下一步`；`_x.ai/suggestPrompt { sessionId, generation }` | 通过：按钮仅在用户点击时调用；隔离 ACP 的缺失会话守卫返回 `suggestion: null`，纯解析测试通过 | 真实建议是模型调用，可能消耗额度；建议永不自动发送，需用户插入/编辑/发送 |
 
+## 2026-07-31 · 原生可恢复任务包复核
+
+| 范围 | 路由/步骤 | 结果 | 边界 |
+|---|---|---|---|
+| 任务包格式 | `sessionBundle.test.ts`；`createSessionBundle` / `parseSessionBundleText` / `serializeSessionBundle` | 通过：版本、会话 ID、项目路径、summary 列、更新数量、单条更新大小和总文件大小均有边界；序列化往返、版本错误和超大更新均有纯测试 | 本地文件仍可能包含完整任务内容，导出和导入均必须经过隐私提示与用户选择 |
+| 原生会话读取 | `_x.ai/session/state`、`_x.ai/session/updates { offset, limit }`；`verify-grok-acp.mjs --session-bundle` | 通过：锁定 Grok Build 0.2.112 对缺失会话返回合法 state 守卫，updates 返回分页空结果；桌面分页最多 100,000 条更新 | 未用用户主目录读取真实任务；真实已认证导出需人工确认内容边界 |
+| 原生会话恢复 | `_x.ai/session/import`；`verify-grok-acp.mjs --session-bundle` | 通过：缺少 summary 的无效包在内核原生校验处被拒绝；桌面导入要求 JSON 文件、目标项目和二次确认，成功后用正常 `session/load` 重连 | 探针不写入会话；跨设备真实导出→导入仍需用户登录后手动验收，不把路由守卫写成完整恢复成功 |
+
 ## 2026-07-31 · 桌面动作原生 ACP 化复核
 
 | 范围 | 路由/步骤 | 结果 | 边界 |
