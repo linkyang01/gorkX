@@ -4,6 +4,7 @@ mod app_update;
 mod auth;
 mod capture;
 mod computer;
+mod computer_mcp;
 mod extensions;
 mod git_panel;
 mod github;
@@ -207,6 +208,7 @@ pub fn run() {
             capture::capture_screen_region,
             computer::computer_accessibility_status,
             computer::computer_open_accessibility_settings,
+            computer::computer_mcp_install,
             computer::computer_control_set_enabled,
             computer::computer_control_emergency_stop,
             computer::computer_press_key,
@@ -278,6 +280,12 @@ pub fn run() {
 /// Entry point used by the launchd worker mode in the app executable.
 pub fn run_scheduled_jobs() -> Result<scheduler::SchedulerRunSummary, String> {
     scheduler::run_due_jobs()
+}
+
+/// Entry point used by Grok Build when the app-owned Computer MCP server is
+/// configured through Settings → Computer.
+pub fn run_computer_mcp() -> Result<(), String> {
+    computer_mcp::run()
 }
 
 /// Open a path in Finder (macOS) / file manager.

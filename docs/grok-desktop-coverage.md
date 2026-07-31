@@ -67,7 +67,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Source preview | Explicit HTTP(S) link opens in a separate native gorkX reading window | ✅ validates the URL and has no gorkX credential bridge; it is separate from the Agent's MCP Chrome profile |
 | Screenshot attach | Explicit macOS region picker → local PNG attachment | ✅ |
 | Computer Hub workspace | Settings → Screen capture → Computer Hub workspace | 🟡 fixed `workspace status/start/pause/resume/stop` actions are wired to the bundled Grok Build binary, require confirmation, and are still server/account-gated; exposing a project can make its content available to the remote service. |
-| Computer automation | Settings → Computer → foreground controls | 🟡 real user-triggered foreground click / fixed-key / bounded text actions with macOS Accessibility permission and emergency stop; no background capture, arbitrary script, hidden-window control, or agent ACP auto-call. Computer Hub exposure is still a separate remote workspace feature. |
+| Computer automation | Settings → Computer → foreground controls + “Connect Agent Computer tools” | 🟡 real app-owned MCP stdio bridge for one-shot screenshot / foreground click / fixed-key / bounded text actions after explicit registration, Accessibility permission and a short-lived enable lease; no background capture, arbitrary script or hidden-window control. Native Computer ACP is still unavailable, and Computer Hub exposure remains a separate remote workspace feature. |
 
 ## Scheduling
 
@@ -87,4 +87,4 @@ scripts/verify-grok-kernel-patches.sh
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
 
-Updated: 2026-07-26
+Updated: 2026-07-31

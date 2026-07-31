@@ -34,6 +34,10 @@ export async function openComputerAccessibilitySettings(): Promise<void> {
   await invoke('computer_open_accessibility_settings');
 }
 
+export async function installComputerMcp(): Promise<string> {
+  return invoke<string>('computer_mcp_install');
+}
+
 export async function setComputerControlEnabled(enabled: boolean): Promise<ComputerAccessibilityStatus> {
   return invoke<ComputerAccessibilityStatus>('computer_control_set_enabled', { enabled });
 }

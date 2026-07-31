@@ -25,6 +25,7 @@ import {
 import {
   computerAccessibilityStatus,
   computerClick,
+  installComputerMcp,
   computerPressKey,
   computerTypeText,
   emergencyStopComputerControl,
@@ -426,6 +427,8 @@ export function SettingsPanel({
   const [computerX, setComputerX] = useState('');
   const [computerY, setComputerY] = useState('');
   const [computerActionResult, setComputerActionResult] = useState<ComputerActionResult | null>(null);
+  const [computerMcpBusy, setComputerMcpBusy] = useState(false);
+  const [computerMcpStatus, setComputerMcpStatus] = useState<string | null>(null);
   const [managedSetup, setManagedSetup] = useState<string | null>(null);
   const [managedSetupBusy, setManagedSetupBusy] = useState(false);
   const [managedSetupReady, setManagedSetupReady] = useState(false);
@@ -628,6 +631,18 @@ export function SettingsPanel({
       setMsg(error instanceof Error ? error.message : String(error));
     } finally {
       setComputerControlBusy(false);
+    }
+  };
+
+  const registerComputerMcp = async () => {
+    if (!window.confirm(t('settingsComputerControlInstallMcpConfirm'))) return;
+    setComputerMcpBusy(true);
+    try {
+      setComputerMcpStatus(await installComputerMcp());
+    } catch (error) {
+      setComputerMcpStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComputerMcpBusy(false);
     }
   };
 
@@ -2619,6 +2634,9 @@ export function SettingsPanel({
                   >
                     {t('settingsComputerControlOpenSettings')}
                   </button>
+                  <button type="button" className="btn" disabled={computerMcpBusy} onClick={() => void registerComputerMcp()}>
+                    {computerMcpBusy ? t('settingsComputerControlInstallingMcp') : t('settingsComputerControlInstallMcp')}
+                  </button>
                   {computerAccess?.enabled ? (
                     <button type="button" className="btn" disabled={computerControlBusy} onClick={() => void toggleComputerControl(false)}>
                       {t('settingsComputerControlDisable')}
@@ -2638,6 +2656,7 @@ export function SettingsPanel({
                     {' · '}{computerAccess.enabled ? t('settingsComputerControlStateEnabled') : t('settingsComputerControlStateDisabled')}
                   </p>
                 ) : null}
+                {computerMcpStatus ? <p className="hint" style={{ marginTop: 8 }}>{computerMcpStatus}</p> : null}
                 <div className="field-row" style={{ marginTop: 8 }}>
                   <label className="field" style={{ margin: 0, minWidth: 150 }}>
                     {t('settingsComputerControlKey')}

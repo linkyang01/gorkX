@@ -159,8 +159,13 @@ pub fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
 /// Apply env for any process that must use App-owned Grok data.
 pub fn apply_engine_env(cmd: &mut std::process::Command) {
     let _ = ensure_dirs();
+    let support = app_support_dir();
     let home = grok_home();
     let process_home = engine_process_home();
+    cmd.env(
+        "GORKX_COMPUTER_LEASE_DIR",
+        support.join("computer-control"),
+    );
     cmd.env("GROK_HOME", &home);
     cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
@@ -168,8 +173,13 @@ pub fn apply_engine_env(cmd: &mut std::process::Command) {
 
 pub fn apply_engine_env_tokio(cmd: &mut tokio::process::Command) {
     let _ = ensure_dirs();
+    let support = app_support_dir();
     let home = grok_home();
     let process_home = engine_process_home();
+    cmd.env(
+        "GORKX_COMPUTER_LEASE_DIR",
+        support.join("computer-control"),
+    );
     cmd.env("GROK_HOME", &home);
     cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
@@ -205,7 +215,7 @@ pub fn engine_is_app_owned(bin: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_engine_env, engine_process_home, grok_home};
+    use super::{app_support_dir, apply_engine_env, engine_process_home, grok_home};
     use std::process::Command;
 
     #[test]
@@ -220,6 +230,10 @@ mod tests {
                 .map(|value| value.to_string_lossy().into_owned())
         };
         assert_eq!(value("HOME"), Some(engine_process_home().display().to_string()));
+        assert_eq!(
+            value("GORKX_COMPUTER_LEASE_DIR"),
+            Some(app_support_dir().join("computer-control").display().to_string())
+        );
         assert_eq!(value("GROK_HOME"), Some(grok_home().display().to_string()));
     }
 }
