@@ -56,3 +56,12 @@ export async function getTodayTokenUsage(): Promise<DailyTokenUsage | null> {
   if (!isTauri()) return null;
   return invoke<DailyTokenUsage>('store_get_daily_token_usage', { day: localUsageDay() });
 }
+
+/** Read a bounded local history for the usage trend in Settings. */
+export async function getDailyTokenUsage(days = 7): Promise<DailyTokenUsage[]> {
+  if (!isTauri()) return [];
+  return invoke<DailyTokenUsage[]>('store_get_daily_token_usage_range', {
+    day: localUsageDay(),
+    days,
+  });
+}

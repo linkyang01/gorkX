@@ -2,6 +2,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use chrono::{Duration, NaiveDate};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
@@ -257,6 +258,25 @@ fn valid_usage_day(day: &str) -> bool {
         })
 }
 
+fn usage_days(day: &str, count: usize) -> Result<Vec<String>, String> {
+    if !valid_usage_day(day) {
+        return Err("invalid local usage day".into());
+    }
+    if !(1..=31).contains(&count) {
+        return Err("daily usage range must contain 1 to 31 days".into());
+    }
+    let end = NaiveDate::parse_from_str(day, "%Y-%m-%d")
+        .map_err(|_| "invalid local usage day".to_string())?;
+    (0..count)
+        .rev()
+        .map(|offset| {
+            end.checked_sub_signed(Duration::days(offset as i64))
+                .map(|date| date.format("%Y-%m-%d").to_string())
+                .ok_or_else(|| "daily usage range is out of bounds".to_string())
+        })
+        .collect()
+}
+
 fn read_daily_usage(conn: &Connection, day: &str) -> Result<DailyTokenUsageRow, String> {
     conn.query_row(
         "SELECT day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at FROM daily_token_usage WHERE day = ?1",
@@ -347,7 +367,49 @@ pub fn store_get_daily_token_usage(
             cached_read_tokens: 0,
             reasoning_tokens: 0,
             updated_at: 0,
-        }))
+    }))
+}
+
+/// Return a bounded local calendar-day series for the desktop usage chart.
+/// Missing days are returned as zero rows so the UI can show quiet days
+/// without fabricating provider usage.
+#[tauri::command]
+pub fn store_get_daily_token_usage_range(
+    store: State<'_, AppStore>,
+    day: String,
+    days: u8,
+) -> Result<Vec<DailyTokenUsageRow>, String> {
+    let days = usage_days(&day, usize::from(days))?;
+    let conn = store.conn.lock().map_err(|e| e.to_string())?;
+    days.into_iter()
+        .map(|day| {
+            let row = conn
+                .query_row(
+                    "SELECT day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at FROM daily_token_usage WHERE day = ?1",
+                    params![day],
+                    |row| Ok(DailyTokenUsageRow {
+                        day: row.get(0)?,
+                        total_tokens: row.get(1)?,
+                        input_tokens: row.get(2)?,
+                        output_tokens: row.get(3)?,
+                        cached_read_tokens: row.get(4)?,
+                        reasoning_tokens: row.get(5)?,
+                        updated_at: row.get(6)?,
+                    }),
+                )
+                .optional()
+                .map_err(|e| e.to_string())?;
+            Ok(row.unwrap_or(DailyTokenUsageRow {
+                day,
+                total_tokens: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                cached_read_tokens: 0,
+                reasoning_tokens: 0,
+                updated_at: 0,
+            }))
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -1311,7 +1373,7 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{billing_percent, parse_billing_body, search_thread_history, valid_usage_day, visible_models_from_cache};
+    use super::{billing_percent, parse_billing_body, search_thread_history, usage_days, valid_usage_day, visible_models_from_cache};
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1373,6 +1435,16 @@ mod model_cache_tests {
     fn daily_token_usage_requires_a_local_calendar_day() {
         assert!(valid_usage_day("2026-07-26"));
         assert!(!valid_usage_day("2026/07/26"));
+    }
+
+    #[test]
+    fn daily_usage_range_is_oldest_to_newest_and_bounded() {
+        assert_eq!(
+            usage_days("2026-07-26", 3).unwrap(),
+            vec!["2026-07-24", "2026-07-25", "2026-07-26"]
+        );
+        assert!(usage_days("2026-07-26", 0).is_err());
+        assert!(usage_days("2026-07-26", 32).is_err());
     }
 
     #[test]

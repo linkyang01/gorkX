@@ -2459,6 +2459,46 @@ button.pill:hover {
   line-height: 1.4;
 }
 
+.daily-token-history {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.daily-token-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+
+.daily-token-day,
+.daily-token-value {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daily-token-value {
+  text-align: right;
+}
+
+.daily-token-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--hairline);
+}
+
+.daily-token-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
 .settings-list {
   margin: 8px 0 0;
   padding-left: 18px;

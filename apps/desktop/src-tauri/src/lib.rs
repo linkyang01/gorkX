@@ -175,6 +175,7 @@ pub fn run() {
             store::store_kv_set,
             store::store_record_daily_token_usage,
             store::store_get_daily_token_usage,
+            store::store_get_daily_token_usage_range,
             store::store_db_path,
             store::store_data_dir,
             scheduler::scheduler_status,

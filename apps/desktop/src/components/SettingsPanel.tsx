@@ -122,7 +122,7 @@ import {
 } from '../lib/sandboxConfig';
 import { getPersonalRules, savePersonalRules } from '../lib/personalRules';
 import { listAgentProfiles, removeAgentProfile, saveAgentProfile, type AgentProfileSummary } from '../lib/agentProfiles';
-import { getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
+import { getDailyTokenUsage, getTodayTokenUsage, type DailyTokenUsage } from '../lib/dailyTokenUsage';
 import {
   applyManagedSetup,
   computerWorkspaceControl,
@@ -404,6 +404,7 @@ export function SettingsPanel({
   const [hooksSnap, setHooksSnap] = useState<HooksSnapshot | null>(null);
   const [hooksBusy, setHooksBusy] = useState(false);
   const [todayTokenUsage, setTodayTokenUsage] = useState<DailyTokenUsage | null>(null);
+  const [tokenUsageHistory, setTokenUsageHistory] = useState<DailyTokenUsage[]>([]);
   const [computerHubStatus, setComputerHubStatus] = useState<string | null>(null);
   const [computerHubBusy, setComputerHubBusy] = useState(false);
   const [managedSetup, setManagedSetup] = useState<string | null>(null);
@@ -453,7 +454,15 @@ export function SettingsPanel({
     void fetchExtensionsSnapshot(project, grokCmd).then(setBrowserSnap).catch(() => setBrowserSnap(null));
     void fetchGithubStatus().then(setGithub).catch(() => setGithub(null));
     setConnectorAudit(loadConnectorAudit());
-    void getTodayTokenUsage().then(setTodayTokenUsage).catch(() => setTodayTokenUsage(null));
+    void Promise.all([getTodayTokenUsage(), getDailyTokenUsage(7)])
+      .then(([today, history]) => {
+        setTodayTokenUsage(today);
+        setTokenUsageHistory(history);
+      })
+      .catch(() => {
+        setTodayTokenUsage(null);
+        setTokenUsageHistory([]);
+      });
   }, [isOpen, initialSection]);
 
   useEffect(() => {
@@ -1772,10 +1781,34 @@ export function SettingsPanel({
                       </div>
                     ) : null}
                   </div>
-                  <button type="button" className="btn" onClick={() => void getTodayTokenUsage().then(setTodayTokenUsage)}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void Promise.all([getTodayTokenUsage(), getDailyTokenUsage(7)]).then(([today, history]) => {
+                      setTodayTokenUsage(today);
+                      setTokenUsageHistory(history);
+                    })}
+                  >
                     {t('refreshQuota')}
                   </button>
                 </div>
+                {tokenUsageHistory.length ? (
+                  <div className="daily-token-history" aria-label={t('dailyTokenUsageHistory')}>
+                    <div className="settings-row-title">{t('dailyTokenUsageHistory')}</div>
+                    {(() => {
+                      const max = Math.max(1, ...tokenUsageHistory.map((row) => row.totalTokens));
+                      return tokenUsageHistory.map((row) => (
+                        <div className="daily-token-row" key={row.day}>
+                          <span className="daily-token-day mono">{row.day.slice(5)}</span>
+                          <div className="daily-token-track" aria-hidden="true">
+                            <div className="daily-token-fill" style={{ width: `${Math.min(100, (row.totalTokens / max) * 100)}%` }} />
+                          </div>
+                          <span className="daily-token-value mono">{fmt(row.totalTokens)}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                ) : null}
                 <div className="settings-row">
                   <div>
                     <div className="settings-row-title">{t('quota')}</div>
