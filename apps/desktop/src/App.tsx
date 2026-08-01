@@ -148,6 +148,7 @@ import {
   IconOpenFolder,
   IconPlugins,
   IconMemory,
+  IconScheduled,
 } from './components/UiIcons';
 import {
   exportSessionClipboard,
@@ -1068,6 +1069,11 @@ function App() {
   const enqueueApproval = useCallback((entry: PendingApproval) => {
     setApprovalQueue((previous) => previous.some((item) => item.key === entry.key) ? previous : [...previous, entry]);
     setActiveApprovalKey((previous) => previous ?? entry.key);
+    // Cross-task decisions are easy to miss if only the origin thread is open.
+    // Open the inbox so the user can jump without hunting the sidebar.
+    if (entry.threadId !== activeIdRef.current) {
+      setApprovalInboxOpen(true);
+    }
     // Approval is a real ACP pause — count as heartbeat for the origin task.
     setThreads((prev) =>
       prev.map((th) =>
@@ -6084,6 +6090,31 @@ function App() {
             onClick={() => setMemoryOpen(true)}
           >
             <IconMemory />
+          </button>
+          <button
+            type="button"
+            className={scheduledOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('navScheduledHint')}
+            aria-label={t('navScheduled')}
+            onClick={() => setScheduledOpen(true)}
+          >
+            <IconScheduled />
+          </button>
+          <button
+            type="button"
+            className={`chrome-btn${approvalInboxOpen ? ' on' : ''}${approvalQueue.length ? ' attention' : ''}`}
+            title={
+              approvalQueue.length
+                ? t('approvalInboxOpenHint')
+                : t('approvalInboxTitle')
+            }
+            aria-label={t('approvalInboxTitle')}
+            onClick={() => setApprovalInboxOpen(true)}
+          >
+            <span aria-hidden style={{ fontSize: 13, fontWeight: 700 }}>!</span>
+            {approvalQueue.length ? (
+              <span className="icon-badge">{Math.min(99, approvalQueue.length)}</span>
+            ) : null}
           </button>
           <button
             type="button"

@@ -495,7 +495,27 @@ export function ScheduledPanel({
 
         <h3 className="subhead">{t('schedMyJobs')}</h3>
         {jobs.length === 0 ? (
-          <p className="hint">{t('schedEmpty')}</p>
+          <div className="ext-empty-card">
+            <p className="hint" style={{ margin: 0 }}>{t('schedEmpty')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('schedEmptyHint')}</p>
+            <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-sm primary-sm"
+                onClick={() => {
+                  setEditingJobId(null);
+                  setCreating(true);
+                }}
+              >
+                {t('schedCreate')}
+              </button>
+              {SUGGESTIONS[0] ? (
+                <button type="button" className="btn btn-sm" onClick={() => fromSuggestion(SUGGESTIONS[0])}>
+                  {t('schedEmptyUseSuggestion')}
+                </button>
+              ) : null}
+            </div>
+          </div>
         ) : (
           <ul className="sched-list">
             {jobs.map((j) => {

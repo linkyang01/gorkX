@@ -63,7 +63,12 @@ export function ApprovalInboxPanel({ open, rows, activeKey, onClose, onSelect }:
               </button>
             ))}
           </div>
-        ) : <p className="muted" style={{ margin: '18px 0 4px' }}>{t('approvalInboxEmpty')}</p>}
+        ) : (
+          <div className="ext-empty-card" style={{ marginTop: 14 }}>
+            <p className="hint" style={{ margin: 0 }}>{t('approvalInboxEmpty')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('approvalInboxEmptyHint')}</p>
+          </div>
+        )}
       </section>
     </div>
   );
