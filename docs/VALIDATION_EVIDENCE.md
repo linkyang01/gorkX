@@ -104,6 +104,35 @@
 
 **阶段 2 仍缺：** GitHub 网页撤销完整往返；Computer 授权下真实点击/截图；Browser 任务内可复盘日志。阶段 1 出口仍未达成。
 
+## 2026-08-01 · 子任务完成闭环 + 任务树 Inspect 修复 + Computer 权限旁证
+
+### 只读 worktree 子任务跑到 completed
+
+| 步骤 | 结果 | 边界 |
+|---|---|---|
+| App 登录副本 + 可丢弃 Git 项目 | `authenticate` / `session/new` 成功 | 非干净机 H1 |
+| spawn explore + read-only + worktree | `subagentId=019fbb9f-d509-7fd3-a482-512680d7b54a` | ACP 层，非 App UI 点按 |
+| 轮询 `subagent/get` | 先 `status=running`（turnCount=1, tokensUsed≈883），约数秒后 **`status=completed`** | 真实模型回合，消耗额度 |
+| 完成快照字段 | 含 `output`（string，长度 72）、`toolCalls`、`turns`、**`worktreePath`**、`parentSessionId`/`childSessionId` | 未在证据中粘贴完整模型输出正文 |
+| `list_running` | 完成后 **不再**包含该 id | — |
+| 通知 | 过程中有 `session/update`、`_x.ai/session_notification` | 未把通知解析写成 UI 验收 |
+
+### 任务树 UI bugfix
+
+内核状态为 **`completed` / `cancelled` / `failed`**（带 -ed）时，旧正则 `^(complete\|…)\b` 把 Inspect 按钮判为不可用。
+
+- 修复：`SubagentTree` 使用 stem 匹配 `complet|cancel|fail|…`，`completed`/`cancelled`/`failed` 可 Inspect；`running` 仍可 Stop。
+- 验证：本地布尔表对上述状态组合通过；未做 App 内人工点按。
+
+### Computer Accessibility 旁证（本机）
+
+| 探测 | 结果 | 边界 |
+|---|---|---|
+| `System Events` → `UI elements enabled` | **true** | 与 gorkX `check_accessibility()` 同源 osascript；**不等于**已启用 Computer 租约或完成真实点击 |
+| 控制租约 | 未在本轮写入 lease / 未调用 click/type | 急停与真实截图仍待人工 |
+
+**阶段 1 出口仍未达成。** 不打 tag / 不发 Release / 不做 DMG。
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |
