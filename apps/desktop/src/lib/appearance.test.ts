@@ -4,19 +4,34 @@
  */
 import assert from 'node:assert/strict';
 import {
+  applyNamedTheme,
   applyPreset,
   clampContrast,
+  copyPaletteSide,
   defaultAppearance,
+  deleteNamedTheme,
   exportThemePackage,
+  isValidHexInput,
+  loadSavedThemes,
   mergeThemePackage,
   mixHex,
   normalizeHex,
+  normalizePresetId,
   paletteCssVars,
   parseThemePackage,
   sanitizePalette,
+  saveNamedTheme,
+  themeCardPreviewStyle,
   themePreviewLines,
   updatePaletteField,
 } from './appearance.ts';
+
+// Isolation: clear theme library keys between assertions when localStorage exists.
+try {
+  localStorage?.removeItem?.('gorkx.theme-library');
+} catch {
+  /* node without localStorage */
+}
 
 assert.equal(normalizeHex('#abc', '#000000'), '#aabbcc');
 assert.equal(normalizeHex('#AABBCC', '#000000'), '#aabbcc');
@@ -66,5 +81,33 @@ assert.equal(sanitized.contrast, 100);
 const lines = themePreviewLines(base.dark, 'dark');
 assert.ok(lines.some((l) => l.includes(base.dark.accent)));
 assert.ok(lines[0].includes('ThemeConfig'));
+
+assert.equal(normalizePresetId('codex'), 'codex');
+assert.equal(normalizePresetId('custom'), 'custom');
+assert.equal(normalizePresetId('saved:abc'), 'saved:abc');
+assert.equal(isValidHexInput('#339cff'), true);
+assert.equal(isValidHexInput('zzz'), false);
+
+const card = themeCardPreviewStyle(base.dark);
+assert.equal(card.shell.background, base.dark.background);
+assert.equal(card.accent.background, base.dark.accent);
+
+const swapped = copyPaletteSide(base, 'dark', 'light');
+assert.equal(swapped.light.accent, base.dark.accent);
+assert.equal(swapped.lightPreset, 'custom');
+
+// Named theme library only when localStorage is available (browser / --localstorage-file).
+if (typeof localStorage !== 'undefined') {
+  const saved = saveNamedTheme(preset, 'My Codex');
+  assert.ok(saved.some((t) => t.name === 'My Codex'));
+  const id = saved[0].id;
+  const applied = applyNamedTheme(base, id, 'both');
+  assert.equal(applied.light.accent, preset.light.accent);
+  assert.equal(applied.lightPreset, id);
+  const afterDelete = deleteNamedTheme(id);
+  assert.ok(!afterDelete.some((t) => t.id === id));
+  assert.equal(loadSavedThemes().length, afterDelete.length);
+  assert.throws(() => saveNamedTheme(base, '   '), /EMPTY_THEME_NAME/);
+}
 
 console.log('appearance.test.ts: ok');

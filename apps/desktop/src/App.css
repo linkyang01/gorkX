@@ -2811,7 +2811,8 @@ button.pill:hover {
   overflow: hidden;
 }
 
-.theme-color-control code {
+.theme-color-control code,
+.theme-hex-input {
   font-size: 11.5px;
   padding: 4px 10px;
   border-radius: 999px;
@@ -2820,6 +2821,91 @@ button.pill:hover {
   border: 1px solid var(--hairline);
   min-width: 5.5em;
   text-align: center;
+  font-family: var(--mono);
+  width: 6.5em;
+  box-sizing: border-box;
+}
+
+.theme-hex-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-color: var(--accent);
+}
+
+.theme-library-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.theme-library-list {
+  margin-bottom: 16px;
+}
+
+.theme-library-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.theme-library-row:last-child {
+  border-bottom: none;
+}
+
+.theme-library-swatches {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.theme-library-swatches span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+}
+
+.theme-library-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.theme-library-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.theme-mode-preview.skin-live {
+  border-color: transparent;
+}
+
+.theme-mode-preview-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+}
+
+.theme-mode-preview-half {
+  display: grid;
+  grid-template-rows: 18px 1fr;
+  min-width: 0;
+}
+
+.theme-mode-preview-accent {
+  display: block;
+  width: 28px;
+  height: 8px;
+  border-radius: 99px;
+  margin-top: 4px;
+}
+
+.theme-mode-preview-card .theme-mode-preview-accent {
+  width: 36%;
+  height: 10px;
+  margin: 9px 8px;
 }
 
 .theme-contrast-control {

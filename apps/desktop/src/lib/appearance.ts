@@ -38,10 +38,21 @@ export interface AppearancePreferences {
 const THEME_KEY = 'gorkx.theme';
 const DENSITY_KEY = 'gorkx.density';
 const PALETTE_KEY = 'gorkx.theme-palettes';
+const SAVED_THEMES_KEY = 'gorkx.theme-library';
 const THEME_DEFAULT_VERSION_KEY = 'gorkx.theme-default-version';
 const THEME_DEFAULT_VERSION = '3';
+const MAX_SAVED_THEMES = 24;
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** User-named theme snapshot (independent of built-in presets). */
+export interface SavedTheme {
+  id: string;
+  name: string;
+  light: ThemePalette;
+  dark: ThemePalette;
+  updatedAt: number;
+}
 
 export const UI_FONT_OPTIONS: Array<{ id: string; label: string; stack: string }> = [
   {
@@ -272,15 +283,19 @@ export function loadAppearance(): AppearancePreferences {
     density: stored(DENSITY_KEY, ['compact', 'comfortable', 'spacious'] as const, 'comfortable'),
     light: sanitizePalette(storedPalettes.light, defaults.light),
     dark: sanitizePalette(storedPalettes.dark, defaults.dark),
-    lightPreset:
-      storedPalettes.lightPreset && THEME_PRESETS[storedPalettes.lightPreset]
-        ? storedPalettes.lightPreset
-        : 'gorkx',
-    darkPreset:
-      storedPalettes.darkPreset && THEME_PRESETS[storedPalettes.darkPreset]
-        ? storedPalettes.darkPreset
-        : 'gorkx',
+    lightPreset: normalizePresetId(storedPalettes.lightPreset),
+    darkPreset: normalizePresetId(storedPalettes.darkPreset),
   };
+}
+
+/** Built-in preset id, saved theme id (`saved:…`), or `custom`. */
+export function normalizePresetId(raw: string | undefined | null): string {
+  const id = String(raw || '').trim();
+  if (!id) return 'gorkx';
+  if (id === 'custom') return 'custom';
+  if (THEME_PRESETS[id]) return id;
+  if (id.startsWith('saved:')) return id;
+  return 'custom';
 }
 
 export function resolvedThemeMode(theme: ThemePreference): ThemeSide {
@@ -571,4 +586,151 @@ export function themePreviewLines(palette: ThemePalette, side: ThemeSide): strin
     `  contrast: ${clampContrast(palette.contrast)},`,
     `};`,
   ];
+}
+
+/** Inline styles for the live theme-mode preview card. */
+export function themeCardPreviewStyle(palette: ThemePalette): {
+  shell: Record<string, string>;
+  chrome: Record<string, string>;
+  line: Record<string, string>;
+  card: Record<string, string>;
+  accent: Record<string, string>;
+} {
+  const elevated = mixHex(palette.background, palette.foreground, 0.08);
+  const line = mixHex(palette.foreground, palette.background, 0.55);
+  return {
+    shell: { background: palette.background, borderColor: mixHex(palette.foreground, palette.background, 0.82) },
+    chrome: { background: elevated },
+    line: { background: line },
+    card: {
+      background: elevated,
+      borderColor: mixHex(palette.foreground, palette.background, 0.78),
+    },
+    accent: { background: palette.accent },
+  };
+}
+
+function newSavedThemeId(): string {
+  return `saved:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function sanitizeThemeName(name: string): string {
+  return String(name || '')
+    .replace(/[\u0000-\u001f]/g, '')
+    .trim()
+    .slice(0, 48);
+}
+
+export function loadSavedThemes(): SavedTheme[] {
+  try {
+    const raw = localStorage.getItem(SAVED_THEMES_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw) as unknown;
+    if (!Array.isArray(data)) return [];
+    const defaults = defaultAppearance();
+    return data
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const row = item as Record<string, unknown>;
+        const name = sanitizeThemeName(String(row.name || ''));
+        const id = String(row.id || '').trim();
+        if (!name || !id.startsWith('saved:')) return null;
+        return {
+          id,
+          name,
+          light: sanitizePalette(row.light as ThemePalette, defaults.light),
+          dark: sanitizePalette(row.dark as ThemePalette, defaults.dark),
+          updatedAt: typeof row.updatedAt === 'number' ? row.updatedAt : Date.now(),
+        } satisfies SavedTheme;
+      })
+      .filter((row): row is SavedTheme => Boolean(row))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_SAVED_THEMES);
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedThemes(list: SavedTheme[]): void {
+  try {
+    localStorage.setItem(SAVED_THEMES_KEY, JSON.stringify(list.slice(0, MAX_SAVED_THEMES)));
+  } catch {
+    /* storage full */
+  }
+}
+
+/** Save current light+dark palettes under a user-facing name. */
+export function saveNamedTheme(prefs: AppearancePreferences, name: string, replaceId?: string): SavedTheme[] {
+  const clean = sanitizeThemeName(name);
+  if (!clean) throw new Error('EMPTY_THEME_NAME');
+  const list = loadSavedThemes();
+  const now = Date.now();
+  if (replaceId) {
+    const idx = list.findIndex((t) => t.id === replaceId);
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        name: clean,
+        light: { ...prefs.light },
+        dark: { ...prefs.dark },
+        updatedAt: now,
+      };
+      persistSavedThemes(list);
+      return loadSavedThemes();
+    }
+  }
+  const entry: SavedTheme = {
+    id: newSavedThemeId(),
+    name: clean,
+    light: { ...prefs.light },
+    dark: { ...prefs.dark },
+    updatedAt: now,
+  };
+  persistSavedThemes([entry, ...list.filter((t) => t.name !== clean)]);
+  return loadSavedThemes();
+}
+
+export function deleteNamedTheme(id: string): SavedTheme[] {
+  const list = loadSavedThemes().filter((t) => t.id !== id);
+  persistSavedThemes(list);
+  return list;
+}
+
+export function applyNamedTheme(
+  prefs: AppearancePreferences,
+  id: string,
+  side: ThemeSide | 'both' = 'both',
+): AppearancePreferences {
+  const entry = loadSavedThemes().find((t) => t.id === id);
+  if (!entry) return prefs;
+  if (side === 'light') {
+    return { ...prefs, light: { ...entry.light }, lightPreset: id };
+  }
+  if (side === 'dark') {
+    return { ...prefs, dark: { ...entry.dark }, darkPreset: id };
+  }
+  return {
+    ...prefs,
+    light: { ...entry.light },
+    dark: { ...entry.dark },
+    lightPreset: id,
+    darkPreset: id,
+  };
+}
+
+/** Copy one side’s palette onto the other. */
+export function copyPaletteSide(
+  prefs: AppearancePreferences,
+  from: ThemeSide,
+  to: ThemeSide,
+): AppearancePreferences {
+  if (from === to) return prefs;
+  const next = { ...prefs[from] };
+  if (to === 'light') return { ...prefs, light: next, lightPreset: 'custom' };
+  return { ...prefs, dark: next, darkPreset: 'custom' };
+}
+
+/** Whether a typed hex is valid enough to commit. */
+export function isValidHexInput(raw: string): boolean {
+  return HEX.test(String(raw || '').trim());
 }

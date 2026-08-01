@@ -79,18 +79,27 @@ import {
 import { t } from '../lib/i18n';
 import {
   applyAppearance,
+  applyNamedTheme,
   applyPreset,
   CODE_FONT_OPTIONS,
+  copyPaletteSide,
+  deleteNamedTheme,
   exportThemePackage,
+  isValidHexInput,
   loadAppearance,
+  loadSavedThemes,
   mergeThemePackage,
+  normalizeHex,
   parseThemePackage,
+  saveNamedTheme,
   THEME_PRESETS,
+  themeCardPreviewStyle,
   themePreviewLines,
   UI_FONT_OPTIONS,
   updatePaletteField,
   type AppearancePreferences,
   type DensityPreference,
+  type SavedTheme,
   type ThemePalette,
   type ThemePreference,
   type ThemeSide,
@@ -406,6 +415,7 @@ export function SettingsPanel({
     loadModelVerifyRecords(),
   );
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
+  const [savedThemes, setSavedThemes] = useState<SavedTheme[]>(() => loadSavedThemes());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
   const [browserPreviewUrl, setBrowserPreviewUrl] = useState('');
@@ -1608,57 +1618,172 @@ export function SettingsPanel({
     commitAppearance(updatePaletteField(appearance, side, key, value));
   };
 
-  const copyThemeJson = async () => {
+  const commitHex = (side: ThemeSide, key: 'accent' | 'background' | 'foreground', raw: string) => {
+    if (!isValidHexInput(raw)) return;
+    const hex = normalizeHex(raw.trim(), appearance[side][key]);
+    patchPalette(side, key, hex);
+  };
+
+  const copyThemeJson = async (side?: ThemeSide) => {
     try {
-      const text = JSON.stringify(exportThemePackage(appearance), null, 2);
-      await navigator.clipboard.writeText(text);
+      const pack = exportThemePackage(appearance);
+      const payload = side
+        ? {
+            version: 1 as const,
+            kind: 'gorkx-theme' as const,
+            light: side === 'light' ? pack.light : appearance.light,
+            dark: side === 'dark' ? pack.dark : appearance.dark,
+            lightPreset: side === 'light' ? appearance.lightPreset : appearance.lightPreset,
+            darkPreset: side === 'dark' ? appearance.darkPreset : appearance.darkPreset,
+          }
+        : pack;
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
       setMsg(t('settingsThemeCopied'));
     } catch (error) {
       showErr(error);
     }
   };
 
-  const importThemeJson = async () => {
+  const importThemeJson = async (side: ThemeSide | 'both' = 'both') => {
     const raw = window.prompt(t('settingsThemeImport'));
     if (raw == null || !raw.trim()) return;
     try {
       const pack = parseThemePackage(raw.trim());
-      commitAppearance(mergeThemePackage(appearance, pack, 'both'));
+      commitAppearance(mergeThemePackage(appearance, pack, side));
       setMsg(t('settingsThemeImportOk'));
     } catch {
       showMsg(t('settingsThemeImportFail'), true);
     }
   };
 
+  const exportThemeFile = async () => {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+      const path = await save({
+        defaultPath: 'gorkx-theme.json',
+        filters: [{ name: 'gorkX theme', extensions: ['json'] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, JSON.stringify(exportThemePackage(appearance), null, 2));
+      setMsg(t('settingsThemeExportOk'));
+    } catch (error) {
+      showErr(error);
+    }
+  };
+
+  const importThemeFile = async (side: ThemeSide | 'both' = 'both') => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
+      const path = await open({
+        multiple: false,
+        filters: [{ name: 'gorkX theme', extensions: ['json'] }],
+      });
+      if (!path || Array.isArray(path)) return;
+      const pack = parseThemePackage(await readTextFile(path));
+      commitAppearance(mergeThemePackage(appearance, pack, side));
+      setMsg(t('settingsThemeImportOk'));
+    } catch {
+      showMsg(t('settingsThemeImportFail'), true);
+    }
+  };
+
+  const saveCurrentTheme = () => {
+    const name = window.prompt(t('settingsThemeSavePrompt'), '');
+    if (name == null) return;
+    try {
+      const list = saveNamedTheme(appearance, name);
+      setSavedThemes(list);
+      const latest = list[0];
+      if (latest) {
+        commitAppearance({
+          ...appearance,
+          lightPreset: latest.id,
+          darkPreset: latest.id,
+        });
+      }
+      setMsg(t('settingsThemeSaveOk'));
+    } catch {
+      showMsg(t('settingsThemeSaveFail'), true);
+    }
+  };
+
+  const renderColorRow = (
+    side: ThemeSide,
+    key: 'accent' | 'background' | 'foreground',
+    label: string,
+  ) => (
+    <ThemeColorRow
+      key={`${side}-${key}-${appearance[side][key]}`}
+      label={label}
+      value={appearance[side][key]}
+      onPick={(hex) => patchPalette(side, key, hex)}
+      onCommitHex={(raw) => commitHex(side, key, raw)}
+      hexAria={`${label} ${t('settingsThemeHex')}`}
+    />
+  );
+
   const renderPaletteEditor = (side: ThemeSide, title: string) => {
     const palette = appearance[side];
     const presetKey = side === 'light' ? appearance.lightPreset : appearance.darkPreset;
     const preview = themePreviewLines(palette, side);
+    const selectValue = THEME_PRESETS[presetKey]
+      ? presetKey
+      : savedThemes.some((s) => s.id === presetKey)
+        ? presetKey
+        : 'custom';
     return (
       <div className="theme-palette-card" key={side}>
         <div className="theme-palette-head">
           <h3 className="subhead" style={{ margin: 0 }}>{title}</h3>
           <div className="theme-palette-actions">
-            <button type="button" className="btn btn-sm" onClick={() => void importThemeJson()}>
+            <button type="button" className="btn btn-sm" onClick={() => void importThemeFile(side)}>
+              {t('settingsThemeImportFile')}
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => void importThemeJson(side)}>
               {t('settingsThemeImport')}
             </button>
-            <button type="button" className="btn btn-sm" onClick={() => void copyThemeJson()}>
+            <button type="button" className="btn btn-sm" onClick={() => void copyThemeJson(side)}>
               {t('settingsThemeCopy')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                commitAppearance(copyPaletteSide(appearance, side, side === 'light' ? 'dark' : 'light'));
+              }}
+              title={t('settingsThemeCopyToOther')}
+            >
+              {side === 'light' ? t('settingsThemeCopyToDark') : t('settingsThemeCopyToLight')}
             </button>
             <label className="theme-preset-select">
               <span className="sr-only">{t('settingsThemePreset')}</span>
               <select
-                value={THEME_PRESETS[presetKey] ? presetKey : 'custom'}
+                value={selectValue}
                 onChange={(event) => {
                   const id = event.target.value;
                   if (id === 'custom') return;
+                  if (id.startsWith('saved:')) {
+                    commitAppearance(applyNamedTheme(appearance, id, side));
+                    return;
+                  }
                   commitAppearance(applyPreset(appearance, side, id));
                 }}
                 aria-label={t('settingsThemePreset')}
               >
-                {Object.entries(THEME_PRESETS).map(([id, preset]) => (
-                  <option key={id} value={id}>{preset.label}</option>
-                ))}
+                <optgroup label={t('settingsThemePreset')}>
+                  {Object.entries(THEME_PRESETS).map(([id, preset]) => (
+                    <option key={id} value={id}>{preset.label}</option>
+                  ))}
+                </optgroup>
+                {savedThemes.length > 0 ? (
+                  <optgroup label={t('settingsThemeSaved')}>
+                    {savedThemes.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                ) : null}
                 <option value="custom">{t('settingsThemePresetCustom')}</option>
               </select>
             </label>
@@ -1688,42 +1813,9 @@ export function SettingsPanel({
         </div>
 
         <div className="settings-card theme-palette-fields">
-          <label className="settings-row theme-color-row">
-            <div className="settings-row-title">{t('settingsThemeAccent')}</div>
-            <div className="theme-color-control">
-              <input
-                type="color"
-                value={palette.accent}
-                onChange={(e) => patchPalette(side, 'accent', e.target.value)}
-                aria-label={t('settingsThemeAccent')}
-              />
-              <code>{palette.accent.toUpperCase()}</code>
-            </div>
-          </label>
-          <label className="settings-row theme-color-row">
-            <div className="settings-row-title">{t('settingsThemeBackground')}</div>
-            <div className="theme-color-control">
-              <input
-                type="color"
-                value={palette.background}
-                onChange={(e) => patchPalette(side, 'background', e.target.value)}
-                aria-label={t('settingsThemeBackground')}
-              />
-              <code>{palette.background.toUpperCase()}</code>
-            </div>
-          </label>
-          <label className="settings-row theme-color-row">
-            <div className="settings-row-title">{t('settingsThemeForeground')}</div>
-            <div className="theme-color-control">
-              <input
-                type="color"
-                value={palette.foreground}
-                onChange={(e) => patchPalette(side, 'foreground', e.target.value)}
-                aria-label={t('settingsThemeForeground')}
-              />
-              <code>{palette.foreground.toUpperCase()}</code>
-            </div>
-          </label>
+          {renderColorRow(side, 'accent', t('settingsThemeAccent'))}
+          {renderColorRow(side, 'background', t('settingsThemeBackground'))}
+          {renderColorRow(side, 'foreground', t('settingsThemeForeground'))}
           <label className="settings-row">
             <div className="settings-row-title">{t('settingsThemeUiFont')}</div>
             <select
@@ -1921,40 +2013,80 @@ export function SettingsPanel({
               <div className="theme-mode-grid" role="radiogroup" aria-label={t('settingsTheme')}>
                 {(
                   [
-                    ['system', t('settingsThemeSystem'), t('settingsThemeSystemHint'), 'system'],
-                    ['light', t('settingsThemeLight'), t('settingsThemeLightHint'), 'light'],
-                    ['dark', t('settingsThemeDark'), t('settingsThemeDarkHint'), 'dark'],
-                  ] as const
-                ).map(([id, title, hint, skin]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={appearance.theme === id}
-                    className={`theme-mode-card${appearance.theme === id ? ' on' : ''}`}
-                    onClick={() => updateAppearance('theme', id as ThemePreference)}
-                    title={hint}
-                  >
-                    <div className={`theme-mode-preview skin-${skin}`} aria-hidden>
-                      <div className="theme-mode-preview-chrome" />
-                      <div className="theme-mode-preview-body">
-                        <div className="theme-mode-preview-line" />
-                        <div className="theme-mode-preview-line short" />
-                        <div className="theme-mode-preview-card" />
-                      </div>
-                    </div>
-                    <div className="theme-mode-label">{title}</div>
-                  </button>
-                ))}
+                    ['system', t('settingsThemeSystem'), t('settingsThemeSystemHint')] as const,
+                    ['light', t('settingsThemeLight'), t('settingsThemeLightHint')] as const,
+                    ['dark', t('settingsThemeDark'), t('settingsThemeDarkHint')] as const,
+                  ]
+                ).map(([id, title, hint]) => {
+                  const livePal =
+                    id === 'light'
+                      ? appearance.light
+                      : id === 'dark'
+                        ? appearance.dark
+                        : appearance.dark;
+                  const lightStyle = themeCardPreviewStyle(appearance.light);
+                  const darkStyle = themeCardPreviewStyle(appearance.dark);
+                  const style = themeCardPreviewStyle(livePal);
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={appearance.theme === id}
+                      className={`theme-mode-card${appearance.theme === id ? ' on' : ''}`}
+                      onClick={() => updateAppearance('theme', id as ThemePreference)}
+                      title={hint}
+                    >
+                      {id === 'system' ? (
+                        <div className="theme-mode-preview skin-system-live" aria-hidden>
+                          <div className="theme-mode-preview-split">
+                            <div className="theme-mode-preview-half" style={lightStyle.shell}>
+                              <div className="theme-mode-preview-chrome" style={lightStyle.chrome} />
+                              <div className="theme-mode-preview-body">
+                                <div className="theme-mode-preview-line" style={lightStyle.line} />
+                                <div className="theme-mode-preview-accent" style={lightStyle.accent} />
+                              </div>
+                            </div>
+                            <div className="theme-mode-preview-half" style={darkStyle.shell}>
+                              <div className="theme-mode-preview-chrome" style={darkStyle.chrome} />
+                              <div className="theme-mode-preview-body">
+                                <div className="theme-mode-preview-line" style={darkStyle.line} />
+                                <div className="theme-mode-preview-accent" style={darkStyle.accent} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="theme-mode-preview skin-live" style={style.shell} aria-hidden>
+                          <div className="theme-mode-preview-chrome" style={style.chrome} />
+                          <div className="theme-mode-preview-body">
+                            <div className="theme-mode-preview-line" style={style.line} />
+                            <div className="theme-mode-preview-line short" style={style.line} />
+                            <div className="theme-mode-preview-card" style={style.card}>
+                              <span className="theme-mode-preview-accent" style={style.accent} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="theme-mode-label">{title}</div>
+                    </button>
+                  );
+                })}
               </div>
 
-              {renderPaletteEditor('light', t('settingsThemeLightSection'))}
-              {renderPaletteEditor('dark', t('settingsThemeDarkSection'))}
-
-              <div className="field-row" style={{ marginTop: 8, marginBottom: 16 }}>
+              <div className="theme-library-bar">
+                <button type="button" className="btn btn-sm" onClick={saveCurrentTheme}>
+                  {t('settingsThemeSaveAs')}
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => void exportThemeFile()}>
+                  {t('settingsThemeExportFile')}
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => void importThemeFile('both')}>
+                  {t('settingsThemeImportFile')}
+                </button>
                 <button
                   type="button"
-                  className="btn"
+                  className="btn btn-sm"
                   onClick={() => {
                     const reset = applyPreset(applyPreset(appearance, 'light', 'gorkx'), 'dark', 'gorkx');
                     commitAppearance({ ...reset, lightPreset: 'gorkx', darkPreset: 'gorkx' });
@@ -1963,6 +2095,47 @@ export function SettingsPanel({
                   {t('settingsThemeReset')}
                 </button>
               </div>
+
+              {savedThemes.length > 0 ? (
+                <div className="settings-card theme-library-list">
+                  <div className="settings-row-title" style={{ marginBottom: 6 }}>{t('settingsThemeLibrary')}</div>
+                  {savedThemes.map((theme) => (
+                    <div key={theme.id} className="theme-library-row">
+                      <div className="theme-library-swatches" aria-hidden>
+                        <span style={{ background: theme.light.accent }} />
+                        <span style={{ background: theme.dark.accent }} />
+                        <span style={{ background: theme.dark.background }} />
+                      </div>
+                      <div className="theme-library-meta">
+                        <div className="settings-row-title">{theme.name}</div>
+                      </div>
+                      <div className="theme-library-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => commitAppearance(applyNamedTheme(appearance, theme.id, 'both'))}
+                        >
+                          {t('settingsThemeApplySaved')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => {
+                            if (!window.confirm(t('settingsThemeDeleteConfirm'))) return;
+                            setSavedThemes(deleteNamedTheme(theme.id));
+                          }}
+                          aria-label={t('settingsThemeDelete')}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {renderPaletteEditor('light', t('settingsThemeLightSection'))}
+              {renderPaletteEditor('dark', t('settingsThemeDarkSection'))}
 
               <h3 className="subhead">{t('settingsPreferences')}</h3>
               <div className="settings-card">
@@ -4221,6 +4394,55 @@ export function SettingsPanel({
             </div>
           ) : null}
         </section>
+      </div>
+    </div>
+  );
+}
+
+/** Colour picker + editable HEX field with draft typing. */
+function ThemeColorRow({
+  label,
+  value,
+  onPick,
+  onCommitHex,
+  hexAria,
+}: {
+  label: string;
+  value: string;
+  onPick: (hex: string) => void;
+  onCommitHex: (raw: string) => void;
+  hexAria: string;
+}) {
+  const [draft, setDraft] = useState(value.toUpperCase());
+  useEffect(() => {
+    setDraft(value.toUpperCase());
+  }, [value]);
+  return (
+    <div className="settings-row theme-color-row">
+      <div className="settings-row-title">{label}</div>
+      <div className="theme-color-control">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onPick(e.target.value)}
+          aria-label={label}
+        />
+        <input
+          className="theme-hex-input"
+          spellCheck={false}
+          value={draft}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setDraft(raw);
+            if (isValidHexInput(raw.trim())) onPick(normalizeHex(raw.trim(), value));
+          }}
+          onBlur={() => {
+            if (isValidHexInput(draft.trim())) onCommitHex(draft);
+            else setDraft(value.toUpperCase());
+          }}
+          aria-label={hexAria}
+          maxLength={7}
+        />
       </div>
     </div>
   );
