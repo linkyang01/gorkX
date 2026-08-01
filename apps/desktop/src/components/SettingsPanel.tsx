@@ -443,6 +443,10 @@ export function SettingsPanel({
   const [worktreePreviewBusy, setWorktreePreviewBusy] = useState(false);
   const [mcpDoctorOut, setMcpDoctorOut] = useState<string | null>(null);
   const [envDoctorOpen, setEnvDoctorOpen] = useState(false);
+  const [modelListQuery, setModelListQuery] = useState('');
+  const [modelListFilter, setModelListFilter] = useState<'all' | 'verified' | 'failed' | 'untested'>('all');
+  const [modelProviderCollapsed, setModelProviderCollapsed] = useState<Record<string, boolean>>({});
+  const [entitledModelsExpanded, setEntitledModelsExpanded] = useState(false);
 
   const parseWorktreePreviewRows = (list: unknown[]): Array<{ path: string; branch?: string; bare?: boolean }> => {
     const out: Array<{ path: string; branch?: string; bare?: boolean }> = [];
@@ -666,7 +670,10 @@ export function SettingsPanel({
   };
 
   const manageHooks = (action: HookManagementAction) => {
-    if (!onManageHooks) return;
+    if (!onManageHooks) {
+      showMsg(t('settingsHooksNeedTask'), true);
+      return;
+    }
     setHooksBusy(true);
     void onManageHooks(action)
       .then((snap) => {
@@ -680,10 +687,11 @@ export function SettingsPanel({
         else if (action.type === 'add') ok = t('settingsHooksAddedOk');
         else if (action.type === 'remove') ok = t('settingsHooksRemovedOk');
         if (snap.loadErrors?.length) {
-          showMsg(
-            `${ok}\n${t('settingsHooksLoadError')}: ${snap.loadErrors.slice(0, 3).join(' · ')}`,
-            true,
-          );
+          const humanized = snap.loadErrors
+            .slice(0, 3)
+            .map((line) => settingsErrorMessage(line))
+            .join(' · ');
+          showMsg(`${ok}\n${t('settingsHooksLoadError')}: ${humanized}`, true);
         } else {
           showMsg(ok, false);
         }
@@ -2529,6 +2537,22 @@ export function SettingsPanel({
           {section === 'usage' ? (
             <>
               <h2>{t('settingsUsage')}</h2>
+              {!status?.authenticated && !account?.authenticated ? (
+                <div className="settings-card usage-empty-cta">
+                  <div className="settings-row-title">{t('settingsUsageNeedLoginTitle')}</div>
+                  <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                    {t('settingsUsageNeedLoginBody')}
+                  </p>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    style={{ marginTop: 10 }}
+                    onClick={() => setSection('account')}
+                  >
+                    {t('settingsUsageGoAccount')}
+                  </button>
+                </div>
+              ) : null}
               <div className="settings-card">
                 <div className="settings-row">
                   <div>
@@ -2541,6 +2565,11 @@ export function SettingsPanel({
                         : t('dailyTokenUsageUnavailable')}
                     </div>
                     <div className="settings-row-hint">{t('dailyTokenUsageHint')}</div>
+                    {!todayTokenUsage || todayTokenUsage.totalTokens === 0 ? (
+                      <div className="settings-row-hint" style={{ marginTop: 4 }}>
+                        {t('settingsUsageTokenEmptyHint')}
+                      </div>
+                    ) : null}
                     {todayTokenUsage && (todayTokenUsage.inputTokens > 0 || todayTokenUsage.outputTokens > 0) ? (
                       <div className="settings-row-hint mono">
                         {t('dailyTokenUsageBreakdown')
@@ -2599,7 +2628,19 @@ export function SettingsPanel({
                     </button>
                   </div>
                 </div>
-                {billingError ? <div className="settings-row-hint error-text">{billingError}</div> : null}
+                {billingError ? (
+                  <div className="settings-row-hint error-text">
+                    {settingsErrorMessage(billingError)}
+                    {!status?.authenticated ? (
+                      <>
+                        {' · '}
+                        <button type="button" className="link-btn" onClick={() => setSection('account')}>
+                          {t('settingsUsageGoAccount')}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
                 {billing ? (
                   <div className="settings-card" style={{ marginTop: 10, background: 'var(--panel-soft, transparent)' }}>
                     <div className="settings-row-title">{t('billingNativeTitle')}</div>
@@ -2969,19 +3010,49 @@ export function SettingsPanel({
                     {t('refreshModels')}
                   </button>
                 </div>
-                {subscriptionModels?.models.length ? (
-                  <div className="settings-list mono" style={{ marginTop: 10 }}>
-                    {subscriptionModels.models.map((model) => (
-                      <div key={model.modelId}>
-                        {model.name || model.modelId}
-                        {model.name && model.name !== model.modelId ? ` · ${model.modelId}` : ''}
-                      </div>
-                    ))}
+                {!status?.authenticated ? (
+                  <div className="settings-row-hint" style={{ marginTop: 8 }}>
+                    {t('settingsModelsGrokOff')}
+                    {' · '}
+                    <button type="button" className="link-btn" onClick={() => setSection('account')}>
+                      {t('settingsUsageGoAccount')}
+                    </button>
                   </div>
                 ) : null}
+                {subscriptionModels?.models.length ? (
+                  <>
+                    <div className="settings-list mono" style={{ marginTop: 10 }}>
+                      {(entitledModelsExpanded
+                        ? subscriptionModels.models
+                        : subscriptionModels.models.slice(0, 6)
+                      ).map((model) => (
+                        <div key={model.modelId}>
+                          {model.name || model.modelId}
+                          {model.name && model.name !== model.modelId ? ` · ${model.modelId}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                    {subscriptionModels.models.length > 6 ? (
+                      <button
+                        type="button"
+                        className="link-btn"
+                        style={{ marginTop: 6 }}
+                        onClick={() => setEntitledModelsExpanded((v) => !v)}
+                      >
+                        {entitledModelsExpanded
+                          ? t('settingsModelsShowLess')
+                          : t('settingsModelsShowMore').replace(
+                              '{n}',
+                              String(subscriptionModels.models.length - 6),
+                            )}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
                 {subscriptionModels?.refreshError ? (
-                  <div className="settings-row-hint" style={{ marginTop: 8 }}>
-                    {t('settingsModelsRefreshFailed')}: {subscriptionModels.refreshError}
+                  <div className="settings-row-hint error-text" style={{ marginTop: 8 }}>
+                    {t('settingsModelsRefreshFailed')}:{' '}
+                    {settingsErrorMessage(subscriptionModels.refreshError)}
                   </div>
                 ) : null}
               </div>
@@ -3239,96 +3310,200 @@ export function SettingsPanel({
               ) : null}
               {(modelsSnap?.customModels?.length ?? 0) > 0 ? (
                 <>
-                {Object.entries(modelsSnap!.customModels.reduce<Record<string, CustomModelRow[]>>((groups, model) => {
-                  const provider = model.providerLabel.trim() || (model.apiBackend === 'messages' ? 'Anthropic-compatible' : /ollama|localhost|127\.0\.0\.1/i.test(model.baseUrl) ? 'Local / Ollama' : 'Custom / OpenAI-compatible');
-                  (groups[provider] ||= []).push(model); return groups;
-                }, {})).sort(([a], [b]) => a.localeCompare(b)).map(([provider, providerModels]) => <div className="settings-card" key={provider} style={{ marginBottom: 10 }}>
-                  <div className="settings-row-title" style={{ marginBottom: 6 }}>{provider}</div>
-                  {providerModels.map((m) => {
-                    const isDefault =
-                      modelsSnap?.defaultModel === m.model ||
-                      modelsSnap?.defaultModel === m.id;
-                    const testStatus = findVerifyRecord(modelVerifyRecords, m);
-                    return (
-                      <div key={m.id} className="settings-row">
-                        <div>
-                          <div className="settings-row-title">
-                            {m.name || m.model}
-                            {isDefault ? (
+                  <div className="settings-card model-list-toolbar">
+                    <div className="settings-row-title">{t('settingsModelsConfiguredTitle')}</div>
+                    <div className="field-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                      <input
+                        className="settings-text-input"
+                        style={{ marginTop: 0, flex: 1, minWidth: 160 }}
+                        value={modelListQuery}
+                        onChange={(e) => setModelListQuery(e.target.value)}
+                        placeholder={t('settingsModelsFilterPlaceholder')}
+                        spellCheck={false}
+                      />
+                      <select
+                        className="settings-select"
+                        value={modelListFilter}
+                        onChange={(e) =>
+                          setModelListFilter(e.target.value as 'all' | 'verified' | 'failed' | 'untested')
+                        }
+                        aria-label={t('settingsModelsFilterStatus')}
+                      >
+                        <option value="all">{t('settingsModelsFilterAll')}</option>
+                        <option value="verified">{t('settingsModelsFilterVerified')}</option>
+                        <option value="failed">{t('settingsModelsFilterFailed')}</option>
+                        <option value="untested">{t('settingsModelsFilterUntested')}</option>
+                      </select>
+                    </div>
+                  </div>
+                  {(() => {
+                    const q = modelListQuery.trim().toLowerCase();
+                    const filtered = (modelsSnap!.customModels || []).filter((model) => {
+                      const rec = findVerifyRecord(modelVerifyRecords, model);
+                      if (modelListFilter === 'verified' && !(rec?.ok)) return false;
+                      if (modelListFilter === 'failed' && !(rec && !rec.ok)) return false;
+                      if (modelListFilter === 'untested' && rec) return false;
+                      if (!q) return true;
+                      const hay = [
+                        model.name,
+                        model.model,
+                        model.id,
+                        model.baseUrl,
+                        model.providerLabel,
+                      ]
+                        .join(' ')
+                        .toLowerCase();
+                      return hay.includes(q);
+                    });
+                    const groups = filtered.reduce<Record<string, CustomModelRow[]>>((acc, model) => {
+                      const provider =
+                        model.providerLabel.trim() ||
+                        (model.apiBackend === 'messages'
+                          ? 'Anthropic-compatible'
+                          : /ollama|localhost|127\.0\.0\.1/i.test(model.baseUrl)
+                            ? 'Local / Ollama'
+                            : 'Custom / OpenAI-compatible');
+                      (acc[provider] ||= []).push(model);
+                      return acc;
+                    }, {});
+                    const entries = Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+                    if (!entries.length) {
+                      return (
+                        <div className="settings-card muted-block">
+                          <p className="hint" style={{ margin: 0 }}>{t('settingsModelsFilterEmpty')}</p>
+                        </div>
+                      );
+                    }
+                    return entries.map(([provider, providerModels]) => {
+                      const collapsed = Boolean(modelProviderCollapsed[provider]);
+                      return (
+                        <div className="settings-card" key={provider} style={{ marginBottom: 10 }}>
+                          <button
+                            type="button"
+                            className="model-provider-toggle"
+                            onClick={() =>
+                              setModelProviderCollapsed((prev) => ({
+                                ...prev,
+                                [provider]: !prev[provider],
+                              }))
+                            }
+                          >
+                            <span className="settings-row-title">
+                              {provider}
                               <span className="muted" style={{ marginLeft: 8, fontWeight: 500 }}>
-                                {t('settingsModelsDefaultBadge')}
+                                {providerModels.length}
                               </span>
-                            ) : null}
-                          </div>
-                          <div className="settings-row-hint mono">
-                            {m.model} · {m.baseUrl}
-                          </div>
-                          <div className="settings-row-hint">
-                            {m.hasPlaintextSecret ? t('settingsModelsPlaintextStatus') : m.hasKeychainSecret ? t('settingsModelsKeychainStatus') : m.apiKey.startsWith('env:') ? t('settingsModelsEnvStatus') : t('settingsModelsNoKeyStatus')}
-                          </div>
-                          <div className={`settings-row-hint model-test-status${testStatus ? (testStatus.ok ? ' verified' : ' failed') : ' unverified'}`}>
-                            {testStatus
-                              ? (testStatus.ok ? t('settingsModelsVerifiedAt') : t('settingsModelsTestFailedAt')).replace('{when}', formatWhen(testStatus.checkedAt))
-                              : t('settingsModelsNotTested')}
-                          </div>
-                          {testStatus?.failReason ? (
-                            <div className="settings-row-hint" style={{ color: 'var(--danger, #c33)' }}>
-                              {testStatus.failReason}
-                            </div>
-                          ) : null}
-                          {testStatus ? (
-                            <div className="settings-row-hint">
-                              {t('settingsModelsCaps')}:{' '}
-                              {t('settingsModelsCapTools')}=
-                              {String(testStatus.capabilities.tools)} ·{' '}
-                              {t('settingsModelsCapVision')}=
-                              {String(testStatus.capabilities.vision)}
-                              {typeof testStatus.latencyMs === 'number'
-                                ? ` · ${testStatus.latencyMs}ms`
-                                : ''}
-                            </div>
-                          ) : null}
+                            </span>
+                            <span className="muted">{collapsed ? '▸' : '▾'}</span>
+                          </button>
+                          {collapsed
+                            ? null
+                            : providerModels.map((m) => {
+                                const isDefault =
+                                  modelsSnap?.defaultModel === m.model ||
+                                  modelsSnap?.defaultModel === m.id;
+                                const testStatus = findVerifyRecord(modelVerifyRecords, m);
+                                return (
+                                  <div key={m.id} className="settings-row">
+                                    <div>
+                                      <div className="settings-row-title">
+                                        {m.name || m.model}
+                                        {isDefault ? (
+                                          <span className="muted" style={{ marginLeft: 8, fontWeight: 500 }}>
+                                            {t('settingsModelsDefaultBadge')}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <div className="settings-row-hint mono">
+                                        {m.model} · {m.baseUrl}
+                                      </div>
+                                      <div className="settings-row-hint">
+                                        {m.hasPlaintextSecret
+                                          ? t('settingsModelsPlaintextStatus')
+                                          : m.hasKeychainSecret
+                                            ? t('settingsModelsKeychainStatus')
+                                            : m.apiKey.startsWith('env:')
+                                              ? t('settingsModelsEnvStatus')
+                                              : t('settingsModelsNoKeyStatus')}
+                                      </div>
+                                      <div
+                                        className={`settings-row-hint model-test-status${
+                                          testStatus
+                                            ? testStatus.ok
+                                              ? ' verified'
+                                              : ' failed'
+                                            : ' unverified'
+                                        }`}
+                                      >
+                                        {testStatus
+                                          ? (testStatus.ok
+                                              ? t('settingsModelsVerifiedAt')
+                                              : t('settingsModelsTestFailedAt')
+                                            ).replace('{when}', formatWhen(testStatus.checkedAt))
+                                          : t('settingsModelsNotTested')}
+                                      </div>
+                                      {testStatus?.failReason ? (
+                                        <div className="settings-row-hint error-text">
+                                          {settingsErrorMessage(testStatus.failReason)}
+                                        </div>
+                                      ) : null}
+                                      {testStatus ? (
+                                        <div className="settings-row-hint">
+                                          {t('settingsModelsCaps')}:{' '}
+                                          {t('settingsModelsCapTools')}=
+                                          {String(testStatus.capabilities.tools)} ·{' '}
+                                          {t('settingsModelsCapVision')}=
+                                          {String(testStatus.capabilities.vision)}
+                                          {typeof testStatus.latencyMs === 'number'
+                                            ? ` · ${testStatus.latencyMs}ms`
+                                            : ''}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        disabled={modelBusy}
+                                        onClick={() => {
+                                          setModelBusy(true);
+                                          setMsg(t('settingsModelsTesting'));
+                                          void testCustomModel(m)
+                                            .then((r) => {
+                                              recordModelTest(m, r);
+                                              if (r.ok) setMsg(r.note);
+                                              else showMsg(settingsErrorMessage(r.note || t('settingsModelsTest')), true);
+                                            })
+                                            .catch((e) => showErr(e))
+                                            .finally(() => setModelBusy(false));
+                                        }}
+                                      >
+                                        {t('settingsModelsTest')}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        disabled={modelBusy || isDefault}
+                                        onClick={() => void makeDefaultModel(m.model)}
+                                      >
+                                        {t('settingsModelsSetDefault')}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm"
+                                        disabled={modelBusy}
+                                        onClick={() => void deleteCustomModel(m.id)}
+                                      >
+                                        {t('settingsModelsRemove')}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                         </div>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            className="btn btn-sm"
-                            disabled={modelBusy}
-                            onClick={() => {
-                              setModelBusy(true);
-                              setMsg(t('settingsModelsTesting'));
-                              void testCustomModel(m)
-                                .then((r) => {
-                                  recordModelTest(m, r);
-                                  setMsg(r.note);
-                                })
-                                .catch((e) => showErr(e))
-                                .finally(() => setModelBusy(false));
-                            }}
-                          >
-                            {t('settingsModelsTest')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm"
-                            disabled={modelBusy || isDefault}
-                            onClick={() => void makeDefaultModel(m.model)}
-                          >
-                            {t('settingsModelsSetDefault')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm"
-                            disabled={modelBusy}
-                            onClick={() => void deleteCustomModel(m.id)}
-                          >
-                            {t('settingsModelsRemove')}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>)}
+                      );
+                    });
+                  })()}
                 </>
               ) : (
                 <div className="settings-card muted-block">
@@ -3788,13 +3963,35 @@ export function SettingsPanel({
                 )}
               </div>
               <h3 className="subhead">{t('settingsHooksTitle')}</h3>
+              {!project ? (
+                <div className="settings-card usage-empty-cta">
+                  <div className="settings-row-title">{t('settingsHooksNeedProjectTitle')}</div>
+                  <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                    {t('settingsInstructionsNeedProject')}
+                  </p>
+                </div>
+              ) : null}
               {project ? <HookBuilder project={project} onSaved={() => { void refreshHooks(); }} /> : null}
               <div className="settings-card">
                 <p className="settings-row-hint">{t('settingsHooksHint')}</p>
                 {!hooksAvailable ? (
                   <div className="ext-empty-card" style={{ marginTop: 10 }}>
                     <p className="hint" style={{ margin: 0 }}>{t('settingsHooksNeedTask')}</p>
+                    <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsHooksNeedTaskSteps')}</p>
                     <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsHooksUnavailable')}</p>
+                    <div className="field-row" style={{ marginTop: 10 }}>
+                      <button type="button" className="btn btn-sm" onClick={onClose}>
+                        {t('settingsHooksBackToApp')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={hooksBusy || !onRefreshHooks}
+                        onClick={() => refreshHooks()}
+                      >
+                        {t('settingsHooksReload')}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
