@@ -23,6 +23,8 @@ function shortcutRows(): Array<{ keys: string; action: string }> {
     { keys: '⇧⌘/Ctrl + A', action: t('shortcutDecisions') },
     { keys: '⇧⌘/Ctrl + S', action: t('shortcutScheduled') },
     { keys: '⇧⌘/Ctrl + B', action: t('shortcutSpawnSubagent') },
+    { keys: '⇧⌘/Ctrl + P', action: t('shortcutProcess') },
+    { keys: '⇧⌘/Ctrl + I', action: t('shortcutTaskInfo') },
     { keys: '⇧⌘/Ctrl + F', action: t('shortcutTaskSearch') },
     { keys: '⌘/Ctrl + K', action: t('shortcutSettings') },
     { keys: 'Ctrl + Space / F8', action: t('shortcutVoice') },

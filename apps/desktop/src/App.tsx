@@ -1525,6 +1525,27 @@ function App() {
         }
         return;
       }
+      if (meta && (e.key === 'p' || e.key === 'P') && e.shiftKey) {
+        e.preventDefault();
+        setProcessOpen((v) => {
+          const next = !v;
+          try {
+            localStorage.setItem('gorkx.processOpen', next ? '1' : '0');
+          } catch {
+            /* optional */
+          }
+          return next;
+        });
+        return;
+      }
+      if (meta && (e.key === 'i' || e.key === 'I') && e.shiftKey) {
+        const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+        if (live?.client && live.sessionId) {
+          e.preventDefault();
+          setTaskInfoOpen(true);
+        }
+        return;
+      }
       if (meta && e.key === '/') {
         e.preventDefault();
         setShortcutsOpen((v) => !v);
