@@ -52,6 +52,31 @@ export function settingsErrorMessage(error: unknown): string {
     return t('settingsComputerControlCoordinatesInvalid');
   }
 
+  // Account / network / browser / models common shapes
+  if (/network|offline|ECONNREFUSED|ENOTFOUND|timed?\s*out|timeout|fetch failed|connection reset/i.test(s)) {
+    return t('settingsErrorNetwork');
+  }
+  if (/unauthorized|401|invalid.?token|token.*(invalid|expired)|sign.?in|login required|oauth/i.test(s)
+    && /github|account|auth|token|keychain|credential/i.test(s)) {
+    return t('settingsErrorAuth');
+  }
+  if (/keychain|secitem|errSec|钥匙串/i.test(s)) {
+    return t('settingsErrorKeychain');
+  }
+  if (/chrome|playwright|mcp|browser/i.test(s) && /fail|error|not found|denied|refused/i.test(s)) {
+    return t('settingsErrorBrowser');
+  }
+  if (/model|endpoint|openai|anthropic|base.?url|api.?key/i.test(s)
+    && /fail|invalid|reject|verify|connect|401|403|404/i.test(s)) {
+    return t('settingsErrorModel');
+  }
+  if (/permission denied|EACCES|operation not permitted/i.test(s)) {
+    return t('settingsErrorPermission');
+  }
+  if (/no such file|ENOENT|not a directory/i.test(s)) {
+    return t('settingsErrorNotFound');
+  }
+
   const human = humanizeEngineError(s);
   if (
     human

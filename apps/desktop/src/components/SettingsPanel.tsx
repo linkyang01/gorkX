@@ -357,7 +357,7 @@ export function SettingsPanel({
   const [account, setAccount] = useState<AccountSummary | null>(accountProp ?? null);
   const [dbPath, setDbPath] = useState<string | null>(null);
   const [dataDir, setDataDir] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsgRaw] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
   const [kernelUp, setKernelUp] = useState<KernelUpdateInfo | null>(null);
   const [appUp, setAppUp] = useState<AppUpdateInfo | null>(null);
@@ -460,12 +460,17 @@ export function SettingsPanel({
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
 
+  /** Info/success: always clears the error style (legacy setMsg call sites). */
+  const setMsg = (text: string | null) => {
+    setMsgRaw(text);
+    setMsgIsError(false);
+  };
   const showMsg = (text: string, isError = false) => {
-    setMsg(text);
+    setMsgRaw(text);
     setMsgIsError(isError);
   };
   const showErr = (error: unknown) => {
-    setMsg(settingsErrorMessage(error));
+    setMsgRaw(settingsErrorMessage(error));
     setMsgIsError(true);
   };
 
@@ -474,7 +479,6 @@ export function SettingsPanel({
     if (initialSection) setSection(initialSection);
     setQuery('');
     setMsg(null);
-    setMsgIsError(false);
     void storeDbPath().then(setDbPath);
     void storeDataDir().then(setDataDir);
     void fetchAccountSummary().then(setAccount);
@@ -618,7 +622,7 @@ export function SettingsPanel({
     try {
       setComputerHubStatus(await computerWorkspaceStatus(grokCmd || undefined));
     } catch (error) {
-      setComputerHubStatus(error instanceof Error ? error.message : String(error));
+      setComputerHubStatus(settingsErrorMessage(error));
     } finally {
       setComputerHubBusy(false);
     }
@@ -704,7 +708,7 @@ export function SettingsPanel({
     try {
       setCloudEnvironments(await onListCloudEnvironments());
     } catch (error) {
-      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+      setCloudEnvironmentError(settingsErrorMessage(error));
     } finally {
       setCloudEnvironmentBusy(false);
     }
@@ -719,7 +723,7 @@ export function SettingsPanel({
       setBilling(next);
       if (onFetchAutoTopup) setAutoTopup(await onFetchAutoTopup());
     } catch (error) {
-      setBillingError(error instanceof Error ? error.message : String(error));
+      setBillingError(settingsErrorMessage(error));
     } finally {
       setBillingBusy(false);
     }
@@ -772,7 +776,7 @@ export function SettingsPanel({
       setCloudEnvironmentDraft({ name: '' });
       setMsg(editingCloudEnvironmentId ? t('settingsCloudEnvironmentUpdated') : t('settingsCloudEnvironmentCreated'));
     } catch (error) {
-      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+      setCloudEnvironmentError(settingsErrorMessage(error));
     } finally {
       setCloudEnvironmentBusy(false);
     }
@@ -792,7 +796,7 @@ export function SettingsPanel({
       }
       setMsg(t('settingsCloudEnvironmentDeleted'));
     } catch (error) {
-      setCloudEnvironmentError(error instanceof Error ? error.message : String(error));
+      setCloudEnvironmentError(settingsErrorMessage(error));
     } finally {
       setCloudEnvironmentBusy(false);
     }
@@ -824,7 +828,7 @@ export function SettingsPanel({
       setComputerHubStatus(raw || t('settingsComputerHubDone'));
       await refreshComputerHub();
     } catch (error) {
-      setComputerHubStatus(error instanceof Error ? error.message : String(error));
+      setComputerHubStatus(settingsErrorMessage(error));
     } finally {
       setComputerHubBusy(false);
     }
@@ -835,7 +839,7 @@ export function SettingsPanel({
     try {
       setKernelDoctor(await runKernelDoctor(grokCmd || undefined));
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setDoctorBusy(false);
     }
@@ -849,7 +853,7 @@ export function SettingsPanel({
       setMsg(result.success ? t('kernelDoctorFixSuccess') : `${t('kernelDoctorFixFailed')}: ${result.output}`);
       await checkKernelDoctor();
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setDoctorFixBusy(null);
     }
@@ -1285,7 +1289,7 @@ export function SettingsPanel({
       }
       onRefresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setLoginBusy(false);
     }
@@ -1298,7 +1302,7 @@ export function SettingsPanel({
       setAccount(null);
       onRefresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     }
   };
 
@@ -1320,7 +1324,7 @@ export function SettingsPanel({
       );
       onModelsRefreshed?.();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     }
   };
 
@@ -1355,7 +1359,7 @@ export function SettingsPanel({
       const info = await checkAppUpdate(APP_VERSION);
       setAppUp(info);
       if (info.error && !info.latestVersion) {
-        setMsg(`${t('updateFail')}: ${info.error}`);
+        showMsg(`${t('updateFail')}: ${settingsErrorMessage(info.error)}`, true);
       } else if (info.updateAvailable) {
         const size = formatBytes(info.dmgBytes);
         setMsg(
@@ -1385,7 +1389,7 @@ export function SettingsPanel({
       const r = await installAppUpdate(info);
       setMsg(r.note || (r.ok ? t('updateAppDone') : t('updateFail')));
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setUpBusy(false);
     }
@@ -1398,7 +1402,7 @@ export function SettingsPanel({
       setMemory(next);
       setMsg(next?.enabled ? t('memoryOn') : t('memoryOff'));
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setMemBusy(false);
     }
@@ -1412,7 +1416,7 @@ export function SettingsPanel({
       setPersonalRulesPath(snapshot.path);
       setMsg(snapshot.content ? t('settingsPersonalInstructionsSaved') : t('settingsPersonalInstructionsCleared'));
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setPersonalRulesBusy(false);
     }
@@ -1427,7 +1431,7 @@ export function SettingsPanel({
       setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions(''); setEditingAgentName(null);
       onNewTaskProfile(saved.name);
       setMsg(t('settingsAgentRoleSaved'));
-    } catch (error) { setMsg(error instanceof Error ? error.message : String(error)); }
+    } catch (error) { showErr(error); }
     finally { setAgentProfileBusy(false); }
   };
 
@@ -1439,7 +1443,7 @@ export function SettingsPanel({
       setArchived((p) => p.filter((x) => x.id !== row.id));
       setMsg(t('settingsArchivedRestored'));
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setArchBusy(false);
     }
@@ -1467,7 +1471,7 @@ export function SettingsPanel({
       setModelForm((f) => ({ ...f, apiKey: '' }));
       onModelsRefreshed?.();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setModelBusy(false);
     }
@@ -1502,7 +1506,7 @@ export function SettingsPanel({
       onModelsRefreshed?.();
       setMsg(t('settingsModelsConnected').replace('{model}', row.model));
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setModelBusy(false);
     }
@@ -1551,7 +1555,7 @@ export function SettingsPanel({
       setMsg(t('settingsModelsDefaultOk').replace('{id}', modelWireId));
       onModelsRefreshed?.();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setModelBusy(false);
     }
@@ -1565,7 +1569,7 @@ export function SettingsPanel({
       setMsg(t('settingsModelsRemoved'));
       onModelsRefreshed?.();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      showErr(e);
     } finally {
       setModelBusy(false);
     }
@@ -1879,7 +1883,7 @@ export function SettingsPanel({
                 <textarea className="settings-textarea" style={{ marginTop: 8 }} rows={6} value={agentRoleInstructions} maxLength={12000} placeholder={t('settingsAgentRoleInstructions')} onChange={(event) => setAgentRoleInstructions(event.target.value)} />
                 <div className="field-row" style={{ marginTop: 8 }}><button type="button" className="btn primary" disabled={agentProfileBusy} onClick={() => void saveAgentRole()}>{agentProfileBusy ? t('settingsAgentSaving') : t('settingsAgentSave')}</button>{editingAgentName ? <button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setEditingAgentName(null); setAgentRoleName(''); setAgentRoleDescription(''); setAgentRoleInstructions(''); }}>{t('cancel')}</button> : null}</div>
               </div>
-              {agentProfiles.filter((profile) => profile.editable).length ? <div className="settings-card"><div className="settings-row-title">{t('settingsAgentCreated')}</div>{agentProfiles.filter((profile) => profile.editable).map((profile) => <div className="settings-row" key={profile.name}><div><strong>{profile.displayName}</strong><div className="settings-row-hint">{profile.description}</div></div><div className="field-row"><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { const body = profile.content?.replace(/^[\s\S]*?\n---\n?/, '') || ''; setEditingAgentName(profile.name); setAgentRoleName(profile.displayName); setAgentRoleDescription(profile.description); setAgentRoleInstructions(body.trim()); }}>{t('settingsEdit')}</button><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setAgentProfileBusy(true); void removeAgentProfile(profile.name).then(() => { setAgentProfiles((current) => current.filter((item) => item.name !== profile.name)); if (newTaskProfile === profile.name) onNewTaskProfile('default'); setMsg(t('settingsAgentRemoved')); }).catch((error) => setMsg(error instanceof Error ? error.message : String(error))).finally(() => setAgentProfileBusy(false)); }}>{t('settingsRemove')}</button></div></div>)}</div> : null}
+              {agentProfiles.filter((profile) => profile.editable).length ? <div className="settings-card"><div className="settings-row-title">{t('settingsAgentCreated')}</div>{agentProfiles.filter((profile) => profile.editable).map((profile) => <div className="settings-row" key={profile.name}><div><strong>{profile.displayName}</strong><div className="settings-row-hint">{profile.description}</div></div><div className="field-row"><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { const body = profile.content?.replace(/^[\s\S]*?\n---\n?/, '') || ''; setEditingAgentName(profile.name); setAgentRoleName(profile.displayName); setAgentRoleDescription(profile.description); setAgentRoleInstructions(body.trim()); }}>{t('settingsEdit')}</button><button type="button" className="btn" disabled={agentProfileBusy} onClick={() => { setAgentProfileBusy(true); void removeAgentProfile(profile.name).then(() => { setAgentProfiles((current) => current.filter((item) => item.name !== profile.name)); if (newTaskProfile === profile.name) onNewTaskProfile('default'); setMsg(t('settingsAgentRemoved')); }).catch((error) => showErr(error)).finally(() => setAgentProfileBusy(false)); }}>{t('settingsRemove')}</button></div></div>)}</div> : null}
             </>
           ) : null}
 
@@ -2178,7 +2182,7 @@ export function SettingsPanel({
                 <p className="settings-row-hint">{t('mediaToolsHint')}</p>
                 {(['image', 'video'] as const).map((kind) => {
                   const enabled = kind === 'image' ? (mediaTools?.imageGenEnabled ?? true) : (mediaTools?.videoGenEnabled ?? true);
-                  return <div className="settings-row" style={{ marginTop: 10 }} key={kind}><div><div className="settings-row-title">{kind === 'image' ? t('mediaImage') : t('mediaVideo')}</div><div className="settings-row-hint">{enabled ? t('mediaEnabled') : t('mediaDisabled')}</div></div><button type="button" className={`btn${enabled ? ' primary' : ''}`} disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setMediaToolEnabled(kind, !enabled).then(setMediaTools).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{enabled ? t('mediaDisabled') : t('mediaEnabled')}</button></div>;
+                  return <div className="settings-row" style={{ marginTop: 10 }} key={kind}><div><div className="settings-row-title">{kind === 'image' ? t('mediaImage') : t('mediaVideo')}</div><div className="settings-row-hint">{enabled ? t('mediaEnabled') : t('mediaDisabled')}</div></div><button type="button" className={`btn${enabled ? ' primary' : ''}`} disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setMediaToolEnabled(kind, !enabled).then(setMediaTools).catch((e) => showErr(e)).finally(() => setMediaBusy(false)); }}>{enabled ? t('mediaDisabled') : t('mediaEnabled')}</button></div>;
                 })}
                 <div className="settings-row" style={{ marginTop: 10 }}>
                   <div style={{ flex: 1 }}>
@@ -2192,7 +2196,7 @@ export function SettingsPanel({
                       onChange={(event) => setImageEditModelDraft(event.target.value)}
                     />
                   </div>
-                  <button type="button" className="btn" disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setImageEditModelOverride(imageEditModelDraft).then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch((e) => setMsg(e instanceof Error ? e.message : String(e))).finally(() => setMediaBusy(false)); }}>{t('mediaSave')}</button>
+                  <button type="button" className="btn" disabled={mediaBusy} onClick={() => { setMediaBusy(true); void setImageEditModelOverride(imageEditModelDraft).then((snapshot) => { setMediaTools(snapshot); setImageEditModelDraft(snapshot.imageEditModelOverride || ''); }).catch((e) => showErr(e)).finally(() => setMediaBusy(false)); }}>{t('mediaSave')}</button>
                 </div>
               </div>
               <h3 className="subhead">{t('settingsModelsCustom')}</h3>
@@ -2345,7 +2349,7 @@ export function SettingsPanel({
                           setModelCatalog(result.models);
                           setMsg(result.note);
                         })
-                        .catch((error) => setMsg(String(error)))
+                        .catch((error) => showErr(error))
                         .finally(() => setModelCatalogBusy(false));
                     }}
                   >
@@ -2388,7 +2392,7 @@ export function SettingsPanel({
                           recordModelTest(row, r);
                           setMsg(r.note);
                         })
-                        .catch((e) => setMsg(String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setModelBusy(false));
                     }}
                   >
@@ -2400,7 +2404,7 @@ export function SettingsPanel({
                     onClick={() =>
                       void openModelsConfig()
                         .then((p) => setMsg(p))
-                        .catch((e) => setMsg(String(e)))
+                        .catch((e) => showErr(e))
                     }
                   >
                     {t('settingsModelsEditToml')}
@@ -2421,7 +2425,7 @@ export function SettingsPanel({
                   <div className="settings-row-hint">{t('settingsModelsPlaintextHint')}</div>
                   <button type="button" className="btn" disabled={modelBusy} onClick={() => {
                     setModelBusy(true);
-                    void migratePlaintextModelKeys().then(setModelsSnap).then(() => setMsg(t('settingsModelsMigrated'))).catch((e) => setMsg(String(e))).finally(() => setModelBusy(false));
+                    void migratePlaintextModelKeys().then(setModelsSnap).then(() => setMsg(t('settingsModelsMigrated'))).catch((e) => showErr(e)).finally(() => setModelBusy(false));
                   }}>{t('settingsModelsMigrate')}</button>
                 </div>
               ) : null}
@@ -2490,7 +2494,7 @@ export function SettingsPanel({
                                   recordModelTest(m, r);
                                   setMsg(r.note);
                                 })
-                                .catch((e) => setMsg(String(e)))
+                                .catch((e) => showErr(e))
                                 .finally(() => setModelBusy(false));
                             }}
                           >
@@ -2565,7 +2569,7 @@ export function SettingsPanel({
                       if (event.key !== 'Enter' || !browserPreviewUrl.trim()) return;
                       event.preventDefault();
                       void openWebPreview(browserPreviewUrl).catch((error) =>
-                        setMsg(error instanceof Error ? error.message : String(error)),
+                        showErr(error),
                       );
                     }}
                   />
@@ -2575,7 +2579,7 @@ export function SettingsPanel({
                     disabled={!browserPreviewUrl.trim()}
                     onClick={() => {
                       void openWebPreview(browserPreviewUrl).catch((error) =>
-                        setMsg(error instanceof Error ? error.message : String(error)),
+                        showErr(error),
                       );
                     }}
                   >
@@ -2624,7 +2628,7 @@ export function SettingsPanel({
                           setMsg(t('settingsBrowserConnected'));
                           return refreshBrowser();
                         })
-                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setBrowserBusy(false));
                     }}
                   >
@@ -2638,7 +2642,7 @@ export function SettingsPanel({
                       setBrowserBusy(true);
                       void runMcpDoctor(grokCmd || undefined)
                         .then((note) => setMsg(note.slice(0, 2000)))
-                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setBrowserBusy(false));
                     }}
                   >
@@ -2867,7 +2871,7 @@ export function SettingsPanel({
                           setSubagentsSnap(snapshot);
                           setMsg(next ? t('settingsSubagentsEnabledNow') : t('settingsSubagentsDisabledNow'));
                         })
-                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setSubagentsBusy(false));
                     }}
                   >
@@ -2888,7 +2892,7 @@ export function SettingsPanel({
                       setSubagentsBusy(true);
                       void setSubagentTypeEnabled('explore', next)
                         .then(setSubagentsSnap)
-                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setSubagentsBusy(false));
                     }}
                   >
@@ -2909,7 +2913,7 @@ export function SettingsPanel({
                       setSubagentsBusy(true);
                       void setSubagentTypeEnabled('plan', next)
                         .then(setSubagentsSnap)
-                        .catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+                        .catch((e) => showErr(e))
                         .finally(() => setSubagentsBusy(false));
                     }}
                   >
@@ -2962,7 +2966,7 @@ export function SettingsPanel({
                               setProjectInstructionsDraft(snapshot.content);
                               setMsg(t('settingsInstructionsSaved'));
                             })
-                            .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+                            .catch((error) => showErr(error))
                             .finally(() => setProjectInstructionsBusy(false));
                         }}
                       >
@@ -3589,7 +3593,7 @@ export function SettingsPanel({
                             setSandboxSnap(snapshot);
                             setMsg(t('settingsSandboxSaved'));
                           })
-                          .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+                          .catch((error) => showErr(error))
                           .finally(() => setSandboxBusy(false));
                       }}
                     />

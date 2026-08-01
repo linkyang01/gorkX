@@ -18,4 +18,10 @@ assert.match(computerStatusDetail('Foreground Computer controls are disabled.'),
 // Unknown detail is passed through.
 assert.equal(computerStatusDetail('custom detail 42'), 'custom detail 42');
 
+assert.ok(settingsErrorMessage(new Error('fetch failed: ECONNREFUSED 127.0.0.1:9222')).length > 4);
+assert.ok(settingsErrorMessage('Keychain SecItemAdd failed: errSecAuthFailed').length > 4);
+assert.ok(settingsErrorMessage('Chrome MCP connection refused').length > 4);
+assert.ok(settingsErrorMessage('Model verify failed: invalid api key for endpoint').length > 4);
+assert.ok(settingsErrorMessage('ENOENT: no such file or directory, open /tmp/x').length > 4);
+
 console.log('settingsFeedback.test.ts: ok');
