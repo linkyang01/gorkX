@@ -79,10 +79,21 @@ import {
 import { t } from '../lib/i18n';
 import {
   applyAppearance,
+  applyPreset,
+  CODE_FONT_OPTIONS,
+  exportThemePackage,
   loadAppearance,
+  mergeThemePackage,
+  parseThemePackage,
+  THEME_PRESETS,
+  themePreviewLines,
+  UI_FONT_OPTIONS,
+  updatePaletteField,
   type AppearancePreferences,
   type DensityPreference,
+  type ThemePalette,
   type ThemePreference,
+  type ThemeSide,
 } from '../lib/appearance';
 import {
   enablePlaywrightChromeMcp,
@@ -1584,6 +1595,192 @@ export function SettingsPanel({
     applyAppearance(next);
   };
 
+  const commitAppearance = (next: AppearancePreferences) => {
+    setAppearance(next);
+    applyAppearance(next);
+  };
+
+  const patchPalette = <K extends keyof ThemePalette>(
+    side: ThemeSide,
+    key: K,
+    value: ThemePalette[K],
+  ) => {
+    commitAppearance(updatePaletteField(appearance, side, key, value));
+  };
+
+  const copyThemeJson = async () => {
+    try {
+      const text = JSON.stringify(exportThemePackage(appearance), null, 2);
+      await navigator.clipboard.writeText(text);
+      setMsg(t('settingsThemeCopied'));
+    } catch (error) {
+      showErr(error);
+    }
+  };
+
+  const importThemeJson = async () => {
+    const raw = window.prompt(t('settingsThemeImport'));
+    if (raw == null || !raw.trim()) return;
+    try {
+      const pack = parseThemePackage(raw.trim());
+      commitAppearance(mergeThemePackage(appearance, pack, 'both'));
+      setMsg(t('settingsThemeImportOk'));
+    } catch {
+      showMsg(t('settingsThemeImportFail'), true);
+    }
+  };
+
+  const renderPaletteEditor = (side: ThemeSide, title: string) => {
+    const palette = appearance[side];
+    const presetKey = side === 'light' ? appearance.lightPreset : appearance.darkPreset;
+    const preview = themePreviewLines(palette, side);
+    return (
+      <div className="theme-palette-card" key={side}>
+        <div className="theme-palette-head">
+          <h3 className="subhead" style={{ margin: 0 }}>{title}</h3>
+          <div className="theme-palette-actions">
+            <button type="button" className="btn btn-sm" onClick={() => void importThemeJson()}>
+              {t('settingsThemeImport')}
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => void copyThemeJson()}>
+              {t('settingsThemeCopy')}
+            </button>
+            <label className="theme-preset-select">
+              <span className="sr-only">{t('settingsThemePreset')}</span>
+              <select
+                value={THEME_PRESETS[presetKey] ? presetKey : 'custom'}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  if (id === 'custom') return;
+                  commitAppearance(applyPreset(appearance, side, id));
+                }}
+                aria-label={t('settingsThemePreset')}
+              >
+                {Object.entries(THEME_PRESETS).map(([id, preset]) => (
+                  <option key={id} value={id}>{preset.label}</option>
+                ))}
+                <option value="custom">{t('settingsThemePresetCustom')}</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="theme-diff-preview" aria-label={t('settingsThemePreview')}>
+          <pre className="theme-diff-pane before">
+            {themePreviewLines(
+              side === 'light' ? THEME_PRESETS.gorkx.light : THEME_PRESETS.gorkx.dark,
+              side,
+            ).map((line, i) => (
+              <div key={`b-${i}`} className={i > 0 && i < 4 ? 'theme-diff-line remove' : 'theme-diff-line'}>
+                <span className="theme-diff-n">{i + 1}</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </pre>
+          <pre className="theme-diff-pane after">
+            {preview.map((line, i) => (
+              <div key={`a-${i}`} className={i > 0 && i < 4 ? 'theme-diff-line add' : 'theme-diff-line'}>
+                <span className="theme-diff-n">{i + 1}</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </pre>
+        </div>
+
+        <div className="settings-card theme-palette-fields">
+          <label className="settings-row theme-color-row">
+            <div className="settings-row-title">{t('settingsThemeAccent')}</div>
+            <div className="theme-color-control">
+              <input
+                type="color"
+                value={palette.accent}
+                onChange={(e) => patchPalette(side, 'accent', e.target.value)}
+                aria-label={t('settingsThemeAccent')}
+              />
+              <code>{palette.accent.toUpperCase()}</code>
+            </div>
+          </label>
+          <label className="settings-row theme-color-row">
+            <div className="settings-row-title">{t('settingsThemeBackground')}</div>
+            <div className="theme-color-control">
+              <input
+                type="color"
+                value={palette.background}
+                onChange={(e) => patchPalette(side, 'background', e.target.value)}
+                aria-label={t('settingsThemeBackground')}
+              />
+              <code>{palette.background.toUpperCase()}</code>
+            </div>
+          </label>
+          <label className="settings-row theme-color-row">
+            <div className="settings-row-title">{t('settingsThemeForeground')}</div>
+            <div className="theme-color-control">
+              <input
+                type="color"
+                value={palette.foreground}
+                onChange={(e) => patchPalette(side, 'foreground', e.target.value)}
+                aria-label={t('settingsThemeForeground')}
+              />
+              <code>{palette.foreground.toUpperCase()}</code>
+            </div>
+          </label>
+          <label className="settings-row">
+            <div className="settings-row-title">{t('settingsThemeUiFont')}</div>
+            <select
+              className="settings-select"
+              value={UI_FONT_OPTIONS.find((o) => o.stack === palette.uiFont)?.id || 'system'}
+              onChange={(e) => {
+                const opt = UI_FONT_OPTIONS.find((o) => o.id === e.target.value) || UI_FONT_OPTIONS[0];
+                patchPalette(side, 'uiFont', opt.stack);
+              }}
+            >
+              {UI_FONT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-row">
+            <div className="settings-row-title">{t('settingsThemeCodeFont')}</div>
+            <select
+              className="settings-select"
+              value={CODE_FONT_OPTIONS.find((o) => o.stack === palette.codeFont)?.id || 'system-mono'}
+              onChange={(e) => {
+                const opt = CODE_FONT_OPTIONS.find((o) => o.id === e.target.value) || CODE_FONT_OPTIONS[0];
+                patchPalette(side, 'codeFont', opt.stack);
+              }}
+            >
+              {CODE_FONT_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="settings-row toggle-row">
+            <div className="settings-row-title">{t('settingsThemeTranslucentSidebar')}</div>
+            <input
+              type="checkbox"
+              checked={palette.translucentSidebar}
+              onChange={(e) => patchPalette(side, 'translucentSidebar', e.target.checked)}
+            />
+          </label>
+          <label className="settings-row theme-contrast-row">
+            <div className="settings-row-title">{t('settingsThemeContrast')}</div>
+            <div className="theme-contrast-control">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={palette.contrast}
+                onChange={(e) => patchPalette(side, 'contrast', Number(e.target.value))}
+                aria-label={t('settingsThemeContrast')}
+              />
+              <span className="theme-contrast-value">{palette.contrast}</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="modal-backdrop settings-backdrop" onClick={onClose}>
       <div
@@ -1719,30 +1916,55 @@ export function SettingsPanel({
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
                 {t('settingsAppearanceHint')}
               </p>
+
               <h3 className="subhead">{t('settingsTheme')}</h3>
-              <div className="settings-card">
+              <div className="theme-mode-grid" role="radiogroup" aria-label={t('settingsTheme')}>
                 {(
                   [
-                    ['system', t('settingsThemeSystem'), t('settingsThemeSystemHint')],
-                    ['light', t('settingsThemeLight'), t('settingsThemeLightHint')],
-                    ['dark', t('settingsThemeDark'), t('settingsThemeDarkHint')],
+                    ['system', t('settingsThemeSystem'), t('settingsThemeSystemHint'), 'system'],
+                    ['light', t('settingsThemeLight'), t('settingsThemeLightHint'), 'light'],
+                    ['dark', t('settingsThemeDark'), t('settingsThemeDarkHint'), 'dark'],
                   ] as const
-                ).map(([id, title, hint]) => (
-                  <label key={id} className="settings-row toggle-row">
-                    <div>
-                      <div className="settings-row-title">{title}</div>
-                      <div className="settings-row-hint">{hint}</div>
+                ).map(([id, title, hint, skin]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={appearance.theme === id}
+                    className={`theme-mode-card${appearance.theme === id ? ' on' : ''}`}
+                    onClick={() => updateAppearance('theme', id as ThemePreference)}
+                    title={hint}
+                  >
+                    <div className={`theme-mode-preview skin-${skin}`} aria-hidden>
+                      <div className="theme-mode-preview-chrome" />
+                      <div className="theme-mode-preview-body">
+                        <div className="theme-mode-preview-line" />
+                        <div className="theme-mode-preview-line short" />
+                        <div className="theme-mode-preview-card" />
+                      </div>
                     </div>
-                    <input
-                      type="radio"
-                      name="theme"
-                      checked={appearance.theme === id}
-                      onChange={() => updateAppearance('theme', id as ThemePreference)}
-                    />
-                  </label>
+                    <div className="theme-mode-label">{title}</div>
+                  </button>
                 ))}
               </div>
-              <h3 className="subhead">{t('settingsDensity')}</h3>
+
+              {renderPaletteEditor('light', t('settingsThemeLightSection'))}
+              {renderPaletteEditor('dark', t('settingsThemeDarkSection'))}
+
+              <div className="field-row" style={{ marginTop: 8, marginBottom: 16 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    const reset = applyPreset(applyPreset(appearance, 'light', 'gorkx'), 'dark', 'gorkx');
+                    commitAppearance({ ...reset, lightPreset: 'gorkx', darkPreset: 'gorkx' });
+                  }}
+                >
+                  {t('settingsThemeReset')}
+                </button>
+              </div>
+
+              <h3 className="subhead">{t('settingsPreferences')}</h3>
               <div className="settings-card">
                 {(
                   [
@@ -1764,9 +1986,6 @@ export function SettingsPanel({
                     />
                   </label>
                 ))}
-              </div>
-              <h3 className="subhead">{t('settingsMessages')}</h3>
-              <div className="settings-card">
                 <label className="settings-row toggle-row">
                   <div>
                     <div className="settings-row-title">{t('settingsMessageTimestamps')}</div>

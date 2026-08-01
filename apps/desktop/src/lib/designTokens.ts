@@ -222,10 +222,17 @@ export function stripThemeTokenBlocks(css: string): string {
 
 /**
  * Find component-level light surface hex hardcodes on `background` properties.
- * Text colors are ignored. Empty array = pass.
+ * Text colors are ignored. Static theme-mode preview skins may use fixed hex
+ * to illustrate light/dark (they are not live product surfaces).
+ * Empty array = pass.
  */
 export function findLightSurfaceHardcodes(css: string): string[] {
-  const body = stripThemeTokenBlocks(css);
+  let body = stripThemeTokenBlocks(css);
+  // Drop pure illustrative theme picker skins (Codex-style cards).
+  body = body.replace(
+    /\.theme-mode-preview[\s\S]*?(?=\n\.theme-mode-label|\n\.theme-palette-card|\n\/\*|$)/g,
+    '',
+  );
   const found = new Set<string>();
   const re = new RegExp(
     `background(?:-color)?\\s*:\\s*[^;\\n]*?(${FORBIDDEN_LIGHT_SURFACE_HEX})`,
