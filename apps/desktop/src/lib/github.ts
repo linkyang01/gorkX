@@ -7,6 +7,10 @@ export interface GithubStatus {
   login: string | null;
   error: string | null;
   authMethod: 'oauth' | 'token' | null;
+  /** OAuth requested scopes or a short PAT disclaimer. Never secrets. */
+  scopes: string[];
+  /** ISO-8601 UTC of last successful connection test, if any. */
+  lastVerifiedAt: string | null;
   note: string;
 }
 

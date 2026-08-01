@@ -3110,6 +3110,19 @@ export function SettingsPanel({
                         {t('githubAuthMethod')}: {github.authMethod}
                       </div>
                     ) : null}
+                    {(github?.scopes?.length ?? 0) > 0 ? (
+                      <div className="settings-row-hint">
+                        {t('githubScopesLive')}: {github!.scopes.join('; ')}
+                      </div>
+                    ) : null}
+                    {github?.configured ? (
+                      <div className="settings-row-hint">
+                        {t('githubLastVerified')}:{' '}
+                        {github.lastVerifiedAt
+                          ? new Date(github.lastVerifiedAt).toLocaleString()
+                          : t('githubLastVerifiedNever')}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 {!github?.configured ? (

@@ -79,6 +79,31 @@
 | 子任务模型完成结果、审批流、App 重开后的父子树恢复 |
 | 阶段 1 H1/H2/H3 |
 
+## 2026-08-01 · 阶段 2.3 GitHub 安全收口 + 2.4 Computer 边界
+
+### 2.3 GitHub
+
+| 项 | 证据 | 边界 |
+|---|---|---|
+| 凭据只在 Keychain | `com.gorkx.github` / `read-token`；不读 `gh` CLI | 本机 Keychain 中存在条目（不打印 secret） |
+| 身份实时验证 | `GET /user` 使用 Keychain token → HTTP 200，`login=linkyang01` | 不代表干净机安装 |
+| 写前确认 | Settings / Review：`window.confirm` + `githubWriteConfirmSummary` 后才 `create_pull_request` / `create_pr_comment` | 未在本轮创建真实 PR/评论 |
+| 断开清理 | `github_disconnect` → `token_delete` + 清除 `github-connector.json` 元数据 | 本轮未故意断开用户现有连接 |
+| **新增：权限范围与最后验证时间** | `GithubStatus.scopes` + `lastVerifiedAt`；OAuth 为 `read:user` / `public_repo`；PAT 为 fine-grained 说明；成功 whoami 写入 App Support 元数据；401/403 清除 lastVerified 并提示可能已撤销 | 设置页展示 scopes 与 last verified；**未**做用户在 GitHub 网页主动撤销后的完整人工往返 |
+| 单元测试 | `cargo test github`：**7** 通过（含 OAuth scope 列表） | — |
+
+### 2.4 Browser / Computer
+
+| 项 | 证据 | 边界 |
+|---|---|---|
+| Computer 工具白名单 | MCP 仅：`status` / `screenshot` / `click` / `key` / `type` / `stop`；无 shell/script | `cargo test computer`：**4** 通过 |
+| 固定键位 / 坐标 / 文本边界 | unit tests：key map 固定；坐标有界；文本有界并转义 | 本机未授予 Accessibility 时不宣称真实点击结果 |
+| 急停租约 | 设计：桌面 emergency stop 取消 lease，MCP 子进程拒绝后续动作 | 需已启用控制时的人工急停验收 |
+| 非原生 ACP | FEATURES 诚实：App-owned MCP 桥 ≠ Grok Build 原生 Computer ACP | 0.2.116 无原生 Computer ACP |
+| Playwright Browser | 包版本钉死 `@playwright/mcp@0.0.78`；允许源 origin 校验 unit 测试 | 未做完整浏览器任务内动作日志/截图流人工验收 |
+
+**阶段 2 仍缺：** GitHub 网页撤销完整往返；Computer 授权下真实点击/截图；Browser 任务内可复盘日志。阶段 1 出口仍未达成。
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |

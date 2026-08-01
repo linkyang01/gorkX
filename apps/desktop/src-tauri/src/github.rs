@@ -20,6 +20,9 @@ const GITHUB_OAUTH_CLIENT_ID: &str = "Ov23livbHzJdiRnxlavV";
 const GITHUB_OAUTH_SCOPES: &str = "read:user public_repo";
 const DEVICE_FLOW_URL: &str = "https://github.com/login/device/code";
 const DEVICE_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+/// Non-secret connector metadata (never stores the token). Lives under the
+/// app support directory so last-verified time survives process restarts.
+const CONNECTOR_META_FILE: &str = "github-connector.json";
 
 #[derive(Debug)]
 struct PendingOAuth {
@@ -40,7 +43,24 @@ pub struct GithubStatus {
     pub login: Option<String>,
     pub error: Option<String>,
     pub auth_method: Option<String>,
+    /// OAuth requested scopes, or a short PAT disclaimer. Never secrets.
+    pub scopes: Vec<String>,
+    /// ISO-8601 UTC timestamp of the last successful `whoami` / connection test.
+    pub last_verified_at: Option<String>,
     pub note: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubConnectorMeta {
+    #[serde(default)]
+    login: Option<String>,
+    #[serde(default)]
+    auth_method: Option<String>,
+    #[serde(default)]
+    scopes: Vec<String>,
+    #[serde(default)]
+    last_verified_at: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -157,6 +177,78 @@ pub struct GithubComment {
     pub line: Option<i64>,
     pub url: String,
     pub created_at: String,
+}
+
+fn oauth_scope_list() -> Vec<String> {
+    GITHUB_OAUTH_SCOPES
+        .split_whitespace()
+        .map(str::to_string)
+        .collect()
+}
+
+fn pat_scope_list() -> Vec<String> {
+    vec![
+        "fine-grained PAT (scopes chosen on GitHub)".into(),
+        "never inherits gh CLI credentials".into(),
+    ]
+}
+
+fn scopes_for_method(method: Option<&str>) -> Vec<String> {
+    match method {
+        Some("oauth") => oauth_scope_list(),
+        Some("token") => pat_scope_list(),
+        _ => oauth_scope_list(),
+    }
+}
+
+fn connector_meta_path() -> std::path::PathBuf {
+    crate::paths::app_support_dir().join(CONNECTOR_META_FILE)
+}
+
+fn read_connector_meta() -> GithubConnectorMeta {
+    let path = connector_meta_path();
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return GithubConnectorMeta::default();
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn write_connector_meta(meta: &GithubConnectorMeta) -> Result<(), String> {
+    let path = connector_meta_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("create app support dir: {e}"))?;
+    }
+    let raw = serde_json::to_string_pretty(meta).map_err(|e| format!("serialize GitHub meta: {e}"))?;
+    std::fs::write(&path, raw).map_err(|e| format!("write GitHub meta: {e}"))
+}
+
+fn clear_connector_meta() {
+    let _ = std::fs::remove_file(connector_meta_path());
+}
+
+fn now_verified_iso() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
+fn record_verified(token: &str, login: &str) {
+    let method = auth_method(token);
+    let meta = GithubConnectorMeta {
+        login: Some(login.to_string()),
+        auth_method: Some(method.clone()),
+        scopes: scopes_for_method(Some(method.as_str())),
+        last_verified_at: Some(now_verified_iso()),
+    };
+    let _ = write_connector_meta(&meta);
+}
+
+fn clear_last_verified_keep_identity(error_note: &str) -> GithubConnectorMeta {
+    let mut meta = read_connector_meta();
+    meta.last_verified_at = None;
+    // Keep login/scopes for UI identity until the user disconnects, but mark
+    // verification as stale when GitHub rejects the token.
+    let _ = write_connector_meta(&meta);
+    let _ = error_note;
+    meta
 }
 
 #[cfg(target_os = "macos")]
@@ -303,12 +395,21 @@ fn auth_method(token: &str) -> String {
 }
 
 fn connected_status(token: &str, login: String, note: impl Into<String>) -> GithubStatus {
+    let method = auth_method(token);
+    record_verified(token, &login);
+    let meta = read_connector_meta();
     GithubStatus {
         configured: true,
         connected: true,
         login: Some(login),
         error: None,
-        auth_method: Some(auth_method(token)),
+        auth_method: Some(method.clone()),
+        scopes: if meta.scopes.is_empty() {
+            scopes_for_method(Some(method.as_str()))
+        } else {
+            meta.scopes
+        },
+        last_verified_at: meta.last_verified_at,
         note: note.into(),
     }
 }
@@ -427,9 +528,37 @@ pub fn github_poll_oauth(attempt_id: String) -> Result<GithubOAuthPoll, String> 
 
 #[tauri::command]
 pub fn github_status() -> GithubStatus {
+    let meta = read_connector_meta();
     match token_read() {
-        Some(token) => GithubStatus { configured: true, connected: false, login: None, error: None, auth_method: Some(auth_method(&token)), note: "GitHub authorization is stored in macOS Keychain. Test it before reading repository data.".into() },
-        None => GithubStatus { configured: false, connected: false, login: None, error: None, auth_method: None, note: "No GitHub authorization configured. Public repository reads are available anonymously; private repositories require a fine-grained token.".into() },
+        Some(token) => {
+            let method = auth_method(&token);
+            GithubStatus {
+                configured: true,
+                // Keychain presence is not a live connection; only a successful
+                // whoami marks connected.
+                connected: false,
+                login: meta.login.clone(),
+                error: None,
+                auth_method: Some(method.clone()),
+                scopes: if meta.scopes.is_empty() {
+                    scopes_for_method(Some(method.as_str()))
+                } else {
+                    meta.scopes
+                },
+                last_verified_at: meta.last_verified_at,
+                note: "GitHub authorization is stored in macOS Keychain. Test it before reading repository data.".into(),
+            }
+        }
+        None => GithubStatus {
+            configured: false,
+            connected: false,
+            login: None,
+            error: None,
+            auth_method: None,
+            scopes: oauth_scope_list(),
+            last_verified_at: None,
+            note: "No GitHub authorization configured. Public repository reads are available anonymously; private repositories require a fine-grained token.".into(),
+        },
     }
 }
 
@@ -451,20 +580,40 @@ pub fn github_test_connection() -> GithubStatus {
     };
     match whoami(&token) {
         Ok(login) => connected_status(&token, login, "GitHub connection verified."),
-        Err(error) => GithubStatus {
-            configured: true,
-            connected: false,
-            login: None,
-            error: Some(error),
-            auth_method: Some(auth_method(&token)),
-            note: "Stored token could not be verified. Replace or disconnect it.".into(),
-        },
+        Err(error) => {
+            let method = auth_method(&token);
+            let meta = clear_last_verified_keep_identity(&error);
+            let revoked = error.contains("401") || error.contains("403") || error.contains("HTTP 401") || error.contains("HTTP 403");
+            GithubStatus {
+                configured: true,
+                connected: false,
+                login: meta.login,
+                error: Some(if revoked {
+                    format!("{error}. The stored authorization may have been revoked or expired on GitHub.")
+                } else {
+                    error
+                }),
+                auth_method: Some(method.clone()),
+                scopes: if meta.scopes.is_empty() {
+                    scopes_for_method(Some(method.as_str()))
+                } else {
+                    meta.scopes
+                },
+                last_verified_at: None,
+                note: if revoked {
+                    "Stored authorization is no longer accepted by GitHub. Disconnect and reconnect after fixing access on GitHub.".into()
+                } else {
+                    "Stored token could not be verified. Replace or disconnect it.".into()
+                },
+            }
+        }
     }
 }
 
 #[tauri::command]
 pub fn github_disconnect() -> Result<GithubStatus, String> {
     token_delete()?;
+    clear_connector_meta();
     Ok(github_status())
 }
 
@@ -851,7 +1000,20 @@ pub fn github_list_pr_comments(cwd: String, pr_number: u64) -> Result<Vec<Github
 
 #[cfg(test)]
 mod tests {
-    use super::{github_branch_name, github_read_error, parse_github_remote, valid_comment_body};
+    use super::{
+        github_branch_name, github_read_error, oauth_scope_list, parse_github_remote,
+        scopes_for_method, valid_comment_body,
+    };
+
+    #[test]
+    fn oauth_scopes_match_device_flow_request() {
+        let scopes = oauth_scope_list();
+        assert!(scopes.iter().any(|s| s == "read:user"));
+        assert!(scopes.iter().any(|s| s == "public_repo"));
+        assert_eq!(scopes_for_method(Some("oauth")), scopes);
+        let pat = scopes_for_method(Some("token"));
+        assert!(pat.iter().any(|s| s.contains("fine-grained")));
+    }
 
     #[test]
     fn parses_supported_github_remote_forms() {
