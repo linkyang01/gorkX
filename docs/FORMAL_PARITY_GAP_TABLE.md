@@ -7,14 +7,14 @@
 | # | Capability | Desktop primary entry | FEATURES status | Evidence / gap |
 |---|---|---|---|---|
 | 1 | New/restore/delete task | Sidebar + auto-reconnect | Real | Code; offline reconnect banner |
-| 2 | Stream + tools + permissions | Composer / cards | Real | Code; Build-403 humanize; **live stream needs Build account** |
+| 2 | Stream + tools + permissions | Composer / cards | Real | Code; humanize for denial shapes; **ACP `session/prompt` short turn PASS 2026-08-01** (`one-shot-complete-20260801/b1-prompt-probe.log`, model grok-4.5); App GUI stream still human |
 | 3 | Terminal PTY | Chrome terminal / ⇧⌘J | Real | Code |
 | 4 | Review diff / stage | Review panel / ⌘D | Real (boundary) | Code |
 | 5 | Agent changes / git / code nav | Review tabs | Kernel-wired | ACP desktop-controls; tab hidden if unadvertised |
 | 6 | Worktree create/list/switch | Worktree panel | Real | Code + ACP worktree |
 | 7 | Memory Remember/Forget/Flush | Memory panel / ⇧⌘M | Real (+ flush Kernel) | Code |
 | 8 | Skills Run / MCP / plugins | Extensions / ⇧⌘E | Real | Code; empty-state CTAs |
-| 9 | Subagent spawn/tree/stop/inspect | Composer / Process / ⇧⌘B | Kernel-wired | ACP **real** spawn→running→**completed**+output (2026-08-01); cancel/list routes OK; **GUI 点按仍未验收** |
+| 9 | Subagent spawn/tree/stop/inspect | Composer / Process / ⇧⌘B | Kernel-wired | ACP **real** spawn→running→**completed**+output reconfirmed (`smoke`, one-shot-complete); cancel/list routes OK; **GUI 点按仍未验收** |
 | 10 | Hooks trust/reload/enable | Settings → Hooks | Kernel-wired | ACP hooks; **human click 未验收** |
 | 11 | Computer screenshot/click/stop | Settings → Computer | Real w/ boundary | Emergency stop code; **live Accessibility 未验收** |
 | 12 | GitHub OAuth + verify + PR | Settings → Git / Review | Real confirmation-gated | githubFeedback; **web revoke live 未验收** |
@@ -30,12 +30,13 @@
 | 22 | TUI vim/pager | — | Unavailable | Deliberate non-goal |
 
 ## Structural lock
-- `apps/desktop/src/lib/desktopPrimaryEntries.test.ts` asserts ≥20 desktop primary path symbols in shipped sources.
+- `apps/desktop/src/lib/desktopPrimaryEntries.test.ts` asserts **25** desktop primary path symbols in shipped sources.
+- `findLightSurfaceHardcodes` in `designTokens.ts` blocks light-gray component backgrounds that flash white on dark theme.
 
 ## Remaining honest blocks (not code-fakeable)
 - **H1** clean-machine install→login→first task→reopen.
 - **H2** user-supplied third-party endpoint true reply.
 - **H3** microphone dictation → draft, no auto-send.
-- **B1** live Build chat under entitled account.
+- **B1 ACP** short prompt: **PASS** (2026-08-01 one-shot-complete). **B1 App GUI** stream in `gorkX.app`: still human acceptance.
 - **B3 GUI** subagent spawn → tree → stop/inspect in App (ACP real completion already evidenced).
 - Tag / notarized DMG / GitHub Release: **user approval only**.

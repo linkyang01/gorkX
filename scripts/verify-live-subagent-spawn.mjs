@@ -13,13 +13,13 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const authDir = process.env.GORKX_ACP_TEST_AUTH_DIR || process.env.GORKX_ACP_TEST_HOME;
 const projectDir = process.env.GORKX_ACP_TEST_PROJECT_DIR || process.env.GORKX_ACP_TEST_CWD;
-const grok =
-  process.argv[2]
-  || process.env.GROK
-  || new URL('../apps/desktop/src-tauri/resources/grok', import.meta.url).pathname;
+const defaultGrok = fileURLToPath(new URL('../apps/desktop/src-tauri/resources/grok', import.meta.url));
+const grok = resolve(process.argv[2] || process.env.GROK || defaultGrok);
 
 if (!authDir || !projectDir) {
   console.error('usage: GORKX_ACP_TEST_AUTH_DIR=... GORKX_ACP_TEST_PROJECT_DIR=... node scripts/verify-live-subagent-spawn.mjs [grok]');

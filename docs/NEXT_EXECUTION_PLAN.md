@@ -20,9 +20,9 @@
 | 阶段 | 状态 |
 |---|---|
 | **0** 子 Agent WIP 收口 | **已完成** |
-| **正式完备条**（本目标） | **候选达标**：门禁全绿 + `FORMAL_PARITY_GAP_TABLE` + primary-entries 单测 + H1/H2/H3 **书面阻塞**；见 `VALIDATION_EVIDENCE` 正式完备条节 |
+| **正式完备条**（本目标） | **加强达标**：门禁全绿 + 25 主路径 + 暗色白底守卫 + ACP 主 prompt PASS + 子任务 completed；见 `docs/evidence/one-shot-complete-20260801/SUMMARY.md` |
 | **1** H1/H2/H3 发布阻断 | **未达成**：需干净机 / endpoint / 麦克风真人证据 |
-| **2** 深化 Real | **部分**：代码增强；真人 live 仍缺 |
+| **2** 深化 Real | **ACP 级主对话与子任务已有 live 证据**；App GUI 点按 / 重开恢复仍待人工 |
 | **3** 连接器闭环 | Calendar 等 **Soon**；GitHub 代码已有，revoke live 待人工 |
 
 功能状态口径：
@@ -31,12 +31,13 @@
 - **Kernel-wired**：已接 Grok Build 原生能力，仍可能需账号、权限或人工验收。
 - **Soon**：无官方授权链；入口必须诚实，不可伪装已连接。
 
-## 1. 当前优先（按用户价值，无额度也可推进代码）
+## 1. 当前优先（机器侧已压实后）
 
-1. **人工点按**（本机 `gorkX.app`）：`docs/DESKTOP_ACCEPTANCE_CHECKLIST.md` A1–A5、B2–B5；有 Build 权限时再做 B1/B3。  
-2. **委派子任务**：GUI 闭环录像（启动 → 树 → 停止/Inspect）；仍标 Kernel-wired 直至重开恢复有证据。  
-3. **阶段 1**：H1 干净安装、H2 endpoint、H3 语音 — **用户侧**；不得伪造。  
-4. **连接器**：仅当有官方 OAuth 链时推进；否则保持 Soon。
+1. **人工点按**（本机最新 `gorkX.app`）：清单 A1–A5、**B1 真流式**、B2–B5 委派树。  
+2. **委派 GUI 录像**（⇧⌘B → 树 → 停止/Inspect）；ACP 已 completed。  
+3. **阶段 1**：H1 / H2 / H3 — **用户侧**；不得伪造。  
+4. **连接器**：仅当有官方 OAuth 链时推进；否则保持 Soon。  
+5. **发版**：仅在明确版本号 + 批准后 tag / DMG / Release。
 
 ### 门禁（每次合入前）
 

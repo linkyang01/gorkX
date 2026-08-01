@@ -172,3 +172,68 @@ export function findMissingThemeTokens(css: string): Record<string, string[]> {
   }
   return result;
 }
+
+/** Light hex fills that flash white on dark theme when used as component backgrounds. */
+const FORBIDDEN_LIGHT_SURFACE_HEX =
+  '#(?:fafafa|f8f8f9|f4f4f5|f0f0f1|f0f0f2|eaeaec|e4e4e7|e2e8f0|ffffff|fff)\\b';
+
+/**
+ * Strip `:root` / theme variable blocks so token definitions are not reported
+ * as component hardcodes.
+ */
+export function stripThemeTokenBlocks(css: string): string {
+  let out = css;
+  for (const selector of [
+    ':root[data-theme="dark"]',
+    ':root[data-density="compact"]',
+    ':root[data-density="spacious"]',
+    ':root',
+  ]) {
+    let idx = 0;
+    while (idx < out.length) {
+      const found = out.indexOf(selector, idx);
+      if (found === -1) break;
+      const beforeOk = found === 0 || /[\s}]/.test(out[found - 1] ?? '');
+      const after = out.slice(found + selector.length).match(/^\s*\{/);
+      if (!beforeOk || !after) {
+        idx = found + selector.length;
+        continue;
+      }
+      const braceStart = found + selector.length + (after[0].length - 1);
+      let depth = 0;
+      let end = -1;
+      for (let i = braceStart; i < out.length; i++) {
+        if (out[i] === '{') depth++;
+        else if (out[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      if (end === -1) break;
+      out = out.slice(0, found) + out.slice(end + 1);
+      idx = found;
+    }
+  }
+  return out;
+}
+
+/**
+ * Find component-level light surface hex hardcodes on `background` properties.
+ * Text colors are ignored. Empty array = pass.
+ */
+export function findLightSurfaceHardcodes(css: string): string[] {
+  const body = stripThemeTokenBlocks(css);
+  const found = new Set<string>();
+  const re = new RegExp(
+    `background(?:-color)?\\s*:\\s*[^;\\n]*?(${FORBIDDEN_LIGHT_SURFACE_HEX})`,
+    'gi',
+  );
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    found.add(m[1].toLowerCase());
+  }
+  return [...found].sort();
+}

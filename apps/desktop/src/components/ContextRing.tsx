@@ -15,7 +15,11 @@ export function ContextRing({
   const dash = (p / 100) * c;
   const warn = p >= 70;
   const crit = p >= 90;
-  const stroke = crit ? '#ef4444' : warn ? '#f59e0b' : '#0d0d0d';
+  const stroke = crit
+    ? 'var(--status-danger, #ef4444)'
+    : warn
+      ? 'var(--status-warn, #f59e0b)'
+      : 'var(--accent, currentColor)';
   const className = `ctx-ring${warn ? ' warn' : ''}${crit ? ' critical' : ''}${onClick ? ' clickable' : ''}`;
   const common = {
     className,
@@ -32,7 +36,7 @@ export function ContextRing({
         cy="12"
         r={r}
         fill="none"
-        stroke="rgba(0,0,0,0.16)"
+        stroke="var(--hairline-strong, rgba(128,128,128,0.35))"
         strokeWidth="2.5"
       />
       <circle

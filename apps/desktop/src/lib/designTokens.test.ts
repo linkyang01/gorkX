@@ -10,6 +10,7 @@ import {
   ALL_TOKEN_NAMES,
   COLOR_TOKEN_NAMES,
   extractTokenBlock,
+  findLightSurfaceHardcodes,
   findMissingThemeTokens,
 } from './designTokens.ts';
 
@@ -35,6 +36,14 @@ for (const name of COLOR_TOKEN_NAMES) {
 
 const missing = findMissingThemeTokens(css);
 assert.deepEqual(missing, {}, `unexpected missing tokens: ${JSON.stringify(missing)}`);
+
+// Component surfaces must not hardcode light grays (dark theme white flash)
+const lightHardcodes = findLightSurfaceHardcodes(css);
+assert.deepEqual(
+  lightHardcodes,
+  [],
+  `dark-theme white-flash hardcodes in App.css: ${lightHardcodes.join(', ')} — use var(--meta-surface)/var(--bg-hover)/var(--glass-*)`,
+);
 
 // Primary chrome surfaces consume tokens (not one-off hex on chrome-btn)
 assert.match(css, /\.chrome-btn\s*\{[\s\S]*?color:\s*var\(--icon-muted\)/);

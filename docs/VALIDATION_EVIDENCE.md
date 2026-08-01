@@ -4,6 +4,45 @@
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
 
+## 2026-08-01 · ONE_SHOT COMPLETE（全的做 · 一次验证）
+
+> 用户：「全的做，一次性完成，完成的验证」。  
+> 摘要：`docs/evidence/one-shot-complete-20260801/SUMMARY.md`。
+
+### 本轮代码
+
+| 项 | 说明 |
+|---|---|
+| 暗色白底 | 建议卡/子菜单/附件 chip/权限块/表单/hover 等改主题 token |
+| 主题守卫 | `findLightSurfaceHardcodes` + `designTokens.test` 禁止组件层浅灰 `background` |
+| 主路径矩阵 | `desktopPrimaryEntries` **25** 路径 |
+| live subagent 脚本 | 绝对路径解析，避免相对路径 ENOENT |
+
+### 自动门禁
+
+| 门禁 | 结果 |
+|---|---|
+| tsc / test:stages | PASS（含 25 主路径 + 白底守卫） |
+| cargo test | **88** passed |
+| patches 0001–0007 | PASS @ dd04f39 |
+| ACP desktop+voice（无登录） | PASS |
+| ACP 登录副本：session/info、fork、hooks、bundle 守卫、subagent 路由、billing… | PASS |
+| **Live 子任务** spawn→poll→**completed** `smoke` | PASS |
+| **主 `session/prompt`** 短答 `end_turn` · `grok-4.5` | **PASS**（本账号副本不再 403） |
+| build:app + verify-macos-app-bundle | PASS · `gorkX.app` · 内核 0.2.116 |
+
+### 仍阻塞（诚实）
+
+| 项 | 状态 |
+|---|---|
+| App 内委派 GUI 录像 | 未做 |
+| H1 干净机 / H2 endpoint / H3 麦克风 | 未做 |
+| tag / 公证 DMG / Release | **未批准** |
+
+**结论：** 定义 A **加强达成**（含 ACP 级 B1 真 prompt + 主题收口）；定义 B 仍待人工与发版批准。
+
+---
+
 ## 2026-08-01 · ONE_SHOT「跑完所有」再执行
 
 > 用户再次要求一次性跑完所有。机器可完成部分已连续执行；外部阻塞如实列出。
