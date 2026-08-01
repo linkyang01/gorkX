@@ -81,9 +81,19 @@ export function ProcessPanel({
           <div className="ext-empty-card" style={{ margin: '10px 8px' }}>
             <p className="hint" style={{ margin: 0 }}>{t('processEmpty')}</p>
             <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('processEmptyHint')}</p>
-            {canSpawnSubagent && onSpawnSubagent ? (
+            {onSpawnSubagent ? (
               <div className="field-row" style={{ marginTop: 10 }}>
-                <button type="button" className="btn btn-sm primary-sm" onClick={onSpawnSubagent}>
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  disabled={canSpawnSubagent === false}
+                  title={
+                    canSpawnSubagent === false
+                      ? t('processLive')
+                      : t('plusSpawnSubagentHint')
+                  }
+                  onClick={onSpawnSubagent}
+                >
                   {t('plusSpawnSubagent')}
                 </button>
               </div>

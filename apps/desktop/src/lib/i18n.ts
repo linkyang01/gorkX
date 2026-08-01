@@ -1413,6 +1413,8 @@ const dict = {
     subagentSpawnHint: 'Grok Build will run this as a real child task and report progress here.',
     subagentSpawnClose: 'Close subtask launcher',
     subagentSpawnNoTask: 'Open a live task first.',
+    subagentSpawnNoTaskHint:
+      'Start or reconnect a task, then return here. Subtasks run under that session with the access level you choose (default read-only).',
     subagentSpawnDescription: 'Short description',
     subagentSpawnDescriptionPlaceholder: 'e.g. Check the authentication flow',
     subagentSpawnPrompt: 'What should the worker do?',
@@ -3354,6 +3356,8 @@ const dict = {
     subagentSpawnHint: 'Grok Build 会把它作为真实子任务运行，进展会回到当前会话。',
     subagentSpawnClose: '关闭子任务面板',
     subagentSpawnNoTask: '请先打开一个正在连接的任务。',
+    subagentSpawnNoTaskHint:
+      '请先启动或重连任务，再回到这里。子任务挂在该会话下运行，权限由你选择（默认只读）。',
     subagentSpawnDescription: '简短说明',
     subagentSpawnDescriptionPlaceholder: '例如：检查登录流程',
     subagentSpawnPrompt: '希望子任务完成什么？',

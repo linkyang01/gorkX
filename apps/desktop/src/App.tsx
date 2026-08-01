@@ -7761,7 +7761,7 @@ function App() {
               }}
               lines={active.lines}
               busy={active.busy}
-              canSpawnSubagent={Boolean(active.client && active.sessionId && !active.busy)}
+              canSpawnSubagent={!active.busy}
               onSpawnSubagent={() => setSubagentSpawnOpen(true)}
               onCancelSubagent={(subagentId) => {
                 const client = active.client;
@@ -8250,11 +8250,15 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
-                    {active.sessionId && active.client && !active.busy ? (
+                    {!active.busy ? (
                       <button
                         type="button"
                         className="btn btn-sm composer-btw-btn"
-                        title={t('plusSpawnSubagentHint')}
+                        title={
+                          active.sessionId && active.client
+                            ? t('plusSpawnSubagentHint')
+                            : t('subagentSpawnNoTask')
+                        }
                         onClick={() => setSubagentSpawnOpen(true)}
                       >
                         {t('plusSpawnSubagent')}
@@ -8420,8 +8424,13 @@ function App() {
                           : t('voiceInput')
                       }
                       aria-pressed={voiceListeningSessionId === active.sessionId}
-                      disabled={!active.client || !active.sessionId}
-                      onClick={() => void toggleNativeVoice()}
+                      onClick={() => {
+                        if (!active.client || !active.sessionId) {
+                          setVoiceError(t('voiceNeedTask'));
+                          return;
+                        }
+                        void toggleNativeVoice();
+                      }}
                     >
                       <svg className="mic-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                         <rect x="5.25" y="2" width="5.5" height="8" rx="2.75" fill="none" stroke="currentColor" strokeWidth="1.5" />

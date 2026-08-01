@@ -75,35 +75,43 @@ export function SubagentSpawnPanel({ open, client, sessionId, onClose, onStarted
           </div>
           <button type="button" className="btn btn-sm" onClick={onClose} aria-label={t('subagentSpawnClose')}>×</button>
         </div>
-        {!client || !sessionId ? <p className="hint">{t('subagentSpawnNoTask')}</p> : null}
-        <label className="field-label" htmlFor="subagent-spawn-description">{t('subagentSpawnDescription')}</label>
-        <input id="subagent-spawn-description" className="settings-input" maxLength={120} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('subagentSpawnDescriptionPlaceholder')} />
-        <label className="field-label" htmlFor="subagent-spawn-prompt">{t('subagentSpawnPrompt')}</label>
-        <textarea id="subagent-spawn-prompt" className="settings-textarea subagent-spawn-prompt" rows={6} maxLength={12000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t('subagentSpawnPromptPlaceholder')} />
-        <div className="subagent-spawn-grid">
-          <label className="field-label">{t('subagentSpawnRole')}
-            <select className="settings-input" value={subagentType} onChange={(event) => setSubagentType(event.target.value)}>
-              <option value="general-purpose">{t('subagentSpawnRoleGeneral')}</option>
-              <option value="explore">{t('subagentSpawnRoleExplore')}</option>
-              <option value="plan">{t('subagentSpawnRolePlan')}</option>
-            </select>
-          </label>
-          <label className="field-label">{t('subagentSpawnAccess')}
-            <select className="settings-input" value={capabilityMode} onChange={(event) => setCapabilityMode(event.target.value as CapabilityMode)}>
-              <option value="read-only">{t('subagentSpawnReadOnly')}</option>
-              <option value="read-write">{t('subagentSpawnReadWrite')}</option>
-              <option value="execute">{t('subagentSpawnExecute')}</option>
-              <option value="all">{t('subagentSpawnAll')}</option>
-            </select>
-          </label>
-        </div>
-        <label className="field-label">{t('subagentSpawnIsolation')}
-          <select className="settings-input" value={isolation} onChange={(event) => setIsolation(event.target.value as Isolation)}>
-            <option value="none">{t('subagentSpawnShared')}</option>
-            <option value="worktree">{t('subagentSpawnWorktree')}</option>
-          </select>
-        </label>
-        <p className="hint subagent-spawn-safety">{capabilityMode === 'read-only' ? t('subagentSpawnReadOnlyHint') : t('subagentSpawnWriteHint')}</p>
+        {!client || !sessionId ? (
+          <div className="ext-empty-card" style={{ margin: '8px 0 12px' }}>
+            <p className="hint" style={{ margin: 0 }}>{t('subagentSpawnNoTask')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('subagentSpawnNoTaskHint')}</p>
+          </div>
+        ) : (
+          <>
+            <label className="field-label" htmlFor="subagent-spawn-description">{t('subagentSpawnDescription')}</label>
+            <input id="subagent-spawn-description" className="settings-input" maxLength={120} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t('subagentSpawnDescriptionPlaceholder')} />
+            <label className="field-label" htmlFor="subagent-spawn-prompt">{t('subagentSpawnPrompt')}</label>
+            <textarea id="subagent-spawn-prompt" className="settings-textarea subagent-spawn-prompt" rows={6} maxLength={12000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t('subagentSpawnPromptPlaceholder')} />
+            <div className="subagent-spawn-grid">
+              <label className="field-label">{t('subagentSpawnRole')}
+                <select className="settings-input" value={subagentType} onChange={(event) => setSubagentType(event.target.value)}>
+                  <option value="general-purpose">{t('subagentSpawnRoleGeneral')}</option>
+                  <option value="explore">{t('subagentSpawnRoleExplore')}</option>
+                  <option value="plan">{t('subagentSpawnRolePlan')}</option>
+                </select>
+              </label>
+              <label className="field-label">{t('subagentSpawnAccess')}
+                <select className="settings-input" value={capabilityMode} onChange={(event) => setCapabilityMode(event.target.value as CapabilityMode)}>
+                  <option value="read-only">{t('subagentSpawnReadOnly')}</option>
+                  <option value="read-write">{t('subagentSpawnReadWrite')}</option>
+                  <option value="execute">{t('subagentSpawnExecute')}</option>
+                  <option value="all">{t('subagentSpawnAll')}</option>
+                </select>
+              </label>
+            </div>
+            <label className="field-label">{t('subagentSpawnIsolation')}
+              <select className="settings-input" value={isolation} onChange={(event) => setIsolation(event.target.value as Isolation)}>
+                <option value="none">{t('subagentSpawnShared')}</option>
+                <option value="worktree">{t('subagentSpawnWorktree')}</option>
+              </select>
+            </label>
+            <p className="hint subagent-spawn-safety">{capabilityMode === 'read-only' ? t('subagentSpawnReadOnlyHint') : t('subagentSpawnWriteHint')}</p>
+          </>
+        )}
         {error ? <pre className="ext-msg err">{error}</pre> : null}
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onClose}>{t('cancel')}</button>
