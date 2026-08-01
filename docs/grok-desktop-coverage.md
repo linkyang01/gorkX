@@ -17,7 +17,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Model / effort | Subscription and custom-model picker; effort is applied at engine spawn | ✅ |
 | Permission modes | Default / Auto / Full chooser + permission cards | ✅ |
 | Plan mode | ACP mode, Review plan and execute/retry controls | 🟡 engine plan quality decides the result |
-| Native subagents | Persisted tree from lifecycle updates; `_x.ai/subagent/list_running` reconciliation after reconnect; get/cancel controls; new task → **Use one agent only** | 🟡 a single-agent task starts with native `--no-subagents`; otherwise the kernel decides delegation and isolation. Isolated ACP gate confirms the three control routes, but a real delegated coding task remains a release acceptance scenario |
+| Native subagents | Persisted tree; `+ → Delegate a subtask`; list_running + get on reconnect; Inspect/Stop; new task → **Use one agent only** | 🟡 ACP-level read-only worktree spawn→completed/cancel recorded; Inspect recognizes `completed`/`cancelled`/`failed`. App click-through and quit/reopen human acceptance remain |
 | Compact | Native ACP compact button plus automatic threshold handling | 🟡 engine decides compaction availability |
 | Current-task usage | Task information panel → native session usage read | 🟡 aggregate tokens and cost appear only when the active Grok Build session supplies them; no cost is inferred from subscription quota or local daily counters |
 | Coding-data privacy | Task information → native privacy setting | ✅ cached OAuth state and confirmed `x.ai/privacy/setCodingDataRetention`; API-key and team-managed states remain unavailable rather than guessed |
@@ -67,7 +67,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Source preview | Explicit HTTP(S) link opens in a separate native gorkX reading window | ✅ validates the URL and has no gorkX credential bridge; it is separate from the Agent's MCP Chrome profile |
 | Screenshot attach | Explicit macOS region picker → local PNG attachment | ✅ |
 | Computer Hub workspace | Settings → Screen capture → Computer Hub workspace | 🟡 fixed `workspace status/start/pause/resume/stop` actions are wired to the bundled Grok Build binary, require confirmation, and are still server/account-gated; exposing a project can make its content available to the remote service. |
-| Computer automation | Settings → Computer → foreground controls + “Connect Agent Computer tools” | 🟡 real app-owned MCP stdio bridge for one-shot screenshot / foreground click / fixed-key / bounded text actions after explicit registration, Accessibility permission and a short-lived enable lease; no background capture, arbitrary script or hidden-window control. Native Computer ACP is still unavailable, and Computer Hub exposure remains a separate remote workspace feature. |
+| Computer automation | Settings → Computer → foreground controls + “Connect Agent Computer tools” | 🟡 app-owned MCP bridge (status/screenshot/click/key/type/stop) after registration, Accessibility and enable lease; emergency stop clears lease. Not native Computer ACP. Hub remains separate server-gated workspace. |
 
 ## Scheduling
 
@@ -87,4 +87,4 @@ scripts/verify-grok-kernel-patches.sh
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
 
-Updated: 2026-07-31
+Updated: 2026-08-01 — see also `DESKTOP_ALIGNMENT_PLAN.md` (slash picks open desktop controls)

@@ -181,7 +181,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Control Chrome | One-click enable Playwright MCP + permission | ✅ isolated, version-pinned MCP and origin allowlist | E |
 | In-app page preview | WebviewWindow URL | ✅ explicit HTTP(S) reading window | E |
 | Screenshot → chat | Capture + attach | ✅ explicit macOS region picker | E |
-| Computer use | Optional, default off | ❌ intentionally not shipped: no background capture or local mouse/keyboard automation | F |
+| Computer use | Settings → Computer + optional Agent MCP tools | 🟡 foreground-only fixed actions after Accessibility + enable lease; no background capture or arbitrary AppleScript; not native Computer ACP | F |
 
 ### 5.7 TUI-only (replace, don’t clone)
 

@@ -3,6 +3,9 @@
 This is the regression checklist for the bundled Grok Build ACP command
 catalogue. gorkX is desktop-first: an everyday capability must have a visible
 control; `/` remains an expert compatibility shortcut, not the primary path.
+When a slash autocomplete pick maps to a known desktop control, the app opens
+that control (or a guided form) instead of leaving `/command` text in the
+composer — see `DESKTOP_ALIGNMENT_PLAN.md`.
 
 | Grok Build capability | Desktop entry | Boundary |
 |---|---|---|

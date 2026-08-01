@@ -3081,36 +3081,109 @@ function App() {
     setSlashIndex(0);
   };
 
+  /**
+   * Slash autocomplete is expert compatibility only. When a pick maps to a real
+   * desktop control, open that control — never leave `/command` text in the
+   * composer as if typing a CLI were the product path.
+   */
   const applySlashPick = (name: string) => {
-    if (name === 'plan') {
-      void changeChatMode('plan');
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
+    const cmd = name.replace(/^\//, '').toLowerCase();
+    setDraft('');
+    setSlashOpen(false);
+    setSlashIndex(0);
+
+    switch (cmd) {
+      case 'plan':
+        void changeChatMode('plan');
+        return;
+      case 'fork':
+        void forkActiveSession();
+        return;
+      case 'rewind':
+      case 'undo':
+        void openRewindDialog();
+        return;
+      case 'compact':
+        void compactActiveSession();
+        return;
+      case 'review':
+      case 'diff':
+        setReviewOpen(true);
+        return;
+      case 'skills':
+      case 'mcp':
+      case 'plugins':
+        setExtOpen(true);
+        return;
+      case 'memory':
+      case 'flush':
+      case 'dream':
+      case 'remember':
+        setMemoryOpen(true);
+        return;
+      case 'goal':
+        void openGoalAction();
+        return;
+      case 'loop':
+        void openKernelLoopAction();
+        return;
+      case 'deep-research':
+        void openDeepResearchAction();
+        return;
+      case 'imagine':
+        void openMediaAction('image');
+        return;
+      case 'imagine-video':
+        void openMediaAction('video');
+        return;
+      case 'feedback':
+        void openFeedbackAction();
+        return;
+      case 'share':
+        void shareActiveSession();
+        return;
+      case 'recap':
+        void recapActiveSession();
+        return;
+      case 'export':
+        void exportActiveSession();
+        return;
+      case 'context':
+      case 'session-info':
+        setTaskInfoOpen(true);
+        return;
+      case 'worktree':
+        setWorktreePanelOpen(true);
+        return;
+      case 'new':
+      case 'clear':
+        selectThread(null);
+        setCapabilityArm(null);
+        return;
+      case 'model':
+      case 'effort':
+        setSettingsInitialSection('models');
+        setKernelOpen(true);
+        return;
+      case 'sessions':
+      case 'resume':
+        setTaskSearchOpen(true);
+        return;
+      default: {
+        // Any remaining advertised engine action still gets a guided form, not
+        // a raw slash string left for the user to finish typing.
+        const agent = threadsRef.current.find((thread) => thread.id === (active?.id || activeId));
+        const advertised = agent?.commands?.some(
+          (command) => command.name.replace(/^\//, '').toLowerCase() === cmd,
+        );
+        if (advertised) {
+          void openEngineAction(cmd, cmd, undefined);
+          return;
+        }
+        // Unknown local-only token: keep keyboard compatibility for power users.
+        insertSlash(cmd);
+      }
     }
-    if (name === 'fork') {
-      void forkActiveSession();
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
-    }
-    if (name === 'rewind') {
-      void openRewindDialog();
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
-    }
-    if (name === 'undo') {
-      void openRewindDialog();
-      setDraft('');
-      setSlashOpen(false);
-      setSlashIndex(0);
-      return;
-    }
-    insertSlash(name);
   };
 
   /**

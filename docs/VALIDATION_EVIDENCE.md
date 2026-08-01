@@ -133,6 +133,17 @@
 
 **阶段 1 出口仍未达成。** 不打 tag / 不发 Release / 不做 DMG。
 
+## 2026-08-01 · Slash 选择全面路由到桌面控件
+
+| 变更 | 结果 | 边界 |
+|---|---|---|
+| `applySlashPick` | 已知 Grok 能力（compact、review、memory、goal、loop、imagine、fork/rewind、task info、worktree、模型设置、任务搜索等）**打开对应面板/表单/动作**，清空输入框 | 不把 `/command` 留在 composer 当主路径 |
+| 广告中的未知引擎命令 | 走 `openEngineAction` 引导表单 + `_x.ai/desktop/command` | 仍非专用 UI，但是按键表单而非手写 slash |
+| 完全未知 token | 才 `insertSlash` 专家兼容 | 不宣称这些是产品主路径 |
+| 文档 | 新增 `docs/DESKTOP_ALIGNMENT_PLAN.md` 对齐清单 | 阶段 1 H1/H2/H3 仍未验收 |
+
+`npx tsc --noEmit` 通过。未做全量 UI 人工点按。
+
 ## 2026-08-01 · 子任务重连恢复加固 + H1 包隔离复验 + 阶段 3 边界
 
 ### 重连恢复（代码）
