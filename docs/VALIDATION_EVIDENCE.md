@@ -31,6 +31,7 @@
 | 快捷键目录 | `desktopShortcuts.ts`：App matcher 与 ShortcutsHelp 同源；`desktopShortcuts.test` 锁定 A2 的 ⇧⌘A/B/M/S/P/I | stage-b 通过 | 非 GUI 录像；⌥⌘ 任务切换仍在 App 内联 |
 | ⇧⌘B 无会话 | 始终打开委派面板；空状态显示 `subagentSpawnNoTask`（不再静默吞键） | 源码 | 父任务 busy 时仍不打开 |
 | 任务信息重连 CTA | 有 sessionId 无 client 时显示重连；`test:stages` + `build:app` 绿（含 spawn/voice 空状态） |
+| 会话离线条 | 恢复会话无 client 且无 error 时聊天区横幅 + 重连；Fork 禁用时 title 说明需重连 |
 | 任务信息空状态 | 顶栏/⇧⌘I 无会话也打开面板；空卡片说明 + 账户入口；`build:app` 再绿 | 源码 + bundle | 非真 session/info 点按 |
 | 执行方案文档 | `NEXT_EXECUTION_PLAN.md` 基线刷新为 2026-08-01 真实进度 | 文档 | 阶段 1 仍未达成 |
 

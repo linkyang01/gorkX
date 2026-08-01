@@ -7541,7 +7541,11 @@ function App() {
                   <button
                     type="button"
                     className="chrome-btn"
-                    title={t('forkSession')}
+                    title={
+                      !active.client
+                        ? t('taskInfoNeedReconnect')
+                        : t('forkSession')
+                    }
                     aria-label={t('forkSession')}
                     disabled={active.busy || !active.client}
                     onClick={() => void forkActiveSession()}
@@ -7551,6 +7555,19 @@ function App() {
                 </>
               ) : null}
             </header>
+            {/* Restored snapshot offline: offer reconnect outside the error card path. */}
+            {active.sessionId && !active.client && !active.busy && !active.error ? (
+              <div className="run-stall-banner" role="status">
+                <span>{t('restoredHint')}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm primary-sm"
+                  onClick={() => void reconnectThread(active.id).catch(() => {})}
+                >
+                  {t('taskInfoReconnect')}
+                </button>
+              </div>
+            ) : null}
             {/* Goal console: persist + native actions + plan-based progress */}
             {active.sessionGoal ? (
               <div
