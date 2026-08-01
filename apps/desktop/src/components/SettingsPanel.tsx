@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import {
   type AutoTopupSnapshot,
@@ -81,22 +81,28 @@ import {
   applyAppearance,
   applyNamedTheme,
   applyPreset,
+  buildCustomFontStack,
   CODE_FONT_OPTIONS,
   copyPaletteSide,
   deleteNamedTheme,
   exportThemePackage,
+  extractPrimaryFontName,
   isValidHexInput,
   loadAppearance,
   loadSavedThemes,
+  matchFontOptionId,
   mergeThemePackage,
   normalizeHex,
   parseThemePackage,
+  resolvedThemeMode,
   saveNamedTheme,
+  syncAccent,
   THEME_PRESETS,
   themeCardPreviewStyle,
   themePreviewLines,
   UI_FONT_OPTIONS,
   updatePaletteField,
+  workspacePreviewStyle,
   type AppearancePreferences,
   type DensityPreference,
   type SavedTheme,
@@ -1816,35 +1822,92 @@ export function SettingsPanel({
           {renderColorRow(side, 'accent', t('settingsThemeAccent'))}
           {renderColorRow(side, 'background', t('settingsThemeBackground'))}
           {renderColorRow(side, 'foreground', t('settingsThemeForeground'))}
-          <label className="settings-row">
-            <div className="settings-row-title">{t('settingsThemeUiFont')}</div>
-            <select
-              className="settings-select"
-              value={UI_FONT_OPTIONS.find((o) => o.stack === palette.uiFont)?.id || 'system'}
-              onChange={(e) => {
-                const opt = UI_FONT_OPTIONS.find((o) => o.id === e.target.value) || UI_FONT_OPTIONS[0];
-                patchPalette(side, 'uiFont', opt.stack);
-              }}
+          <div className="settings-row theme-font-row">
+            <div>
+              <div className="settings-row-title">{t('settingsThemeUiFont')}</div>
+            </div>
+            <div className="theme-font-control">
+              <select
+                className="settings-select"
+                value={matchFontOptionId(palette.uiFont, UI_FONT_OPTIONS)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id === 'custom') {
+                    const name = extractPrimaryFontName(palette.uiFont) || '';
+                    patchPalette(side, 'uiFont', buildCustomFontStack(name || 'System', 'ui'));
+                    return;
+                  }
+                  const opt = UI_FONT_OPTIONS.find((o) => o.id === id) || UI_FONT_OPTIONS[0];
+                  patchPalette(side, 'uiFont', opt.stack);
+                }}
+              >
+                {UI_FONT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+                <option value="custom">{t('settingsThemePresetCustom')}</option>
+              </select>
+              {matchFontOptionId(palette.uiFont, UI_FONT_OPTIONS) === 'custom' ? (
+                <input
+                  className="theme-font-input"
+                  spellCheck={false}
+                  placeholder={t('settingsThemeCustomFontPlaceholder')}
+                  value={extractPrimaryFontName(palette.uiFont)}
+                  onChange={(e) => patchPalette(side, 'uiFont', buildCustomFontStack(e.target.value, 'ui'))}
+                  aria-label={t('settingsThemeCustomFont')}
+                  title={t('settingsThemeCustomFontHint')}
+                />
+              ) : null}
+            </div>
+          </div>
+          <div className="settings-row theme-font-row">
+            <div>
+              <div className="settings-row-title">{t('settingsThemeCodeFont')}</div>
+            </div>
+            <div className="theme-font-control">
+              <select
+                className="settings-select"
+                value={matchFontOptionId(palette.codeFont, CODE_FONT_OPTIONS)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id === 'custom') {
+                    const name = extractPrimaryFontName(palette.codeFont) || '';
+                    patchPalette(side, 'codeFont', buildCustomFontStack(name || 'SF Mono', 'code'));
+                    return;
+                  }
+                  const opt = CODE_FONT_OPTIONS.find((o) => o.id === id) || CODE_FONT_OPTIONS[0];
+                  patchPalette(side, 'codeFont', opt.stack);
+                }}
+              >
+                {CODE_FONT_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+                <option value="custom">{t('settingsThemePresetCustom')}</option>
+              </select>
+              {matchFontOptionId(palette.codeFont, CODE_FONT_OPTIONS) === 'custom' ? (
+                <input
+                  className="theme-font-input"
+                  spellCheck={false}
+                  placeholder={t('settingsThemeCustomFontPlaceholder')}
+                  value={extractPrimaryFontName(palette.codeFont)}
+                  onChange={(e) => patchPalette(side, 'codeFont', buildCustomFontStack(e.target.value, 'code'))}
+                  aria-label={t('settingsThemeCustomFont')}
+                  title={t('settingsThemeCustomFontHint')}
+                />
+              ) : null}
+            </div>
+          </div>
+          <label className="settings-row toggle-row">
+            <div>
+              <div className="settings-row-title">{t('settingsThemeSyncAccent')}</div>
+              <div className="settings-row-hint">{t('settingsThemeSyncAccentHint')}</div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => commitAppearance(syncAccent(appearance, side, 'both'))}
             >
-              {UI_FONT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="settings-row">
-            <div className="settings-row-title">{t('settingsThemeCodeFont')}</div>
-            <select
-              className="settings-select"
-              value={CODE_FONT_OPTIONS.find((o) => o.stack === palette.codeFont)?.id || 'system-mono'}
-              onChange={(e) => {
-                const opt = CODE_FONT_OPTIONS.find((o) => o.id === e.target.value) || CODE_FONT_OPTIONS[0];
-                patchPalette(side, 'codeFont', opt.stack);
-              }}
-            >
-              {CODE_FONT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
+              {t('settingsThemeSyncAccent')}
+            </button>
           </label>
           <label className="settings-row toggle-row">
             <div className="settings-row-title">{t('settingsThemeTranslucentSidebar')}</div>
@@ -2008,6 +2071,22 @@ export function SettingsPanel({
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
                 {t('settingsAppearanceHint')}
               </p>
+
+              <h3 className="subhead">{t('settingsThemeLivePreview')}</h3>
+              <p className="hint" style={{ marginTop: -4, marginBottom: 10 }}>
+                {t('settingsThemeLivePreviewHint')}
+              </p>
+              <ThemeWorkspacePreview
+                palette={
+                  resolvedThemeMode(appearance.theme) === 'dark'
+                    ? appearance.dark
+                    : appearance.light
+                }
+                side={resolvedThemeMode(appearance.theme)}
+                userLabel={t('settingsThemePreviewUser')}
+                assistantLabel={t('settingsThemePreviewAssistant')}
+                composerLabel={t('settingsThemePreviewComposer')}
+              />
 
               <h3 className="subhead">{t('settingsTheme')}</h3>
               <div className="theme-mode-grid" role="radiogroup" aria-label={t('settingsTheme')}>
@@ -4443,6 +4522,51 @@ function ThemeColorRow({
           aria-label={hexAria}
           maxLength={7}
         />
+      </div>
+    </div>
+  );
+}
+
+/** Self-contained mini workspace using palette CSS variables (does not touch the real shell). */
+function ThemeWorkspacePreview({
+  palette,
+  side,
+  userLabel,
+  assistantLabel,
+  composerLabel,
+}: {
+  palette: ThemePalette;
+  side: ThemeSide;
+  userLabel: string;
+  assistantLabel: string;
+  composerLabel: string;
+}) {
+  const vars = workspacePreviewStyle(palette, side);
+  return (
+    <div
+      className="theme-workspace-preview"
+      style={vars as CSSProperties}
+      aria-hidden
+    >
+      <aside className="twp-sidebar">
+        <div className="twp-brand">
+          <span className="twp-logo" />
+          <span>gorkX</span>
+        </div>
+        <div className="twp-nav on">Task</div>
+        <div className="twp-nav">Review</div>
+        <div className="twp-nav muted">Terminal</div>
+      </aside>
+      <div className="twp-main">
+        <div className="twp-msg user">{userLabel}</div>
+        <div className="twp-msg assistant">
+          <div>{assistantLabel}</div>
+          <code className="twp-code">const ok = true;</code>
+        </div>
+        <div className="twp-composer">
+          <span className="twp-composer-placeholder">{composerLabel}</span>
+          <span className="twp-send" />
+        </div>
       </div>
     </div>
   );

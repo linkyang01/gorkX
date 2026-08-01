@@ -100,6 +100,69 @@ export const CODE_FONT_OPTIONS: Array<{ id: string; label: string; stack: string
   },
 ];
 
+/** Strip unsafe characters from a user-typed font family name. */
+export function sanitizeFontFamilyName(raw: string): string {
+  return String(raw || '')
+    .replace(/["'\\<>{};]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 64);
+}
+
+/** Build a safe CSS font-family stack from a custom family name. */
+export function buildCustomFontStack(family: string, kind: 'ui' | 'code'): string {
+  const name = sanitizeFontFamilyName(family);
+  const fallback =
+    kind === 'ui' ? UI_FONT_OPTIONS[0].stack : CODE_FONT_OPTIONS[0].stack;
+  if (!name) return fallback;
+  // Quote multi-word and always quote for consistency.
+  const quoted = `"${name.replace(/"/g, '')}"`;
+  return kind === 'ui'
+    ? `${quoted}, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif`
+    : `${quoted}, "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace`;
+}
+
+/** Known preset stack id, or `custom` when the stack is user-defined. */
+export function matchFontOptionId(
+  stack: string,
+  options: Array<{ id: string; stack: string }>,
+): string {
+  const hit = options.find((o) => o.stack === stack);
+  return hit?.id || 'custom';
+}
+
+/** First quoted family from a stack, for custom font field display. */
+export function extractPrimaryFontName(stack: string): string {
+  const m = String(stack || '').match(/^\s*"([^"]+)"/);
+  if (m) return m[1];
+  const bare = String(stack || '').split(',')[0]?.trim() || '';
+  return bare.replace(/^["']|["']$/g, '');
+}
+
+/** Copy accent from one side to both (or only the other side). */
+export function syncAccent(
+  prefs: AppearancePreferences,
+  from: ThemeSide,
+  mode: 'both' | 'other' = 'both',
+): AppearancePreferences {
+  const accent = prefs[from].accent;
+  if (mode === 'other') {
+    const to: ThemeSide = from === 'light' ? 'dark' : 'light';
+    return updatePaletteField(prefs, to, 'accent', accent);
+  }
+  let next = updatePaletteField(prefs, 'light', 'accent', accent);
+  next = updatePaletteField(next, 'dark', 'accent', accent);
+  return next;
+}
+
+/** Inline style map for a self-contained mini workspace preview. */
+export function workspacePreviewStyle(
+  palette: ThemePalette,
+  side: ThemeSide,
+): Record<string, string> {
+  return paletteCssVars(palette, side);
+}
+
 /** Built-in palettes — defaults match current gorkX CSS tokens. */
 export const THEME_PRESETS: Record<
   string,

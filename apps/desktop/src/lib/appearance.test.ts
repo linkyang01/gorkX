@@ -6,24 +6,30 @@ import assert from 'node:assert/strict';
 import {
   applyNamedTheme,
   applyPreset,
+  buildCustomFontStack,
   clampContrast,
   copyPaletteSide,
   defaultAppearance,
   deleteNamedTheme,
   exportThemePackage,
+  extractPrimaryFontName,
   isValidHexInput,
   loadSavedThemes,
+  matchFontOptionId,
   mergeThemePackage,
   mixHex,
   normalizeHex,
   normalizePresetId,
   paletteCssVars,
   parseThemePackage,
+  sanitizeFontFamilyName,
   sanitizePalette,
   saveNamedTheme,
+  syncAccent,
   themeCardPreviewStyle,
   themePreviewLines,
   updatePaletteField,
+  workspacePreviewStyle,
 } from './appearance.ts';
 
 // Isolation: clear theme library keys between assertions when localStorage exists.
@@ -109,5 +115,24 @@ if (typeof localStorage !== 'undefined') {
   assert.equal(loadSavedThemes().length, afterDelete.length);
   assert.throws(() => saveNamedTheme(base, '   '), /EMPTY_THEME_NAME/);
 }
+
+assert.equal(sanitizeFontFamilyName('  Foo "Bar"  '), 'Foo Bar');
+const customStack = buildCustomFontStack('JetBrains Mono', 'code');
+assert.match(customStack, /^"JetBrains Mono"/);
+assert.equal(extractPrimaryFontName(customStack), 'JetBrains Mono');
+assert.equal(matchFontOptionId(base.light.uiFont, [{ id: 'system', stack: base.light.uiFont }]), 'system');
+assert.equal(matchFontOptionId(customStack, [{ id: 'system', stack: base.light.uiFont }]), 'custom');
+
+const accentSynced = syncAccent(
+  updatePaletteField(base, 'light', 'accent', '#0169cc'),
+  'light',
+  'both',
+);
+assert.equal(accentSynced.light.accent, '#0169cc');
+assert.equal(accentSynced.dark.accent, '#0169cc');
+
+const previewStyle = workspacePreviewStyle(base.dark, 'dark');
+assert.equal(previewStyle['--bg-app'], base.dark.background);
+assert.equal(previewStyle['--accent'], base.dark.accent);
 
 console.log('appearance.test.ts: ok');
