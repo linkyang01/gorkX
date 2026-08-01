@@ -553,6 +553,44 @@ body {
   text-overflow: ellipsis;
 }
 
+.subagent-spawn-modal {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.subagent-spawn-modal .field-label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.subagent-spawn-modal .settings-input,
+.subagent-spawn-modal .settings-textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.subagent-spawn-prompt {
+  min-height: 118px;
+  resize: vertical;
+}
+
+.subagent-spawn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.subagent-spawn-safety {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 620px) {
+  .subagent-spawn-grid { grid-template-columns: 1fr; gap: 0; }
+}
+
 .onboard-steps {
   list-style: none;
   margin: 12px 0 0;

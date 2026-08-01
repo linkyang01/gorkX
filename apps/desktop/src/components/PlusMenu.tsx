@@ -23,6 +23,7 @@ export type PlusAction =
   | { type: 'task-planning'; on: boolean }
   | { type: 'task-tool-limits' }
   | { type: 'task-permission-rules' }
+  | { type: 'spawn-subagent' }
   | { type: 'search-scope' }
   | { type: 'fork-session' }
   | { type: 'rewind-session' }
@@ -367,6 +368,13 @@ export function PlusMenu({
     },
 
     { kind: 'label', id: 'l-session', title: t('plusCatSession') },
+    ...(hasActiveSession ? ([{
+      kind: 'action' as const,
+      id: 'spawn-subagent',
+      title: t('plusSpawnSubagent'),
+      desc: t('plusSpawnSubagentHint'),
+      action: { type: 'spawn-subagent' } as PlusAction,
+    }] as Row[]) : []),
     ...(hasActiveSession ? ([{
       kind: 'action' as const,
       id: 'task-info',

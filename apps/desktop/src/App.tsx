@@ -63,6 +63,7 @@ import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { TaskSearchDialog } from './components/TaskSearchDialog';
 import { MessageList, type ChatLine } from './components/MessageList';
 import { ConversationTimelinePanel } from './components/ConversationTimelinePanel';
+import { SubagentSpawnPanel } from './components/SubagentSpawnPanel';
 import { AttachmentStrip } from './components/AttachmentStrip';
 import { AttachmentPreview } from './components/AttachmentPreview';
 import {
@@ -583,6 +584,7 @@ function App() {
   const [projectInspectPath, setProjectInspectPath] = useState<string | null>(null);
   const [taskInfoOpen, setTaskInfoOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [subagentSpawnOpen, setSubagentSpawnOpen] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection | undefined>();
   const [addProjectMenuOpen, setAddProjectMenuOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -3740,6 +3742,10 @@ function App() {
         return;
       case 'timeline':
         setTimelineOpen(true);
+        return;
+      case 'spawn-subagent':
+        setPlusMenuOpen(false);
+        setSubagentSpawnOpen(true);
         return;
       case 'prompt-history':
         setPromptHistoryOpen(true);
@@ -8704,6 +8710,21 @@ function App() {
           setTimelineOpen(false);
           requestAnimationFrame(() => {
             document.getElementById(`message-line-${encodeURIComponent(lineId)}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        }}
+      /> : null}
+
+      {subagentSpawnOpen ? <SubagentSpawnPanel
+        open
+        client={active?.client ?? null}
+        sessionId={active?.sessionId ?? null}
+        onClose={() => setSubagentSpawnOpen(false)}
+        onStarted={(subagentId, description) => {
+          if (!active) return;
+          appendLine(active.id, {
+            id: nid(),
+            role: 'system',
+            text: `${t('subagentSpawnStartedNotice')}: ${description} (${subagentId})`,
           });
         }}
       /> : null}

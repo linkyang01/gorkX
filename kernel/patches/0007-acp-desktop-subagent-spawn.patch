@@ -1,0 +1,188 @@
+diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
+index 9e90805..604719b 100644
+--- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
++++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
+@@ -2266,6 +2266,84 @@ impl MvpAgent {
+             .cancel(subagent_id)
+             .await
+     }
++
++    /// Queue a user-requested desktop subagent through the same coordinator
++    /// and shell-child runner used by the native `task` tool. The desktop route
++    /// returns after the coordinator accepts the request; lifecycle,
++    /// permissions, worktree setup, progress and completion remain kernel-owned.
++    pub(crate) fn start_desktop_subagent(
++        &self,
++        session_id: &str,
++        prompt: String,
++        description: String,
++        subagent_type: String,
++        capability_mode: xai_tool_types::SubagentCapabilityMode,
++        isolation: Option<xai_tool_types::SubagentIsolationMode>,
++    ) -> Result<String, String> {
++        let parent_session_id = session_id.to_owned();
++        let parent_depth = self
++            .sessions
++            .borrow()
++            .get(&acp::SessionId::new(session_id))
++            .map(|handle| handle.tool_context.subagent_depth)
++            .ok_or_else(|| "parent session not found".to_owned())?;
++        let max_depth = self.cfg.borrow().subagents_max_depth;
++        if parent_depth >= max_depth {
++            return Err(format!(
++                "subagent depth limit exceeded (current depth: {parent_depth}, max: {max_depth})"
++            ));
++        }
++        if self
++            .try_build_subagent_spawn_context(session_id)
++            .is_none()
++        {
++            return Err("parent session is not available for subagent work".to_owned());
++        }
++
++        let id = uuid::Uuid::now_v7().to_string();
++        let request = xai_grok_tools::implementations::grok_build::task::types::SubagentRequest {
++            id: id.clone(),
++            prompt,
++            description,
++            subagent_type,
++            parent_session_id,
++            parent_prompt_id: None,
++            resume_from: None,
++            cwd: None,
++            runtime_overrides:
++                xai_grok_tools::implementations::grok_build::task::types::SubagentRuntimeOverrides {
++                    capability_mode: Some(capability_mode),
++                    isolation,
++                    ..Default::default()
++                },
++            run_in_background: true,
++            surface_completion: true,
++            await_to_completion: false,
++            fork_context: false,
++            owner: xai_grok_tools::implementations::grok_build::task::types::SubagentOwner::Task,
++            cancel_token: tokio_util::sync::CancellationToken::new(),
++        };
++        let (result_tx, result_rx) = tokio::sync::oneshot::channel();
++        self.subagent_event_tx
++            .send(xai_grok_tools::implementations::grok_build::task::types::SubagentEvent::Spawn(
++                xai_grok_tools::implementations::grok_build::task::types::SubagentSpawnRequest {
++                    request: Box::new(request),
++                    result_tx,
++                },
++            ))
++            .map_err(|_| "subagent coordinator is unavailable".to_owned())?;
++        tokio::spawn(async move {
++            if let Ok(result) = result_rx.await && !result.success {
++                tracing::warn!(
++                    subagent_id = %result.subagent_id,
++                    error = ?result.error,
++                    cancelled = result.cancelled,
++                    "desktop subagent spawn rejected or failed"
++                );
++            }
++        });
++        Ok(id)
++    }
+     pub(crate) async fn list_running_subagents(
+         &self,
+         parent_session_id: &str,
+diff --git a/crates/codegen/xai-grok-shell/src/extensions/task.rs b/crates/codegen/xai-grok-shell/src/extensions/task.rs
+index 0395481..2621e30 100644
+--- a/crates/codegen/xai-grok-shell/src/extensions/task.rs
++++ b/crates/codegen/xai-grok-shell/src/extensions/task.rs
+@@ -58,6 +58,36 @@ pub struct CancelSubagentRequest {
+     pub subagent_id: String,
+ }
++
++/// Wire DTO for the desktop-guided subagent launcher. This is deliberately a
++/// background request: the native coordinator owns the child session,
++/// permissions and completion lifecycle.
++#[derive(Debug, Clone, Deserialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SpawnSubagentRequest {
++    pub session_id: String,
++    pub prompt: String,
++    pub description: String,
++    #[serde(default = "default_subagent_type")]
++    pub subagent_type: String,
++    #[serde(default)]
++    pub capability_mode: Option<xai_tool_types::SubagentCapabilityMode>,
++    #[serde(default)]
++    pub isolation: Option<xai_tool_types::SubagentIsolationMode>,
++}
++
++fn default_subagent_type() -> String {
++    "general-purpose".to_owned()
++}
++
++#[derive(Debug, Clone, Serialize)]
++#[serde(rename_all = "camelCase")]
++pub struct SpawnSubagentResponse {
++    pub subagent_id: String,
++    pub status: &'static str,
++    pub capability_mode: xai_tool_types::SubagentCapabilityMode,
++    pub isolation: xai_tool_types::SubagentIsolationMode,
++}
+ 
+ /// Wire mirror of the coordinator's [`SubagentCancelOutcome`], `kind`-tagged so
+ /// a client can branch and read the already-finished `status`. Sent alongside
+ /// the legacy `cancelled` bool: a new pager prefers this, an old one ignores it.
+@@ -407,6 +437,38 @@ pub async fn handle_scheduler(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtRe
+ /// Handle `x.ai/subagent/*` extension methods.
+ pub async fn handle_subagent(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
+     match args.method.as_ref() {
++        "x.ai/subagent/spawn" => {
++            let req: SpawnSubagentRequest = parse(args)?;
++            let prompt = req.prompt.trim().to_owned();
++            let description = req.description.trim().to_owned();
++            if prompt.is_empty() {
++                return Err(acp::Error::invalid_params().data("prompt must not be empty"));
++            }
++            if description.is_empty() {
++                return Err(acp::Error::invalid_params().data("description must not be empty"));
++            }
++            let capability_mode = req
++                .capability_mode
++                .unwrap_or(xai_tool_types::SubagentCapabilityMode::ReadOnly);
++            let isolation = req.isolation;
++            let isolation_wire = isolation.unwrap_or_default();
++            let subagent_id = agent
++                .start_desktop_subagent(
++                    &req.session_id,
++                    prompt,
++                    description,
++                    req.subagent_type,
++                    capability_mode,
++                    isolation,
++                )
++                .map_err(|error| acp::Error::invalid_params().data(error))?;
++            respond(Ok::<_, String>(SpawnSubagentResponse {
++                subagent_id,
++                status: "started",
++                capability_mode,
++                isolation: isolation_wire,
++            }))
++        }
+         "x.ai/subagent/cancel" => {
+             let req: CancelSubagentRequest = parse(args)?;
+             tracing::info!(subagent_id = %req.subagent_id, "Cancelling subagent via ext method");
+@@ -561,6 +623,17 @@ mod tests {
+     fn list_running_response_serializes_with_subagents_array() {
+         let resp = ListRunningSubagentsResponse { subagents: vec![] };
+         let json = serde_json::to_value(&resp).expect("should serialize");
+         assert_eq!(json["subagents"], serde_json::json!([]));
+     }
++
++    #[test]
++    fn desktop_spawn_request_defaults_to_safe_mode() {
++        let req: SpawnSubagentRequest = serde_json::from_str(
++            r#"{"sessionId":"s","prompt":"inspect","description":"inspect files"}"#,
++        )
++        .expect("request should parse");
++        assert_eq!(req.subagent_type, "general-purpose");
++        assert_eq!(req.capability_mode, None);
++        assert_eq!(req.isolation, None);
++    }
+ 
+     // ── SubagentSnapshotDto serialization tests ────────────────────────

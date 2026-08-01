@@ -2623,6 +2623,39 @@ export class AcpClient {
     };
   }
 
+  /** Start one native Grok Build subagent from the guided desktop flow. */
+  async spawnSubagent(input: {
+    sessionId: string;
+    prompt: string;
+    description: string;
+    subagentType?: string;
+    capabilityMode?: 'read-only' | 'read-write' | 'execute' | 'all';
+    isolation?: 'none' | 'worktree';
+  }): Promise<{
+    subagentId: string;
+    status: string;
+    capabilityMode: string;
+    isolation: string;
+  }> {
+    const raw = (await this.request('_x.ai/subagent/spawn', {
+      sessionId: input.sessionId,
+      prompt: input.prompt,
+      description: input.description,
+      subagentType: input.subagentType ?? 'general-purpose',
+      capabilityMode: input.capabilityMode ?? 'read-only',
+      isolation: input.isolation ?? 'none',
+    }, 15_000)) as { result?: Record<string, unknown> } & Record<string, unknown>;
+    const result = (raw.result ?? raw) as Record<string, unknown>;
+    const subagentId = String(result.subagentId ?? '').trim();
+    if (!subagentId) throw new Error('Grok Build did not return a subagent id');
+    return {
+      subagentId,
+      status: String(result.status ?? 'started'),
+      capabilityMode: String(result.capabilityMode ?? input.capabilityMode ?? 'read-only'),
+      isolation: String(result.isolation ?? input.isolation ?? 'none'),
+    };
+  }
+
   /** Read-only reconciliation after reconnect; returns only engine-owned state. */
   async listRunningSubagents(sessionId: string): Promise<unknown[]> {
     const raw = (await this.request('_x.ai/subagent/list_running', { sessionId }, 15_000)) as {

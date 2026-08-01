@@ -3,6 +3,23 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-01 · 桌面委派子任务（`x.ai/subagent/spawn`）阶段 0 收口
+
+| 范围 | 命令或步骤 | 结果 | 边界 |
+|---|---|---|---|
+| 内核补丁 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` | 通过：锁定提交 `dd04f397b1d02f2272b092555669dfba1f01bc85`，0001–0007 均可在干净 worktree 顺序应用；`vendor/grok-build` 工作树无已跟踪脏改动 | 未记录的 nested untracked `vendor/grok-build/vendor/` 不参与补丁 apply；构建仍在临时 worktree 中进行 |
+| 内核重建 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok`；`resources/grok --version` | 通过：包内资源为 `grok 0.2.116 (dd04f39)`，含 `0007-acp-desktop-subagent-spawn.patch` | 版本号不变；不构成 GitHub Release 或 DMG 发布 |
+| ACP spawn 路由（无认证隔离 HOME） | 隔离 `HOME`/`GROK_HOME` 下对包内内核发送 `initialize`，再调用 `x.ai/subagent/spawn` 与 `_x.ai/subagent/spawn`，父会话 ID 故意不存在 | 通过：标准拼写 `x.ai/subagent/spawn` 为 method not found；运行时兼容拼写 `_x.ai/subagent/spawn` 返回 `Invalid params` / `data: "parent session not found"`，未返回 `subagentId`，未排队真实子任务 | 桌面客户端调用 `_x.ai/subagent/spawn`。本探针不创建真实父会话、不发起模型请求；**真实只读/可写子任务执行、审批、完成与 App 重开恢复仍缺认证账号 + 可丢弃项目人工证据** |
+| 脚本门禁 | `scripts/verify-grok-acp.mjs … --authenticated --subagent-controls` | 部分：`--subagent-controls` 仍要求 `--authenticated` 与可丢弃目录；空临时认证目录下 `authenticate(cached_token)` 可能超时 | 不得把“路由可达”写成“子任务已跑完”；完整 `--subagent-controls` 绿跑需带有效隔离认证目录 |
+| 桌面门禁 | `cd apps/desktop && npx tsc --noEmit && npm run test:stages && npm run build && npm run build:app`；`cd src-tauri && cargo test && cargo check`；`scripts/verify-macos-app-bundle.sh …/gorkX.app` | 通过：TypeScript 无报错；stage 测试全绿；前端生产构建成功；Rust **87** 项单元测试通过；`cargo check` 通过；arm64 App-only bundle 含 `grok 0.2.116 (dd04f39)`、许可证与隔离 `GROK_HOME` | 未签名/公证；未生成 DMG；未打 tag；未发 Release |
+| UI / 文档诚实边界 | `+ → Delegate a subtask` / `+ → 委派子任务`；`FEATURES.md` 标为 **Kernel-wired** | 默认只读；共享工作区写/执行需 `window.confirm`；生命周期仍由内核协调器拥有 | 不得宣称 Real 端到端；阶段 2 才做真实闭环 |
+
+### 阶段 0 结论
+
+- 已收口：源码、0007 补丁、内核重建、无认证 spawn 拒绝探针、前端/Rust/App bundle 门禁。
+- **未完成（不得写成已验收）**：登录态下真实子任务启动、角色/权限/worktree 实跑、取消与完成恢复。
+- 发布动作：本阶段明确不做 tag / Release / DMG。
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |

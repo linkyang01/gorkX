@@ -718,6 +718,19 @@ try {
       const cancelled = await preferRuntimeRoute('subagent/cancel', { subagentId: missingId });
       if (!cancelled) throw new Error('subagent/cancel is not exposed by either ACP route');
       console.log(`PASS: ACP ${cancelled.method} (subagent cancel route)`);
+
+      // Route-only probe: the parent session is intentionally missing, so the
+      // kernel rejects before queueing any child or making a model request.
+      const spawned = await preferRuntimeRoute('subagent/spawn', {
+        sessionId: `gorkx-acp-missing-parent-${Date.now().toString(36)}`,
+        prompt: 'route probe only',
+        description: 'route probe',
+        subagentType: 'explore',
+        capabilityMode: 'read-only',
+        isolation: 'none',
+      });
+      if (!spawned) throw new Error('subagent/spawn is not exposed by either ACP route');
+      console.log(`PASS: ACP ${spawned.method} (subagent spawn route; rejected missing parent as expected)`);
     }
 
     if (hooksControlsSmoke) {

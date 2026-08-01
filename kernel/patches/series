@@ -7,3 +7,4 @@
 0004-acp-agent-stdio-cli-overrides.patch
 0005-acp-desktop-actions.patch
 0006-code-nav-desktop.patch
+0007-acp-desktop-subagent-spawn.patch
