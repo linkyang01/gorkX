@@ -14,7 +14,7 @@
 | 6 | Worktree create/list/switch | Worktree panel | Real | Code + ACP worktree |
 | 7 | Memory Remember/Forget/Flush | Memory panel / ⇧⌘M | Real (+ flush Kernel) | Code |
 | 8 | Skills Run / MCP / plugins | Extensions / ⇧⌘E | Real | Code; empty-state CTAs |
-| 9 | Subagent spawn/tree/stop/inspect | Composer / Process / ⇧⌘B | Kernel-wired | ACP spawn/list/get/cancel; **GUI spawn 未验收** |
+| 9 | Subagent spawn/tree/stop/inspect | Composer / Process / ⇧⌘B | Kernel-wired | ACP **real** spawn→running→**completed**+output (2026-08-01); cancel/list routes OK; **GUI 点按仍未验收** |
 | 10 | Hooks trust/reload/enable | Settings → Hooks | Kernel-wired | ACP hooks; **human click 未验收** |
 | 11 | Computer screenshot/click/stop | Settings → Computer | Real w/ boundary | Emergency stop code; **live Accessibility 未验收** |
 | 12 | GitHub OAuth + verify + PR | Settings → Git / Review | Real confirmation-gated | githubFeedback; **web revoke live 未验收** |
@@ -37,5 +37,5 @@
 - **H2** user-supplied third-party endpoint true reply.
 - **H3** microphone dictation → draft, no auto-send.
 - **B1** live Build chat under entitled account.
-- **B3 GUI** subagent spawn → tree → stop/inspect in App.
+- **B3 GUI** subagent spawn → tree → stop/inspect in App (ACP real completion already evidenced).
 - Tag / notarized DMG / GitHub Release: **user approval only**.

@@ -24,7 +24,8 @@
 | H1 干净安装 | **未验收（阻塞）** — 需无既有 Grok 数据的 macOS 机上：安装 → 登录 → 首任务 → 退出重开 |
 | H2 第三方模型真回复 | **未验收（阻塞）** — 用户未提供可授权 endpoint/密钥 |
 | H3 语音听写 | **未验收（阻塞）** — 需麦克风 TCC + 真人朗读；ACP 路由已绿 |
-| 子任务 GUI 点按 | **未验收** — ACP 层 spawn/list/get/cancel 有证据；App 委派→树→停止/Inspect 无录像 |
+| 子任务 GUI 点按 | **未验收** — App 委派按钮→树→停止/Inspect **无录像** |
+| 子任务 ACP 真跑（父会话存在） | **通过（2026-08-01）** — App GROK_HOME 副本 + 可丢弃 git 项目：`_x.ai/subagent/spawn` explore/read-only → `status=started` → poll `get` → **`status=completed`**、`output=hello-gorkx`、`toolCalls=1`（scratch `live-spawn-get-poll.log`）。**非** App UI 点按 |
 | tag / Release / 公证 DMG | **未做** — 需用户明确批准；当前为 release **候选** 包 |
 
 ### 映射抽检（≥15）
