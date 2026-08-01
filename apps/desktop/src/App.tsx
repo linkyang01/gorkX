@@ -146,6 +146,8 @@ import {
   IconWorktree,
   IconRemoteSession,
   IconOpenFolder,
+  IconPlugins,
+  IconMemory,
 } from './components/UiIcons';
 import {
   exportSessionClipboard,
@@ -6067,6 +6069,24 @@ function App() {
           </button>
           <button
             type="button"
+            className={extOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('navPlugins')}
+            aria-label={t('navPlugins')}
+            onClick={() => setExtOpen(true)}
+          >
+            <IconPlugins />
+          </button>
+          <button
+            type="button"
+            className={memoryOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('navMemoryHint')}
+            aria-label={t('memoryManageNav')}
+            onClick={() => setMemoryOpen(true)}
+          >
+            <IconMemory />
+          </button>
+          <button
+            type="button"
             className={reviewOpen ? 'chrome-btn on' : 'chrome-btn'}
             title={t('reviewTitle')}
             aria-label={t('reviewToggle')}
@@ -8051,6 +8071,16 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
+                    {active.sessionId && active.client && !active.busy ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm composer-btw-btn"
+                        title={t('plusSpawnSubagentHint')}
+                        onClick={() => setSubagentSpawnOpen(true)}
+                      >
+                        {t('plusSpawnSubagent')}
+                      </button>
+                    ) : null}
                     {active.sessionId && active.client && !active.busy && active.lines.some((line) => line.role === 'assistant') ? (
                       <button
                         type="button"
