@@ -133,6 +133,37 @@
 
 **阶段 1 出口仍未达成。** 不打 tag / 不发 Release / 不做 DMG。
 
+## 2026-08-01 · 子任务重连恢复加固 + H1 包隔离复验 + 阶段 3 边界
+
+### 重连恢复（代码）
+
+`reconcileRunningSubagents` 在 `list_running` 之外，对本地仍显示 `running` 但引擎列表已不存在的子任务，额外调用 `getSubagent`：
+
+| 引擎快照 | 桌面结果 |
+|---|---|
+| `completed` / done / success | 行状态 → `completed`（可 Inspect） |
+| cancel* | → `cancelled` |
+| fail / error | → `failed` |
+| 仍 running / get 失败 | → `unverified after reconnect` |
+| 列表中仍有 | 保持 live `running · …` 并补行 |
+
+TypeScript / stage 测试通过。**未**做真实「App 退出 → 子任务跑完 → 重开」人工往返（需登录 UI）。
+
+### H1 旁证（非干净机）
+
+`scripts/verify-macos-app-bundle.sh …/gorkX.app` 复验通过：arm64、包内 `grok 0.2.116 (dd04f39)`、隔离 `GROK_HOME`、许可证。  
+**不等于**干净 Mac 安装→登录→首任务→退出重开。
+
+### 阶段 3 连接器边界（审计，不扩假能力）
+
+| 连接器 | 目录状态 | 本轮 |
+|---|---|---|
+| GitHub | `real`：OAuth Device Flow、Keychain、scopes/lastVerified、写前 confirm | 已有证据；网页撤销往返仍缺 |
+| Calendar / Slack / 飞书 / Notion / Drive | `soon`：目录声明 scopes，**无**官方授权闭环 | 保持 Soon，不伪装已连接 |
+| 第三方 API 模型 | 设置可配；真推理需用户 endpoint | **H2 未验收** |
+
+原则：无官方授权链的服务不得显示已连接；API Key/PAT 仅高级入口。
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |

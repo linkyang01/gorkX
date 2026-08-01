@@ -2594,28 +2594,42 @@ function App() {
   }, [toggleNativeVoice]);
 
   /**
-   * Rehydrate only the engine's currently-running child tasks after a session
-   * load. Finished tasks come from the persisted session replay; this query is
-   * solely for work that survived while the desktop process was absent.
+   * Rehydrate child tasks after a session load. Live children come from
+   * list_running; children that finished while the app was closed are resolved
+   * with a one-shot get snapshot so the tree can show completed/cancelled/failed
+   * instead of a stale "running" badge.
    */
   const reconcileRunningSubagents = useCallback(
     async (threadId: string, client: AcpClient, sessionId: string) => {
-      const markPersistedRunningAsUnverified = () => {
-        setThreads((prev) =>
-          prev.map((thread) => {
-            if (thread.id !== threadId) return thread;
-            const lines = thread.lines.map((line) =>
-              line.toolKind === 'subagent' && /^(running|initializing|cancelling)\b/i.test(line.toolStatus || '')
-                ? { ...line, toolStatus: 'unverified after reconnect' }
-                : line,
-            );
-            return { ...thread, lines };
-          }),
-        );
+      const isActiveSubagentStatus = (status: string | undefined) =>
+        /^(running|initializing|cancelling)\b/i.test(status || '');
+
+      const terminalStatusFromSnapshot = (snapshot: Record<string, unknown> | null): string | null => {
+        if (!snapshot) return null;
+        const raw = String(snapshot.status ?? '').toLowerCase().trim();
+        if (!raw) return null;
+        if (/^(running|initializing|cancelling|pending|queued|starting|in_progress|active)\b/.test(raw)) {
+          return null;
+        }
+        if (/^(complet|done|success)/.test(raw)) return raw.startsWith('complet') ? 'completed' : raw;
+        if (/^cancel/.test(raw)) return 'cancelled';
+        if (/^(fail|error)/.test(raw)) return raw.startsWith('fail') ? 'failed' : raw;
+        return raw;
       };
+
+      const collectPersistedActiveIds = (): string[] => {
+        const thread = threadsRef.current.find((row) => row.id === threadId);
+        if (!thread) return [];
+        return thread.lines.flatMap((line) => {
+          if (line.toolKind !== 'subagent' || !isActiveSubagentStatus(line.toolStatus)) return [];
+          const id = line.toolKey?.replace(/^subagent:/, '') ?? '';
+          return id ? [id] : [];
+        });
+      };
+
       try {
         const snapshots = await client.listRunningSubagents(sessionId);
-        const rows = snapshots.flatMap((snapshot) => {
+        const liveRows = snapshots.flatMap((snapshot) => {
           if (!snapshot || typeof snapshot !== 'object') return [];
           const raw = snapshot as Record<string, unknown>;
           const subagentId = String(raw.subagentId ?? raw.subagent_id ?? '');
@@ -2636,47 +2650,86 @@ function App() {
             status: detail.length ? `running · ${detail.join(' · ')}` : 'running',
           }];
         });
-        if (!rows.length) {
-          // An authoritative empty response means none of the persisted rows
-          // is still live. Do not leave yesterday's lifecycle event looking
-          // like an active process.
-          markPersistedRunningAsUnverified();
-          return;
+        const liveKeys = new Set(liveRows.map((row) => row.key));
+        const statusByKey = new Map<string, { status: string; text?: string }>();
+        for (const row of liveRows) {
+          statusByKey.set(row.key, { status: row.status, text: row.text });
         }
+
+        // Finished-while-away children are absent from list_running. Resolve
+        // each stale "running" row with a get snapshot when possible.
+        const missingIds = collectPersistedActiveIds().filter((id) => !liveKeys.has(`subagent:${id}`));
+        await Promise.all(
+          missingIds.map(async (subagentId) => {
+            const key = `subagent:${subagentId}`;
+            try {
+              const snap = await client.getSubagent(subagentId);
+              const terminal = terminalStatusFromSnapshot(snap);
+              if (terminal) {
+                statusByKey.set(key, { status: terminal });
+                return;
+              }
+            } catch {
+              // Fall through to unverified.
+            }
+            statusByKey.set(key, { status: 'unverified after reconnect' });
+          }),
+        );
+
         setThreads((prev) =>
           prev.map((thread) => {
             if (thread.id !== threadId) return thread;
-            const liveKeys = new Set(rows.map((row) => row.key));
-            const lines = thread.lines.map((line) =>
-              line.toolKind === 'subagent' &&
-              /^(running|initializing|cancelling)\b/i.test(line.toolStatus || '') &&
-              !liveKeys.has(line.toolKey || '')
-                ? { ...line, toolStatus: 'unverified after reconnect' }
-                : line,
-            );
-            for (const row of rows) {
-              const index = lines.findIndex((line) => line.toolKey === row.key);
-              if (index >= 0) {
-                lines[index] = { ...lines[index], toolStatus: row.status, toolKind: 'subagent' };
-              } else {
-                lines.push({
-                  id: nid(),
-                  role: 'tool',
-                  text: row.text,
-                  toolKey: row.key,
-                  toolStatus: row.status,
-                  toolKind: 'subagent',
-                });
+            const lines = thread.lines.map((line) => {
+              const key = line.toolKey || '';
+              const next = statusByKey.get(key);
+              if (next) {
+                return {
+                  ...line,
+                  toolStatus: next.status,
+                  toolKind: 'subagent' as const,
+                  ...(next.text ? { text: next.text } : {}),
+                };
               }
+              // Authoritative empty list_running with no resolvable get: do not
+              // leave a historical lifecycle row looking live.
+              if (
+                line.toolKind === 'subagent' &&
+                isActiveSubagentStatus(line.toolStatus) &&
+                !liveKeys.has(key)
+              ) {
+                return { ...line, toolStatus: 'unverified after reconnect' };
+              }
+              return line;
+            });
+            for (const row of liveRows) {
+              if (lines.some((line) => line.toolKey === row.key)) continue;
+              lines.push({
+                id: nid(),
+                role: 'tool',
+                text: row.text,
+                toolKey: row.key,
+                toolStatus: row.status,
+                toolKind: 'subagent',
+              });
             }
             return { ...thread, lines };
           }),
         );
       } catch {
-        // This extension is absent from the current locked kernel. Session
-        // replay stays readable, but its historical "running" status is not
-        // evidence that a child survived the desktop restart.
-        markPersistedRunningAsUnverified();
+        // Extension absent or transport error: demote active badges only.
+        setThreads((prev) =>
+          prev.map((thread) => {
+            if (thread.id !== threadId) return thread;
+            return {
+              ...thread,
+              lines: thread.lines.map((line) =>
+                line.toolKind === 'subagent' && isActiveSubagentStatus(line.toolStatus)
+                  ? { ...line, toolStatus: 'unverified after reconnect' }
+                  : line,
+              ),
+            };
+          }),
+        );
       }
     },
     [],
