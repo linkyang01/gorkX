@@ -519,7 +519,32 @@ export function MemoryPanel({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 12, minHeight: 240 }}>
           <div style={{ overflow: 'auto', border: '1px solid var(--hairline)', borderRadius: 10, padding: 8 }}>
             {(st?.files ?? []).length === 0 ? (
-              <div className="hint">{t('memoryEmpty')}</div>
+              <div className="ext-empty-card" style={{ margin: 4 }}>
+                <p className="hint" style={{ margin: 0 }}>{t('memoryEmpty')}</p>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('memoryEmptyHint')}</p>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm primary-sm"
+                    onClick={() => {
+                      setRememberOpen(true);
+                      setForgetOpen(false);
+                    }}
+                  >
+                    {t('memoryRememberLocal')}
+                  </button>
+                  {canCaptureSessionMemory ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => onRunKernelMemoryAction?.('capture')}
+                      disabled={!onRunKernelMemoryAction}
+                    >
+                      {t('memoryFlush')}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             ) : (
               st!.files.map((f) => (
                 <button

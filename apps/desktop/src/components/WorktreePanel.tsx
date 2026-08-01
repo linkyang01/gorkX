@@ -210,7 +210,18 @@ export function WorktreePanel({
         {msg ? <pre className="ext-msg">{msg}</pre> : null}
         <div className="ext-list" style={{ maxHeight: 400, overflow: 'auto' }}>
           {rows.length === 0 ? (
-            <div className="hint">{t('worktreeEmpty')}</div>
+            <div className="ext-empty-card">
+              <p className="hint" style={{ margin: 0 }}>{t('worktreeEmpty')}</p>
+              <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('worktreeEmptyHint')}</p>
+              <div className="field-row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn btn-sm primary-sm" disabled={!project} onClick={onCreate}>
+                  {t('createWorktreeMenu')}
+                </button>
+                <button type="button" className="btn btn-sm" disabled={loading} onClick={() => void refresh()}>
+                  {loading ? '…' : t('extRefresh')}
+                </button>
+              </div>
+            </div>
           ) : (
             rows.map((w, i) => {
               const id = rowId(w) || String(i);

@@ -7647,6 +7647,8 @@ function App() {
               }}
               lines={active.lines}
               busy={active.busy}
+              canSpawnSubagent={Boolean(active.client && active.sessionId && !active.busy)}
+              onSpawnSubagent={() => setSubagentSpawnOpen(true)}
               onCancelSubagent={(subagentId) => {
                 const client = active.client;
                 if (!client) return;

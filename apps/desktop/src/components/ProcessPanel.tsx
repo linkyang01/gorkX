@@ -11,12 +11,24 @@ interface Props {
   onClose: () => void;
   lines: ChatLine[];
   busy?: boolean;
+  /** When set, empty state can open the guided subagent launcher. */
+  canSpawnSubagent?: boolean;
+  onSpawnSubagent?: () => void;
   onCancelSubagent?: (subagentId: string) => void;
   onInspectSubagent?: (subagentId: string) => void;
 }
 
 /** Agent process stream (thinking + tools + system). Closed by default — open when you care. */
-export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onInspectSubagent }: Props) {
+export function ProcessPanel({
+  open,
+  onClose,
+  lines,
+  busy,
+  canSpawnSubagent,
+  onSpawnSubagent,
+  onCancelSubagent,
+  onInspectSubagent,
+}: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const processLines = lines.filter(
     (l) => l.role === 'thought' || l.role === 'tool' || l.role === 'system',
@@ -59,7 +71,17 @@ export function ProcessPanel({ open, onClose, lines, busy, onCancelSubagent, onI
           onInspect={onInspectSubagent}
         />
         {processLines.length === 0 ? (
-          <div className="hint">{t('processEmpty')}</div>
+          <div className="ext-empty-card" style={{ margin: '10px 8px' }}>
+            <p className="hint" style={{ margin: 0 }}>{t('processEmpty')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('processEmptyHint')}</p>
+            {canSpawnSubagent && onSpawnSubagent ? (
+              <div className="field-row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn btn-sm primary-sm" onClick={onSpawnSubagent}>
+                  {t('plusSpawnSubagent')}
+                </button>
+              </div>
+            ) : null}
+          </div>
         ) : (
           processLines.map((line) => {
             const clean = sanitizeText(line.text);
