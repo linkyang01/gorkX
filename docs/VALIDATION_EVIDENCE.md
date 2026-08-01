@@ -20,7 +20,7 @@
 | ACP `--desktop-controls --voice-controls` | PASS（无模型请求） |
 | ACP auth：session/info + subagent list/get/cancel/spawn(缺父拒) + hooks list/reload + worktree list | PASS（App GROK_HOME 副本，临时目录已删） |
 | `npm run build:app` + `verify-macos-app-bundle` | PASS · `gorkX.app` 1.0.0 · 包内 `grok 0.2.116 (dd04f39)` · 隔离 GROK_HOME |
-| 直播码 B1 / 真对话 | **未验收** — 无已确认 Grok Build 额度；不得伪造流式；403 仅 humanize |
+| 直播码 B1 / 真对话 | **未验收（服务端 403）** — 2026-08-01 用 App `GROK_HOME` 副本：`authenticate`+`session/new|load` PASS；`--resource` 触发 `session/prompt` 得 **403** `Grok Build is coming soon. You don't have access now.`（见 scratch `live-resource-prompt.log`）。**不得伪造流式**；UI humanize 路径已测 |
 | H1 干净安装 | **未验收（阻塞）** — 需无既有 Grok 数据的 macOS 机上：安装 → 登录 → 首任务 → 退出重开 |
 | H2 第三方模型真回复 | **未验收（阻塞）** — 用户未提供可授权 endpoint/密钥 |
 | H3 语音听写 | **未验收（阻塞）** — 需麦克风 TCC + 真人朗读；ACP 路由已绿 |

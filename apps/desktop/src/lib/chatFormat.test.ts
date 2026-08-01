@@ -32,4 +32,19 @@ assert.equal(isAgentProcessExited('Agent process exited'), true);
 assert.equal(humanizeEngineError(AGENT_PROCESS_EXITED), 'GROKX_AGENT_PROCESS_EXITED');
 assert.match(summarizeError('spawn failed: No such file or directory'), /No such file|spawn failed/i);
 
+
+// Live 2026-08-01 probe body (auth ok, session ok, prompt 403)
+assert.equal(
+  isGrokBuildAccessDenied(
+    'API error (status 403 Forbidden): Grok Build is coming soon. You don\'t have access now.',
+  ),
+  true,
+);
+assert.equal(
+  humanizeEngineError(
+    'API error (status 403 Forbidden): Grok Build is coming soon. You don\'t have access now.',
+  ),
+  'GROKX_BUILD_ACCESS_DENIED',
+);
+
 console.log('chatFormat.test.ts: ok');
