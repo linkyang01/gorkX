@@ -4,6 +4,24 @@
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
 
+## 2026-08-01 · 发布 gorkX 1.1.0
+
+| 项 | 结果 |
+|---|---|
+| 版本 | `1.1.0`（相对 1.0.0：外观 Codex 化 + 设置页深化 + 暗色白底修复） |
+| 代码 | `main` @ `f54ae56` + tag **`v1.1.0`** |
+| 门禁 | tsc / test:stages / cargo / bundle verify **PASS** |
+| 包 | `gorkX.app` + `gorkX_1.1.0_aarch64.dmg` |
+| 内核 | `grok 0.2.116 (dd04f39)` |
+| 签名 | **adhoc**（未公证；Gatekeeper 可能需「仍要打开」） |
+| DMG SHA-256 | `c93f996018f3c8293727af025c2ed9cae3854908f7b7aa50ce72e8b8c0e22734` |
+| GitHub Release | https://github.com/linkyang01/gorkX/releases/tag/v1.1.0 |
+| 说明 | `docs/RELEASE_NOTES_v1.1.0.md` |
+
+用户明确要求「git 上去，可以发布就发一版」后执行。
+
+---
+
 ## 2026-08-01 · ONE_SHOT COMPLETE（全的做 · 一次验证）
 
 > 用户：「全的做，一次性完成，完成的验证」。  
