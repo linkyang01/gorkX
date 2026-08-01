@@ -109,6 +109,13 @@ import {
   type GithubOAuthStart,
 } from '../lib/github';
 import {
+  formatGithubVerifiedAt,
+  githubActionError,
+  githubHostMessage,
+  githubStatusFeedback,
+  isGithubAuthRevoked,
+} from '../lib/githubFeedback';
+import {
   CONNECTOR_CATALOG,
   deriveConnectorUiState,
   getConnector,
@@ -864,20 +871,42 @@ export function SettingsPanel({
     );
   };
 
-  const withGithub = async (action: () => Promise<GithubStatus>) => {
+  const applyGithubStatus = (next: GithubStatus, opts?: { announce?: boolean }) => {
+    setGithub(next);
+    if (opts?.announce === false) return next;
+    const feedback = githubStatusFeedback(next);
+    showMsg(feedback.text, feedback.isError);
+    return next;
+  };
+
+  const withGithub = async (action: () => Promise<GithubStatus>, opts?: { announce?: boolean }) => {
     setGithubBusy(true);
     try {
       const next = await action();
-      setGithub(next);
-      setMsg(next.error || next.note);
-      return next;
+      return applyGithubStatus(next, opts);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
       return null;
     } finally {
       setGithubBusy(false);
+    }
+  };
+
+  const testGithubConnection = async () => {
+    showMsg(t('githubTesting'), false);
+    const next = await withGithub(githubTestConnection);
+    if (next?.connected) {
+      recordGithubAudit(
+        'test',
+        `GitHub test OK as ${next.login || 'user'}${next.lastVerifiedAt ? ` @ ${next.lastVerifiedAt}` : ''}`,
+      );
+    } else if (next) {
+      recordGithubAudit(
+        'fail',
+        next.error || next.note || 'GitHub test failed',
+      );
     }
   };
 
@@ -899,26 +928,26 @@ export function SettingsPanel({
         const result = await githubPollOauth(flow.attemptId);
         if (result.status === 'pending') continue;
         if (result.status === 'connected' && result.github) {
-          setGithub(result.github);
-          setMsg(result.github.note);
+          applyGithubStatus(result.github);
           recordGithubAudit(
             'connect',
             `GitHub connected as ${result.github.login || 'user'} (browser OAuth)`,
           );
         } else {
-          setMsg(result.message || t('githubOauthFailed'));
-          recordGithubAudit('fail', result.message || t('githubOauthFailed'));
+          const message = githubHostMessage(result.message) || t('githubOauthFailed');
+          showMsg(message, true);
+          recordGithubAudit('fail', message);
         }
         setGithubOauth(null);
         return;
       }
       setGithubOauth(null);
-      setMsg(t('githubOauthExpired'));
+      showMsg(t('githubOauthExpired'), true);
       recordGithubAudit('fail', t('githubOauthExpired'));
     } catch (error) {
       setGithubOauth(null);
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -931,11 +960,11 @@ export function SettingsPanel({
       const flow = await githubStartOauth();
       setGithubOauth(flow);
       await openUrlSafe(flow.verificationUriComplete || flow.verificationUri);
-      setMsg(t('githubOauthOpened'));
+      showMsg(t('githubOauthOpened'), false);
       void pollGithubOauth(flow);
     } catch (error) {
       setGithubBusy(false);
-      setMsg(error instanceof Error ? error.message : String(error));
+      showMsg(githubActionError(error), true);
     }
   };
 
@@ -953,23 +982,26 @@ export function SettingsPanel({
       document.execCommand('copy');
       input.remove();
     }
-    setMsg(t('githubOauthCopied'));
+    showMsg(t('githubOauthCopied'), false);
   };
 
   const loadGithubPrs = async () => {
     if (!project) {
-      setMsg(t('githubProjectRequired'));
+      showMsg(t('githubProjectRequired'), true);
       return;
     }
     setGithubBusy(true);
     try {
       const prs = await githubListOpenPrs(project);
       setGithubPrs(prs);
-      setMsg(prs.length ? t('githubPrsLoaded').replace('{n}', String(prs.length)) : t('githubPrsEmpty'));
+      showMsg(
+        prs.length ? t('githubPrsLoaded').replace('{n}', String(prs.length)) : t('githubPrsEmpty'),
+        false,
+      );
       recordGithubAudit('read', `Listed ${prs.length} open PR(s) for current project`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -982,11 +1014,11 @@ export function SettingsPanel({
     try {
       const checks = await githubListPrChecks(project, prNumber);
       setGithubChecks((current) => ({ ...current, [prNumber]: checks }));
-      setMsg(t('githubChecksLoaded').replace('{n}', String(checks.length)));
+      showMsg(t('githubChecksLoaded').replace('{n}', String(checks.length)), false);
       recordGithubAudit('read', `Loaded ${checks.length} check(s) for PR #${prNumber}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -999,11 +1031,11 @@ export function SettingsPanel({
     try {
       const comments = await githubListPrComments(project, prNumber);
       setGithubComments((current) => ({ ...current, [prNumber]: comments }));
-      setMsg(t('githubCommentsLoaded').replace('{n}', String(comments.length)));
+      showMsg(t('githubCommentsLoaded').replace('{n}', String(comments.length)), false);
       recordGithubAudit('read', `Loaded ${comments.length} comment(s) for PR #${prNumber}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -1013,16 +1045,16 @@ export function SettingsPanel({
   /** Explicit user confirmation required before any remote write. */
   const createGithubPullRequest = async () => {
     if (!project) {
-      setMsg(t('githubProjectRequired'));
+      showMsg(t('githubProjectRequired'), true);
       return;
     }
     if (!github?.connected && !github?.configured) {
-      setMsg(t('githubNotConnected'));
+      showMsg(t('githubNotConnected'), true);
       return;
     }
     const title = githubPrTitle.trim();
     if (!title) {
-      setMsg(t('githubPrTitleRequired'));
+      showMsg(t('githubPrTitleRequired'), true);
       return;
     }
     const repository =
@@ -1046,12 +1078,12 @@ export function SettingsPanel({
         draft: githubPrDraft,
       });
       setGithubReceipt(created.url);
-      setMsg(`${t('githubPrCreated')}: #${created.number}`);
+      showMsg(`${t('githubPrCreated')}: #${created.number}`, false);
       recordGithubAudit('write', confirmLine, { receiptUrl: created.url, detail: `PR #${created.number}` });
       void loadGithubPrs();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -1060,13 +1092,13 @@ export function SettingsPanel({
 
   const createGithubComment = async () => {
     if (!project) {
-      setMsg(t('githubProjectRequired'));
+      showMsg(t('githubProjectRequired'), true);
       return;
     }
     const prNumber = Number(githubCommentPr);
     const body = githubCommentBody.trim();
     if (!Number.isFinite(prNumber) || prNumber <= 0 || !body) {
-      setMsg(t('githubCommentRequired'));
+      showMsg(t('githubCommentRequired'), true);
       return;
     }
     const listed = githubPrs.find((pr) => pr.number === prNumber);
@@ -1085,13 +1117,13 @@ export function SettingsPanel({
     try {
       const created = await githubCreatePrComment(project, prNumber, body);
       setGithubReceipt(created.url);
-      setMsg(t('githubCommentCreated'));
+      showMsg(t('githubCommentCreated'), false);
       recordGithubAudit('write', confirmLine, { receiptUrl: created.url });
       setGithubCommentBody('');
       void loadGithubComments(prNumber);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setMsg(message);
+      const message = githubActionError(error);
+      showMsg(message, true);
       recordGithubAudit('fail', message);
     } finally {
       setGithubBusy(false);
@@ -3189,7 +3221,18 @@ export function SettingsPanel({
                           ? t('githubConfigured')
                           : t('githubNotConnected')}
                     </div>
-                    {github?.error ? <div className="settings-row-hint">{github.error}</div> : null}
+                    {github?.error ? (
+                      <div className="settings-row-hint" style={{ color: 'var(--danger, #e85d5d)' }}>
+                        {githubHostMessage(github.error)}
+                      </div>
+                    ) : github?.note ? (
+                      <div className="settings-row-hint">{githubHostMessage(github.note)}</div>
+                    ) : null}
+                    {github?.error && isGithubAuthRevoked(github.error) ? (
+                      <div className="settings-row-hint" style={{ marginTop: 4 }}>
+                        {t('githubReauth')} → {t('githubOauthConnect')} / {t('githubConnect')}
+                      </div>
+                    ) : null}
                     {github?.authMethod ? (
                       <div className="settings-row-hint">
                         {t('githubAuthMethod')}: {github.authMethod}
@@ -3203,9 +3246,7 @@ export function SettingsPanel({
                     {github?.configured ? (
                       <div className="settings-row-hint">
                         {t('githubLastVerified')}:{' '}
-                        {github.lastVerifiedAt
-                          ? new Date(github.lastVerifiedAt).toLocaleString()
-                          : t('githubLastVerifiedNever')}
+                        {formatGithubVerifiedAt(github.lastVerifiedAt)}
                       </div>
                     ) : null}
                   </div>
@@ -3248,52 +3289,53 @@ export function SettingsPanel({
                     </div>
                   </>
                 ) : (
-                  <div className="field-row" style={{ marginTop: 10 }}>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={githubBusy}
-                      onClick={() => {
-                        void withGithub(githubTestConnection).then((next) => {
-                          if (next?.connected) {
-                            recordGithubAudit('test', `GitHub test OK as ${next.login || 'user'}`);
-                          } else if (next) {
-                            recordGithubAudit('fail', next.error || next.note || 'GitHub test failed');
-                          }
-                        });
-                      }}
-                    >
-                      {t('githubTest')}
-                    </button>
-                    <button type="button" className="btn" disabled={githubBusy} onClick={() => void loadGithubPrs()}>{t('githubLoadPrs')}</button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={githubBusy}
-                      onClick={() => {
-                        void withGithub(githubDisconnect).then(() => {
-                          recordGithubAudit('disconnect', 'GitHub disconnected');
-                          setGithubPrs([]);
-                          setGithubReceipt(null);
-                        });
-                      }}
-                    >
-                      {t('githubDisconnect')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={githubBusy}
-                      onClick={() => {
-                        void withGithub(githubDisconnect).then(() => {
-                          recordGithubAudit('reauth', 'GitHub re-auth: cleared stored credentials');
-                          setGithubPrs([]);
-                        });
-                      }}
-                    >
-                      {t('githubReauth')}
-                    </button>
-                  </div>
+                  <>
+                    <div className="field-row" style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={githubBusy}
+                        title={t('githubTestHint')}
+                        onClick={() => void testGithubConnection()}
+                      >
+                        {githubBusy ? t('githubTesting') : t('githubTest')}
+                      </button>
+                      <button type="button" className="btn" disabled={githubBusy} onClick={() => void loadGithubPrs()}>{t('githubLoadPrs')}</button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={githubBusy}
+                        onClick={() => {
+                          void withGithub(githubDisconnect, { announce: false }).then((next) => {
+                            if (!next) return;
+                            showMsg(t('githubDisconnectDone'), false);
+                            recordGithubAudit('disconnect', 'GitHub disconnected');
+                            setGithubPrs([]);
+                            setGithubReceipt(null);
+                          });
+                        }}
+                      >
+                        {t('githubDisconnect')}
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn${github?.error && isGithubAuthRevoked(github.error) ? ' primary' : ''}`}
+                        disabled={githubBusy}
+                        onClick={() => {
+                          void withGithub(githubDisconnect, { announce: false }).then((next) => {
+                            if (!next) return;
+                            showMsg(t('githubReauthDone'), false);
+                            recordGithubAudit('reauth', 'GitHub re-auth: cleared stored credentials');
+                            setGithubPrs([]);
+                            setGithubReceipt(null);
+                          });
+                        }}
+                      >
+                        {t('githubReauth')}
+                      </button>
+                    </div>
+                    <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('githubTestHint')}</p>
+                  </>
                 )}
                 {(github?.connected || github?.configured) && project ? (
                   <div className="settings-card muted-block" style={{ marginTop: 12 }}>
