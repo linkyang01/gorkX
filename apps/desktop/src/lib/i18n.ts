@@ -1783,6 +1783,8 @@ const dict = {
     taskInfoClose: 'Close task info',
     taskInfoLoading: 'Loading…',
     taskInfoNoTask: 'Open a task first to view its engine information.',
+    taskInfoNoTaskHint:
+      'Start or reconnect a task, then open Task info again. Model, context, and auth category appear only for a live session — never API keys or tokens.',
     taskInfoModel: 'Model',
     taskInfoAgent: 'Agent',
     taskInfoTurns: 'Turns',
@@ -3717,6 +3719,8 @@ const dict = {
     taskInfoClose: '关闭任务信息',
     taskInfoLoading: '正在读取…',
     taskInfoNoTask: '请先打开一个任务，再查看它的内核信息。',
+    taskInfoNoTaskHint:
+      '请先启动或重连任务，再打开任务信息。模型、上下文与认证类别仅在已连接会话中显示，绝不会出现 API 密钥或 token。',
     taskInfoModel: '模型',
     taskInfoAgent: '智能体',
     taskInfoTurns: '轮次',

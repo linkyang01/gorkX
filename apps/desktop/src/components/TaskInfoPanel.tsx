@@ -114,7 +114,19 @@ export function TaskInfoPanel({
             {loading ? t('taskInfoLoading') : t('extRefresh')}
           </button>
         </div>
-        {!client || !sessionId ? <div className="hint">{t('taskInfoNoTask')}</div> : null}
+        {!client || !sessionId ? (
+          <div className="ext-empty-card" style={{ margin: '10px 0' }}>
+            <p className="hint" style={{ margin: 0 }}>{t('taskInfoNoTask')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskInfoNoTaskHint')}</p>
+            {onManageAuth ? (
+              <div className="field-row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn btn-sm" onClick={() => onManageAuth('account')}>
+                  {t('taskInfoManageAccount')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {error ? <pre className="ext-msg err">{error}</pre> : null}
         {info ? <div className="task-info-content">
           <div className="task-info-grid">

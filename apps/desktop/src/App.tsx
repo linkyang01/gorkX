@@ -1523,7 +1523,6 @@ function App() {
       );
       if (action) {
         const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
-        const liveReady = Boolean(live?.client && live.sessionId);
         switch (action) {
           case 'new-task':
             e.preventDefault();
@@ -1580,8 +1579,9 @@ function App() {
             });
             return;
           case 'task-info':
+            // Always open: empty state explains when no live session is connected.
             e.preventDefault();
-            if (liveReady) setTaskInfoOpen(true);
+            setTaskInfoOpen(true);
             return;
           case 'help':
             e.preventDefault();
@@ -6216,7 +6216,6 @@ function App() {
             className={taskInfoOpen ? 'chrome-btn on' : 'chrome-btn'}
             title={t('taskInfoTitle')}
             aria-label={t('taskInfoTitle')}
-            disabled={!active?.client || !active?.sessionId}
             onClick={() => setTaskInfoOpen(true)}
           >
             <span aria-hidden style={{ fontSize: 12, fontWeight: 700 }}>i</span>
