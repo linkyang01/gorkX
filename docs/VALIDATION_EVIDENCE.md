@@ -17,7 +17,10 @@
 | 设置全局 | catch → `showErr`；成功 `setMsg` 清 err 样式；网络/钥匙串/MCP/模型映射 | 源码 + stage-a | 不伪造连接成功 |
 | 扩展 / Review / Inspect | 原始 dump → `settingsErrorMessage` / `githubActionError` | 源码 | 未做 GUI 录像 |
 | 其它面板 | Worktree / TaskInfo / Subagent / HookBuilder / Terminal / Kernel / Attachment / Memory / Scheduled 同样 humanize | 源码 | 不伪造成功 |
-| 门禁 | `npx tsc --noEmit`；`npm run test:stages`（a–g 全绿） | 本会话通过 | 未重跑 cargo / App bundle |
+| 门禁 | `npx tsc --noEmit`；`npm run test:stages`（a–g 全绿） | 本会话通过 | — |
+| Rust | `cd apps/desktop/src-tauri && cargo test` | **88 passed**（本会话） | 未 cargo check 之外的签名 |
+| ACP 桌面控制 | `node scripts/verify-grok-acp.mjs …/resources/grok --desktop-controls` | 全绿：interject/btw/memory/repair/goal/command/workflow/hunk/code/git 原生守卫 | 无模型请求；`--authenticated` 另跑 |
+| 主界面错误 | 账户刷新/登录、提示历史、建议下一步 catch → `settingsErrorMessage` | 源码 | 任务 `error` 仍存原始 token 供 403 识别 |
 
 ### 诚实结论
 

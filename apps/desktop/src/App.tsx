@@ -184,6 +184,7 @@ import {
   isInjectedUserPromptEcho,
   sanitizeText,
 } from './lib/chatFormat';
+import { settingsErrorMessage } from './lib/settingsFeedback';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -1682,7 +1683,7 @@ function App() {
       }
     } catch (e) {
       setAccount(null);
-      setAccountError(e instanceof Error ? e.message : String(e));
+      setAccountError(settingsErrorMessage(e));
     }
   }, []);
 
@@ -2973,7 +2974,7 @@ function App() {
       setKernelPromptHistory(await client.promptHistory(cwd));
     } catch (error) {
       setKernelPromptHistory([]);
-      setKernelPromptHistoryError(error instanceof Error ? error.message : String(error));
+      setKernelPromptHistoryError(settingsErrorMessage(error));
     } finally {
       if (owned && client) await client.stop().catch(() => {});
       setKernelPromptHistoryLoading(false);
@@ -3009,7 +3010,7 @@ function App() {
       const reply = await thread.client.suggestNextPrompt(thread.sessionId, Date.now());
       if (reply.suggestion) setPromptSuggestion({ threadId: thread.id, text: reply.suggestion });
     } catch (error) {
-      setPromptSuggestionError(error instanceof Error ? error.message : String(error));
+      setPromptSuggestionError(settingsErrorMessage(error));
     } finally {
       setPromptSuggestionBusy(false);
     }
@@ -5938,7 +5939,7 @@ function App() {
       await reconnectThread(id);
       setTaskErrorOpen(false);
     } catch (error) {
-      setAccountError(error instanceof Error ? error.message : String(error));
+      setAccountError(settingsErrorMessage(error));
     } finally {
       setTaskReauthBusy(false);
     }
@@ -6978,7 +6979,7 @@ function App() {
                           if (result.ok) setAccountError(null);
                           else if (result.note) setAccountError(result.note);
                         } catch (e) {
-                          setAccountError(e instanceof Error ? e.message : String(e));
+                          setAccountError(settingsErrorMessage(e));
                         }
                         refreshStatus();
                         void refreshAccount();
@@ -8769,7 +8770,7 @@ function App() {
               if (result.account) setAccount(result.account);
               if (result.ok) setAccountError(null);
             } catch (e) {
-              setAccountError(e instanceof Error ? e.message : String(e));
+              setAccountError(settingsErrorMessage(e));
             }
             refreshStatus();
             void refreshAccount();
