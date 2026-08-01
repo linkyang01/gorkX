@@ -20,6 +20,34 @@
 - **未完成（不得写成已验收）**：登录态下真实子任务启动、角色/权限/worktree 实跑、取消与完成恢复。
 - 发布动作：本阶段明确不做 tag / Release / DMG。
 
+## 2026-08-01 · 阶段 1 阻断项与阶段 2.1 子任务部分证据
+
+### 阶段 1（H1 / H2 / H3）状态
+
+| 项 | 状态 | 本机证据 | 仍缺 |
+|---|---|---|---|
+| **H1** 干净 macOS 独立安装 | **未验收（干净机）**；开发机有部分旁证 | App `GROK_HOME` = `~/Library/Application Support/gorkX/grok-home`，与用户 CLI `~/.grok` 路径可区分；App home 含 `auth.json`（mode 600）；正式包 `verify-macos-app-bundle.sh` 确认隔离 `GROK_HOME`；包内内核 `0.2.116 (dd04f39)` | 在无既有 Grok CLI 数据的环境：安装 App → 登录 → 真实项目首任务 → 退出 → 重开恢复同一任务的步骤记录 |
+| **H2** 第三方 API / 兼容模型 | **未验收** | 无用户提供的可授权 endpoint/密钥；不得把 `session/set_model` 接受写成真实推理 | 用户明确提供 endpoint + key 后：连接测试 → 模型目录/ID → Keychain 保存 → 任务选中 → 真实回复 → 切回 Grok |
+| **H3** macOS 语音 | **未验收（听写）**；路由门禁通过 | `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --voice-controls`：`_x.ai/voice/start|stop|shutdown` 抵达原生会话守卫，无采集 | 用户允许麦克风后：按钮 → TCC → 流式转写 → 可编辑草稿 → **手动**发送；停止/关窗/拒绝权限 |
+
+**阶段 1 出口：未达成。** 不可形成 Beta 发布候选；不打 tag / 不发 Release / 不做 DMG。
+
+### 认证态 spawn 路由（App 登录副本，非 CLI home）
+
+| 范围 | 命令 | 结果 | 边界 |
+|---|---|---|---|
+| 认证 + 子代理控制 | 复制 App `GROK_HOME` 到一次性目录（不使用 `~/.grok`），可丢弃 Git 项目；`GORKX_ACP_TEST_AUTH_DIR` + `GORKX_ACP_TEST_PROJECT_DIR` + `verify-grok-acp.mjs … --authenticated --subagent-controls --session-info` | 通过：`authenticate(cached_token)`、`session/new|load`、`_x.ai/session/info`、`list_running` / `get` / `cancel`、**`_x.ai/subagent/spawn` 对缺失父会话按预期拒绝** | 临时认证副本与项目已删除；不读取 CLI home；不发送主会话模型提示词 |
+
+### 阶段 2.1 部分：真实只读子任务 start / list / cancel
+
+| 范围 | 步骤 | 结果 | 边界 |
+|---|---|---|---|
+| 真实 spawn | 同上一次性 App 登录副本 + 可丢弃项目；`session/new` 后调用 `_x.ai/subagent/spawn`：`explore` + `capabilityMode=read-only` + `isolation=none`，prompt 仅要求阅读 `README.md` | **通过启动**：返回 `subagentId=019fbb7c-4e5f-7300-b361-d8f932af425e`，`status=started`，`capabilityMode=read-only`，`isolation=none` | 这是内核 ACP 层证据，**不是**桌面 `+ → 委派子任务` UI 点按验收 |
+| 运行中可见 | `_x.ai/subagent/list_running` 轮询 | **通过**：约 1s 内观察到 1 个运行中子任务（含上述 id） | 未验证 worktree 隔离路径、未验证写权限确认框 |
+| 快照 / 取消 | `_x.ai/subagent/get`（block=false）；`_x.ai/subagent/cancel` | get 返回含 `snapshot`；cancel 返回 `cancelled=true`，`outcome.kind=cancelled` | **未等待模型完成结果**；未做 App 重开恢复；未验证父子任务树 UI；临时目录已删除 |
+
+**诚实结论：** 原生子任务协调器可从桌面 ACP 路由真实启动只读子任务并取消；FEATURES 仍保持 **Kernel-wired**，不得升为 Real，直到 App UI、完成结果、审批与重开恢复有完整证据。
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |
