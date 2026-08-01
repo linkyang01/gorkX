@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { inspectProject } from '../lib/grokAdmin';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 interface Props {
   open: boolean;
@@ -33,7 +34,7 @@ export function ProjectInspectPanel({ open, project, grokCmd, onClose }: Props) 
       setValue(prettyInspection(await inspectProject(project, grokCmd || undefined)));
     } catch (e) {
       setValue('');
-      setError(e instanceof Error ? e.message : String(e));
+      setError(settingsErrorMessage(e));
     } finally {
       setLoading(false);
     }

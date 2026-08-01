@@ -24,6 +24,7 @@ import {
   type SkillInfo,
 } from '../lib/extensions';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 import type { AcpClient, LiveMcpServer } from '../lib/acpClient';
 
 type Tab = 'skills' | 'mcp' | 'plugins' | 'market';
@@ -69,7 +70,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
       setSnap(s);
       if (s.error) setMsg(s.error);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setMsg(settingsErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -85,7 +86,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
       setMarketSources(m.sources ?? []);
       setMarketRaw(m.raw ?? '');
     } catch (e) {
-      setMsg(String(e));
+      setMsg(settingsErrorMessage(e));
     }
   }, [grokCmd]);
 
@@ -96,7 +97,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
     if (!liveClient || !liveSessionId) { setLiveMcp([]); return; }
     setLiveMcp(await liveClient.listLiveMcp(liveSessionId, fresh));
   }, [liveClient, liveSessionId]);
-  useEffect(() => { if (open && tab === 'mcp') void refreshLiveMcp().catch((e) => setMsg(String(e))); }, [open, tab, refreshLiveMcp]);
+  useEffect(() => { if (open && tab === 'mcp') void refreshLiveMcp().catch((e) => setMsg(settingsErrorMessage(e))); }, [open, tab, refreshLiveMcp]);
 
   const skills = useMemo(() => {
     const list = snap?.skills ?? [];
@@ -190,18 +191,18 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
             <button
               type="button"
               className="btn btn-sm"
-              onClick={() => void openSkillsDir().catch((e) => setMsg(String(e)))}
+              onClick={() => void openSkillsDir().catch((e) => setMsg(settingsErrorMessage(e)))}
             >
               {t('extOpenSkillsDir')}
             </button>
           ) : null}
           {tab === 'mcp' ? (
             <>
-              {liveClient && liveSessionId ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void refreshLiveMcp(true).catch((e) => setMsg(String(e)))}>{t('extMcpRefreshLive')}</button> : null}
+              {liveClient && liveSessionId ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void refreshLiveMcp(true).catch((e) => setMsg(settingsErrorMessage(e)))}>{t('extMcpRefreshLive')}</button> : null}
               <button
                 type="button"
                 className="btn btn-sm"
-                onClick={() => void openGrokConfig().catch((e) => setMsg(String(e)))}
+                onClick={() => void openGrokConfig().catch((e) => setMsg(settingsErrorMessage(e)))}
               >
                 {t('extOpenConfig')}
               </button>
@@ -217,7 +218,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                       setMsg(s);
                       return refresh();
                     })
-                    .catch((e) => setMsg(String(e)))
+                    .catch((e) => setMsg(settingsErrorMessage(e)))
                     .finally(() => setBusy(false));
                 }}
               >
@@ -231,7 +232,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                   setBusy(true);
                   void runMcpDoctor(grokCmd || undefined)
                     .then((s) => setMsg(s.slice(0, 2000)))
-                    .catch((e) => setMsg(String(e)))
+                    .catch((e) => setMsg(settingsErrorMessage(e)))
                     .finally(() => setBusy(false));
                 }}
               >
@@ -242,7 +243,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
           {tab === 'plugins' ? (
             <button type="button" className="btn btn-sm" disabled={busy || !(snap?.plugins.length)} onClick={() => {
               setBusy(true);
-              void updatePlugin(undefined, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false));
+              void updatePlugin(undefined, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false));
             }}>{t('extPluginUpdateAll')}</button>
           ) : null}
         </div>
@@ -259,7 +260,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                   <button
                     type="button"
                     className="btn btn-sm primary-sm"
-                    onClick={() => void openSkillsDir().catch((e) => setMsg(String(e)))}
+                    onClick={() => void openSkillsDir().catch((e) => setMsg(settingsErrorMessage(e)))}
                   >
                     {t('extOpenSkillsDir')}
                   </button>
@@ -297,7 +298,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                     <button
                       type="button"
                       className="btn btn-sm"
-                      onClick={() => void openExtensionPath(s.path).catch((e) => setMsg(String(e)))}
+                      onClick={() => void openExtensionPath(s.path).catch((e) => setMsg(settingsErrorMessage(e)))}
                     >
                       {t('openFolder')}
                     </button>
@@ -325,7 +326,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                   setBusy(true);
                   void addRemoteMcp(remoteMcpName, remoteMcpUrl, remoteMcpTransport, remoteMcpScope, project || undefined, grokCmd || undefined)
                     .then((s) => { setMsg(s || t('extMcpRemoteAdded')); setRemoteMcpName(''); setRemoteMcpUrl(''); return refresh(); })
-                    .catch((e) => setMsg(String(e)))
+                    .catch((e) => setMsg(settingsErrorMessage(e)))
                     .finally(() => setBusy(false));
                 }}>{t('extInstall')}</button>
               </div>
@@ -336,7 +337,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
               <div className="field-row" style={{ flexWrap: 'wrap' }}>
                 <input className="ext-search" value={localMcpName} onChange={(e) => setLocalMcpName(e.target.value)} placeholder={t('extMcpRemoteName')} aria-label={t('extMcpRemoteName')} />
                 <input className="ext-search" value={localMcpCommand} readOnly placeholder={t('extMcpLocalExecutable')} aria-label={t('extMcpLocalExecutable')} />
-                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void openFile({ multiple: false, directory: false }).then((selected) => { if (typeof selected === 'string') setLocalMcpCommand(selected); }).catch((e) => setMsg(String(e)))}>{t('extMcpChooseExecutable')}</button>
+                <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void openFile({ multiple: false, directory: false }).then((selected) => { if (typeof selected === 'string') setLocalMcpCommand(selected); }).catch((e) => setMsg(settingsErrorMessage(e)))}>{t('extMcpChooseExecutable')}</button>
                 <select value={localMcpScope} onChange={(e) => setLocalMcpScope(e.target.value === 'project' ? 'project' : 'user')} aria-label={t('extMcpRemoteScope')}>
                   <option value="user">{t('extMcpRemoteScopeUser')}</option><option value="project" disabled={!project}>{t('extMcpRemoteScopeProject')}</option>
                 </select>
@@ -350,7 +351,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                   setBusy(true);
                   void addLocalMcp(localMcpName, localMcpCommand, args, localMcpScope, project || undefined, grokCmd || undefined)
                     .then((s) => { setMsg(s || t('extMcpLocalAdded')); setLocalMcpName(''); setLocalMcpCommand(''); setLocalMcpArgs(''); return refresh(); })
-                    .catch((e) => setMsg(String(e))).finally(() => setBusy(false));
+                    .catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false));
                 }}>{t('extInstall')}</button>
               </div>
             </div>
@@ -358,12 +359,12 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
               liveMcp.map((server) => (
                 <div key={`live:${server.name}`} className="ext-row">
                   <div className="ext-row-main"><div className="ext-row-title"><strong>{server.displayName || server.name}</strong><span className="pill">{server.session?.status || 'configured'}</span></div><div className="ext-row-desc">{server.session?.tools?.length ?? 0} tools</div>
-                    {server.session?.setupRequired && server.setup?.fields?.length === 1 && server.setup.fields[0].type === 'select' ? (() => { const field = server.setup!.fields![0]; const selected = mcpSetupChoices[server.name] ?? field.default ?? field.options?.[0]?.value ?? ''; return <div className="field-row" style={{ marginTop: 8 }}><select value={selected} onChange={(e) => setMcpSetupChoices((old) => ({ ...old, [server.name]: e.target.value }))} aria-label={field.label}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button type="button" className="btn btn-sm primary-sm" disabled={busy || !selected} onClick={() => { setBusy(true); void liveClient!.setupLiveMcp(liveSessionId!, server.name, { [field.id]: selected }).then(() => refreshLiveMcp(true)).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{t('extMcpApplySetup')}</button></div>; })() : null}
-                    {server.session?.tools?.length ? <div className="field-row" style={{ marginTop: 7, flexWrap: 'wrap' }}>{server.session.tools.slice(0, 16).map((tool) => <button key={tool.name} type="button" className={`btn btn-sm${tool.enabled ? '' : ' danger'}`} disabled={busy} title={tool.description || tool.name} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcpTool(liveSessionId!, server.name, tool.name, !tool.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{tool.displayName || tool.name}{tool.enabled ? ` · ${t('extMcpToolOn')}` : ` · ${t('extMcpToolOff')}`}</button>)}</div> : null}
+                    {server.session?.setupRequired && server.setup?.fields?.length === 1 && server.setup.fields[0].type === 'select' ? (() => { const field = server.setup!.fields![0]; const selected = mcpSetupChoices[server.name] ?? field.default ?? field.options?.[0]?.value ?? ''; return <div className="field-row" style={{ marginTop: 8 }}><select value={selected} onChange={(e) => setMcpSetupChoices((old) => ({ ...old, [server.name]: e.target.value }))} aria-label={field.label}>{(field.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><button type="button" className="btn btn-sm primary-sm" disabled={busy || !selected} onClick={() => { setBusy(true); void liveClient!.setupLiveMcp(liveSessionId!, server.name, { [field.id]: selected }).then(() => refreshLiveMcp(true)).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false)); }}>{t('extMcpApplySetup')}</button></div>; })() : null}
+                    {server.session?.tools?.length ? <div className="field-row" style={{ marginTop: 7, flexWrap: 'wrap' }}>{server.session.tools.slice(0, 16).map((tool) => <button key={tool.name} type="button" className={`btn btn-sm${tool.enabled ? '' : ' danger'}`} disabled={busy} title={tool.description || tool.name} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcpTool(liveSessionId!, server.name, tool.name, !tool.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false)); }}>{tool.displayName || tool.name}{tool.enabled ? ` · ${t('extMcpToolOn')}` : ` · ${t('extMcpToolOff')}`}</button>)}</div> : null}
                   </div>
                   <div className="ext-row-actions">
-                    {server.session?.authRequired ? <button type="button" className="btn btn-sm primary-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.triggerLiveMcpAuth(liveSessionId!, server.name).then((r) => { setMsg(r.error || r.status || t('extMcpAuthStarted')); return refreshLiveMcp(true); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{t('extMcpAuthenticate')}</button> : null}
-                    {server.session ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcp(liveSessionId!, server.name, !server.session!.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(String(e))).finally(() => setBusy(false)); }}>{server.session.enabled ? t('extMcpDisableLive') : t('extMcpEnableLive')}</button> : null}
+                    {server.session?.authRequired ? <button type="button" className="btn btn-sm primary-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.triggerLiveMcpAuth(liveSessionId!, server.name).then((r) => { setMsg(r.error || r.status || t('extMcpAuthStarted')); return refreshLiveMcp(true); }).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false)); }}>{t('extMcpAuthenticate')}</button> : null}
+                    {server.session ? <button type="button" className="btn btn-sm" disabled={busy} onClick={() => { setBusy(true); void liveClient!.toggleLiveMcp(liveSessionId!, server.name, !server.session!.enabled).then(() => refreshLiveMcp()).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false)); }}>{server.session.enabled ? t('extMcpDisableLive') : t('extMcpEnableLive')}</button> : null}
                   </div>
                 </div>
               ))
@@ -384,7 +385,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                           setMsg(s);
                           return refresh();
                         })
-                        .catch((e) => setMsg(String(e)))
+                        .catch((e) => setMsg(settingsErrorMessage(e)))
                         .finally(() => setBusy(false));
                     }}
                   >
@@ -426,7 +427,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                             setMsg(s || 'removed');
                             return refresh();
                           })
-                          .catch((e) => setMsg(String(e)))
+                          .catch((e) => setMsg(settingsErrorMessage(e)))
                           .finally(() => setBusy(false));
                       }}
                     >
@@ -460,7 +461,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                         setPluginSrc('');
                         return refresh();
                       })
-                      .catch((e) => setMsg(String(e)))
+                      .catch((e) => setMsg(settingsErrorMessage(e)))
                       .finally(() => setBusy(false));
                   }}
                 >
@@ -514,7 +515,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                           setBusy(true);
                           void pluginDetails(p.name, grokCmd || undefined)
                             .then((text) => setPluginReadout({ name: p.name, text, kind: 'details' }))
-                            .catch((e) => setMsg(String(e)))
+                            .catch((e) => setMsg(settingsErrorMessage(e)))
                             .finally(() => setBusy(false));
                         }}
                       >
@@ -529,7 +530,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                             setBusy(true);
                             void validatePlugin(p.path!, grokCmd || undefined)
                               .then((text) => setPluginReadout({ name: p.name, text, kind: 'validate' }))
-                              .catch((e) => setMsg(String(e)))
+                              .catch((e) => setMsg(settingsErrorMessage(e)))
                               .finally(() => setBusy(false));
                           }}
                         >
@@ -548,7 +549,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                               setMsg(s || 'ok');
                               return refresh();
                             })
-                            .catch((e) => setMsg(String(e)))
+                            .catch((e) => setMsg(settingsErrorMessage(e)))
                             .finally(() => setBusy(false));
                         }}
                       >
@@ -556,14 +557,14 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                       </button>
                       <button type="button" className="btn btn-sm" disabled={busy} onClick={() => {
                         setBusy(true);
-                        void updatePlugin(p.name, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(String(e))).finally(() => setBusy(false));
+                        void updatePlugin(p.name, grokCmd || undefined).then((s) => { setMsg(s || t('extPluginUpdateDone')); return refresh(); }).catch((e) => setMsg(settingsErrorMessage(e))).finally(() => setBusy(false));
                       }}>{t('extPluginUpdate')}</button>
                       {p.path ? (
                         <button
                           type="button"
                           className="btn btn-sm"
                           onClick={() =>
-                            void openExtensionPath(p.path!).catch((e) => setMsg(String(e)))
+                            void openExtensionPath(p.path!).catch((e) => setMsg(settingsErrorMessage(e)))
                           }
                         >
                           {t('openFolder')}
@@ -580,7 +581,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                               setMsg(s || 'uninstalled');
                               return refresh();
                             })
-                            .catch((e) => setMsg(String(e)))
+                            .catch((e) => setMsg(settingsErrorMessage(e)))
                             .finally(() => setBusy(false));
                         }}
                       >
@@ -615,7 +616,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                         setMsg(s || t('marketAddDone'));
                         return refreshMarketplace();
                       })
-                      .catch((e) => setMsg(String(e)))
+                      .catch((e) => setMsg(settingsErrorMessage(e)))
                       .finally(() => setBusy(false));
                   }}
                 >
@@ -632,7 +633,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                         setMsg(s || t('marketUpdateDone'));
                         return refreshMarketplace();
                       })
-                      .catch((e) => setMsg(String(e)))
+                      .catch((e) => setMsg(settingsErrorMessage(e)))
                       .finally(() => setBusy(false));
                   }}
                 >
@@ -673,7 +674,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                               setMsg(s || t('marketUpdateDone'));
                               return refreshMarketplace();
                             })
-                            .catch((e) => setMsg(String(e)))
+                            .catch((e) => setMsg(settingsErrorMessage(e)))
                             .finally(() => setBusy(false));
                         }}
                       >
@@ -691,7 +692,7 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                               setMsg(s || t('marketRemoveDone'));
                               return refreshMarketplace();
                             })
-                            .catch((e) => setMsg(String(e)))
+                            .catch((e) => setMsg(settingsErrorMessage(e)))
                             .finally(() => setBusy(false));
                         }}
                       >

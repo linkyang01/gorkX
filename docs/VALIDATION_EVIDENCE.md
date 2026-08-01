@@ -3,6 +3,27 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-01 · 错误体验与设置/GitHub/Computer 深化（无模型额度）
+
+> 目标：账号缺 Grok Build 或未做真人点按时，桌面仍诚实、可读、不假重连。  
+> 提交线索：`5b46579` … `8970e6c` 及本轮扩展/审阅面板 humanize。
+
+| 范围 | 变更 | 证据类型 | 边界 |
+|---|---|---|---|
+| Build 403 | stderr 尽早 `markTaskFailed`；不自动重连；运行中心失败行短标题 | 源码 + `chatFormat.test` | **不能绕过服务端 403**；真对话仍需 Build 权限 |
+| 进程退出 | 稳定 token `Agent process exited`；UI i18n；过程面板 system 行友好化 | 源码 + 单测 | 旧会话英文 token 仍可识别 |
+| Hooks / Computer | 设置成功/失败短文案；急停始终可点 + danger；状态 detail 本地化 | 源码 + `settingsFeedback.test` | 急停/点击真人验收仍待 |
+| GitHub 验证连接 | `githubFeedback`：成功 login+最后验证；401/403 撤销提示；审计 test/fail | 源码 + `githubFeedback.test` / stage-d | 需用户 token 才能 live 绿 |
+| 设置全局 | catch → `showErr`；成功 `setMsg` 清 err 样式；网络/钥匙串/MCP/模型映射 | 源码 + stage-a | 不伪造连接成功 |
+| 扩展 / Review / Inspect | 原始 dump → `settingsErrorMessage` / `githubActionError` | 源码 | 未做 GUI 录像 |
+| 门禁 | `npx tsc --noEmit`；`npm run test:stage-a`；`npm run test:stage-d` | 本会话通过 | 未重跑完整 `test:stages` / cargo / bundle |
+
+### 诚实结论
+
+- P1 代码侧：**Hooks 失败提示、Computer 急停可用性、GitHub 验证往返文案**已落地。  
+- **不得**写成 H1–H3 或 B1 真对话已通过；不 tag / 不 Release / 不 DMG。  
+- 真人：设置 → Computer 急停一次；设置 → Git → 验证连接（有 token 时）；App 内 A1–A5 点按。
+
 ## 2026-08-01 · 桌面委派子任务（`x.ai/subagent/spawn`）阶段 0 收口
 
 | 范围 | 命令或步骤 | 结果 | 边界 |

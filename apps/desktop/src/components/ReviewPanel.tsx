@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { fetchGitSnapshot, type GitSnapshot } from '../lib/git';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
+import { githubActionError } from '../lib/githubFeedback';
 import {
   githubCreatePrComment,
   githubListOpenPrs,
@@ -150,7 +152,7 @@ export function ReviewPanel({
         setAgentChanges(files);
       })
       .catch((error) => {
-        const text = error instanceof Error ? error.message : String(error);
+        const text = settingsErrorMessage(error);
         // Older or non-Grok ACP sessions may not advertise this extension;
         // keep the Review surface honest by hiding the tab in that case.
         setAgentChangesAvailable(false);
@@ -180,7 +182,7 @@ export function ReviewPanel({
         if (!status.eligible) setTab((current) => (current === 'code' ? 'diff' : current));
       })
       .catch((error) => {
-        const text = error instanceof Error ? error.message : String(error);
+        const text = settingsErrorMessage(error);
         setCodeNavAvailable(false);
         setCodeNavStatus(null);
         setCodeNavResults([]);
@@ -201,7 +203,7 @@ export function ReviewPanel({
       : client.findCodeReferences(sessionId, cwd, codeNavSymbol);
     void request
       .then((result) => setCodeNavResults(result.locations))
-      .catch((error) => setCodeNavError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setCodeNavError(settingsErrorMessage(error)))
       .finally(() => setCodeNavBusy(false));
   };
 
@@ -234,7 +236,7 @@ export function ReviewPanel({
       })
       .catch((error) => {
         setRemotePrs([]);
-        setRemoteError(error instanceof Error ? error.message : String(error));
+        setRemoteError(githubActionError(error));
         setRemoteLoadedCwd(cwd);
       })
       .finally(() => setRemoteBusy(false));
@@ -246,7 +248,7 @@ export function ReviewPanel({
     setRemoteError(null);
     void githubListPrChecks(cwd, prNumber)
       .then((checks) => setRemoteChecks((current) => ({ ...current, [prNumber]: checks })))
-      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setRemoteError(githubActionError(error)))
       .finally(() => setRemoteBusy(false));
   };
 
@@ -258,7 +260,7 @@ export function ReviewPanel({
       .then((comments) =>
         setRemoteComments((current) => ({ ...current, [prNumber]: comments })),
       )
-      .catch((error) => setRemoteError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setRemoteError(githubActionError(error)))
       .finally(() => setRemoteBusy(false));
   };
 
@@ -296,7 +298,7 @@ export function ReviewPanel({
         if (comments) setRemoteComments((current) => ({ ...current, [prNumber]: comments }));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = githubActionError(error);
         setRemoteError(message);
         appendConnectorAudit({ connector: 'github', action: 'fail', summary: message });
       })
@@ -366,13 +368,13 @@ export function ReviewPanel({
           // Fallback: try absolute path join via git_file_diff errors as plain text
           void invoke<string>('git_file_diff', { cwd, path: selected })
             .then(setFileDiff)
-            .catch((e) => setFileDiff(String(e)));
+            .catch((e) => setFileDiff(settingsErrorMessage(e)));
         });
       return;
     }
     void invoke<string>('git_file_diff', { cwd, path: selected })
       .then(setFileDiff)
-      .catch((e) => setFileDiff(String(e)));
+      .catch((e) => setFileDiff(settingsErrorMessage(e)));
   }, [open, cwd, selected, snap?.diff, snap?.ok, snap?.isGit, allowWorkspacePreview]);
 
   const diffSrc = selected ? fileDiff : snap?.diff || '';
@@ -442,7 +444,7 @@ export function ReviewPanel({
         setSelected(null);
         refresh();
       })
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setMsg(settingsErrorMessage(error)))
       .finally(() => setGitActionBusy(false));
   };
 
@@ -456,7 +458,7 @@ export function ReviewPanel({
         setMsg(t('reviewGitStashed'));
         refresh();
       })
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setMsg(settingsErrorMessage(error)))
       .finally(() => setGitActionBusy(false));
   };
 
@@ -475,7 +477,7 @@ export function ReviewPanel({
         setCommitDraft('');
         refresh();
       })
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setMsg(settingsErrorMessage(error)))
       .finally(() => setGitActionBusy(false));
   };
 
@@ -494,7 +496,7 @@ export function ReviewPanel({
         setMsg(message.replace('{path}', path).replace('{n}', String(result.affectedCount)));
         refreshAgentChanges();
       })
-      .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setAgentChangesError(settingsErrorMessage(error)))
       .finally(() => setAgentChangesBusy(false));
   };
 
@@ -665,7 +667,7 @@ export function ReviewPanel({
                             );
                             refresh();
                           })
-                          .catch((e) => setMsg(String(e)))
+                          .catch((e) => setMsg(settingsErrorMessage(e)))
                       }
                     >
                       {t('gitStage')}
@@ -687,7 +689,7 @@ export function ReviewPanel({
                             );
                             refresh();
                           })
-                          .catch((e) => setMsg(String(e)))
+                          .catch((e) => setMsg(settingsErrorMessage(e)))
                       }
                     >
                       {t('gitUnstage')}
@@ -725,7 +727,7 @@ export function ReviewPanel({
                     void navigator.clipboard
                       .writeText(diffSrc)
                       .then(() => setMsg(t('copied')))
-                      .catch((e) => setMsg(String(e)));
+                      .catch((e) => setMsg(settingsErrorMessage(e)));
                   }}
                 >
                   {isWorkspace ? t('reviewCopyPreview') : t('reviewCopyDiff')}
@@ -740,7 +742,7 @@ export function ReviewPanel({
                     void navigator.clipboard
                       .writeText(selected)
                       .then(() => setMsg(t('copied')))
-                      .catch((e) => setMsg(String(e)));
+                      .catch((e) => setMsg(settingsErrorMessage(e)));
                   }}
                 >
                   {t('reviewCopyPath')}
@@ -864,7 +866,7 @@ export function ReviewPanel({
                     setMsg(t('reviewAgentAccepted').replace('{n}', String(result.affectedCount)));
                     refreshAgentChanges();
                   })
-                  .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+                  .catch((error) => setAgentChangesError(settingsErrorMessage(error)))
                   .finally(() => setAgentChangesBusy(false));
               }}
             >
@@ -884,7 +886,7 @@ export function ReviewPanel({
                     setMsg(t('reviewAgentRejected').replace('{n}', String(result.affectedCount)));
                     refreshAgentChanges();
                   })
-                  .catch((error) => setAgentChangesError(error instanceof Error ? error.message : String(error)))
+                  .catch((error) => setAgentChangesError(settingsErrorMessage(error)))
                   .finally(() => setAgentChangesBusy(false));
               }}
             >

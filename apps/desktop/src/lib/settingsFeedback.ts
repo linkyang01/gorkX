@@ -32,7 +32,13 @@ export function settingsErrorMessage(error: unknown): string {
     return t('settingsHooksWireError');
   }
 
-  if (/method not found|not (?:exposed|available)|unsupported.*hook/i.test(s)) {
+  // Only map method-not-found when the surface is clearly Hooks-related.
+  // Generic ACP "Method not found" (e.g. optional Review extensions) must stay
+  // machine-detectable for hide-tab logic, not become a Hooks CTA.
+  if (
+    /hook/i.test(s)
+    && (/method not found|not (?:exposed|available)|unsupported/i.test(s))
+  ) {
     return t('settingsHooksUnavailable');
   }
 
