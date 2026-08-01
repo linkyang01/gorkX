@@ -1560,10 +1560,10 @@ function App() {
             setScheduledOpen(true);
             return;
           case 'spawn-subagent':
-            if (liveReady && !live?.busy) {
-              e.preventDefault();
-              setSubagentSpawnOpen(true);
-            }
+            // Always open the guided panel: empty state explains when no live task.
+            // Only block while the parent turn is busy (avoid competing with the agent).
+            e.preventDefault();
+            if (!live?.busy) setSubagentSpawnOpen(true);
             return;
           case 'process':
             e.preventDefault();
@@ -1578,10 +1578,8 @@ function App() {
             });
             return;
           case 'task-info':
-            if (liveReady) {
-              e.preventDefault();
-              setTaskInfoOpen(true);
-            }
+            e.preventDefault();
+            if (liveReady) setTaskInfoOpen(true);
             return;
           case 'help':
             e.preventDefault();
@@ -4554,7 +4552,7 @@ function App() {
           appendLine(id, {
             id: nid(),
             role: 'system',
-            text: `plan mode: ${settingsErrorMessage(e)}`,
+            text: `${t('applyPlanModeWarn')}: ${settingsErrorMessage(e)}`,
           });
         }
       } else {

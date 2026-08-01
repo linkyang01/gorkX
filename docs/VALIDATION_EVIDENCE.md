@@ -29,6 +29,8 @@
 | App-only 包 | `cd apps/desktop && npm run build:app` | 通过：`…/bundle/macos/gorkX.app` · CFBundle `1.0.0` | 未签名公证；未 DMG；未 tag |
 | Bundle 结构 | `scripts/verify-macos-app-bundle.sh …/gorkX.app` | PASS：arm64 主程序 + 包内 `grok 0.2.116 (dd04f39)` + 隔离 `GROK_HOME` + 许可证 | 不构成干净机 H1 |
 | 快捷键目录 | `desktopShortcuts.ts`：App matcher 与 ShortcutsHelp 同源；`desktopShortcuts.test` 锁定 A2 的 ⇧⌘A/B/M/S/P/I | stage-b 通过 | 非 GUI 录像；⌥⌘ 任务切换仍在 App 内联 |
+| ⇧⌘B 无会话 | 始终打开委派面板；空状态显示 `subagentSpawnNoTask`（不再静默吞键） | 源码 | 父任务 busy 时仍不打开 |
+| 执行方案文档 | `NEXT_EXECUTION_PLAN.md` 基线刷新为 2026-08-01 真实进度 | 文档 | 阶段 1 仍未达成 |
 
 ### 诚实结论
 
