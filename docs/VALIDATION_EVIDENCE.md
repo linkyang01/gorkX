@@ -3,6 +3,42 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+
+## 2026-08-01 · 正式完备条（Formal completeness bar）
+
+> 目标：桌面优先映射 + 编码核心可证 + ACP 可达 + 门禁绿 + 诚实 H1/H2/H3 阻塞记录。  
+> 差距表：`docs/FORMAL_PARITY_GAP_TABLE.md`。  
+> 自动门禁日志（本机 scratch，会话内）：`gates-tsc-stages-cargo-acp-bundle.log`、`acp-desktop.log`、`acp-auth-subagent.log`、`stage-ab.log`、`cargo-test.log`、`live-loop.txt`。
+
+| 门禁 | 结果 |
+|---|---|
+| `npx tsc --noEmit` | PASS |
+| `npm run test:stages` | PASS（含 stage-b `desktopPrimaryEntries` 20 路径） |
+| `cargo test` | **88 passed** |
+| `cargo check` | PASS |
+| `verify-grok-kernel-patches` | PASS 0001–0007 @ `dd04f39` |
+| ACP `--desktop-controls --voice-controls` | PASS（无模型请求） |
+| ACP auth：session/info + subagent list/get/cancel/spawn(缺父拒) + hooks list/reload + worktree list | PASS（App GROK_HOME 副本，临时目录已删） |
+| `npm run build:app` + `verify-macos-app-bundle` | PASS · `gorkX.app` 1.0.0 · 包内 `grok 0.2.116 (dd04f39)` · 隔离 GROK_HOME |
+| 直播码 B1 / 真对话 | **未验收** — 无已确认 Grok Build 额度；不得伪造流式；403 仅 humanize |
+| H1 干净安装 | **未验收（阻塞）** — 需无既有 Grok 数据的 macOS 机上：安装 → 登录 → 首任务 → 退出重开 |
+| H2 第三方模型真回复 | **未验收（阻塞）** — 用户未提供可授权 endpoint/密钥 |
+| H3 语音听写 | **未验收（阻塞）** — 需麦克风 TCC + 真人朗读；ACP 路由已绿 |
+| 子任务 GUI 点按 | **未验收** — ACP 层 spawn/list/get/cancel 有证据；App 委派→树→停止/Inspect 无录像 |
+| tag / Release / 公证 DMG | **未做** — 需用户明确批准；当前为 release **候选** 包 |
+
+### 映射抽检（≥15）
+
+见 `FORMAL_PARITY_GAP_TABLE.md` 行 1–22；`desktopPrimaryEntries.test.ts` 锁定 20 个桌面主路径符号。Calendar 等为 Soon，非可点已连接。
+
+### 正式条结论（诚实）
+
+- **达到**本目标定义的正式完备条：桌面优先、编码主路径有 Real/Kernel-wired 接线与自动门禁、缺口与 H1–H3 **书面阻塞**、无 403 绕过、无假连接器。  
+- **未达到**「无人工阻塞的全量 Codex P1–P6 / 全 Build 真对话验收」；有 Build 额度与干净机后可升 Real 条目。  
+- 不打 tag、不发 Release、不做公证 DMG，除非用户另批。
+
+---
+
 ## 2026-08-01 · 错误体验与设置/GitHub/Computer 深化（无模型额度）
 
 > 目标：账号缺 Grok Build 或未做真人点按时，桌面仍诚实、可读、不假重连。  
@@ -30,8 +66,8 @@
 | Bundle 结构 | `scripts/verify-macos-app-bundle.sh …/gorkX.app` | PASS：arm64 主程序 + 包内 `grok 0.2.116 (dd04f39)` + 隔离 `GROK_HOME` + 许可证 | 不构成干净机 H1 |
 | 快捷键目录 | `desktopShortcuts.ts`：App matcher 与 ShortcutsHelp 同源；`desktopShortcuts.test` 锁定 A2 的 ⇧⌘A/B/M/S/P/I | stage-b 通过 | 非 GUI 录像；⌥⌘ 任务切换仍在 App 内联 |
 | ⇧⌘B 无会话 | 始终打开委派面板；空状态显示 `subagentSpawnNoTask`（不再静默吞键） | 源码 | 父任务 busy 时仍不打开 |
-| 任务信息重连 CTA | 有 sessionId 无 client 时显示重连；`test:stages` + `build:app` 绿（含 spawn/voice 空状态） |
-| 会话离线条 | 恢复会话无 client 且无 error 时聊天区横幅 + 重连；Fork 禁用时 title 说明需重连 |
+| 任务信息重连 CTA | 有 sessionId 无 client 时显示重连；`test:stages` + `build:app` 绿（含 spawn/voice 空状态） | 源码 + bundle | — |
+| 会话离线条 | 恢复会话无 client 且无 error 时聊天区横幅 + 重连；Fork 禁用时 title 说明需重连 | 源码 | — |
 | 任务信息空状态 | 顶栏/⇧⌘I 无会话也打开面板；空卡片说明 + 账户入口；`build:app` 再绿 | 源码 + bundle | 非真 session/info 点按 |
 | 执行方案文档 | `NEXT_EXECUTION_PLAN.md` 基线刷新为 2026-08-01 真实进度 | 文档 | 阶段 1 仍未达成 |
 

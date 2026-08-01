@@ -141,3 +141,21 @@ node scripts/verify-grok-acp.mjs … --desktop-controls --voice-controls → 通
 | B1 / E1–E3 | **未验收** | 需 Build 权限 / 干净机 / 麦克风 |
 
 **结论：** A2 从「静态存在」升级为「目录 + 单测锁定」。仍非人工全绿；不 tag / 不 DMG。
+
+---
+
+## 2026-08-01 正式完备条记录
+
+| 字段 | 值 |
+|------|-----|
+| 构建 | `main` + formal gap table / primary-entries test；包内 `grok 0.2.116 (dd04f39)` |
+| 自动门禁 | tsc · test:stages · cargo 88 · patches · ACP desktop+voice · auth subagent/hooks/session-info · build:app · bundle **全绿** |
+| A1–A5 | **源码/单测通过**；**非** GUI 录像全绿 |
+| B1 | **未验收** — 无确认的 Grok Build 额度（禁止伪造流式） |
+| B2–B3 GUI | **未验收** — ACP 层有证据；App 点按无录像 |
+| E1 H1 | **未验收（阻塞）** — 需干净机 |
+| E2 H2 | **未验收（阻塞）** — 无用户 endpoint |
+| E3 H3 | **未验收（阻塞）** — 需麦克风真人 |
+
+**正式完备条：** 自动门禁 + 映射诚实 + 阻塞书面化 = **达标（候选包）**。  
+**不**宣称人工全绿或新 tag/DMG。

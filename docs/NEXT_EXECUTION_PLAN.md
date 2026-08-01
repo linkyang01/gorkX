@@ -19,10 +19,11 @@
 
 | 阶段 | 状态 |
 |---|---|
-| **0** 子 Agent WIP 收口 | **已完成**：补丁 0007、spawn 路由、桌面面板、门禁与证据已落；**真 UI 点按 spawn 仍缺** |
+| **0** 子 Agent WIP 收口 | **已完成** |
+| **正式完备条**（本目标） | **候选达标**：门禁全绿 + `FORMAL_PARITY_GAP_TABLE` + primary-entries 单测 + H1/H2/H3 **书面阻塞**；见 `VALIDATION_EVIDENCE` 正式完备条节 |
 | **1** H1/H2/H3 发布阻断 | **未达成**：需干净机 / endpoint / 麦克风真人证据 |
-| **2** 深化 Real | **部分**：Hooks/Computer/GitHub **代码**已增强；**真人 live** 仍缺；子任务代码闭环加固 |
-| **3** 连接器闭环 | Calendar 等保持 **Soon**；GitHub OAuth/验证代码已有，live 撤销往返待人工 |
+| **2** 深化 Real | **部分**：代码增强；真人 live 仍缺 |
+| **3** 连接器闭环 | Calendar 等 **Soon**；GitHub 代码已有，revoke live 待人工 |
 
 功能状态口径：
 
