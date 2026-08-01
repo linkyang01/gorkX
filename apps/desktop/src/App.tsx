@@ -1143,6 +1143,21 @@ function App() {
       if (th.archived) continue;
       const info = threadRunInfo(th);
       if (!shouldShowInRunCenter(info.phase)) continue;
+      // Failed tasks: show a short human reason instead of a leftover tool label.
+      let stepLabel = info.step;
+      if (info.phase === 'failed' && th.error?.trim()) {
+        if (
+          isGrokBuildAccessDenied(th.error)
+          || humanizeEngineError(th.error) === 'GROKX_BUILD_ACCESS_DENIED'
+        ) {
+          stepLabel = t('taskErrorBuildAccessTitle');
+        } else if (requiresAccountReauthentication(th.error)) {
+          stepLabel = t('taskErrorSignInRequired');
+        } else {
+          const human = humanizeEngineError(th.error);
+          stepLabel = (human || info.step || t('taskFailedTitle')).slice(0, 120);
+        }
+      }
       rows.push({
         threadId: th.id,
         title: th.title || t('newThread'),
@@ -1151,7 +1166,7 @@ function App() {
             ? projectDisplayName(th.cwd || th.projectKey, projectAliases)
             : t('tasksSection'),
         phase: info.phase,
-        stepLabel: info.step,
+        stepLabel,
         stalled: info.stalled,
       });
     }
@@ -2588,9 +2603,35 @@ function App() {
       };
 
       client.onStderr = (line) => {
-        if (/error|Error|panic|failed/i.test(line)) {
-          appendLine(threadId, { id: nid(), role: 'system', text: line });
+        if (!/error|Error|panic|failed|403|Forbidden|coming soon/i.test(line)) return;
+        const detail = sanitizeText(line);
+        if (!detail) return;
+        // Permanent entitlement denial: fail the task once with friendly copy,
+        // and never dump ANSI/JSON-RPC noise or schedule a reconnect loop.
+        if (
+          isGrokBuildAccessDenied(detail)
+          || humanizeEngineError(detail) === 'GROKX_BUILD_ACCESS_DENIED'
+        ) {
+          const live = threadsRef.current.find((thread) => thread.id === threadId);
+          if (
+            live?.error
+            && (
+              isGrokBuildAccessDenied(live.error)
+              || humanizeEngineError(live.error) === 'GROKX_BUILD_ACCESS_DENIED'
+            )
+          ) {
+            return;
+          }
+          autoReconnectTried.current.add(threadId);
+          markTaskFailed(threadId, detail);
+          return;
         }
+        const human = humanizeEngineError(detail);
+        if (!human || human === 'GROKX_BUILD_ACCESS_DENIED') return;
+        const live = threadsRef.current.find((thread) => thread.id === threadId);
+        const last = live?.lines[live.lines.length - 1];
+        if (last?.role === 'system' && last.text === human) return;
+        appendLine(threadId, { id: nid(), role: 'system', text: human.slice(0, 240) });
       };
 
       client.onExit = () => {
@@ -2607,19 +2648,32 @@ function App() {
         // leave a stale approval that looks actionable in another task.
         setApprovalQueue((previous) => previous.filter((item) => item.threadId !== threadId));
         setActiveApprovalKey(null);
+        const existingError = live?.error?.trim() || '';
+        const buildDenied =
+          isGrokBuildAccessDenied(existingError)
+          || humanizeEngineError(existingError) === 'GROKX_BUILD_ACCESS_DENIED';
         patchThread(threadId, {
           busy: false,
           client: null,
           queue: null,
           // If the prompt/session request already gave us a useful reason,
           // do not replace it with the generic process-exit symptom.
-          error: live?.error?.trim() || 'Agent process exited',
+          error: existingError || 'Agent process exited',
         });
-        appendLine(threadId, {
-          id: nid(),
-          role: 'system',
-          text: 'Agent process exited',
-        });
+        // Skip the generic exit line when we already recorded a real cause
+        // (especially Build 403 — re-saying "exited" only adds noise).
+        if (!existingError) {
+          appendLine(threadId, {
+            id: nid(),
+            role: 'system',
+            text: 'Agent process exited',
+          });
+        }
+        // Permanent access denial cannot be fixed by reconnecting the process.
+        if (buildDenied) {
+          autoReconnectTried.current.add(threadId);
+          return;
+        }
         // One-shot auto reconnect per thread id
         if (!autoReconnectTried.current.has(threadId)) {
           autoReconnectTried.current.add(threadId);
@@ -2640,7 +2694,7 @@ function App() {
         }
       };
     },
-    [appendLine, appendOrMerge, enqueueApproval, patchThread],
+    [appendLine, appendOrMerge, enqueueApproval, markTaskFailed, patchThread],
   );
 
   /** Map kernel/voice failures to short desktop copy (never raw stack traces). */
