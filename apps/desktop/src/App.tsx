@@ -7541,11 +7541,11 @@ function App() {
                   ),
                 );
                 void client.cancelSubagent(subagentId).then((result) => {
-                  // A live cancellation emits subagent_finished. If the engine
-                  // says it was already terminal, no follow-up event is sent,
-                  // so settle the row from the typed response.
-                  if (result.cancelled) return;
-                  const terminal = result.outcome?.status || 'cancelled';
+                  // Prefer an immediate terminal badge. Lifecycle events may
+                  // also arrive; appendOrMerge keeps the latest status.
+                  const terminal = result.cancelled
+                    ? 'cancelled'
+                    : (result.outcome?.status || result.outcome?.kind || 'cancelled');
                   setThreads((prev) =>
                     prev.map((thread) =>
                       thread.id === active.id
@@ -7553,7 +7553,7 @@ function App() {
                             ...thread,
                             lines: thread.lines.map((line) =>
                               line.toolKey === `subagent:${subagentId}`
-                                ? { ...line, toolStatus: terminal }
+                                ? { ...line, toolStatus: String(terminal) }
                                 : line,
                             ),
                           }
@@ -7585,12 +7585,18 @@ function App() {
               onInspectSubagent={(subagentId) => {
                 const client = active.client;
                 if (!client) return;
+                setProcessOpen(true);
+                try {
+                  localStorage.setItem('gorkx.processOpen', '1');
+                } catch {
+                  /* optional */
+                }
                 void client.getSubagent(subagentId).then((snapshot) => {
                   if (!snapshot) {
                     appendLine(active.id, {
                       id: nid(),
                       role: 'system',
-                      text: `子任务 ${subagentId} 的内核快照已不可用。`,
+                      text: t('subagentInspectMissing').replace('{id}', subagentId),
                     });
                     return;
                   }
@@ -7605,18 +7611,34 @@ function App() {
                     : typeof snapshot.cancel_reason === 'string'
                       ? snapshot.cancel_reason
                       : '';
-                  const status = String(snapshot.status ?? 'unknown');
-                  const detail = output || failure || cancelled || '内核未返回文本输出。';
+                  const statusRaw = String(snapshot.status ?? 'unknown');
+                  const status = statusRaw.toLowerCase();
+                  let toolStatus = statusRaw;
+                  if (/^(complet|done|success)/.test(status)) toolStatus = 'completed';
+                  else if (/^cancel/.test(status)) toolStatus = 'cancelled';
+                  else if (/^(fail|error)/.test(status)) toolStatus = status.startsWith('fail') ? 'failed' : statusRaw;
+                  appendOrMerge(active.id, 'tool', '', `subagent:${subagentId}`, {
+                    toolStatus,
+                    toolKind: 'subagent',
+                  });
+                  const worktree =
+                    typeof snapshot.worktreePath === 'string'
+                      ? snapshot.worktreePath
+                      : typeof snapshot.worktree_path === 'string'
+                        ? snapshot.worktree_path
+                        : '';
+                  const detail = output || failure || cancelled || t('subagentInspectNoOutput');
+                  const wtLine = worktree ? `\n${t('subagentInspectWorktree')}: ${worktree}` : '';
                   appendLine(active.id, {
                     id: nid(),
                     role: 'system',
-                    text: `子任务结果 (${status})\n${detail}`,
+                    text: `${t('subagentInspectResult')} (${toolStatus})${wtLine}\n${detail}`,
                   });
                 }).catch((error) => {
                   appendLine(active.id, {
                     id: nid(),
                     role: 'system',
-                    text: `读取子任务结果失败：${error instanceof Error ? error.message : String(error)}`,
+                    text: `${t('subagentInspectFailed')}: ${error instanceof Error ? error.message : String(error)}`,
                   });
                 });
               }}
@@ -8845,13 +8867,73 @@ function App() {
         client={active?.client ?? null}
         sessionId={active?.sessionId ?? null}
         onClose={() => setSubagentSpawnOpen(false)}
-        onStarted={(subagentId, description) => {
+        onStarted={(started) => {
           if (!active) return;
-          appendLine(active.id, {
+          const threadId = active.id;
+          const client = active.client;
+          const roleLabel =
+            started.subagentType === 'explore'
+              ? t('subagentSpawnRoleExplore')
+              : started.subagentType === 'plan'
+                ? t('subagentSpawnRolePlan')
+                : t('subagentSpawnRoleGeneral');
+          const accessLabel =
+            started.capabilityMode === 'read-only'
+              ? t('subagentSpawnReadOnly')
+              : started.capabilityMode === 'read-write'
+                ? t('subagentSpawnReadWrite')
+                : started.capabilityMode === 'execute'
+                  ? t('subagentSpawnExecute')
+                  : t('subagentSpawnAll');
+          const isolationLabel =
+            started.isolation === 'worktree' ? t('subagentSpawnWorktree') : t('subagentSpawnShared');
+          // Seed the process tree immediately so the user does not wait for a
+          // lifecycle notification before Stop/Inspect appear.
+          appendOrMerge(
+            threadId,
+            'tool',
+            `子任务 · ${roleLabel} · ${started.description}`,
+            `subagent:${started.subagentId}`,
+            { toolStatus: 'running', toolKind: 'subagent' },
+          );
+          appendLine(threadId, {
             id: nid(),
             role: 'system',
-            text: `${t('subagentSpawnStartedNotice')}: ${description} (${subagentId})`,
+            text: `${t('subagentSpawnStartedNotice')}: ${started.description} · ${accessLabel} · ${isolationLabel}`,
           });
+          setProcessOpen(true);
+          try {
+            localStorage.setItem('gorkx.processOpen', '1');
+          } catch {
+            /* optional */
+          }
+          // Bounded progress poll: lifecycle events may lag; keep the tree honest.
+          if (!client) return;
+          const subagentId = started.subagentId;
+          let ticks = 0;
+          const maxTicks = 120;
+          const timer = window.setInterval(() => {
+            ticks += 1;
+            void client.getSubagent(subagentId).then((snapshot) => {
+              if (!snapshot) return;
+              const status = String(snapshot.status ?? '').toLowerCase().trim();
+              if (!status) return;
+              const running = /^(running|initializing|cancelling|pending|queued|starting|in_progress|active)\b/.test(status);
+              let toolStatus = status;
+              if (/^(complet|done|success)/.test(status)) toolStatus = 'completed';
+              else if (/^cancel/.test(status)) toolStatus = 'cancelled';
+              else if (/^(fail|error)/.test(status)) toolStatus = status.startsWith('fail') ? 'failed' : status;
+              appendOrMerge(threadId, 'tool', '', `subagent:${subagentId}`, {
+                toolStatus,
+                toolKind: 'subagent',
+              });
+              if (!running || ticks >= maxTicks) {
+                window.clearInterval(timer);
+              }
+            }).catch(() => {
+              if (ticks >= maxTicks) window.clearInterval(timer);
+            });
+          }, 2500);
         }}
       /> : null}
 

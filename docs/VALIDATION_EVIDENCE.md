@@ -133,6 +133,16 @@
 
 **阶段 1 出口仍未达成。** 不打 tag / 不发 Release / 不做 DMG。
 
+## 2026-08-01 · 委派子任务桌面闭环增强
+
+| 变更 | 结果 | 边界 |
+|---|---|---|
+| 启动后 Process 树 | `onStarted` 立即 `appendOrMerge` 为 `toolKind=subagent` / `running`，并打开进程面板 | 不依赖 lifecycle 事件才显示 Stop |
+| 进度 | 有界轮询 `getSubagent`（2.5s × 最多 120 次）更新 completed/cancelled/failed | 非第二套 Agent 循环；内核仍拥有执行 |
+| Inspect | 打开进程面板；展示 status、output、worktreePath；同步树状态 | 需活动会话 |
+| Stop | cancel 成功后立即标 `cancelled` | 真取消仍由内核执行 |
+| tsc | 通过 | 未做本机 App 人工点按录像 |
+
 ## 2026-08-01 · Slash 选择全面路由到桌面控件
 
 | 变更 | 结果 | 边界 |

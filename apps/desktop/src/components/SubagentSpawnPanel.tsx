@@ -5,12 +5,20 @@ import { t } from '../lib/i18n';
 type CapabilityMode = 'read-only' | 'read-write' | 'execute' | 'all';
 type Isolation = 'none' | 'worktree';
 
+export type SubagentSpawnStarted = {
+  subagentId: string;
+  description: string;
+  subagentType: string;
+  capabilityMode: CapabilityMode;
+  isolation: Isolation;
+};
+
 interface Props {
   open: boolean;
   client: AcpClient | null;
   sessionId: string | null;
   onClose: () => void;
-  onStarted: (subagentId: string, description: string) => void;
+  onStarted: (started: SubagentSpawnStarted) => void;
 }
 
 /** Guided launcher for the kernel-native subagent coordinator. */
@@ -39,7 +47,13 @@ export function SubagentSpawnPanel({ open, client, sessionId, onClose, onStarted
         capabilityMode,
         isolation,
       });
-      onStarted(result.subagentId, description.trim());
+      onStarted({
+        subagentId: result.subagentId,
+        description: description.trim(),
+        subagentType,
+        capabilityMode: (result.capabilityMode as CapabilityMode) || capabilityMode,
+        isolation: (result.isolation as Isolation) || isolation,
+      });
       setPrompt('');
       setDescription('');
       onClose();
