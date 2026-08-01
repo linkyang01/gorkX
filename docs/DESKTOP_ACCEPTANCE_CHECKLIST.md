@@ -119,3 +119,25 @@ node scripts/verify-grok-acp.mjs … --desktop-controls --voice-controls → 通
 - **人工**：在本机打开 gorkX.app，按 A1–A5 与 B1–B3 各点一次，把 ☐ 改成真人结果。  
 - **B1 / 完整 B2–B3 UI / E1–E3** 仍未用 GUI 闭环。  
 - 不把本记录写成「A+B 人工全绿」或发布候选。
+
+---
+
+## 2026-08-01 复核（`1dc37f7` 后 · 快捷键目录化）
+
+| 字段 | 值 |
+|------|-----|
+| 日期 | 2026-08-01 |
+| 构建 | `main` @ 快捷键目录化提交；包内内核 `grok 0.2.116 (dd04f39)`；`build:app` + `verify-macos-app-bundle` 已绿 |
+| 账号 | 本复核未做 GUI 登录点按 |
+
+| # | 结果 | 证据 |
+|---|------|------|
+| A1 | **通过（源码接线）** | 顶栏 chrome 按钮：`setExtOpen` / `setMemoryOpen` / `setScheduledOpen` / `setApprovalInboxOpen` |
+| A2 | **通过（单测）** | `desktopShortcuts.ts` + `desktopShortcuts.test.ts`：⇧⌘A/B/M/S/P/I 与帮助表同源；`matchDesktopShortcut` 覆盖 |
+| A3–A5 | **通过（源码接线）** | 与上轮相同；未 GUI 录像 |
+| B2 | **部分** | ⇧⌘B → `spawn-subagent` 需 live session；默认只读在 `SubagentSpawnPanel` |
+| B4–B5 | **通过（源码/单测）** | process / task-info 在目录与 matcher 中 |
+| App 包 | **通过** | `npm run build:app`；`verify-macos-app-bundle.sh` PASS |
+| B1 / E1–E3 | **未验收** | 需 Build 权限 / 干净机 / 麦克风 |
+
+**结论：** A2 从「静态存在」升级为「目录 + 单测锁定」。仍非人工全绿；不 tag / 不 DMG。

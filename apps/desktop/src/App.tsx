@@ -185,6 +185,7 @@ import {
   sanitizeText,
 } from './lib/chatFormat';
 import { settingsErrorMessage } from './lib/settingsFeedback';
+import { matchDesktopShortcut } from './lib/desktopShortcuts';
 import {
   extractSubagentSnapshotFields,
   formatSubagentRowLabel,
@@ -1504,109 +1505,101 @@ function App() {
     [activeId, project, selectThread],
   );
 
-  // Global shortcuts
+  // Global shortcuts (catalog: lib/desktopShortcuts.ts — help + matcher share one list)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const action = matchDesktopShortcut(
+        {
+          key: e.key,
+          code: e.code,
+          metaKey: e.metaKey,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+        },
+        { voiceEnabled: voiceShortcutEnabled },
+      );
+      if (action) {
+        const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+        const liveReady = Boolean(live?.client && live.sessionId);
+        switch (action) {
+          case 'new-task':
+            e.preventDefault();
+            void createThreadRef.current?.();
+            return;
+          case 'review':
+            e.preventDefault();
+            setReviewOpen((v) => !v);
+            return;
+          case 'terminal':
+            e.preventDefault();
+            setTerminalOpen((v) => !v);
+            return;
+          case 'settings':
+            e.preventDefault();
+            setKernelOpen(true);
+            return;
+          case 'task-search':
+            e.preventDefault();
+            setTaskSearchOpen(true);
+            return;
+          case 'extensions':
+            e.preventDefault();
+            setExtOpen(true);
+            return;
+          case 'memory':
+            e.preventDefault();
+            setMemoryOpen(true);
+            return;
+          case 'decisions':
+            e.preventDefault();
+            setApprovalInboxOpen(true);
+            return;
+          case 'scheduled':
+            e.preventDefault();
+            setScheduledOpen(true);
+            return;
+          case 'spawn-subagent':
+            if (liveReady && !live?.busy) {
+              e.preventDefault();
+              setSubagentSpawnOpen(true);
+            }
+            return;
+          case 'process':
+            e.preventDefault();
+            setProcessOpen((v) => {
+              const next = !v;
+              try {
+                localStorage.setItem('gorkx.processOpen', next ? '1' : '0');
+              } catch {
+                /* optional */
+              }
+              return next;
+            });
+            return;
+          case 'task-info':
+            if (liveReady) {
+              e.preventDefault();
+              setTaskInfoOpen(true);
+            }
+            return;
+          case 'help':
+            e.preventDefault();
+            setShortcutsOpen((v) => !v);
+            return;
+          case 'voice':
+            e.preventDefault();
+            toggleNativeVoiceRef.current();
+            return;
+          case 'focus-composer':
+            e.preventDefault();
+            focusComposer();
+            return;
+          default:
+            break;
+        }
+      }
       const meta = e.metaKey || e.ctrlKey;
-
-      if (meta && (e.key === 'n' || e.key === 'N')) {
-        e.preventDefault();
-        void createThreadRef.current?.();
-        return;
-      }
-      if (meta && (e.key === 'd' || e.key === 'D') && !e.shiftKey) {
-        e.preventDefault();
-        setReviewOpen((v) => !v);
-        return;
-      }
-      if (meta && (e.key === 'j' || e.key === 'J') && e.shiftKey) {
-        e.preventDefault();
-        setTerminalOpen((v) => !v);
-        return;
-      }
-      if (meta && (e.key === 'k' || e.key === 'K') && !e.shiftKey) {
-        e.preventDefault();
-        setKernelOpen(true);
-        return;
-      }
-      if (meta && (e.key === 'f' || e.key === 'F') && e.shiftKey) {
-        e.preventDefault();
-        setTaskSearchOpen(true);
-        return;
-      }
-      if (meta && (e.key === 'e' || e.key === 'E') && e.shiftKey) {
-        e.preventDefault();
-        setExtOpen(true);
-        return;
-      }
-      if (meta && (e.key === 'm' || e.key === 'M') && e.shiftKey) {
-        e.preventDefault();
-        setMemoryOpen(true);
-        return;
-      }
-      if (meta && (e.key === 'a' || e.key === 'A') && e.shiftKey) {
-        e.preventDefault();
-        setApprovalInboxOpen(true);
-        return;
-      }
-      if (meta && (e.key === 's' || e.key === 'S') && e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        setScheduledOpen(true);
-        return;
-      }
-      if (meta && (e.key === 'b' || e.key === 'B') && e.shiftKey) {
-        // Delegate a subtask (background worker) — only with a live session.
-        const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
-        if (live?.client && live.sessionId && !live.busy) {
-          e.preventDefault();
-          setSubagentSpawnOpen(true);
-        }
-        return;
-      }
-      if (meta && (e.key === 'p' || e.key === 'P') && e.shiftKey) {
-        e.preventDefault();
-        setProcessOpen((v) => {
-          const next = !v;
-          try {
-            localStorage.setItem('gorkx.processOpen', next ? '1' : '0');
-          } catch {
-            /* optional */
-          }
-          return next;
-        });
-        return;
-      }
-      if (meta && (e.key === 'i' || e.key === 'I') && e.shiftKey) {
-        const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
-        if (live?.client && live.sessionId) {
-          e.preventDefault();
-          setTaskInfoOpen(true);
-        }
-        return;
-      }
-      if (meta && e.key === '/') {
-        e.preventDefault();
-        setShortcutsOpen((v) => !v);
-        return;
-      }
-      // Mirrors the engine's native-voice shortcut while keeping it scoped to
-      // this desktop window. The visible microphone button always remains.
-      if (
-        voiceShortcutEnabled
-        && !e.altKey
-        && !e.metaKey
-        && (e.key === 'F8' || (e.ctrlKey && e.code === 'Space'))
-      ) {
-        e.preventDefault();
-        toggleNativeVoiceRef.current();
-        return;
-      }
-      // Focus composer (⌘L) — works from anywhere
-      if (meta && (e.key === 'l' || e.key === 'L') && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        focusComposer();
-        return;
-      }
       // Previous / next task in current project (⌥⌘↑ / ⌥⌘↓)
       if (meta && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.preventDefault();
