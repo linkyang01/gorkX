@@ -2971,7 +2971,8 @@ button.pill:hover {
   display: flex;
   flex-direction: column;
   border-bottom: 1px solid var(--hairline);
-  background: #fafafa;
+  background: var(--bg-main);
+  color: var(--text);
 }
 
 .process-head {
@@ -2981,6 +2982,8 @@ button.pill:hover {
   gap: 8px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--hairline);
+  background: var(--bg-main);
+  color: var(--text);
 }
 
 .process-title {
@@ -2989,6 +2992,7 @@ button.pill:hover {
   gap: 8px;
   font-size: 13px;
   font-weight: 650;
+  color: var(--text);
 }
 
 .process-live {
@@ -3005,6 +3009,8 @@ button.pill:hover {
   min-height: 0;
   overflow: auto;
   padding: 8px 12px 12px;
+  background: var(--bg-main);
+  color: var(--text);
 }
 
 .subagent-tree {
@@ -3021,8 +3027,9 @@ button.pill:hover {
   gap: 7px;
   padding: 6px 10px;
   font-size: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--bg-hover);
   border-bottom: 1px solid var(--hairline);
+  color: var(--text);
 }
 
 .subagent-tree-hint {
@@ -3082,11 +3089,12 @@ button.pill:hover {
   font-size: 12px;
   font-weight: 600;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--bg-hover);
   border-bottom: 1px solid var(--hairline);
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--text);
 }
 
 .process-item-label svg {
