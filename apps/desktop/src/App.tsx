@@ -186,6 +186,12 @@ import {
 } from './lib/chatFormat';
 import { settingsErrorMessage } from './lib/settingsFeedback';
 import {
+  extractSubagentSnapshotFields,
+  isActiveSubagentStatus,
+  normalizeSubagentToolStatus,
+  subagentInspectBody,
+} from './lib/subagentStatus';
+import {
   loadPinnedProjects,
   loadProjectAliases,
   loadRecentProjects,
@@ -994,6 +1000,8 @@ function App() {
   const activeIdRef = useRef<string | null>(activeId);
   /** Prevent reconnect storm if agent keeps dying */
   const autoReconnectTried = useRef<Set<string>>(new Set());
+  /** Bounded get-poll timers for desktop-spawned subagents (keyed by subagentId). */
+  const subagentPollTimers = useRef<Map<string, number>>(new Map());
 
   const active = useMemo(() => {
     const th = threads.find((x) => x.id === activeId) ?? null;
@@ -1685,6 +1693,15 @@ function App() {
       setAccount(null);
       setAccountError(settingsErrorMessage(e));
     }
+  }, []);
+
+  useEffect(() => {
+    // Clear desktop subagent progress polls when the app shell unmounts.
+    const polls = subagentPollTimers.current;
+    return () => {
+      for (const timer of polls.values()) window.clearInterval(timer);
+      polls.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -2774,20 +2791,12 @@ function App() {
    */
   const reconcileRunningSubagents = useCallback(
     async (threadId: string, client: AcpClient, sessionId: string) => {
-      const isActiveSubagentStatus = (status: string | undefined) =>
-        /^(running|initializing|cancelling)\b/i.test(status || '');
-
       const terminalStatusFromSnapshot = (snapshot: Record<string, unknown> | null): string | null => {
         if (!snapshot) return null;
-        const raw = String(snapshot.status ?? '').toLowerCase().trim();
-        if (!raw) return null;
-        if (/^(running|initializing|cancelling|pending|queued|starting|in_progress|active)\b/.test(raw)) {
-          return null;
-        }
-        if (/^(complet|done|success)/.test(raw)) return raw.startsWith('complet') ? 'completed' : raw;
-        if (/^cancel/.test(raw)) return 'cancelled';
-        if (/^(fail|error)/.test(raw)) return raw.startsWith('fail') ? 'failed' : raw;
-        return raw;
+        const fields = extractSubagentSnapshotFields(snapshot);
+        if (!fields) return null;
+        if (isActiveSubagentStatus(fields.statusRaw)) return null;
+        return normalizeSubagentToolStatus(fields.statusRaw) || fields.statusRaw;
       };
 
       const collectPersistedActiveIds = (): string[] => {
@@ -7785,7 +7794,14 @@ function App() {
                   // also arrive; appendOrMerge keeps the latest status.
                   const terminal = result.cancelled
                     ? 'cancelled'
-                    : (result.outcome?.status || result.outcome?.kind || 'cancelled');
+                    : normalizeSubagentToolStatus(
+                      String(result.outcome?.status || result.outcome?.kind || 'cancelled'),
+                    ) || 'cancelled';
+                  const poll = subagentPollTimers.current.get(subagentId);
+                  if (poll != null) {
+                    window.clearInterval(poll);
+                    subagentPollTimers.current.delete(subagentId);
+                  }
                   setThreads((prev) =>
                     prev.map((thread) =>
                       thread.id === active.id
@@ -7818,7 +7834,7 @@ function App() {
                   appendLine(active.id, {
                     id: nid(),
                     role: 'system',
-                    text: `停止子任务失败：${error instanceof Error ? error.message : String(error)}`,
+                    text: `${t('subagentStopFailed')}: ${settingsErrorMessage(error)}`,
                   });
                 });
               }}
@@ -7832,7 +7848,8 @@ function App() {
                   /* optional */
                 }
                 void client.getSubagent(subagentId).then((snapshot) => {
-                  if (!snapshot) {
+                  const fields = extractSubagentSnapshotFields(snapshot);
+                  if (!fields) {
                     appendLine(active.id, {
                       id: nid(),
                       role: 'system',
@@ -7840,45 +7857,24 @@ function App() {
                     });
                     return;
                   }
-                  const output = typeof snapshot.output === 'string' ? snapshot.output.trim() : '';
-                  const failure = typeof snapshot.failureError === 'string'
-                    ? snapshot.failureError
-                    : typeof snapshot.failure_error === 'string'
-                      ? snapshot.failure_error
-                      : '';
-                  const cancelled = typeof snapshot.cancelReason === 'string'
-                    ? snapshot.cancelReason
-                    : typeof snapshot.cancel_reason === 'string'
-                      ? snapshot.cancel_reason
-                      : '';
-                  const statusRaw = String(snapshot.status ?? 'unknown');
-                  const status = statusRaw.toLowerCase();
-                  let toolStatus = statusRaw;
-                  if (/^(complet|done|success)/.test(status)) toolStatus = 'completed';
-                  else if (/^cancel/.test(status)) toolStatus = 'cancelled';
-                  else if (/^(fail|error)/.test(status)) toolStatus = status.startsWith('fail') ? 'failed' : statusRaw;
                   appendOrMerge(active.id, 'tool', '', `subagent:${subagentId}`, {
-                    toolStatus,
+                    toolStatus: fields.toolStatus,
                     toolKind: 'subagent',
                   });
-                  const worktree =
-                    typeof snapshot.worktreePath === 'string'
-                      ? snapshot.worktreePath
-                      : typeof snapshot.worktree_path === 'string'
-                        ? snapshot.worktree_path
-                        : '';
-                  const detail = output || failure || cancelled || t('subagentInspectNoOutput');
-                  const wtLine = worktree ? `\n${t('subagentInspectWorktree')}: ${worktree}` : '';
+                  const detail = subagentInspectBody(fields, t('subagentInspectNoOutput'));
+                  const wtLine = fields.worktreePath
+                    ? `\n${t('subagentInspectWorktree')}: ${fields.worktreePath}`
+                    : '';
                   appendLine(active.id, {
                     id: nid(),
                     role: 'system',
-                    text: `${t('subagentInspectResult')} (${toolStatus})${wtLine}\n${detail}`,
+                    text: `${t('subagentInspectResult')} (${fields.toolStatus})${wtLine}\n${detail}`,
                   });
                 }).catch((error) => {
                   appendLine(active.id, {
                     id: nid(),
                     role: 'system',
-                    text: `${t('subagentInspectFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+                    text: `${t('subagentInspectFailed')}: ${settingsErrorMessage(error)}`,
                   });
                 });
               }}
@@ -7914,7 +7910,7 @@ function App() {
                 appendLine(active.id, {
                   id: nid(),
                   role: 'system',
-                  text: error instanceof Error ? error.message : String(error),
+                  text: settingsErrorMessage(error),
                 });
               })}
               workflowActionDisabled={!workflowManagementAvailable || active.busy}
@@ -7922,7 +7918,7 @@ function App() {
                 appendLine(active.id, {
                   id: nid(),
                   role: 'system',
-                  text: error instanceof Error ? error.message : String(error),
+                  text: settingsErrorMessage(error),
                 });
               })}
               scheduledTaskDeleteDisabled={active.busy}
@@ -9162,30 +9158,33 @@ function App() {
           // Bounded progress poll: lifecycle events may lag; keep the tree honest.
           if (!client) return;
           const subagentId = started.subagentId;
+          const prevTimer = subagentPollTimers.current.get(subagentId);
+          if (prevTimer != null) window.clearInterval(prevTimer);
           let ticks = 0;
           const maxTicks = 120;
+          const clearPoll = () => {
+            const id = subagentPollTimers.current.get(subagentId);
+            if (id != null) {
+              window.clearInterval(id);
+              subagentPollTimers.current.delete(subagentId);
+            }
+          };
           const timer = window.setInterval(() => {
             ticks += 1;
             void client.getSubagent(subagentId).then((snapshot) => {
-              if (!snapshot) return;
-              const status = String(snapshot.status ?? '').toLowerCase().trim();
-              if (!status) return;
-              const running = /^(running|initializing|cancelling|pending|queued|starting|in_progress|active)\b/.test(status);
-              let toolStatus = status;
-              if (/^(complet|done|success)/.test(status)) toolStatus = 'completed';
-              else if (/^cancel/.test(status)) toolStatus = 'cancelled';
-              else if (/^(fail|error)/.test(status)) toolStatus = status.startsWith('fail') ? 'failed' : status;
+              const fields = extractSubagentSnapshotFields(snapshot);
+              if (!fields || !fields.statusRaw) return;
+              const running = isActiveSubagentStatus(fields.statusRaw);
               appendOrMerge(threadId, 'tool', '', `subagent:${subagentId}`, {
-                toolStatus,
+                toolStatus: fields.toolStatus || fields.statusRaw,
                 toolKind: 'subagent',
               });
-              if (!running || ticks >= maxTicks) {
-                window.clearInterval(timer);
-              }
+              if (!running || ticks >= maxTicks) clearPoll();
             }).catch(() => {
-              if (ticks >= maxTicks) window.clearInterval(timer);
+              if (ticks >= maxTicks) clearPoll();
             });
           }, 2500);
+          subagentPollTimers.current.set(subagentId, timer);
         }}
       /> : null}
 

@@ -1,6 +1,7 @@
 import type { ChatLine } from './MessageList';
 import { IconTool } from './UiIcons';
 import { t } from '../lib/i18n';
+import { isActiveSubagentStatus, isTerminalSubagentStatus } from '../lib/subagentStatus';
 
 type Node = {
   id: string;
@@ -30,19 +31,14 @@ export function subagentTree(lines: ChatLine[]): Node[] {
   return roots;
 }
 
-/** Kernel statuses include completed / cancelled / failed — not only bare stems. */
-function isRunningStatus(raw: string): boolean {
-  return /^(running|initializing|cancelling)\b/i.test(raw);
-}
-
-function isTerminalStatus(raw: string): boolean {
-  return /^(complet|done|success|fail|error|cancel)/i.test(raw.trim());
-}
-
 function statusLabel(raw: string | undefined): string {
   if (!raw) return t('subagentTreeRunning');
   if (/unverified|not verified|未验证/i.test(raw)) return t('subagentTreeUnverified');
-  if (isRunningStatus(raw)) return t('subagentTreeRunning');
+  if (isActiveSubagentStatus(raw)) {
+    // Keep progress detail after "running · …" when present.
+    const detail = String(raw).replace(/^(running|initializing|cancelling|pending|queued|starting|in_progress|active)\s*/i, '').replace(/^·\s*/, '').trim();
+    return detail ? `${t('subagentTreeRunning')} · ${detail}` : t('subagentTreeRunning');
+  }
   if (/fail|error/i.test(raw)) return t('subagentTreeFailed');
   if (/complete|done|success/i.test(raw)) return t('subagentTreeComplete');
   if (/cancel/i.test(raw)) return t('subagentTreeCancelled');
@@ -62,8 +58,9 @@ function NodeRow({
 }) {
   const label = node.line.text.replace(/^子任务\s*·\s*/, '').trim() || node.id.slice(0, 8);
   const status = node.line.toolStatus || '';
-  const canCancel = isRunningStatus(status);
-  const canInspect = isTerminalStatus(status);
+  const canCancel = isActiveSubagentStatus(status);
+  // Inspect is available while running (progress) and after terminal outcomes.
+  const canInspect = Boolean(onInspect) && (isActiveSubagentStatus(status) || isTerminalSubagentStatus(status) || Boolean(status));
   return (
     <li className="subagent-tree-row" style={{ paddingLeft: depth * 16 }}>
       <div className="subagent-tree-label">
