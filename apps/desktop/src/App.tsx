@@ -9090,6 +9090,16 @@ function App() {
           await active.client!.setCodingDataRetention(optOut);
           setAccount((current) => current ? { ...current, codingDataRetentionOptOut: optOut } : current);
         } : undefined}
+        reconnectBusy={Boolean(active?.busy)}
+        onReconnect={
+          active?.sessionId && !active.client
+            ? () => {
+                void reconnectThread(active.id).then((client) => {
+                  if (client) void client.getSessionInfo(active.sessionId!).catch(() => {});
+                });
+              }
+            : undefined
+        }
         onClose={() => setTaskInfoOpen(false)}
         onManageAuth={(destination) => {
           setTaskInfoOpen(false);

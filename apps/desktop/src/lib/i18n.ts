@@ -1787,6 +1787,10 @@ const dict = {
     taskInfoNoTask: 'Open a task first to view its engine information.',
     taskInfoNoTaskHint:
       'Start or reconnect a task, then open Task info again. Model, context, and auth category appear only for a live session — never API keys or tokens.',
+    taskInfoNeedReconnect: 'This task has a saved session but is not connected right now.',
+    taskInfoNeedReconnectHint:
+      'Reconnect to load live model, context, and auth category from the engine. Secrets are never shown.',
+    taskInfoReconnect: 'Reconnect task',
     taskInfoModel: 'Model',
     taskInfoAgent: 'Agent',
     taskInfoTurns: 'Turns',
@@ -3725,6 +3729,10 @@ const dict = {
     taskInfoNoTask: '请先打开一个任务，再查看它的内核信息。',
     taskInfoNoTaskHint:
       '请先启动或重连任务，再打开任务信息。模型、上下文与认证类别仅在已连接会话中显示，绝不会出现 API 密钥或 token。',
+    taskInfoNeedReconnect: '此任务有已保存的会话，但当前尚未连接。',
+    taskInfoNeedReconnectHint:
+      '重连后可从内核读取实时模型、上下文与认证类别。绝不会显示密钥。',
+    taskInfoReconnect: '重连任务',
     taskInfoModel: '模型',
     taskInfoAgent: '智能体',
     taskInfoTurns: '轮次',

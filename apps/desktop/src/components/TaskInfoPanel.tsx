@@ -10,6 +10,9 @@ interface Props {
   sessionId: string | null;
   onClose: () => void;
   onManageAuth?: (destination: 'account' | 'models') => void;
+  /** When a saved session exists without a live client. */
+  onReconnect?: () => void;
+  reconnectBusy?: boolean;
   /** Local selection fallback when snapshot omits provider branding. */
   localModelId?: string | null;
   localProviderLabel?: string | null;
@@ -43,6 +46,8 @@ export function TaskInfoPanel({
   sessionId,
   onClose,
   onManageAuth,
+  onReconnect,
+  reconnectBusy = false,
   localModelId,
   localProviderLabel,
   privacyOptOut,
@@ -116,15 +121,36 @@ export function TaskInfoPanel({
         </div>
         {!client || !sessionId ? (
           <div className="ext-empty-card" style={{ margin: '10px 0' }}>
-            <p className="hint" style={{ margin: 0 }}>{t('taskInfoNoTask')}</p>
-            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskInfoNoTaskHint')}</p>
-            {onManageAuth ? (
-              <div className="field-row" style={{ marginTop: 10 }}>
-                <button type="button" className="btn btn-sm" onClick={() => onManageAuth('account')}>
-                  {t('taskInfoManageAccount')}
-                </button>
-              </div>
-            ) : null}
+            {sessionId && !client ? (
+              <>
+                <p className="hint" style={{ margin: 0 }}>{t('taskInfoNeedReconnect')}</p>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskInfoNeedReconnectHint')}</p>
+                {onReconnect ? (
+                  <div className="field-row" style={{ marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      disabled={reconnectBusy}
+                      onClick={onReconnect}
+                    >
+                      {reconnectBusy ? t('connecting') : t('taskInfoReconnect')}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="hint" style={{ margin: 0 }}>{t('taskInfoNoTask')}</p>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskInfoNoTaskHint')}</p>
+                {onManageAuth ? (
+                  <div className="field-row" style={{ marginTop: 10 }}>
+                    <button type="button" className="btn btn-sm" onClick={() => onManageAuth('account')}>
+                      {t('taskInfoManageAccount')}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         ) : null}
         {error ? <pre className="ext-msg err">{error}</pre> : null}
