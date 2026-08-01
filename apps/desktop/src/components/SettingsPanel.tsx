@@ -35,6 +35,7 @@ import {
   type ComputerAccessibilityStatus,
   type ComputerActionResult,
 } from '../lib/host';
+import { computerStatusDetail, settingsErrorMessage } from '../lib/settingsFeedback';
 import { APP_VERSION } from '../lib/appMeta';
 import {
   checkAppUpdate,
@@ -422,6 +423,7 @@ export function SettingsPanel({
   const [computerHubBusy, setComputerHubBusy] = useState(false);
   const [computerAccess, setComputerAccess] = useState<ComputerAccessibilityStatus | null>(null);
   const [computerControlBusy, setComputerControlBusy] = useState(false);
+  const [msgIsError, setMsgIsError] = useState(false);
   const [computerKey, setComputerKey] = useState('enter');
   const [computerText, setComputerText] = useState('');
   const [computerX, setComputerX] = useState('');
@@ -451,11 +453,21 @@ export function SettingsPanel({
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
 
+  const showMsg = (text: string, isError = false) => {
+    setMsg(text);
+    setMsgIsError(isError);
+  };
+  const showErr = (error: unknown) => {
+    setMsg(settingsErrorMessage(error));
+    setMsgIsError(true);
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     if (initialSection) setSection(initialSection);
     setQuery('');
     setMsg(null);
+    setMsgIsError(false);
     void storeDbPath().then(setDbPath);
     void storeDataDir().then(setDataDir);
     void fetchAccountSummary().then(setAccount);
@@ -521,7 +533,7 @@ export function SettingsPanel({
         setProjectInstructions(snapshot);
         setProjectInstructionsDraft(snapshot.content);
       })
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .catch((error) => showErr(error))
       .finally(() => setProjectInstructionsBusy(false));
   };
 
@@ -532,7 +544,7 @@ export function SettingsPanel({
         setHooksBusy(true);
         void onRefreshHooks()
           .then(setHooksSnap)
-          .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+          .catch((error) => showErr(error))
           .finally(() => setHooksBusy(false));
       } else {
         setHooksSnap(null);
@@ -542,19 +554,12 @@ export function SettingsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, section, project, onRefreshHooks]);
 
-  // Open the Computer section ready-to-act: refresh Accessibility + lease state.
-  useEffect(() => {
-    if (!isOpen || section !== 'computer') return;
-    void refreshComputerAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, section]);
-
   const refreshHooks = () => {
     if (!onRefreshHooks) return;
     setHooksBusy(true);
     void onRefreshHooks()
       .then(setHooksSnap)
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .catch((error) => showErr(error))
       .finally(() => setHooksBusy(false));
   };
 
@@ -564,25 +569,24 @@ export function SettingsPanel({
     void onManageHooks(action)
       .then((snap) => {
         setHooksSnap(snap);
-        if (action.type === 'trust') setMsg(t('settingsHooksTrusted'));
-        else if (action.type === 'untrust') setMsg(t('settingsHooksUntrusted'));
-        else if (action.type === 'reload') setMsg(t('settingsHooksReloaded'));
-        else if (action.type === 'enable') setMsg(t('settingsHooksEnabledOk'));
-        else if (action.type === 'disable') setMsg(t('settingsHooksDisabledOk'));
-        else if (action.type === 'add') setMsg(t('settingsHooksAddedOk'));
-        else if (action.type === 'remove') setMsg(t('settingsHooksRemovedOk'));
+        let ok = t('settingsHooksReloaded');
+        if (action.type === 'trust') ok = t('settingsHooksTrusted');
+        else if (action.type === 'untrust') ok = t('settingsHooksUntrusted');
+        else if (action.type === 'reload') ok = t('settingsHooksReloaded');
+        else if (action.type === 'enable') ok = t('settingsHooksEnabledOk');
+        else if (action.type === 'disable') ok = t('settingsHooksDisabledOk');
+        else if (action.type === 'add') ok = t('settingsHooksAddedOk');
+        else if (action.type === 'remove') ok = t('settingsHooksRemovedOk');
         if (snap.loadErrors?.length) {
-          setMsg(`${t('settingsHooksLoadError')}: ${snap.loadErrors.slice(0, 3).join(' · ')}`);
-        }
-      })
-      .catch((error) => {
-        const raw = error instanceof Error ? error.message : String(error);
-        if (/hook_name|invalid params/i.test(raw)) {
-          setMsg(t('settingsHooksWireError'));
+          showMsg(
+            `${ok}\n${t('settingsHooksLoadError')}: ${snap.loadErrors.slice(0, 3).join(' · ')}`,
+            true,
+          );
         } else {
-          setMsg(raw || t('settingsHooksActionFailed'));
+          showMsg(ok, false);
         }
       })
+      .catch((error) => showErr(error))
       .finally(() => setHooksBusy(false));
   };
 
@@ -618,7 +622,7 @@ export function SettingsPanel({
     try {
       setComputerAccess(await computerAccessibilityStatus());
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setComputerControlBusy(false);
     }
@@ -628,10 +632,15 @@ export function SettingsPanel({
     if (enabled && !window.confirm(t('settingsComputerControlEnableConfirm'))) return;
     setComputerControlBusy(true);
     try {
-      setComputerAccess(await setComputerControlEnabled(enabled));
+      const next = await setComputerControlEnabled(enabled);
+      setComputerAccess(next);
       if (!enabled) setComputerActionResult(null);
+      showMsg(
+        enabled ? t('settingsComputerControlEnabledOk') : t('settingsComputerControlDisabledOk'),
+        false,
+      );
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setComputerControlBusy(false);
     }
@@ -640,10 +649,12 @@ export function SettingsPanel({
   const stopComputerControl = async () => {
     setComputerControlBusy(true);
     try {
+      // Host always clears the lease; keep the button available even if UI state is stale.
       setComputerAccess(await emergencyStopComputerControl());
       setComputerActionResult(null);
+      showMsg(t('settingsComputerControlStopped'), false);
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setComputerControlBusy(false);
     }
@@ -654,7 +665,7 @@ export function SettingsPanel({
     try {
       setComputerActionResult(await action());
     } catch (error) {
-      setMsg(error instanceof Error ? error.message : String(error));
+      showErr(error);
     } finally {
       setComputerControlBusy(false);
     }
@@ -666,7 +677,7 @@ export function SettingsPanel({
     try {
       setComputerMcpStatus(await installComputerMcp());
     } catch (error) {
-      setComputerMcpStatus(error instanceof Error ? error.message : String(error));
+      setComputerMcpStatus(settingsErrorMessage(error));
     } finally {
       setComputerMcpBusy(false);
     }
@@ -2634,10 +2645,10 @@ export function SettingsPanel({
                   className="btn primary"
                   disabled={!onCaptureDesktop}
                   onClick={() => {
-                    setMsg(t('settingsComputerCapturing'));
+                    showMsg(t('settingsComputerCapturing'), false);
                     void onCaptureDesktop?.()
-                      .then((path) => setMsg(t('settingsComputerCaptured').replace('{path}', path)))
-                      .catch((e) => setMsg(e instanceof Error ? e.message : String(e)));
+                      .then((path) => showMsg(t('settingsComputerCaptured').replace('{path}', path), false))
+                      .catch((e) => showErr(e));
                   }}
                 >
                   {t('settingsComputerCapture')}
@@ -2658,7 +2669,7 @@ export function SettingsPanel({
                     type="button"
                     className="btn"
                     disabled={computerControlBusy}
-                    onClick={() => void openComputerAccessibilitySettings().catch((error) => setMsg(error instanceof Error ? error.message : String(error)))}
+                    onClick={() => void openComputerAccessibilitySettings().catch((error) => showErr(error))}
                   >
                     {t('settingsComputerControlOpenSettings')}
                   </button>
@@ -2674,7 +2685,13 @@ export function SettingsPanel({
                       {t('settingsComputerControlEnable')}
                     </button>
                   )}
-                  <button type="button" className="btn" disabled={computerControlBusy || !computerAccess?.enabled} onClick={() => void stopComputerControl()}>
+                  <button
+                    type="button"
+                    className={`btn${computerAccess?.enabled ? ' danger' : ''}`}
+                    disabled={computerControlBusy}
+                    title={t('settingsComputerControlEmergencyStopHint')}
+                    onClick={() => void stopComputerControl()}
+                  >
                     {t('settingsComputerControlEmergencyStop')}
                   </button>
                 </div>
@@ -2701,7 +2718,9 @@ export function SettingsPanel({
                       {computerAccess.enabled ? t('settingsComputerControlStateEnabled') : t('settingsComputerControlStateDisabled')}
                     </p>
                     {computerAccess.detail ? (
-                      <p className="settings-row-hint" style={{ marginTop: 6 }}>{computerAccess.detail}</p>
+                      <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                        {computerStatusDetail(computerAccess.detail)}
+                      </p>
                     ) : null}
                   </div>
                 ) : (
@@ -2929,7 +2948,10 @@ export function SettingsPanel({
               <div className="settings-card">
                 <p className="settings-row-hint">{t('settingsHooksHint')}</p>
                 {!hooksAvailable ? (
-                  <p className="hint">{t('settingsHooksNeedTask')}</p>
+                  <div className="ext-empty-card" style={{ marginTop: 10 }}>
+                    <p className="hint" style={{ margin: 0 }}>{t('settingsHooksNeedTask')}</p>
+                    <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsHooksUnavailable')}</p>
+                  </div>
                 ) : (
                   <>
                     <div className="field-row">
@@ -3925,7 +3947,14 @@ export function SettingsPanel({
             </>
           ) : null}
 
-          {msg ? <div className="settings-msg hint">{msg}</div> : null}
+          {msg ? (
+            <div
+              className={`settings-msg hint${msgIsError ? ' err' : ''}`}
+              role={msgIsError ? 'alert' : 'status'}
+            >
+              {msg}
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

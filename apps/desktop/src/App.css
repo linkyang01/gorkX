@@ -2689,6 +2689,10 @@ button.pill:hover {
   white-space: pre-wrap;
 }
 
+.settings-msg.err {
+  color: var(--danger, #e85d5d);
+}
+
 .muted-block {
   background: var(--bg-elevated);
 }

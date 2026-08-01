@@ -1,0 +1,76 @@
+/**
+ * Map Settings-panel host/ACP errors to short desktop copy.
+ * Never invent success; only shorten or localize known failure shapes.
+ */
+
+import {
+  humanizeEngineError,
+  isGrokBuildAccessDenied,
+  sanitizeText,
+} from './chatFormat.ts';
+import { t } from './i18n.ts';
+
+/** Localized one-line message for Settings catch blocks. */
+export function settingsErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  const s = sanitizeText(raw);
+  if (!s) return t('settingsActionFailed');
+
+  if (isGrokBuildAccessDenied(s) || humanizeEngineError(s) === 'GROKX_BUILD_ACCESS_DENIED') {
+    return t('taskErrorBuildAccessDenied');
+  }
+
+  if (
+    /open a connected task|settingsHooksNeedTask|先打开.*任务|connected task first|not connected|尚未连接/i.test(
+      s,
+    )
+  ) {
+    return t('settingsHooksNeedTask');
+  }
+
+  if (/hook_name|invalid params/i.test(s)) {
+    return t('settingsHooksWireError');
+  }
+
+  if (/method not found|not (?:exposed|available)|unsupported.*hook/i.test(s)) {
+    return t('settingsHooksUnavailable');
+  }
+
+  if (/Accessibility permission|辅助功能/i.test(s)) {
+    return t('settingsComputerControlPermissionMissing');
+  }
+
+  if (/controls? (?:are )?disabled|not enabled|lease/i.test(s)) {
+    return t('settingsComputerControlDisabledError');
+  }
+
+  if (/unsupported key/i.test(s)) {
+    return t('settingsComputerControlKeyInvalid');
+  }
+
+  if (/whole-number|coordinates|invalid.*coord/i.test(s)) {
+    return t('settingsComputerControlCoordinatesInvalid');
+  }
+
+  const human = humanizeEngineError(s);
+  if (
+    human
+    && human !== 'GROKX_BUILD_ACCESS_DENIED'
+    && human !== 'GROKX_AGENT_PROCESS_EXITED'
+    && human.length <= 240
+  ) {
+    return human;
+  }
+
+  return s.length <= 240 ? s : t('settingsActionFailed');
+}
+
+/** Map known Rust `detail` strings to locale labels; pass through unknown text. */
+export function computerStatusDetail(detail: string | null | undefined): string {
+  const s = sanitizeText(detail || '');
+  if (!s) return '';
+  if (/emergency stop applied/i.test(s)) return t('settingsComputerControlStopped');
+  if (/controls are enabled/i.test(s)) return t('settingsComputerControlEnabledOk');
+  if (/controls are disabled/i.test(s)) return t('settingsComputerControlDisabledOk');
+  return s;
+}
