@@ -3415,7 +3415,7 @@ function App() {
           }
         }
         if (!setModeOk) {
-          setModeErr = e instanceof Error ? e.message : String(e);
+          setModeErr = settingsErrorMessage(e);
         }
       }
     }
@@ -4927,7 +4927,7 @@ function App() {
       await live.client.interject(live.sessionId, text);
       appendLine(live.id, { id: nid(), role: 'system', text: t('followUpInterjected') });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = settingsErrorMessage(error);
       if (/method.?not.?found|unknown.*method/i.test(detail)) {
         setQueuedFollowUps((previous) => ({ ...previous, [live.id]: text }));
         appendLine(live.id, {
@@ -4965,7 +4965,7 @@ function App() {
         at: Date.now(),
       });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = settingsErrorMessage(error);
       if (/method.?not.?found|unknown.*method/i.test(detail)) {
         setQueuedFollowUps((previous) => ({ ...previous, [live.id]: text }));
         appendLine(live.id, {
@@ -5004,7 +5004,7 @@ function App() {
       });
       return true;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = settingsErrorMessage(error);
       setQueuedFollowUps((previous) => ({ ...previous, [live.id]: value }));
       appendLine(live.id, {
         id: nid(),
@@ -5033,7 +5033,7 @@ function App() {
       appendLine(live.id, {
         id: nid(),
         role: 'system',
-        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('followUpQueueActionFailed')}: ${settingsErrorMessage(error)}`,
       });
     }
   };
@@ -5047,7 +5047,7 @@ function App() {
       appendLine(live.id, {
         id: nid(),
         role: 'system',
-        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('followUpQueueActionFailed')}: ${settingsErrorMessage(error)}`,
       });
     }
   };
@@ -5067,7 +5067,7 @@ function App() {
       appendLine(live.id, {
         id: nid(),
         role: 'system',
-        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('followUpQueueActionFailed')}: ${settingsErrorMessage(error)}`,
       });
     }
   };
@@ -5082,7 +5082,7 @@ function App() {
       appendLine(live.id, {
         id: nid(),
         role: 'system',
-        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('followUpQueueActionFailed')}: ${settingsErrorMessage(error)}`,
       });
     }
   };
@@ -5096,7 +5096,7 @@ function App() {
       appendLine(live.id, {
         id: nid(),
         role: 'system',
-        text: `${t('followUpQueueActionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('followUpQueueActionFailed')}: ${settingsErrorMessage(error)}`,
       });
     }
   };
@@ -5226,7 +5226,7 @@ function App() {
           appendLine(agent.id, {
             id: nid(),
             role: 'system',
-            text: `${t('followUpAsideFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+            text: `${t('followUpAsideFailed')}: ${settingsErrorMessage(error)}`,
           });
         }
         return;
@@ -5596,7 +5596,7 @@ function App() {
           appendLine(active.id, {
             id: nid(),
             role: 'system',
-            text: `${t('applyPlanModeWarn')}: ${e instanceof Error ? e.message : String(e)}`,
+            text: `${t('applyPlanModeWarn')}: ${settingsErrorMessage(e)}`,
           });
         }
       }
@@ -5721,7 +5721,7 @@ function App() {
       appendLine(target.id, {
         id: nid(),
         role: 'system',
-        text: `set model failed: ${e instanceof Error ? e.message : String(e)}`,
+        text: `${t('error')}: ${settingsErrorMessage(e)}`,
       });
     }
   };
@@ -5988,7 +5988,7 @@ function App() {
       appendLine(id, {
         id: nid(),
         role: 'system',
-        text: `${t('sessionRepairFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        text: `${t('sessionRepairFailed')}: ${settingsErrorMessage(error)}`,
       });
     } finally {
       setSessionRepairBusyId(null);

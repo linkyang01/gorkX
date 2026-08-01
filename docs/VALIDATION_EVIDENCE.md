@@ -24,6 +24,8 @@
 | 子任务 P0 加固 | `subagentStatus` 归一化；运行中可 Inspect；轮询计时器清理；停止/Inspect humanize（`73ce3aa`） | 源码 + `subagentStatus.test` / stage-b | **非** App UI 真 spawn 录像；仍 Kernel-wired |
 | 子任务标签 i18n | 行标题 `Subtask`/`子任务` 随语言；生命周期与 spawn 种子同一格式 | 源码 + 单测 | 旧会话中文前缀仍可 strip |
 | 主界面 alert | 用户可见 `alert` 失败走 `settingsErrorMessage` | 源码 | 非替代 toast 体系 |
+| 旁问/队列/计划/修复 | follow-up、队列、plan 警告、session repair 系统行 humanize | 源码 | 任务连接失败 error 仍可为原始 token |
+| 前端生产构建 | `cd apps/desktop && npm run build` | 通过（本会话） | 非 App bundle / 非 DMG |
 
 ### 诚实结论
 
