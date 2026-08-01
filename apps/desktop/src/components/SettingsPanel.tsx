@@ -113,9 +113,12 @@ import {
 import {
   enablePlaywrightChromeMcp,
   fetchExtensionsSnapshot,
+  openSkillsDir,
   runMcpDoctor,
   type ExtensionsSnapshot,
 } from '../lib/extensions';
+import { DESKTOP_SHORTCUT_SPECS } from '../lib/desktopShortcuts';
+import { worktreeListJson } from '../lib/grokAdmin';
 import {
   githubConnectReadonly,
   githubCreatePrComment,
@@ -424,6 +427,33 @@ export function SettingsPanel({
   const [savedThemes, setSavedThemes] = useState<SavedTheme[]>(() => loadSavedThemes());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
+  const [extHubSnap, setExtHubSnap] = useState<ExtensionsSnapshot | null>(null);
+  const [extHubBusy, setExtHubBusy] = useState(false);
+  const [worktreePreview, setWorktreePreview] = useState<Array<{ path: string; branch?: string; bare?: boolean }>>([]);
+  const [worktreePreviewBusy, setWorktreePreviewBusy] = useState(false);
+  const [mcpDoctorOut, setMcpDoctorOut] = useState<string | null>(null);
+
+  const parseWorktreePreviewRows = (list: unknown[]): Array<{ path: string; branch?: string; bare?: boolean }> => {
+    const out: Array<{ path: string; branch?: string; bare?: boolean }> = [];
+    for (const row of list || []) {
+      if (!row || typeof row !== 'object') continue;
+      const o = row as Record<string, unknown>;
+      const path =
+        typeof o.path === 'string'
+          ? o.path
+          : typeof o.worktree === 'string'
+            ? o.worktree
+            : '';
+      if (!path) continue;
+      out.push({
+        path,
+        branch: typeof o.branch === 'string' ? o.branch : undefined,
+        bare: Boolean(o.bare),
+      });
+      if (out.length >= 12) break;
+    }
+    return out;
+  };
   const [browserPreviewUrl, setBrowserPreviewUrl] = useState('');
   const [browserAllowedOrigins, setBrowserAllowedOrigins] = useState(() => {
     try { return localStorage.getItem('gorkx.browserAllowedOrigins') || ''; } catch { return ''; }
@@ -546,6 +576,29 @@ export function SettingsPanel({
       .catch((error) => setCloudEnvironmentError(settingsErrorMessage(error)))
       .finally(() => setCloudEnvironmentBusy(false));
   }, [isOpen, section, onListCloudEnvironments]);
+
+  useEffect(() => {
+    if (!isOpen || (section !== 'plugins' && section !== 'mcp' && section !== 'browser')) return;
+    setExtHubBusy(true);
+    void fetchExtensionsSnapshot(project, grokCmd)
+      .then((snap) => {
+        setExtHubSnap(snap);
+        setBrowserSnap(snap);
+      })
+      .catch(() => {
+        /* keep previous snapshot */
+      })
+      .finally(() => setExtHubBusy(false));
+  }, [isOpen, section, project, grokCmd]);
+
+  useEffect(() => {
+    if (!isOpen || section !== 'worktree') return;
+    setWorktreePreviewBusy(true);
+    void worktreeListJson(grokCmd || undefined, project || undefined)
+      .then((list) => setWorktreePreview(parseWorktreePreviewRows(list || [])))
+      .catch(() => setWorktreePreview([]))
+      .finally(() => setWorktreePreviewBusy(false));
+  }, [isOpen, section, project, grokCmd]);
 
   useEffect(() => {
     if (!isOpen || section !== 'usage' || !onFetchBilling) return;
@@ -2036,12 +2089,22 @@ export function SettingsPanel({
                 </div>
               </div>
               <h3 className="subhead">{t('settingsComposer')}</h3>
-              <div className="settings-card muted-block">
-                <p className="hint">{t('settingsComposerHint')}</p>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('settingsComposerKeysTitle')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>{t('settingsComposerHint')}</p>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginTop: 10 }}
+                  onClick={() => setSection('shortcuts')}
+                >
+                  {t('settingsOpenShortcuts')}
+                </button>
               </div>
               <h3 className="subhead">{t('autoCompact')}</h3>
-              <div className="settings-card muted-block">
-                <p className="hint">{t('settingsAutoCompactAlways')}</p>
+              <div className="settings-card">
+                <div className="settings-row-title">{t('autoCompact')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>{t('settingsAutoCompactAlways')}</p>
               </div>
               <h3 className="subhead">{t('tutorialTitle')}</h3>
               <div className="settings-card">
@@ -2361,20 +2424,36 @@ export function SettingsPanel({
           {section === 'shortcuts' ? (
             <>
               <h2>{t('settingsShortcuts')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsShortcutsHint')}
+              </p>
               <div className="settings-card">
-                <p className="hint">{t('settingsShortcutsHint')}</p>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => {
-                    onClose();
-                    onOpenShortcuts?.();
-                  }}
-                >
-                  {t('settingsOpenShortcuts')}
-                </button>
+                <ul className="settings-shortcut-list">
+                  {DESKTOP_SHORTCUT_SPECS.map((spec) => (
+                    <li key={spec.id} className="settings-shortcut-row">
+                      <kbd className="settings-shortcut-keys">{spec.keysLabel}</kbd>
+                      <span className="settings-shortcut-action">{t(spec.actionMsgKey)}</span>
+                      {spec.requiresLiveSession ? (
+                        <span className="settings-row-hint">{t('settingsShortcutNeedsSession')}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                <div className="field-row" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      onClose();
+                      onOpenShortcuts?.();
+                    }}
+                  >
+                    {t('settingsOpenShortcuts')}
+                  </button>
+                </div>
               </div>
-              <div className="settings-card" style={{ marginTop: 12 }}>
+              <h3 className="subhead">{t('settingsVoiceTitle')}</h3>
+              <div className="settings-card">
                 <label className="settings-row toggle-row">
                   <div>
                     <div className="settings-row-title">{t('settingsVoiceShortcut')}</div>
@@ -2386,6 +2465,9 @@ export function SettingsPanel({
                     onChange={(event) => onVoiceShortcutEnabled(event.target.checked)}
                   />
                 </label>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>
+                  {t('settingsVoiceSettingsHint')}
+                </p>
               </div>
             </>
           ) : null}
@@ -2563,18 +2645,87 @@ export function SettingsPanel({
           {section === 'plugins' ? (
             <>
               <h2>{t('settingsPlugins')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsPluginsHint')}
+              </p>
               <div className="settings-card">
-                <p className="hint">{t('settingsPluginsHint')}</p>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => {
-                    onClose();
-                    onOpenExtensions?.();
-                  }}
-                >
-                  {t('openPlugins')}
-                </button>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsExtSnapshotTitle')}</div>
+                    <div className="settings-row-hint">
+                      {extHubBusy
+                        ? t('settingsExtSnapshotLoading')
+                        : t('settingsExtSnapshotSummary')
+                            .replace('{skills}', String(extHubSnap?.skills?.length ?? 0))
+                            .replace('{mcp}', String(extHubSnap?.mcp?.length ?? 0))
+                            .replace('{plugins}', String(extHubSnap?.plugins?.length ?? 0))}
+                    </div>
+                    {extHubSnap?.error ? (
+                      <div className="settings-row-hint error-text">{extHubSnap.error}</div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={extHubBusy}
+                    onClick={() => {
+                      setExtHubBusy(true);
+                      void fetchExtensionsSnapshot(project, grokCmd)
+                        .then(setExtHubSnap)
+                        .catch((e) => showErr(e))
+                        .finally(() => setExtHubBusy(false));
+                    }}
+                  >
+                    {t('settingsExtRefresh')}
+                  </button>
+                </div>
+                {extHubSnap?.skills?.length ? (
+                  <ul className="settings-list" style={{ marginTop: 10, maxHeight: 140, overflow: 'auto' }}>
+                    {extHubSnap.skills.slice(0, 8).map((s) => (
+                      <li key={`${s.scope}-${s.name}`}>
+                        <strong>{s.name}</strong>
+                        <span className="muted"> · {s.scope}</span>
+                        {s.description ? <div className="settings-row-hint">{s.description}</div> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : !extHubBusy ? (
+                  <p className="muted" style={{ marginTop: 8 }}>{t('settingsExtSkillsEmpty')}</p>
+                ) : null}
+                {extHubSnap?.plugins?.length ? (
+                  <>
+                    <div className="settings-row-title" style={{ marginTop: 12 }}>{t('settingsExtPluginsList')}</div>
+                    <ul className="settings-list" style={{ maxHeight: 120, overflow: 'auto' }}>
+                      {extHubSnap.plugins.slice(0, 8).map((p) => (
+                        <li key={`${p.scope}-${p.name}`}>
+                          <strong>{p.name}</strong>
+                          <span className="muted"> · {p.enabled ? t('settingsExtEnabled') : t('settingsExtDisabled')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+                <div className="field-row" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      onClose();
+                      onOpenExtensions?.();
+                    }}
+                  >
+                    {t('openPlugins')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      void openSkillsDir().then(() => setMsg(t('settingsExtSkillsOpened'))).catch((e) => showErr(e));
+                    }}
+                  >
+                    {t('settingsExtOpenSkillsDir')}
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
@@ -3546,18 +3697,91 @@ export function SettingsPanel({
           {section === 'mcp' ? (
             <>
               <h2>{t('settingsMcp')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsMcpHint')}
+              </p>
               <div className="settings-card">
-                <p className="hint">{t('settingsMcpHint')}</p>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    onClose();
-                    onOpenExtensions?.();
-                  }}
-                >
-                  {t('openPlugins')}
-                </button>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsMcpServersTitle')}</div>
+                    <div className="settings-row-hint">
+                      {extHubBusy
+                        ? t('settingsExtSnapshotLoading')
+                        : t('settingsMcpServersCount').replace('{n}', String(extHubSnap?.mcp?.length ?? 0))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={extHubBusy}
+                    onClick={() => {
+                      setExtHubBusy(true);
+                      void fetchExtensionsSnapshot(project, grokCmd)
+                        .then(setExtHubSnap)
+                        .catch((e) => showErr(e))
+                        .finally(() => setExtHubBusy(false));
+                    }}
+                  >
+                    {t('settingsExtRefresh')}
+                  </button>
+                </div>
+                {extHubSnap?.mcp?.length ? (
+                  <ul className="settings-list" style={{ marginTop: 10, maxHeight: 200, overflow: 'auto' }}>
+                    {extHubSnap.mcp.map((m) => (
+                      <li key={`${m.scope}-${m.name}`}>
+                        <strong>{m.name}</strong>
+                        <span className="muted">
+                          {' · '}
+                          {m.enabled ? t('settingsExtEnabled') : t('settingsExtDisabled')}
+                          {' · '}
+                          {m.scope}
+                        </span>
+                        {m.url ? <div className="settings-row-hint mono">{m.url}</div> : null}
+                        {m.command ? (
+                          <div className="settings-row-hint mono">
+                            {m.command}
+                            {m.args?.length ? ` ${m.args.join(' ')}` : ''}
+                          </div>
+                        ) : null}
+                        {m.detail ? <div className="settings-row-hint">{m.detail}</div> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : !extHubBusy ? (
+                  <p className="muted" style={{ marginTop: 8 }}>{t('settingsMcpEmpty')}</p>
+                ) : null}
+                <div className="field-row" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      onClose();
+                      onOpenExtensions?.();
+                    }}
+                  >
+                    {t('openPlugins')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setMcpDoctorOut(null);
+                      void runMcpDoctor(grokCmd || undefined)
+                        .then((out) => {
+                          setMcpDoctorOut(out || t('settingsMcpDoctorEmpty'));
+                          setMsg(t('settingsMcpDoctorDone'));
+                        })
+                        .catch((e) => showErr(e));
+                    }}
+                  >
+                    {t('settingsMcpDoctor')}
+                  </button>
+                </div>
+                {mcpDoctorOut ? (
+                  <pre className="settings-pre" style={{ marginTop: 10, maxHeight: 160, overflow: 'auto' }}>
+                    {mcpDoctorOut}
+                  </pre>
+                ) : null}
               </div>
             </>
           ) : null}
@@ -4184,18 +4408,64 @@ export function SettingsPanel({
           {section === 'worktree' ? (
             <>
               <h2>{t('settingsWorktree')}</h2>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                {t('settingsWorktreeHint')}
+              </p>
               <div className="settings-card">
-                <p className="hint">{t('settingsWorktreeHint')}</p>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => {
-                    onClose();
-                    onOpenWorktrees?.();
-                  }}
-                >
-                  {t('worktreeManage')}
-                </button>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-title">{t('settingsWorktreePreviewTitle')}</div>
+                    <div className="settings-row-hint">
+                      {worktreePreviewBusy
+                        ? t('settingsExtSnapshotLoading')
+                        : t('settingsWorktreePreviewCount').replace('{n}', String(worktreePreview.length))}
+                    </div>
+                    {!project ? (
+                      <div className="settings-row-hint">{t('settingsWorktreeNeedProject')}</div>
+                    ) : (
+                      <div className="settings-row-hint mono">{project}</div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={worktreePreviewBusy}
+                    onClick={() => {
+                      setWorktreePreviewBusy(true);
+                      void worktreeListJson(grokCmd || undefined, project || undefined)
+                        .then((list) => setWorktreePreview(parseWorktreePreviewRows(list || [])))
+                        .catch(() => setWorktreePreview([]))
+                        .finally(() => setWorktreePreviewBusy(false));
+                    }}
+                  >
+                    {t('settingsExtRefresh')}
+                  </button>
+                </div>
+                {worktreePreview.length ? (
+                  <ul className="settings-list" style={{ marginTop: 10, maxHeight: 200, overflow: 'auto' }}>
+                    {worktreePreview.map((w) => (
+                      <li key={w.path}>
+                        <strong className="mono">{w.path}</strong>
+                        {w.branch ? <span className="muted"> · {w.branch}</span> : null}
+                        {w.bare ? <span className="muted"> · bare</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : !worktreePreviewBusy ? (
+                  <p className="muted" style={{ marginTop: 8 }}>{t('worktreeEmpty')}</p>
+                ) : null}
+                <div className="field-row" style={{ marginTop: 12 }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      onClose();
+                      onOpenWorktrees?.();
+                    }}
+                  >
+                    {t('worktreeManage')}
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
@@ -4231,11 +4501,11 @@ export function SettingsPanel({
               </div>
               <div className="kernel-meta" style={{ marginTop: 12 }}>
                 <div className="full">
-                  <span className="muted">Resolved</span>
+                  <span className="muted">{t('kernelResolved')}</span>
                   <div className="mono path-wrap">{status?.grokPath || '—'}</div>
                 </div>
                 <div className="full">
-                  <span className="muted">Status</span>
+                  <span className="muted">{t('kernelStatusLabel')}</span>
                   <div>{status?.detail || '—'}</div>
                 </div>
               </div>
