@@ -516,7 +516,7 @@ export function SettingsPanel({
     setCloudEnvironmentError(null);
     void onListCloudEnvironments()
       .then(setCloudEnvironments)
-      .catch((error) => setCloudEnvironmentError(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setCloudEnvironmentError(settingsErrorMessage(error)))
       .finally(() => setCloudEnvironmentBusy(false));
   }, [isOpen, section, onListCloudEnvironments]);
 

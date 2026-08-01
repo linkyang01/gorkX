@@ -23,6 +23,7 @@ import {
 } from '../lib/scheduled';
 import { projectDisplayName } from '../lib/projects';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 import { IconClose } from './UiIcons';
 
 interface Props {
@@ -260,7 +261,7 @@ export function ScheduledPanel({
       setBackgroundMsg(status.enabled ? t('schedBackgroundOn') : t('schedBackgroundOff'));
       if (status.enabled) void listBackgroundSchedulerRuns().then(setBackgroundRuns).catch(() => {});
     } catch (error) {
-      setBackgroundMsg(error instanceof Error ? error.message : String(error));
+      setBackgroundMsg(settingsErrorMessage(error));
     } finally {
       setBackgroundBusy(false);
     }

@@ -8,6 +8,7 @@ import { fetchAccountSummary, fetchSubscriptionModelsSnapshot } from '../lib/acc
 import type { AccountSummary } from '../lib/account';
 import { APP_VERSION } from '../lib/appMeta';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 interface Props {
   open: boolean;
@@ -95,7 +96,7 @@ export function KernelPanel({
       }
       onRefresh();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setMsg(settingsErrorMessage(e));
     } finally {
       setLoginBusy(false);
     }
@@ -120,7 +121,7 @@ export function KernelPanel({
       );
       onModelsRefreshed?.();
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setMsg(settingsErrorMessage(e));
     }
   };
 

@@ -15,6 +15,7 @@ import {
 } from '../lib/memory';
 import { memoryClear } from '../lib/grokAdmin';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 import { IconClose } from './UiIcons';
 
 interface Props {
@@ -60,7 +61,7 @@ export function MemoryPanel({
       const s = await fetchMemoryStatus(project);
       setSt(s);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(settingsErrorMessage(e));
     }
   }, [project]);
 
@@ -76,7 +77,7 @@ export function MemoryPanel({
       const next = await setMemoryEnabled(!st?.enabled);
       setSt(next);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(settingsErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -87,7 +88,7 @@ export function MemoryPanel({
     try {
       setBody(await readMemoryFile(path));
     } catch (e) {
-      setBody(e instanceof Error ? e.message : String(e));
+      setBody(settingsErrorMessage(e));
     }
   };
 

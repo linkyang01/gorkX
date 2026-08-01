@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { worktreeDbPath, worktreeDbRebuild, worktreeDbStats, worktreeGc, worktreeListJson, worktreeRemove } from '../lib/grokAdmin';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 interface Props {
   open: boolean;
@@ -72,7 +73,7 @@ export function WorktreePanel({
       const list = await worktreeListJson(grokCmd || undefined, project || undefined);
       setRows(list);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+      setMsg(settingsErrorMessage(e));
       setRows([]);
     } finally {
       setLoading(false);
@@ -148,7 +149,7 @@ export function WorktreePanel({
                   setMsg(s);
                   return refresh();
                 })
-                .catch((e) => setMsg(String(e)))
+                .catch((e) => setMsg(settingsErrorMessage(e)))
                 .finally(() => setLoading(false));
             }}
           >
@@ -167,7 +168,7 @@ export function WorktreePanel({
                 setLoading(true);
                 void worktreeDbStats(grokCmd || undefined)
                   .then(setMsg)
-                  .catch((e) => setMsg(String(e)))
+                  .catch((e) => setMsg(settingsErrorMessage(e)))
                   .finally(() => setLoading(false));
               }}
             >
@@ -181,7 +182,7 @@ export function WorktreePanel({
                 setLoading(true);
                 void worktreeDbPath(grokCmd || undefined)
                   .then(setMsg)
-                  .catch((e) => setMsg(String(e)))
+                  .catch((e) => setMsg(settingsErrorMessage(e)))
                   .finally(() => setLoading(false));
               }}
             >
@@ -199,7 +200,7 @@ export function WorktreePanel({
                     setMsg(result);
                     return refresh();
                   })
-                  .catch((e) => setMsg(String(e)))
+                  .catch((e) => setMsg(settingsErrorMessage(e)))
                   .finally(() => setLoading(false));
               }}
             >
@@ -303,7 +304,7 @@ export function WorktreePanel({
                             setMsg(s);
                             return refresh();
                           })
-                          .catch((e) => setMsg(String(e)))
+                          .catch((e) => setMsg(settingsErrorMessage(e)))
                           .finally(() => setLoading(false));
                       }}
                       disabled={loading}

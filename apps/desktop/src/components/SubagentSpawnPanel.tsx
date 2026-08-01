@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AcpClient } from '../lib/acpClient';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 type CapabilityMode = 'read-only' | 'read-write' | 'execute' | 'all';
 type Isolation = 'none' | 'worktree';
@@ -58,7 +59,7 @@ export function SubagentSpawnPanel({ open, client, sessionId, onClose, onStarted
       setDescription('');
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(settingsErrorMessage(cause));
     } finally {
       setBusy(false);
     }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { AcpClient, SessionSnapshot, SessionUsageSnapshot } from '../lib/acpClient';
 import { formatTaskModelDisplay } from '../lib/modelVerify';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 interface Props {
   open: boolean;
@@ -74,7 +75,7 @@ export function TaskInfoPanel({
     } catch (cause) {
       setInfo(null);
       setUsage(null);
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(settingsErrorMessage(cause));
     } finally {
       setLoading(false);
     }
@@ -94,7 +95,7 @@ export function TaskInfoPanel({
     if (!onSetPrivacy || privacyBusy || !window.confirm(optOut ? t('taskInfoPrivacyConfirmOff') : t('taskInfoPrivacyConfirmOn'))) return;
     setPrivacyBusy(true);
     try { await onSetPrivacy(optOut); await load(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    catch (cause) { setError(settingsErrorMessage(cause)); }
     finally { setPrivacyBusy(false); }
   };
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 import {
   buildHookDefinition,
   HOOK_EVENTS,
@@ -52,7 +53,7 @@ export function HookBuilder({ project, onSaved }: Props) {
       setMessage(`${t('settingsHooksSaved')}\n${path}`);
       onSaved?.();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      setMessage(settingsErrorMessage(error));
     } finally {
       setBusy(false);
     }

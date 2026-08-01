@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { onPtyExit, onPtyOutput, ptyClose, ptyOpen, ptyResize, ptyWrite } from '../lib/pty';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 
 interface Props {
   open: boolean;
@@ -76,7 +77,7 @@ export function TerminalDock({ open, cwd, onClose }: Props) {
       const sid = sessionRef.current;
       if (!sid) return;
       void ptyWrite(sid, data).catch((e) => {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(settingsErrorMessage(e));
       });
     });
 
@@ -166,7 +167,7 @@ export function TerminalDock({ open, cwd, onClose }: Props) {
         await ptyResize(r.sessionId, term.cols, term.rows).catch(() => {});
       } catch (e) {
         if (!cancelled) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = settingsErrorMessage(e);
           setError(msg);
           setStatus('');
           term.writeln(`\r\n\x1b[31m${msg}\x1b[0m`);
@@ -210,7 +211,7 @@ export function TerminalDock({ open, cwd, onClose }: Props) {
         term.focus();
         await ptyResize(r.sessionId, term.cols, term.rows).catch(() => {});
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(settingsErrorMessage(e));
       }
     })();
   };

@@ -16,7 +16,8 @@
 | GitHub 验证连接 | `githubFeedback`：成功 login+最后验证；401/403 撤销提示；审计 test/fail | 源码 + `githubFeedback.test` / stage-d | 需用户 token 才能 live 绿 |
 | 设置全局 | catch → `showErr`；成功 `setMsg` 清 err 样式；网络/钥匙串/MCP/模型映射 | 源码 + stage-a | 不伪造连接成功 |
 | 扩展 / Review / Inspect | 原始 dump → `settingsErrorMessage` / `githubActionError` | 源码 | 未做 GUI 录像 |
-| 门禁 | `npx tsc --noEmit`；`npm run test:stage-a`；`npm run test:stage-d` | 本会话通过 | 未重跑完整 `test:stages` / cargo / bundle |
+| 其它面板 | Worktree / TaskInfo / Subagent / HookBuilder / Terminal / Kernel / Attachment / Memory / Scheduled 同样 humanize | 源码 | 不伪造成功 |
+| 门禁 | `npx tsc --noEmit`；`npm run test:stages`（a–g 全绿） | 本会话通过 | 未重跑 cargo / App bundle |
 
 ### 诚实结论
 

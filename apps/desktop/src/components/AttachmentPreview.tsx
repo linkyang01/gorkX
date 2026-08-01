@@ -9,6 +9,7 @@ import {
 } from '../lib/deliverables';
 import { revealInFinder } from '../lib/host';
 import { t } from '../lib/i18n';
+import { settingsErrorMessage } from '../lib/settingsFeedback';
 import { MarkdownView } from './MarkdownView';
 
 interface Props {
@@ -61,7 +62,7 @@ export function AttachmentPreview({ item, projectCwd, onClose }: Props) {
         return;
       } catch (e) {
         // Fall through to read-only plugin path for non-project media paths.
-        setErr(e instanceof Error ? e.message : String(e));
+        setErr(settingsErrorMessage(e));
       }
     }
     try {
@@ -73,7 +74,7 @@ export function AttachmentPreview({ item, projectCwd, onClose }: Props) {
       setDraft(clipped);
       setMtimeMs(0);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(settingsErrorMessage(e));
       setText(null);
     }
   };
@@ -153,7 +154,7 @@ export function AttachmentPreview({ item, projectCwd, onClose }: Props) {
       setEditing(false);
       setStatus(t('deliverablesEditSaved'));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = settingsErrorMessage(e);
       if (/conflict/i.test(msg)) {
         setConflict(true);
         setErr(t('deliverablesEditConflict'));
