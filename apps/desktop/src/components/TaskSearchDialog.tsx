@@ -95,9 +95,19 @@ export function TaskSearchDialog({ open, aliases, onClose, onOpenTask, onSearchK
           }}
         />
         <div style={{ marginTop: 12, maxHeight: '52vh', overflow: 'auto' }}>
-          {!query.trim() ? <p className="hint">{t('taskSearchAllStart')}</p> : null}
+          {!query.trim() ? (
+            <div className="ext-empty-card" style={{ marginTop: 10 }}>
+              <p className="hint" style={{ margin: 0 }}>{t('taskSearchAllStart')}</p>
+              <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskSearchAllStartHint')}</p>
+            </div>
+          ) : null}
           {busy ? <p className="hint">{t('reviewLoading')}</p> : null}
-          {!busy && hits?.length === 0 && !kernelHits?.length ? <p className="hint">{t('taskSearchAllEmpty')}</p> : null}
+          {!busy && hits?.length === 0 && !kernelHits?.length ? (
+            <div className="ext-empty-card" style={{ marginTop: 10 }}>
+              <p className="hint" style={{ margin: 0 }}>{t('taskSearchAllEmpty')}</p>
+              <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('taskSearchAllEmptyHint')}</p>
+            </div>
+          ) : null}
           {hits?.map((hit) => {
             const project = hit.project === '__none__' ? t('noProjectInbox') : projectDisplayName(hit.project, aliases);
             return (

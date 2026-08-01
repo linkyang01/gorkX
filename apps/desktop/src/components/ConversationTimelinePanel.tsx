@@ -65,7 +65,15 @@ export function ConversationTimelinePanel({ open, lines, onClose, onJump }: Prop
               </span>
             </button>
           )) : (
-            <div className="hint">{t('timelineEmpty')}</div>
+            <div className="ext-empty-card">
+              <p className="hint" style={{ margin: 0 }}>{t('timelineEmpty')}</p>
+              <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('timelineEmptyHint')}</p>
+              <div className="field-row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn btn-sm primary-sm" onClick={onClose}>
+                  {t('timelineBackToChat')}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </section>

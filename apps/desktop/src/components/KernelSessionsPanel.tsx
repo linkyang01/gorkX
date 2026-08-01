@@ -75,7 +75,15 @@ export function KernelSessionsPanel({ open, onClose, grokCmd, onResume }: Props)
         {err ? <pre className="ext-msg">{err}</pre> : null}
         <div className="ext-list" style={{ maxHeight: 420, overflow: 'auto' }}>
           {rows.length === 0 && !loading ? (
-            <div className="hint">{t('kernelSessionsEmpty')}</div>
+            <div className="ext-empty-card">
+              <p className="hint" style={{ margin: 0 }}>{t('kernelSessionsEmpty')}</p>
+              <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('kernelSessionsEmptyHint')}</p>
+              <div className="field-row" style={{ marginTop: 10 }}>
+                <button type="button" className="btn btn-sm primary-sm" disabled={loading} onClick={() => void load()}>
+                  {t('extRefresh')}
+                </button>
+              </div>
+            </div>
           ) : (
             rows.map((r) => (
               <div key={r.sessionId} className="ext-row">

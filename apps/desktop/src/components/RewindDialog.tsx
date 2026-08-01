@@ -73,7 +73,12 @@ export function RewindDialog({ points, busy = false, error, preview, onClose, on
               </label>
             ))}
           </div>
-        ) : <div className="rewind-empty">{t('rewindEmpty')}</div>}
+        ) : (
+          <div className="ext-empty-card">
+            <p className="hint" style={{ margin: 0 }}>{t('rewindEmpty')}</p>
+            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('rewindEmptyHint')}</p>
+          </div>
+        )}
 
         {point ? (
           <fieldset className="rewind-modes" disabled={busy}>

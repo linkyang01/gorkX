@@ -2477,7 +2477,9 @@ export function SettingsPanel({
                 </>
               ) : (
                 <div className="settings-card muted-block">
-                  <p className="hint">{t('settingsModelsEmpty')}</p>
+                  <p className="hint" style={{ margin: 0 }}>{t('settingsModelsEmpty')}</p>
+                  <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsModelsEmptyHint')}</p>
+                  <p className="settings-row-hint" style={{ marginTop: 6 }}>{t('settingsModelsEmptyHint2')}</p>
                 </div>
               )}
             </>
@@ -2994,7 +2996,15 @@ export function SettingsPanel({
                             ))}
                           </div>
                         ) : (
-                          <p className="settings-row-hint" style={{ marginTop: 10 }}>{t('settingsHooksEmpty')}</p>
+                          <div className="ext-empty-card" style={{ marginTop: 10 }}>
+                            <p className="hint" style={{ margin: 0 }}>{t('settingsHooksEmpty')}</p>
+                            <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('settingsHooksEmptyHint')}</p>
+                            <div className="field-row" style={{ marginTop: 10 }}>
+                              <button type="button" className="btn btn-sm" disabled={hooksBusy || !hooksSnap} onClick={() => manageHooks({ type: 'reload' })}>
+                                {t('settingsHooksReload')}
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </>
                     ) : null}
