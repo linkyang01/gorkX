@@ -5,38 +5,48 @@ interface Props {
   onClose: () => void;
 }
 
-const ROWS: Array<{ keys: string; action: string }> = [
-  { keys: 'Enter', action: 'send' },
-  { keys: 'Shift + Enter', action: 'newline' },
-  { keys: '↑ / ↓', action: 'Navigate / and @ menus' },
-  { keys: 'Enter / Tab', action: 'Insert selected / or @ item' },
-  { keys: '⌘/Ctrl + L', action: 'Focus composer' },
-  { keys: '⌥⌘ ↑ / ↓', action: 'Previous / next task' },
-  { keys: '⌥⌘ [ / ]', action: 'Previous / next task' },
-  { keys: '⌘/Ctrl + N', action: 'newThread' },
-  { keys: '⌘/Ctrl + D', action: 'Review panel' },
-  { keys: '⇧⌘/Ctrl + J', action: 'Terminal dock' },
-  { keys: '⇧⌘/Ctrl + E', action: 'Extensions' },
-  { keys: '⌘/Ctrl + K', action: 'Kernel settings' },
-  { keys: 'Ctrl + Space / F8', action: 'Start / stop voice input' },
-  { keys: '⌘/Ctrl + /', action: 'Shortcuts' },
-  { keys: 'Esc', action: 'Close menus / modals' },
-];
+/** Desktop-first shortcuts. Slash remains expert-only compatibility. */
+function shortcutRows(): Array<{ keys: string; action: string }> {
+  return [
+    { keys: 'Enter', action: t('shortcutSend') },
+    { keys: 'Shift + Enter', action: t('shortcutNewline') },
+    { keys: '↑ / ↓', action: t('shortcutMenusNav') },
+    { keys: 'Enter / Tab', action: t('shortcutMenusPick') },
+    { keys: '⌘/Ctrl + L', action: t('shortcutFocusComposer') },
+    { keys: '⌥⌘ ↑ / ↓', action: t('shortcutPrevNextTask') },
+    { keys: '⌥⌘ [ / ]', action: t('shortcutPrevNextTask') },
+    { keys: '⌘/Ctrl + N', action: t('shortcutNewTask') },
+    { keys: '⌘/Ctrl + D', action: t('shortcutReview') },
+    { keys: '⇧⌘/Ctrl + J', action: t('shortcutTerminal') },
+    { keys: '⇧⌘/Ctrl + E', action: t('shortcutExtensions') },
+    { keys: '⇧⌘/Ctrl + M', action: t('shortcutMemory') },
+    { keys: '⇧⌘/Ctrl + A', action: t('shortcutDecisions') },
+    { keys: '⇧⌘/Ctrl + S', action: t('shortcutScheduled') },
+    { keys: '⇧⌘/Ctrl + B', action: t('shortcutSpawnSubagent') },
+    { keys: '⇧⌘/Ctrl + F', action: t('shortcutTaskSearch') },
+    { keys: '⌘/Ctrl + K', action: t('shortcutSettings') },
+    { keys: 'Ctrl + Space / F8', action: t('shortcutVoice') },
+    { keys: '⌘/Ctrl + /', action: t('shortcutHelp') },
+    { keys: 'Esc', action: t('shortcutEsc') },
+  ];
+}
 
 export function ShortcutsHelp({ open, onClose }: Props) {
   if (!open) return null;
+  const rows = shortcutRows();
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog">
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('shortcuts')}>
         <div className="modal-head">
           <h2>{t('shortcuts')}</h2>
-          <button type="button" className="btn btn-sm" onClick={onClose}>
+          <button type="button" className="btn btn-sm" onClick={onClose} aria-label={t('cancel')}>
             ×
           </button>
         </div>
+        <p className="hint" style={{ margin: '0 0 10px' }}>{t('shortcutDesktopFirstHint')}</p>
         <table className="shortcuts-table">
           <tbody>
-            {ROWS.map((r) => (
+            {rows.map((r) => (
               <tr key={r.keys}>
                 <td className="mono">{r.keys}</td>
                 <td>{r.action}</td>

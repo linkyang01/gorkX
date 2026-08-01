@@ -51,7 +51,10 @@
 
 - **`applySlashPick`**：已知能力全部转到桌面控件（Review、扩展、记忆、Goal、Loop、媒体、设置模型、任务搜索、Task info、Worktree、Compact、Feedback…）。  
 - 仍广告的未知引擎命令 → **`openEngineAction` 引导表单**，不再默认 `insertSlash`。  
-- 仅完全未知的本地 token 才回退插入 `/name`（专家兼容）。
+- 仅完全未知的本地 token 才回退插入 `/name`（专家兼容）。  
+- **顶栏一键**：进程 · 任务信息 · 扩展 · 记忆 · 计划 · 待处理 · Review · 终端。  
+- **Composer**：活动会话显示「委派子任务」按钮。  
+- **快捷键**（⌘⇧）：E 扩展 · M 记忆 · A 待处理 · S 计划 · B 委派子任务；`⌘/` 打开说明（中英）。
 
 ## 4. 下一阶段实施顺序（按用户价值）
 

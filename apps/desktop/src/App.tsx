@@ -1501,6 +1501,30 @@ function App() {
         setExtOpen(true);
         return;
       }
+      if (meta && (e.key === 'm' || e.key === 'M') && e.shiftKey) {
+        e.preventDefault();
+        setMemoryOpen(true);
+        return;
+      }
+      if (meta && (e.key === 'a' || e.key === 'A') && e.shiftKey) {
+        e.preventDefault();
+        setApprovalInboxOpen(true);
+        return;
+      }
+      if (meta && (e.key === 's' || e.key === 'S') && e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        setScheduledOpen(true);
+        return;
+      }
+      if (meta && (e.key === 'b' || e.key === 'B') && e.shiftKey) {
+        // Delegate a subtask (background worker) — only with a live session.
+        const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+        if (live?.client && live.sessionId && !live.busy) {
+          e.preventDefault();
+          setSubagentSpawnOpen(true);
+        }
+        return;
+      }
       if (meta && e.key === '/') {
         e.preventDefault();
         setShortcutsOpen((v) => !v);
