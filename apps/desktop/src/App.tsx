@@ -448,12 +448,14 @@ function parseSearchScopeForm(value: string): SearchToolOverrides | null {
     lines.shift();
   }
   const domains = lines.flatMap((line) => line.split(/[\s,]+/)).filter(Boolean).map((domain) => domain.toLowerCase());
-  if (!fromDate && !toDate && !domains.length) throw new Error('请填写日期范围或至少一个网站域名。');
+  if (!fromDate && !toDate && !domains.length) throw new Error(t('researchScopeNeedInput'));
   for (const date of [fromDate, toDate]) {
-    if (date && Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new Error('日期请使用 YYYY-MM-DD 格式。');
+    if (date && Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new Error(t('researchScopeDateFormat'));
   }
-  if (fromDate && toDate && fromDate > toDate) throw new Error('开始日期不能晚于结束日期。');
-  if (domains.length > 64 || domains.some((domain) => !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain))) throw new Error('网站请只填写域名，例如 example.com；最多 64 个。');
+  if (fromDate && toDate && fromDate > toDate) throw new Error(t('researchScopeDateOrder'));
+  if (domains.length > 64 || domains.some((domain) => !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain))) {
+    throw new Error(t('researchScopeDomains'));
+  }
   return { ...(fromDate ? { fromDate } : {}), ...(toDate ? { toDate } : {}), ...(domains.length ? { allowedDomains: [...new Set(domains)] } : {}) };
 }
 
@@ -2449,7 +2451,9 @@ function App() {
         appendLine(threadId, {
           id: nid(),
           role: 'system',
-          text: `worktree: ${msg}${st.worktreePath ? ` → ${st.worktreePath}` : ''}`,
+          text: t('systemWorktreeStatus')
+            .replace('{msg}', String(msg))
+            .replace('{path}', st.worktreePath ? ` → ${st.worktreePath}` : ''),
         });
       };
 
@@ -2461,7 +2465,7 @@ function App() {
           appendLine(threadId, {
             id: nid(),
             role: 'system',
-            text: `auto-approved: ${optionId}`,
+            text: t('systemAutoApproved').replace('{option}', optionId),
           });
           return;
         }
@@ -2469,10 +2473,7 @@ function App() {
           key: `permission:${threadId}:${String(req.jsonrpcId)}`,
           kind: 'permission', threadId, createdAt: Date.now(), request: req,
         });
-        void notifyPermission(
-          'gorkX',
-          'Permission required — open the app to approve or reject.',
-        );
+        void notifyPermission('gorkX', t('notifyPermissionRequired'));
       };
 
       client.onUserQuestionRequest = (req) => {
@@ -2482,7 +2483,7 @@ function App() {
         });
         void notifyPermission(
           'gorkX',
-          req.mode === 'plan' ? 'Plan needs your decisions — open gorkX to continue.' : 'Grok needs your decision — open gorkX to continue.',
+          req.mode === 'plan' ? t('notifyPlanQuestion') : t('notifyUserQuestion'),
         );
       };
 
@@ -2491,10 +2492,7 @@ function App() {
           key: `plan:${threadId}:${String(req.jsonrpcId)}`,
           kind: 'plan', threadId, createdAt: Date.now(), request: req,
         });
-        void notifyPermission(
-          'gorkX',
-          'Plan is ready for your review — open gorkX to approve or request changes.',
-        );
+        void notifyPermission('gorkX', t('notifyPlanReview'));
       };
 
       client.onFolderTrustRequest = (req) => {
@@ -2502,7 +2500,7 @@ function App() {
           key: `trust:${threadId}:${String(req.jsonrpcId)}`,
           kind: 'trust', threadId, createdAt: Date.now(), request: req,
         });
-        void notifyPermission('gorkX', 'Project configuration needs your trust decision — open gorkX to continue.');
+        void notifyPermission('gorkX', t('notifyFolderTrust'));
       };
 
       client.onTerminalCreated = (terminalId) => {
@@ -2510,7 +2508,7 @@ function App() {
         appendLine(threadId, {
           id: nid(),
           role: 'system',
-          text: `agent terminal: ${terminalId}`,
+          text: t('systemAgentTerminal').replace('{id}', terminalId),
         });
       };
 
@@ -4541,7 +4539,9 @@ function App() {
         appendLine(id, {
           id: nid(),
           role: 'system',
-          text: `worktree ${wt.status ?? 'ok'}${worktreePath ? `: ${worktreePath}` : ''}`,
+          text: t('worktreeReady')
+            .replace('{status}', String(wt.status ?? 'ok'))
+            .replace('{path}', worktreePath ? `: ${worktreePath}` : ''),
         });
       }
 
@@ -4625,7 +4625,7 @@ function App() {
             appendLine(id, {
               id: nid(),
               role: 'system',
-              text: `stop: ${result.stopReason}`,
+              text: t('systemStopReason').replace('{reason}', String(result.stopReason)),
             });
           }
           patchThread(id, {
@@ -5405,7 +5405,7 @@ function App() {
         appendLine(agent.id, {
           id: nid(),
           role: 'system',
-          text: `stop: ${result.stopReason}`,
+          text: t('systemStopReason').replace('{reason}', String(result.stopReason)),
         });
       }
       if (markInjected) {
@@ -5706,7 +5706,7 @@ function App() {
       appendLine(target.id, {
         id: nid(),
         role: 'system',
-        text: `model → ${next}`,
+        text: t('systemModelSet').replace('{id}', next),
       });
     } catch (e) {
       appendLine(target.id, {
@@ -5731,7 +5731,7 @@ function App() {
       appendLine(active.id, {
         id: nid(),
         role: 'system',
-        text: `effort → ${next} queued after current turn (preference saved)`,
+        text: t('systemEffortQueued').replace('{effort}', next),
       });
       return;
     }
@@ -5743,7 +5743,7 @@ function App() {
     appendLine(threadId, {
       id: nid(),
       role: 'system',
-      text: `restarting agent with effort:${next}…`,
+      text: t('systemEffortRestarting').replace('{effort}', next),
     });
     try {
       await active.client.stop();
@@ -5785,13 +5785,13 @@ function App() {
       appendLine(threadId, {
         id: nid(),
         role: 'system',
-        text: `effort active → ${next}`,
+        text: t('systemEffortActive').replace('{effort}', next),
       });
     } catch (e) {
       patchThread(threadId, {
         busy: false,
         client: null,
-        error: e instanceof Error ? e.message : String(e),
+        error: settingsErrorMessage(e),
       });
     }
   };
