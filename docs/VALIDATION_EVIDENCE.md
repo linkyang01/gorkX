@@ -26,6 +26,8 @@
 | 主界面 alert | 用户可见 `alert` 失败走 `settingsErrorMessage` | 源码 | 非替代 toast 体系 |
 | 旁问/队列/计划/修复 | follow-up、队列、plan 警告、session repair 系统行 humanize | 源码 | 任务连接失败 error 仍可为原始 token |
 | 前端生产构建 | `cd apps/desktop && npm run build` | 通过（本会话） | 非 App bundle / 非 DMG |
+| App-only 包 | `cd apps/desktop && npm run build:app` | 通过：`…/bundle/macos/gorkX.app` · CFBundle `1.0.0` | 未签名公证；未 DMG；未 tag |
+| Bundle 结构 | `scripts/verify-macos-app-bundle.sh …/gorkX.app` | PASS：arm64 主程序 + 包内 `grok 0.2.116 (dd04f39)` + 隔离 `GROK_HOME` + 许可证 | 不构成干净机 H1 |
 
 ### 诚实结论
 

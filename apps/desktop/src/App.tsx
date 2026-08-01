@@ -5621,7 +5621,7 @@ function App() {
         });
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = settingsErrorMessage(e);
       patchThread(active.id, {
         error: msg,
         chatMode: prevMode === 'plan' ? 'plan' : 'agent',
