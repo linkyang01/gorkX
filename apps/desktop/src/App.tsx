@@ -4552,7 +4552,7 @@ function App() {
           appendLine(id, {
             id: nid(),
             role: 'system',
-            text: `${t('applyPlanModeWarn')}: ${settingsErrorMessage(e)}`,
+            text: `${t('planModeFail')}: ${settingsErrorMessage(e)}`,
           });
         }
       } else {
