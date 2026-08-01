@@ -1,0 +1,5 @@
+-rw-r--r--@ 1 link  staff    65M  8月  1 19:53 apps/desktop/src-tauri/target/release/bundle/dmg/gorkX_1.0.0_aarch64.dmg
+
+apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app:
+total 0
+drwxr-xr-x@ 5 link  staff   160B  8月  1 19:52 Contents

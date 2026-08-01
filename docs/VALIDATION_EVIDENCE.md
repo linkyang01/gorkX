@@ -4,6 +4,22 @@
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
 
+## 2026-08-01 · ONE_SHOT「跑完所有」再执行
+
+> 用户再次要求一次性跑完所有。机器可完成部分已连续执行；外部阻塞如实列出。
+
+| 项 | 结果 |
+|---|---|
+| α | 全绿（tsc/stages/cargo88/patches/ACP/desktop） |
+| β | 子任务 **completed**；主 prompt **403** |
+| γ | App 进程 gorkx 已拉起；结构 A/B PASS |
+| δ | **DMG 已生成** `gorkX_1.0.0_aarch64.dmg` + app bundle 校验 PASS |
+| tag/gh release/公证 | **未上传** — 无新版本号与公证材料；本地 DMG 已在 target/release/bundle/dmg/ |
+
+证据目录：`docs/evidence/one-shot-full-20260801-195145/FINAL_EXIT.md`
+
+---
+
 ## 2026-08-01 · ONE_SHOT 一条龙（α–δ）
 
 > 触发：用户「一条龙完成，全做了」。计划：`docs/ONE_SHOT_COMPLETION_PLAN.md`。  
