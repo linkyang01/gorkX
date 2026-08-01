@@ -1,15 +1,57 @@
 /** Sanitize / summarize chat lines for Codex-like clean display. */
 
 const CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+/** CSI / OSC / simple SGR ANSI sequences from engine stderr dumps. */
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g;
 
 /** Strip binary / control noise from protocol dumps. */
 export function sanitizeText(raw: string): string {
   if (!raw) return '';
-  let s = raw.replace(CTRL, '');
+  let s = raw.replace(ANSI, '');
+  // Literal escape sequences sometimes persisted as text dumps.
+  s = s.replace(/\\u001b\[[0-9;?]*[a-zA-Z]/gi, '');
+  s = s.replace(/\\x1b\[[0-9;?]*[a-zA-Z]/gi, '');
+  s = s.replace(CTRL, '');
   // Common MCP/ACP binary framing leftovers
   s = s.replace(/\\u0000/g, '');
   s = s.replace(/\uFFFD+/g, '');
   return s.trim();
+}
+
+/** True when xAI returns 403 that Grok Build is not entitled for this account. */
+export function isGrokBuildAccessDenied(raw: string | null | undefined): boolean {
+  const s = sanitizeText(raw || '');
+  return /coming soon|don'?t have access|do not have access|status\s*403|403\s*forbidden/i.test(s)
+    && /grok\s*build|build is coming/i.test(s);
+}
+
+/**
+ * Prefer a short, desktop-facing explanation over raw JSON-RPC / stderr dumps.
+ * Keeps the original string available for "View error" when callers store it.
+ */
+export function humanizeEngineError(raw: string | null | undefined): string {
+  const s = sanitizeText(raw || '');
+  if (!s) return '';
+  if (isGrokBuildAccessDenied(s)) {
+    return 'GROKX_BUILD_ACCESS_DENIED';
+  }
+  // Prefer the inner data.message from JSON-RPC style envelopes.
+  const dataMsg =
+    s.match(/"message"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]
+    || s.match(/message["']?\s*:\s*["']([^"'\n]+)["']/)?.[1];
+  if (dataMsg) {
+    const unescaped = dataMsg.replace(/\\"/g, '"').replace(/\\n/g, ' ').trim();
+    if (isGrokBuildAccessDenied(unescaped)) return 'GROKX_BUILD_ACCESS_DENIED';
+    if (unescaped.length >= 12 && unescaped.length <= 240) return unescaped;
+  }
+  const api =
+    s.match(/API error\s*\([^)]*\)\s*:\s*([^\n"{}]+)/i)?.[1]?.trim()
+    || s.match(/status\s*403[^\n]*:\s*([^\n"{}]+)/i)?.[1]?.trim();
+  if (api && api.length <= 240) {
+    if (isGrokBuildAccessDenied(api) || isGrokBuildAccessDenied(s)) return 'GROKX_BUILD_ACCESS_DENIED';
+    return api;
+  }
+  return summarizeError(s);
 }
 
 export function isNoiseSystem(text: string): boolean {
@@ -74,20 +116,22 @@ export function toolTitle(text: string, kind?: string, status?: string): string 
 /** Short human summary of tool/system errors. */
 export function summarizeError(text: string): string {
   const s = sanitizeText(text);
+  if (isGrokBuildAccessDenied(s)) return 'GROKX_BUILD_ACCESS_DENIED';
   const m =
     s.match(/Terminal error:[^\n]+/i) ||
     s.match(/spawn failed:[^\n]+/i) ||
     s.match(/No such file or directory[^\n]*/i) ||
     s.match(/error_message["']?\s*[:=]\s*["']?([^\n"']+)/i) ||
+    s.match(/API error\s*\([^)]*\)\s*:\s*([^\n"{}]+)/i) ||
     s.match(/Error:\s*([^\n]+)/i);
   if (m) return (m[1] || m[0]).trim().slice(0, 160);
   // Prefer last non-empty line that looks human
   const lines = s
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l.length > 4 && /[a-zA-Z\u4e00-\u9fff]/.test(l));
+    .filter((l) => l.length > 4 && /[a-zA-Z\u4e00-\u9fff]/.test(l) && !/^\d{4}-\d{2}-\d{2}/.test(l));
   const last = lines[lines.length - 1];
-  if (last && last.length < 200) return last;
+  if (last && last.length < 200 && !/^[{[]/.test(last)) return last;
   return s.slice(0, 120) + (s.length > 120 ? '…' : '');
 }
 

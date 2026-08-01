@@ -176,7 +176,12 @@ import {
 } from './lib/attachments';
 import { captureScreenRegion } from './lib/host';
 import { withConversationPresentation } from './lib/conversationPresentation';
-import { isInjectedUserPromptEcho } from './lib/chatFormat';
+import {
+  humanizeEngineError,
+  isGrokBuildAccessDenied,
+  isInjectedUserPromptEcho,
+  sanitizeText,
+} from './lib/chatFormat';
 import {
   loadPinnedProjects,
   loadProjectAliases,
@@ -2080,15 +2085,44 @@ function App() {
       .slice(0, 30);
   }, [active?.lines]);
 
+  /** Map stored engine dumps to a short user-facing line (i18n when known). */
+  const visibleTaskError = useCallback((raw: string | null | undefined): string => {
+    const detail = sanitizeText(raw || '');
+    if (!detail) return t('taskFailedVisible');
+    if (isGrokBuildAccessDenied(detail) || humanizeEngineError(detail) === 'GROKX_BUILD_ACCESS_DENIED') {
+      return t('taskErrorBuildAccessDenied');
+    }
+    if (requiresAccountReauthentication(detail)) return t('taskErrorSignInRequired');
+    const human = humanizeEngineError(detail);
+    if (human === 'GROKX_BUILD_ACCESS_DENIED') return t('taskErrorBuildAccessDenied');
+    return human || t('taskFailedVisible');
+  }, []);
+
   /**
    * Keep the technical error available on demand, while always leaving a
    * human-readable trace in the task. This avoids an empty conversation when
    * session startup or the first prompt fails before any assistant content.
    */
   const markTaskFailed = useCallback((threadId: string, error: unknown) => {
-    const detail = error instanceof Error ? error.message : String(error);
-    patchThread(threadId, { busy: false, error: detail });
-    appendLine(threadId, { id: nid(), role: 'system', text: t('taskFailedVisible') });
+    const raw = error instanceof Error ? error.message : String(error);
+    const detail = sanitizeText(raw);
+    const friendly = visibleTaskError(detail);
+    const current = threadsRef.current.find((thread) => thread.id === threadId);
+    patchThread(threadId, {
+      busy: false,
+      error: detail,
+      ...(isPlaceholderTitle(current?.title || '')
+        ? {
+            title: isGrokBuildAccessDenied(detail)
+              ? t('taskErrorBuildAccessTitle')
+              : t('taskFailedTitle'),
+          }
+        : {}),
+    });
+    appendLine(threadId, { id: nid(), role: 'system', text: friendly });
+    if (friendly !== t('taskFailedVisible')) {
+      appendLine(threadId, { id: nid(), role: 'system', text: t('taskFailedVisible') });
+    }
     // Account information can otherwise remain a stale cached success while
     // the engine has just proved that its OAuth session cannot be refreshed.
     // Refresh through the same authenticated account path so the sidebar tells
@@ -2096,7 +2130,7 @@ function App() {
     if (requiresAccountReauthentication(detail)) {
       void refreshAccount();
     }
-  }, [appendLine, patchThread, refreshAccount]);
+  }, [appendLine, patchThread, refreshAccount, visibleTaskError]);
 
   const appendOrMerge = useCallback(
     (
@@ -7599,8 +7633,20 @@ function App() {
             {active.error ? (
               <section className="task-error-card" role="alert" aria-label={t('taskErrorDialogTitle')}>
                 <div>
-                  <strong>{requiresAccountReauthentication(active.error) ? t('accountSignInAgain') : t('taskFailedVisible')}</strong>
-                  <p>{t('taskErrorDialogHint')}</p>
+                  <strong>
+                    {requiresAccountReauthentication(active.error)
+                      ? t('accountSignInAgain')
+                      : isGrokBuildAccessDenied(active.error)
+                        ? t('taskErrorBuildAccessTitle')
+                        : t('taskFailedVisible')}
+                  </strong>
+                  <p>
+                    {isGrokBuildAccessDenied(active.error)
+                      ? t('taskErrorBuildAccessDenied')
+                      : requiresAccountReauthentication(active.error)
+                        ? t('taskErrorSignInHint')
+                        : t('taskErrorDialogHint')}
+                  </p>
                 </div>
                 <div className="task-error-card-actions">
                   {requiresAccountReauthentication(active.error) ? (

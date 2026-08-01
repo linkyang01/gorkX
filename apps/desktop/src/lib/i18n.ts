@@ -102,6 +102,10 @@ const dict = {
     taskErrorDetails: 'View error',
     taskErrorDetailsHint: 'Show the task error details',
     taskFailedVisible: 'This task did not finish. View the error details to continue.',
+    taskFailedTitle: 'Task failed',
+    taskErrorBuildAccessTitle: 'Grok Build not available',
+    taskErrorBuildAccessDenied:
+      'This Grok account cannot use Grok Build yet (server 403: coming soon / no access). SuperGrok chat alone is not enough — open Grok Build access for the account, or sign in with an entitled account. gorkX cannot bypass this.',
     taskErrorDialogTitle: 'Task error details',
     taskErrorDialogHint: 'This is the exact error reported by the engine or connection. You can copy it for diagnosis.',
     taskInfoPrivacy: 'Coding data, retention, and training',
@@ -1997,6 +2001,10 @@ const dict = {
     taskErrorDetails: '查看错误',
     taskErrorDetailsHint: '显示这项任务的具体错误信息',
     taskFailedVisible: '此任务没有完成。请查看具体错误后继续。',
+    taskFailedTitle: '任务失败',
+    taskErrorBuildAccessTitle: '暂无 Grok Build 权限',
+    taskErrorBuildAccessDenied:
+      '当前 Grok 账号还不能使用 Grok Build（服务端 403：coming soon / 无访问权）。仅有 SuperGrok 聊天权限不够 — 需为该账号开通 Build，或换有权限的账号登录。gorkX 无法绕过此限制。',
     taskErrorDialogTitle: '任务错误详情',
     taskErrorDialogHint: '这是引擎或连接返回的原始错误信息，可复制后用于诊断。',
     taskInfoPrivacy: '代码数据、留存与训练',

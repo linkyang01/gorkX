@@ -133,7 +133,8 @@ export function isPlaceholderTitle(title: string): boolean {
   if (/^session$/i.test(t)) return true;
   if (/^(wt|plan)\s*·/i.test(t)) return true;
   // Default seed labels (en/zh) used when a thread is created empty
-  if (/^(new task|新建任务|chat|对话|inbox|worktree)$/i.test(t)) return true;
+  if (/^(new task|新建任务|chat|对话|inbox|worktree|\?)$/i.test(t)) return true;
+  if (t === '?' || t === '…' || t === '...') return true;
   // Attachment-polluted titles from older builds
   if (/\[Attached/i.test(t)) return true;
   // UUID-ish or short session id

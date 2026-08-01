@@ -129,12 +129,16 @@ export function ProcessPanel({
                 </div>
               );
             }
+            const looksLikeDump =
+              clean.length > 160
+              || /API error|Internal error|status\s*403|\\u001b|\u001b\[/i.test(clean);
+            const systemBody = looksLikeDump ? summarizeError(clean) : clean.slice(0, 2000);
             return (
               <div key={line.id} className="process-item system">
                 <div className="process-item-label">
                   <IconSystem size={13} /> {t('system')}
                 </div>
-                <pre className="process-item-body">{clean.slice(0, 2000)}</pre>
+                <pre className="process-item-body">{systemBody}{looksLikeDump && clean.length > systemBody.length ? '\n…' : ''}</pre>
               </div>
             );
           })
