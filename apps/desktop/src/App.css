@@ -3282,6 +3282,19 @@ button.pill:hover {
   }
 }
 
+.about-version-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 560px) {
+  .about-version-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .hook-builder-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

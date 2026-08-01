@@ -127,6 +127,7 @@ import {
 } from '../lib/extensions';
 import { DESKTOP_SHORTCUT_SPECS } from '../lib/desktopShortcuts';
 import { worktreeListJson } from '../lib/grokAdmin';
+import { buildDiagnosticsSummary } from '../lib/diagnosticsSummary';
 import {
   githubConnectReadonly,
   githubCreatePrComment,
@@ -441,6 +442,7 @@ export function SettingsPanel({
   const [worktreePreview, setWorktreePreview] = useState<Array<{ path: string; branch?: string; bare?: boolean }>>([]);
   const [worktreePreviewBusy, setWorktreePreviewBusy] = useState(false);
   const [mcpDoctorOut, setMcpDoctorOut] = useState<string | null>(null);
+  const [envDoctorOpen, setEnvDoctorOpen] = useState(false);
 
   const parseWorktreePreviewRows = (list: unknown[]): Array<{ path: string; branch?: string; bare?: boolean }> => {
     const out: Array<{ path: string; branch?: string; bare?: boolean }> = [];
@@ -4119,17 +4121,82 @@ export function SettingsPanel({
             <>
               <h2>{t('settingsGit')}</h2>
               <div className="settings-card">
-                <p className="hint">{t('settingsGitRealHint')}</p>
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => {
-                    onClose();
-                    onOpenReview?.();
-                  }}
-                >
-                  {t('settingsGitOpenReview')}
-                </button>
+                <div className="settings-row-title">{t('settingsGitSummaryTitle')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>{t('settingsGitRealHint')}</p>
+                <div className="settings-row" style={{ marginTop: 10, alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="settings-row-hint">{t('settingsGitProject')}</div>
+                    {project ? (
+                      <div className="mono path-wrap" style={{ fontSize: 11 }}>{project}</div>
+                    ) : (
+                      <div className="settings-row-hint">{t('settingsGitNoProject')}</div>
+                    )}
+                    <div style={{ marginTop: 8 }}>
+                      <span
+                        className={`account-state-badge ${
+                          github?.connected ? 'ok' : github?.error ? 'warn' : 'muted'
+                        }`}
+                      >
+                        {github?.connected
+                          ? t('githubConnected').replace('{login}', github.login || 'GitHub')
+                          : github?.configured
+                            ? t('githubConfigured')
+                            : t('githubNotConnected')}
+                      </span>
+                    </div>
+                    {github?.error ? (
+                      <div className="settings-row-hint error-text" style={{ marginTop: 6 }}>
+                        {githubHostMessage(github.error)}
+                      </div>
+                    ) : github?.note ? (
+                      <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                        {githubHostMessage(github.note)}
+                      </div>
+                    ) : null}
+                    {github?.authMethod ? (
+                      <div className="settings-row-hint">
+                        {t('githubAuthMethod')}: {github.authMethod}
+                        {github.lastVerifiedAt
+                          ? ` · ${t('githubLastVerified')}: ${formatGithubVerifiedAt(github.lastVerifiedAt)}`
+                          : ''}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={!project}
+                    onClick={() => {
+                      onClose();
+                      onOpenReview?.();
+                    }}
+                  >
+                    {t('settingsGitOpenReview')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={githubBusy}
+                    onClick={() => {
+                      setGithubBusy(true);
+                      void fetchGithubStatus()
+                        .then((next) => {
+                          setGithub(next);
+                          const fb = githubStatusFeedback(next);
+                          showMsg(fb.text, fb.isError);
+                        })
+                        .catch((e) => showErr(e))
+                        .finally(() => setGithubBusy(false));
+                    }}
+                  >
+                    {t('settingsGitRefreshStatus')}
+                  </button>
+                </div>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>
+                  {t('settingsGitOpenReviewHint')}
+                </p>
               </div>
               <h3 className="subhead">{t('githubTitle')}</h3>
               <div className="settings-card">
@@ -4385,7 +4452,17 @@ export function SettingsPanel({
                 {t('settingsEnvironmentHint')}
               </p>
               <div className="settings-card">
-                <div className="upgrade-label">{t('dataDir')}</div>
+                <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+                  <div>
+                    <div className="settings-row-title">{t('settingsEnvPathsTitle')}</div>
+                    <span
+                      className={`account-state-badge ${status?.independentReady ? 'ok' : 'warn'}`}
+                    >
+                      {status?.independentReady ? t('settingsEnvReady') : t('settingsEnvNotReady')}
+                    </span>
+                  </div>
+                </div>
+                <div className="upgrade-label" style={{ marginTop: 10 }}>{t('dataDir')}</div>
                 <div className="mono path-wrap" style={{ fontSize: 11 }}>
                   {dataDir || '—'}
                 </div>
@@ -4409,10 +4486,14 @@ export function SettingsPanel({
                     ? t('settingsIndepReady')
                     : t('settingsGrokHomeHint')}
                 </div>
+                <div className="settings-row-title" style={{ marginTop: 12 }}>{t('settingsEnvEngineTitle')}</div>
                 <div className="settings-row-hint mono" style={{ marginTop: 4 }}>
-                  engine: {status?.channel || '—'} · {status?.grokPath || '—'}
+                  {status?.version || '—'} · {status?.channel || '—'}
                 </div>
-                <div className="field-row" style={{ marginTop: 10 }}>
+                <div className="mono path-wrap" style={{ fontSize: 11, marginTop: 4 }}>
+                  {status?.grokPath || '—'}
+                </div>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="btn btn-sm"
@@ -4432,7 +4513,61 @@ export function SettingsPanel({
                   >
                     {t('clearChatCache')}
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={doctorBusy}
+                    onClick={() => {
+                      setEnvDoctorOpen(true);
+                      void checkKernelDoctor();
+                    }}
+                  >
+                    {doctorBusy ? t('kernelDoctorRunning') : t('settingsEnvRunDoctor')}
+                  </button>
+                  <button type="button" className="btn btn-sm" onClick={() => setSection('kernel')}>
+                    {t('settingsEnvOpenKernel')}
+                  </button>
                 </div>
+                {kernelDoctor ? (
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => setEnvDoctorOpen((v) => !v)}
+                    >
+                      {envDoctorOpen ? t('settingsEnvDoctorHide') : t('settingsEnvDoctorCollapsed')}
+                    </button>
+                    {envDoctorOpen ? (
+                      <div className="settings-card" style={{ marginTop: 8 }}>
+                        <div className="settings-row-hint">{kernelDoctor.repairHint}</div>
+                        <div className="settings-row-hint">
+                          {t('kernelDoctorHomeWritable')}:{' '}
+                          {kernelDoctor.grokHomeWritable ? t('kernelDoctorYes') : t('kernelDoctorNo')}
+                        </div>
+                        {kernelDoctor.issues.length ? (
+                          <ul className="settings-list">
+                            {kernelDoctor.issues.map((issue) => (
+                              <li key={issue}>{issue}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="settings-row-hint">{t('kernelDoctorClean')}</div>
+                        )}
+                        {kernelDoctor.engineFindings.length ? (
+                          <div style={{ marginTop: 8 }}>
+                            <div className="settings-row-title">{t('kernelDoctorEngineResults')}</div>
+                            {kernelDoctor.engineFindings.slice(0, 6).map((finding) => (
+                              <div key={finding.id} className="settings-row-hint" style={{ marginTop: 6 }}>
+                                <strong>{finding.message}</strong>
+                                {finding.remediation ? ` — ${finding.remediation}` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="settings-card" style={{ marginTop: 12 }}>
                 <div className="settings-row">
@@ -4938,22 +5073,34 @@ export function SettingsPanel({
             <>
               <h2>{t('settingsAbout')}</h2>
               <div className="settings-card">
-                <div className="settings-row-title">gorkX</div>
-                <div className="mono">v{APP_VERSION}</div>
-                <p className="hint" style={{ marginTop: 8 }}>
+                <div className="settings-row-title">{t('settingsAboutVersions')}</div>
+                <div className="about-version-grid">
+                  <div>
+                    <div className="settings-row-hint">{t('settingsAboutAppVersion')}</div>
+                    <div className="mono">v{APP_VERSION}</div>
+                  </div>
+                  <div>
+                    <div className="settings-row-hint">{t('settingsAboutKernelVersion')}</div>
+                    <div className="mono">
+                      {status?.version || kernelUp?.currentVersion || '—'}
+                      {status?.channel ? ` · ${status.channel}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <p className="hint" style={{ marginTop: 10 }}>
                   {t('aboutBlurb')}
                 </p>
-                <div className="settings-row-hint" style={{ marginTop: 8 }}>
-                  {status?.independentReady
-                    ? t('settingsIndepReady')
-                    : t('settingsIndepStatus')}
+                <div style={{ marginTop: 8 }}>
+                  <span className={`account-state-badge ${status?.independentReady ? 'ok' : 'warn'}`}>
+                    {status?.independentReady ? t('settingsIndepReady') : t('settingsIndepStatus')}
+                  </span>
                 </div>
                 {status?.grokHome ? (
-                  <div className="mono path-wrap" style={{ fontSize: 11, marginTop: 6 }}>
+                  <div className="mono path-wrap" style={{ fontSize: 11, marginTop: 8 }}>
                     GROK_HOME: {status.grokHome}
                   </div>
                 ) : null}
-                <div className="field-row" style={{ marginTop: 10 }}>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="btn"
@@ -4967,6 +5114,82 @@ export function SettingsPanel({
                     onClick={() => void openUrlSafe(GROK_KERNEL_GITHUB.sourceUrl)}
                   >
                     Grok Build
+                  </button>
+                  <button type="button" className="btn" onClick={() => setSection('updates')}>
+                    {t('settingsAboutOpenUpdates')}
+                  </button>
+                </div>
+              </div>
+              <div className="settings-card" style={{ marginTop: 12 }}>
+                <div className="settings-row-title">{t('settingsAboutDiagnostics')}</div>
+                <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                  {t('settingsAboutDiagnosticsHint')}
+                </p>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      const text = buildDiagnosticsSummary({
+                        appVersion: APP_VERSION,
+                        kernelVersion: status?.version || kernelUp?.currentVersion,
+                        kernelPath: status?.grokPath || grokCmd,
+                        kernelChannel: status?.channel,
+                        grokHome: status?.grokHome || modelsSnap?.grokHome,
+                        dataDir,
+                        dbPath,
+                        independentReady: status?.independentReady,
+                        authenticated: Boolean(account?.authenticated || status?.authenticated),
+                        accountEmail: account?.email,
+                        githubConnected: github?.connected,
+                        githubLogin: github?.login,
+                        project,
+                      });
+                      void navigator.clipboard.writeText(text).then(
+                        () => setMsg(t('settingsAboutDiagnosticsCopied')),
+                        (e) => showErr(e),
+                      );
+                    }}
+                  >
+                    {t('settingsAboutCopyDiagnostics')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const { save } = await import('@tauri-apps/plugin-dialog');
+                          const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+                          const path = await save({
+                            defaultPath: `gorkx-diagnostics-${APP_VERSION}.txt`,
+                            filters: [{ name: 'Text', extensions: ['txt'] }],
+                          });
+                          if (!path) return;
+                          const text = buildDiagnosticsSummary({
+                            appVersion: APP_VERSION,
+                            kernelVersion: status?.version || kernelUp?.currentVersion,
+                            kernelPath: status?.grokPath || grokCmd,
+                            kernelChannel: status?.channel,
+                            grokHome: status?.grokHome || modelsSnap?.grokHome,
+                            dataDir,
+                            dbPath,
+                            independentReady: status?.independentReady,
+                            authenticated: Boolean(account?.authenticated || status?.authenticated),
+                            accountEmail: account?.email,
+                            githubConnected: github?.connected,
+                            githubLogin: github?.login,
+                            project,
+                          });
+                          await writeTextFile(path, text);
+                          setMsg(t('settingsAboutDiagnosticsSaved'));
+                        } catch (e) {
+                          showErr(e);
+                        }
+                      })();
+                    }}
+                  >
+                    {t('settingsAboutExportDiagnostics')}
                   </button>
                 </div>
               </div>
