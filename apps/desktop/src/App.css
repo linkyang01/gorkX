@@ -3204,6 +3204,84 @@ button.pill:hover {
   border: 1px solid var(--hairline);
 }
 
+.account-settings-identity {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.account-settings-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--hairline);
+  background: var(--meta-surface);
+}
+
+.account-settings-avatar.placeholder {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.account-state-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--hairline);
+  background: var(--meta-surface);
+  color: var(--text-2);
+}
+
+.account-state-badge.ok {
+  color: var(--ok);
+  background: var(--status-ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--hairline));
+}
+
+.account-state-badge.warn {
+  color: var(--warn);
+  background: var(--status-warn-soft);
+  border-color: color-mix(in srgb, var(--warn) 28%, var(--hairline));
+}
+
+.account-state-badge.muted {
+  color: var(--muted);
+}
+
+.connector-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 12px 0 14px;
+}
+
+.connector-capability-card.soon {
+  border-style: dashed;
+}
+
+.connector-capability-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+@media (min-width: 720px) {
+  .connector-card-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .hook-builder-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

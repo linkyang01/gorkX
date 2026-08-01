@@ -83,6 +83,25 @@ export function settingsErrorMessage(error: unknown): string {
     return t('settingsErrorNotFound');
   }
 
+  // App / kernel update checks
+  if (/rate.?limit|API rate limit|403.*github|secondary rate/i.test(s)) {
+    return t('settingsErrorUpdateRateLimit');
+  }
+  if (/404|not found|no releases?|release.*missing/i.test(s) && /update|release|dmg|github/i.test(s)) {
+    return t('settingsErrorUpdateNotFound');
+  }
+  if (/dmg|download|checksum|signature|gatekeeper|notariz/i.test(s) && /fail|error|invalid|mismatch|reject/i.test(s)) {
+    return t('settingsErrorUpdateDownload');
+  }
+  if (/kernel|grok.?build|update --check/i.test(s) && /fail|error|exit|spawn/i.test(s)) {
+    return t('settingsErrorUpdateKernel');
+  }
+
+  // Account login
+  if (/device.?code|login|sign.?in|oauth|browser/i.test(s) && /cancel|timeout|expired|denied|fail/i.test(s)) {
+    return t('settingsErrorLogin');
+  }
+
   const human = humanizeEngineError(s);
   if (
     human

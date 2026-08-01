@@ -13,7 +13,15 @@ import {
   type PermissionMode,
 } from '../lib/acpClient';
 import type { AccountSummary, SubscriptionModelsSnapshot } from '../lib/account';
-import { fetchAccountSummary, fetchSubscriptionModelsSnapshot, logoutAccount, startLoginFlow } from '../lib/account';
+import {
+  fetchAccountSummary,
+  fetchSubscriptionModelsSnapshot,
+  loadDisplayNameOverride,
+  logoutAccount,
+  saveDisplayNameOverride,
+  startLoginFlow,
+  uiDisplayName,
+} from '../lib/account';
 import {
   clearChatCache,
   loadThreadMetas,
@@ -425,6 +433,7 @@ export function SettingsPanel({
   );
   const [appearance, setAppearance] = useState<AppearancePreferences>(() => loadAppearance());
   const [savedThemes, setSavedThemes] = useState<SavedTheme[]>(() => loadSavedThemes());
+  const [displayNameDraft, setDisplayNameDraft] = useState(() => loadDisplayNameOverride());
   const [browserSnap, setBrowserSnap] = useState<ExtensionsSnapshot | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
   const [extHubSnap, setExtHubSnap] = useState<ExtensionsSnapshot | null>(null);
@@ -1355,6 +1364,10 @@ export function SettingsPanel({
   };
 
   const runSubLogin = async () => {
+    if (!status?.installed) {
+      showMsg(t('accountStateKernelMissing'), true);
+      return;
+    }
     setLoginBusy(true);
     setMsg(t('subLoginHint'));
     try {
@@ -1375,7 +1388,25 @@ export function SettingsPanel({
     }
   };
 
+  const refreshAccountSummary = async () => {
+    setLoginBusy(true);
+    try {
+      const a = await fetchAccountSummary();
+      setAccount(a);
+      setMsg(t('accountRefreshSummary'));
+      onRefresh();
+    } catch (e) {
+      showErr(e);
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   const doLogout = async () => {
+    if (!account?.authenticated && !status?.authenticated) {
+      setMsg(t('accountLogoutDisabled'));
+      return;
+    }
     try {
       await logoutAccount();
       setMsg(t('logout'));
@@ -1414,19 +1445,25 @@ export function SettingsPanel({
     try {
       const info = await checkKernelUpdate(status?.grokPath || grokCmd);
       setKernelUp(info);
+      if (info.error && !info.updateAvailable && info.latestVersion === '—') {
+        showMsg(`${t('updateFail')}: ${settingsErrorMessage(info.error)}`, true);
+        return;
+      }
       setMsg(
         info.updateAvailable && info.runtimeUpdatesDisabled
           ? t('kernelUpdateAvailableSourceLocked')
               .replace('{cur}', info.currentVersion)
               .replace('{latest}', info.latestVersion)
           : info.runtimeUpdatesDisabled && info.error
-            ? `${t('kernelSourceLocked')} · ${info.error}`
+            ? `${t('kernelSourceLocked')} · ${settingsErrorMessage(info.error)}`
             : info.updateAvailable
           ? t('updateAvailable')
               .replace('{cur}', info.currentVersion)
               .replace('{latest}', info.latestVersion)
           : t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion),
       );
+    } catch (e) {
+      showErr(e);
     } finally {
       setUpBusy(false);
     }
@@ -1440,6 +1477,11 @@ export function SettingsPanel({
       setAppUp(info);
       if (info.error && !info.latestVersion) {
         showMsg(`${t('updateFail')}: ${settingsErrorMessage(info.error)}`, true);
+      } else if (info.error && info.updateAvailable === false) {
+        showMsg(
+          `${info.note || t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion)} · ${settingsErrorMessage(info.error)}`,
+          true,
+        );
       } else if (info.updateAvailable) {
         const size = formatBytes(info.dmgBytes);
         setMsg(
@@ -1452,6 +1494,8 @@ export function SettingsPanel({
           info.note || t('updateLatest').replace('{v}', info.latestVersion || info.currentVersion),
         );
       }
+    } catch (e) {
+      showErr(e);
     } finally {
       setUpBusy(false);
     }
@@ -1466,8 +1510,16 @@ export function SettingsPanel({
         info = await checkAppUpdate(APP_VERSION);
         setAppUp(info);
       }
+      if (info.error && !info.dmgUrl) {
+        showMsg(`${t('updateFail')}: ${settingsErrorMessage(info.error)}`, true);
+        return;
+      }
       const r = await installAppUpdate(info);
-      setMsg(r.note || (r.ok ? t('updateAppDone') : t('updateFail')));
+      if (r.ok) {
+        setMsg(r.note || t('updateAppDone'));
+      } else {
+        showMsg(r.note || t('updateFail'), true);
+      }
     } catch (e) {
       showErr(e);
     } finally {
@@ -2602,43 +2654,175 @@ export function SettingsPanel({
           {section === 'account' ? (
             <>
               <h2>{t('settingsAccount')}</h2>
-              <div className="settings-card">
-                <div className="settings-row">
-                  <div>
-                    <div className="settings-row-title">
-                      {(() => {
-                        const name =
-                          account?.displayName || account?.email || t('statusNeedLogin');
-                        const plan = account?.membershipLabel?.trim();
-                        return plan ? `${name}（${plan}）` : name;
-                      })()}
+              {(() => {
+                const signedIn = Boolean(account?.authenticated || status?.authenticated);
+                const kernelMissing = !status?.installed;
+                const needsRefresh =
+                  signedIn &&
+                  Boolean(
+                    account?.quotaNote &&
+                      /sign.?in|re-?login|refresh|expired/i.test(account.quotaNote),
+                  );
+                const stateLabel = kernelMissing
+                  ? t('accountStateKernelMissing')
+                  : needsRefresh
+                    ? t('accountStateRefresh')
+                    : signedIn
+                      ? t('accountStateSignedIn')
+                      : t('accountStateSignedOut');
+                const stateClass = kernelMissing || needsRefresh
+                  ? 'warn'
+                  : signedIn
+                    ? 'ok'
+                    : 'muted';
+                const display = uiDisplayName(account, displayNameDraft) || t('statusNeedLogin');
+                return (
+                  <>
+                    <div className="settings-card">
+                      <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+                        <div className="account-settings-identity">
+                          {account?.avatarUrl ? (
+                            <img
+                              className="account-settings-avatar"
+                              src={account.avatarUrl}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className="account-settings-avatar placeholder" aria-hidden>
+                              {(display || '?').slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div className="settings-row-title">{display}</div>
+                            <div className="settings-row-hint mono">{account?.email || '—'}</div>
+                            <span className={`account-state-badge ${stateClass}`}>{stateLabel}</span>
+                            {account?.membershipLabel ? (
+                              <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                                {account.membershipLabel}
+                              </div>
+                            ) : null}
+                            {account?.quotaLabel ? (
+                              <div className="settings-row-hint">{account.quotaLabel}</div>
+                            ) : null}
+                            {typeof account?.creditUsagePercent === 'number' ? (
+                              <div className="settings-row-hint">
+                                {t('accountQuotaDetail')}: {Math.round(account.creditUsagePercent)}%
+                                {account.periodType ? ` · ${account.periodType}` : ''}
+                              </div>
+                            ) : signedIn ? (
+                              <div className="settings-row-hint">{t('accountQuotaUnavailableShort')}</div>
+                            ) : null}
+                            {account?.quotaNote && !needsRefresh ? (
+                              <div className="settings-row-hint">{account.quotaNote}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="field-row" style={{ marginTop: 12, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className="btn primary"
+                          disabled={loginBusy || kernelMissing}
+                          onClick={() => void runSubLogin()}
+                        >
+                          {loginBusy
+                            ? t('subLoginHint')
+                            : signedIn
+                              ? t('accountLoginAgain')
+                              : t('accountLoginPrimary')}
+                        </button>
+                        {signedIn ? (
+                          <button
+                            type="button"
+                            className="btn"
+                            disabled={loginBusy}
+                            onClick={() => void refreshAccountSummary()}
+                          >
+                            {t('accountRefreshSummary')}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={loginBusy || (!signedIn && !account)}
+                          onClick={() => void doLogout()}
+                        >
+                          {t('logout')}
+                        </button>
+                      </div>
+                      <p className="hint" style={{ marginTop: 8 }}>
+                        {kernelMissing ? t('accountStateKernelMissing') : t('subLoginHint')}
+                      </p>
                     </div>
-                    <div className="settings-row-hint mono">{account?.email || '—'}</div>
-                    {account?.membershipLabel ? (
-                      <div className="settings-row-hint">{account.membershipLabel}</div>
+
+                    <div className="settings-card" style={{ marginTop: 12 }}>
+                      <div className="settings-row-title">{t('accountLocalNickname')}</div>
+                      <p className="settings-row-hint" style={{ marginTop: 6 }}>
+                        {t('accountLocalNicknameHint')}
+                      </p>
+                      <div className="field-row" style={{ marginTop: 10 }}>
+                        <input
+                          className="settings-text-input"
+                          style={{ marginTop: 0, flex: 1 }}
+                          value={displayNameDraft}
+                          maxLength={48}
+                          placeholder={t('displayNamePlaceholder')}
+                          onChange={(e) => setDisplayNameDraft(e.target.value)}
+                          spellCheck={false}
+                        />
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => {
+                            saveDisplayNameOverride(displayNameDraft);
+                            setDisplayNameDraft(loadDisplayNameOverride());
+                            setMsg(t('displayNameEdit'));
+                          }}
+                        >
+                          {t('settingsEdit')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => {
+                            saveDisplayNameOverride('');
+                            setDisplayNameDraft('');
+                            setMsg(t('displayNameReset'));
+                          }}
+                        >
+                          {t('displayNameReset')}
+                        </button>
+                      </div>
+                    </div>
+
+                    {signedIn ? (
+                      <div className="settings-card" style={{ marginTop: 12 }}>
+                        <div className="settings-row-title">{t('accountCodingDataTitle')}</div>
+                        <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                          {account?.codingDataRetentionOptOut === true
+                            ? t('accountCodingDataOptOut')
+                            : account?.codingDataRetentionOptOut === false
+                              ? t('accountCodingDataOptIn')
+                              : t('accountCodingDataUnknown')}
+                        </div>
+                        <p className="settings-row-hint" style={{ marginTop: 8 }}>
+                          {t('settingsUsageModelsHint')}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ marginTop: 8 }}
+                          disabled={loginBusy || !status?.authenticated}
+                          onClick={() => void refreshModels()}
+                        >
+                          {t('refreshModels')}
+                        </button>
+                      </div>
                     ) : null}
-                    {account?.quotaLabel ? (
-                      <div className="settings-row-hint">{account.quotaLabel}</div>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="field-row" style={{ marginTop: 10 }}>
-                  <button
-                    type="button"
-                    className="btn primary"
-                    disabled={loginBusy || !status?.installed}
-                    onClick={() => void runSubLogin()}
-                  >
-                    {t('subLogin')}
-                  </button>
-                  <button type="button" className="btn" onClick={() => void doLogout()}>
-                    {t('logout')}
-                  </button>
-                </div>
-                <p className="hint" style={{ marginTop: 8 }}>
-                  {t('subLoginHint')}
-                </p>
-              </div>
+                  </>
+                );
+              })()}
             </>
           ) : null}
 
@@ -3797,57 +3981,99 @@ export function SettingsPanel({
                 <p className="settings-row-hint" style={{ marginTop: 6 }}>
                   {t('connectorContractBody')}
                 </p>
-                <ul className="settings-list" style={{ marginTop: 10 }}>
-                  {CONNECTOR_CATALOG.map((c) => {
-                    const live = c.id === 'github' ? github : null;
-                    const state = deriveConnectorUiState(c, live);
-                    const stateLabel =
-                      state === 'soon'
-                        ? t('connectorSoon')
-                        : state === 'connected'
-                          ? t('connectorConnected')
-                          : state === 'configured'
-                            ? t('connectorConfigured')
-                            : state === 'error'
-                              ? t('connectorError')
-                              : t('connectorDisconnected');
-                    return (
-                      <li key={c.id}>
-                        <strong>
-                          {c.id === 'github'
-                            ? t('connectorName_github')
-                            : c.id === 'calendar'
-                              ? t('connectorName_calendar')
-                              : c.id === 'slack'
-                                ? t('connectorName_slack')
-                                : c.id === 'feishu'
-                                  ? t('connectorName_feishu')
-                                  : c.id === 'notion'
-                                    ? t('connectorName_notion')
-                                    : t('connectorName_drive')}
-                        </strong>
-                        <span className="muted"> · {stateLabel}</span>
-                        {c.availability === 'real' ? (
-                          <div className="settings-row-hint" style={{ marginTop: 4 }}>
+              </div>
+              <div className="connector-card-grid">
+                {CONNECTOR_CATALOG.map((c) => {
+                  const live = c.id === 'github' ? github : null;
+                  const state = deriveConnectorUiState(c, live);
+                  const name =
+                    c.id === 'github'
+                      ? t('connectorName_github')
+                      : c.id === 'calendar'
+                        ? t('connectorName_calendar')
+                        : c.id === 'slack'
+                          ? t('connectorName_slack')
+                          : c.id === 'feishu'
+                            ? t('connectorName_feishu')
+                            : c.id === 'notion'
+                              ? t('connectorName_notion')
+                              : t('connectorName_drive');
+                  const stateLabel =
+                    state === 'soon'
+                      ? t('connectorSoon')
+                      : state === 'connected'
+                        ? t('connectorConnected')
+                        : state === 'configured'
+                          ? t('connectorConfigured')
+                          : state === 'error'
+                            ? t('connectorError')
+                            : t('connectorDisconnected');
+                  return (
+                    <div
+                      key={c.id}
+                      className={`settings-card connector-capability-card${c.availability === 'soon' ? ' soon' : ' real'}`}
+                    >
+                      <div className="connector-capability-head">
+                        <div>
+                          <div className="settings-row-title">{name}</div>
+                          <span className={`account-state-badge ${state === 'connected' ? 'ok' : state === 'error' ? 'warn' : state === 'soon' ? 'muted' : 'muted'}`}>
+                            {stateLabel}
+                          </span>
+                        </div>
+                        <div className="settings-row-hint">
+                          {c.availability === 'real' ? t('connectorRealCardTitle') : t('connectorSoonCardTitle')}
+                        </div>
+                      </div>
+                      {c.availability === 'soon' ? (
+                        <>
+                          <p className="settings-row-hint" style={{ marginTop: 8 }}>
+                            {t('connectorSoonCardBody')}
+                          </p>
+                          <div className="settings-row-hint" style={{ marginTop: 8 }}>
+                            <strong>{t('connectorSoonScopesTitle')}</strong>
+                            <div>{c.scopes.join(' · ')}</div>
+                          </div>
+                          <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                            <strong>{t('connectorSoonAuthTitle')}</strong>
+                            <div>
+                              {c.preferredAuth === 'oauth'
+                                ? t('connectorSoonAuthOauth')
+                                : t('connectorSoonAuthToken')}
+                            </div>
+                          </div>
+                          {c.writeActions.length ? (
+                            <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                              <strong>{t('connectorSoonWritesTitle')}</strong>
+                              <div>{c.writeActions.join(', ')}</div>
+                            </div>
+                          ) : null}
+                          <button type="button" className="btn btn-sm" style={{ marginTop: 10 }} disabled>
+                            {t('connectorSoonCta')}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="settings-row-hint" style={{ marginTop: 8 }}>
                             {t('connectorScopes')}: {c.scopes.join('; ')}
                           </div>
-                        ) : (
-                          <div className="settings-row-hint" style={{ marginTop: 4 }}>
-                            {t('connectorSoonHint')}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  style={{ marginTop: 10 }}
-                  onClick={() => setSection('git')}
-                >
-                  {t('connectorOpenGithub')}
-                </button>
+                          {live?.error ? (
+                            <div className="settings-row-hint error-text" style={{ marginTop: 6 }}>
+                              {githubHostMessage(live.error) || live.error}
+                            </div>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="btn btn-sm primary"
+                            style={{ marginTop: 10 }}
+                            onClick={() => setSection('git')}
+                          >
+                            {t('connectorOpenGithub')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="settings-card" style={{ marginTop: 12 }}>
                 <div className="settings-row-title">{t('connectorAuditTitle')}</div>
@@ -4566,13 +4792,18 @@ export function SettingsPanel({
                         {kernelUp.updateAvailable && kernelUp.runtimeUpdatesDisabled
                           ? `${kernelUp.currentVersion} → ${kernelUp.latestVersion} · ${t('kernelUpgradeViaApp')}`
                           : kernelUp.runtimeUpdatesDisabled
-                            ? `${t('kernelSourceLocked')}${kernelUp.error ? ` · ${kernelUp.error}` : ''}`
+                            ? `${t('kernelSourceLocked')}${kernelUp.error ? ` · ${settingsErrorMessage(kernelUp.error)}` : ''}`
                             : kernelUp.updateAvailable
                           ? `${kernelUp.currentVersion} → ${kernelUp.latestVersion}`
                           : t('updateLatest').replace(
                               '{v}',
                               kernelUp.latestVersion || kernelUp.currentVersion,
                             )}
+                      </div>
+                    ) : null}
+                    {kernelUp?.error && !kernelUp.updateAvailable ? (
+                      <div className="settings-row-hint error-text" style={{ marginTop: 6 }}>
+                        {t('updateKernelErrorTitle')}: {settingsErrorMessage(kernelUp.error)}
                       </div>
                     ) : null}
                   </div>
@@ -4619,7 +4850,15 @@ export function SettingsPanel({
                             )
                         : appUp?.note || t('updateAppHint')}
                     </div>
+                    {appUp?.error ? (
+                      <div className="settings-row-hint error-text" style={{ marginTop: 6 }}>
+                        {t('updateAppErrorTitle')}: {settingsErrorMessage(appUp.error)}
+                      </div>
+                    ) : null}
                     <div className="settings-row-hint mono">{GORKX_GITHUB.sourceUrl}</div>
+                    <div className="settings-row-hint" style={{ marginTop: 6 }}>
+                      {t('updateAdhocNote')}
+                    </div>
                   </div>
                 </div>
                 <div className="field-row">

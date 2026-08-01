@@ -28,4 +28,10 @@ assert.ok(settingsErrorMessage('Chrome MCP connection refused').length > 4);
 assert.ok(settingsErrorMessage('Model verify failed: invalid api key for endpoint').length > 4);
 assert.ok(settingsErrorMessage('ENOENT: no such file or directory, open /tmp/x').length > 4);
 
+assert.ok(settingsErrorMessage('GitHub API rate limit exceeded while checking releases').length > 4);
+assert.ok(settingsErrorMessage('404 Not Found: no releases for update check').length > 4);
+assert.ok(settingsErrorMessage('DMG download failed: checksum mismatch').length > 4);
+assert.ok(settingsErrorMessage('kernel update --check spawn failed').length > 4);
+assert.ok(settingsErrorMessage('OAuth device code expired during sign-in').length > 4);
+
 console.log('settingsFeedback.test.ts: ok');
