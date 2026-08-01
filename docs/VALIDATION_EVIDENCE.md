@@ -48,6 +48,37 @@
 
 **诚实结论：** 原生子任务协调器可从桌面 ACP 路由真实启动只读子任务并取消；FEATURES 仍保持 **Kernel-wired**，不得升为 Real，直到 App UI、完成结果、审批与重开恢复有完整证据。
 
+## 2026-08-01 · 阶段 2 深化：worktree 子任务 + Hooks 控制与执行
+
+### 2.1 worktree 隔离子任务（可丢弃项目，App 登录副本）
+
+| 步骤 | 结果 | 边界 |
+|---|---|---|
+| `_x.ai/subagent/spawn`：`explore` + `read-only` + `isolation=worktree` | 返回 `subagentId=019fbb88-0e7b-7bb1-904b-61b97679b501`，`isolation=worktree` | 非 App UI 点按 |
+| `list_running` | 约 1s 内看到子任务；含 `parentSessionId` / `childSessionId` / `subagentType` / 用量字段 | 列表项本身未直接暴露 cwd 字段 |
+| `worktree/list` | 出现真实路径：`…/gorkx-p2-auth…/worktrees/…/subagent-019fbb88-…`（位于 App 登录副本 home 下，不在用户项目根） | 证明协调器创建了隔离 worktree |
+| `subagent/get` | `status=running` | 未等模型完成 |
+| `subagent/cancel` | `cancelled=true` | 临时目录已删 |
+
+### 2.2 Hooks 配置、信任、执行与启停
+
+| 步骤 | 结果 | 边界 |
+|---|---|---|
+| 项目写入最小 `SessionStart` command Hook（`.grok/hooks/*.json`） | 内核 `hooks/list` 发现：`handlerType=command`，`projectTrusted` 可变为 true | App 只写定义，不执行 |
+| `hooks/action` reload / trust | success | — |
+| **真实执行** | SessionStart 在会话内写出 marker：`hook-ran-<epoch>` 文件存在 | 证明 **Grok Build 执行** Hook，不是桌面假跑 |
+| `hooks/action` remove by path | success | — |
+| enable / disable | 内核要求字段 **`hook_name`（snake_case）**；`hookName` camelCase 被拒绝（`missing field hook_name`） | 桌面曾错误发送 camelCase |
+
+**修复：** `AcpClient.manageHooks` 对 enable/disable 编码为 `{ type, hook_name }`，TypeScript API 仍用 `hookName`。复验：disable → `disabled=true`，enable → `disabled=false`，`status=success`。
+
+| 仍缺（不得写成完整闭环） |
+|---|
+| App 设置页点按信任/启停的人工走查 |
+| 失败 Hook 的错误提示 UX |
+| 子任务模型完成结果、审批流、App 重开后的父子树恢复 |
+| 阶段 1 H1/H2/H3 |
+
 ## 2026-07-31 · Grok Build v0.2.116 最新锁定提交复核
 
 | 范围 | 命令 | 结果 | 边界 |

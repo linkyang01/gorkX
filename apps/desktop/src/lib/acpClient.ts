@@ -2480,10 +2480,16 @@ export class AcpClient {
       | { type: 'enable' | 'disable'; hookName: string }
       | { type: 'add' | 'remove'; path: string },
   ): Promise<HooksSnapshot> {
+    // Wire shape must match Grok Build HooksAction: enable/disable use the
+    // snake_case field `hook_name`. The desktop TypeScript API keeps camelCase.
+    const wireAction =
+      action.type === 'enable' || action.type === 'disable'
+        ? { type: action.type, hook_name: action.hookName }
+        : action;
     // The extension returns an ActionOutcome, not a HooksSnapshot. Refresh the
     // actual kernel inventory after a successful action rather than treating a
     // success message as hook data.
-    const raw = await this.request('_x.ai/hooks/action', { sessionId, action }, 15_000);
+    const raw = await this.request('_x.ai/hooks/action', { sessionId, action: wireAction }, 15_000);
     const outcome = raw && typeof raw === 'object' && 'result' in raw && (raw as { result?: unknown }).result
       ? (raw as { result: unknown }).result
       : raw;

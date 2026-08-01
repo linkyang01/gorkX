@@ -27,7 +27,7 @@
 | 独立内核 | 包内引擎、App `GROK_HOME`、Doctor、包验收；上游 commit 锁定、来源校验与源码 ACP 初始化已具备；包内 `0.2.116 (dd04f39)` 已完成源码重建与 ACP 桌面控制探针 | 缺 fresh authenticated two-turn evidence，以及干净 Mac 的安装、登录、重开人工闭环 |
 | 日常编码 | 任务、流式 ACP、权限、终端、Review、工作树、记忆可用 | Plan/Review 的成熟度仍受内核质量影响 |
 | 多模型 | API/兼容网关、Keychain、分组、连接测试及任务/会话切换可用；包内引擎已隔离验证自定义 `[model.*]` 经 ACP `session/set_model` 接受 | 缺订阅 OAuth、账号用量聚合；ChatGPT/Claude 网页订阅不冒充 API 登录 |
-| Hooks/MCP | MCP/插件入口与 Playwright MCP 配置、诊断可用；项目规则通过 `AGENTS.md` 真实管理；包内 0.2.112 已在认证 ACP 会话验证 Hook 列表控制路由 | 真实 Hook 配置、信任、启停和执行仍需在真实项目完成端到端验收；Hook 创作与连接器产品化仍待完成 |
+| Hooks/MCP | MCP/插件入口与 Playwright MCP 配置、诊断可用；项目规则通过 `AGENTS.md` 真实管理；可丢弃项目 ACP 已验证 Hook 发现/信任/重载/移除/启停（`hook_name`）及 SessionStart 真实 command 执行写 marker | 设置页人工点按、失败提示 UX、连接器产品化仍待完成；不得把 ACP 控制面写成完整产品验收 |
 | Browser/Computer | Playwright MCP 已在 App `GROK_HOME` 实测启动、握手并发现工具；用户可主动截图附到消息 | 浏览器任务内的目标页/动作日志/域名许可、浏览器截图流与受控桌面自动化；需有效 Grok 登录才可验证 Agent 实际调用 |
 | 自动化/协作 | App 打开时的本地计划任务（App SQLite 持久化、重开补跑）；子 Agent 生命周期事件持久为父/子任务树，可在树中查看结果或停止运行任务；`+ → 委派子任务` 已接到内核原生协调器；ACP 层已在可丢弃项目用 App 登录副本完成只读 spawn→list_running→cancel | 仍缺 App UI 点按闭环、模型完成结果、审批、worktree 隔离路径与 App 重开恢复；不得把 ACP start/cancel 写成完整委派验收。阶段 1 的 H1 干净机安装、H2 第三方模型真实回复、H3 麦克风听写仍未验收。 |
 | 远程工程协作 | 本地 Git Review；GitHub Device Flow；公开仓库 PR、Checks 与评论详情按需只读 | 远端写入逐次确认、断开/撤销、按仓库最小权限的 GitHub App |
