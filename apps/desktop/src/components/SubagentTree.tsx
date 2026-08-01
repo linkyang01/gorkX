@@ -1,7 +1,11 @@
 import type { ChatLine } from './MessageList';
 import { IconTool } from './UiIcons';
 import { t } from '../lib/i18n';
-import { isActiveSubagentStatus, isTerminalSubagentStatus } from '../lib/subagentStatus';
+import {
+  isActiveSubagentStatus,
+  isTerminalSubagentStatus,
+  stripSubagentRowPrefix,
+} from '../lib/subagentStatus';
 
 type Node = {
   id: string;
@@ -56,7 +60,8 @@ function NodeRow({
   onCancel?: (subagentId: string) => void;
   onInspect?: (subagentId: string) => void;
 }) {
-  const label = node.line.text.replace(/^子任务\s*·\s*/, '').trim() || node.id.slice(0, 8);
+  const label =
+    stripSubagentRowPrefix(node.line.text, t('subagentTreeLabelPrefix')) || node.id.slice(0, 8);
   const status = node.line.toolStatus || '';
   const canCancel = isActiveSubagentStatus(status);
   // Inspect is available while running (progress) and after terminal outcomes.

@@ -76,3 +76,27 @@ export function subagentInspectBody(
 ): string {
   return fields.output || fields.failure || fields.cancelled || emptyFallback;
 }
+
+/** Tree/row title: `{prefix} · {type} · {description}` (empty parts dropped). */
+export function formatSubagentRowLabel(
+  prefix: string,
+  parts: { type?: string; description?: string },
+): string {
+  return [prefix, parts.type, parts.description]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Strip a localized or legacy prefix from a stored row label for compact tree display. */
+export function stripSubagentRowPrefix(label: string, prefix: string): string {
+  const raw = String(label || '').trim();
+  if (!raw) return '';
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const cleaned = raw
+    .replace(new RegExp(`^${escaped}\\s*·\\s*`, 'i'), '')
+    .replace(/^子任务\s*·\s*/i, '')
+    .replace(/^subtask\s*·\s*/i, '')
+    .trim();
+  return cleaned || raw;
+}

@@ -13,6 +13,8 @@ import { parsePromptHistory } from './promptHistory';
 import { parsePromptSuggestion, type PromptSuggestionReply } from './promptSuggestion';
 import { parsePromptQueueChanged, type PromptQueueState } from './promptQueue';
 import { createSessionBundle, type SessionBundle } from './sessionBundle';
+import { t } from './i18n';
+import { formatSubagentRowLabel } from './subagentStatus';
 
 export type { AutoTopupSnapshot, BillingSnapshot } from './billing';
 export type { PromptQueueEntry, PromptQueueState } from './promptQueue';
@@ -2869,7 +2871,7 @@ export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate
     return {
       subagentId,
       parentSubagentId,
-      label: `子任务 · ${type}${description ? ` · ${description}` : ''}`,
+      label: formatSubagentRowLabel(t('subagentTreeLabelPrefix'), { type, description }),
       status: 'running',
       kind: 'subagent',
     };
@@ -2903,7 +2905,7 @@ export function parseSubagentUpdate(update: SessionUpdate): ParsedSubagentUpdate
   return {
     subagentId,
     parentSubagentId,
-    label: error ? `子任务失败 · ${error}` : '',
+    label: error ? `${t('subagentFailedLabel')} · ${error}` : '',
     status: details ? `${outcome} · ${details}` : outcome,
     kind: 'subagent',
   };

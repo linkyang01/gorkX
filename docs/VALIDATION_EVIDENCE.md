@@ -21,12 +21,16 @@
 | Rust | `cd apps/desktop/src-tauri && cargo test` | **88 passed**（本会话） | 未 cargo check 之外的签名 |
 | ACP 桌面控制 | `node scripts/verify-grok-acp.mjs …/resources/grok --desktop-controls` | 全绿：interject/btw/memory/repair/goal/command/workflow/hunk/code/git 原生守卫 | 无模型请求；`--authenticated` 另跑 |
 | 主界面错误 | 账户刷新/登录、提示历史、建议下一步 catch → `settingsErrorMessage` | 源码 | 任务 `error` 仍存原始 token 供 403 识别 |
+| 子任务 P0 加固 | `subagentStatus` 归一化；运行中可 Inspect；轮询计时器清理；停止/Inspect humanize（`73ce3aa`） | 源码 + `subagentStatus.test` / stage-b | **非** App UI 真 spawn 录像；仍 Kernel-wired |
+| 子任务标签 i18n | 行标题 `Subtask`/`子任务` 随语言；生命周期与 spawn 种子同一格式 | 源码 + 单测 | 旧会话中文前缀仍可 strip |
+| 主界面 alert | 用户可见 `alert` 失败走 `settingsErrorMessage` | 源码 | 非替代 toast 体系 |
 
 ### 诚实结论
 
 - P1 代码侧：**Hooks 失败提示、Computer 急停可用性、GitHub 验证往返文案**已落地。  
+- P0 子任务：**桌面树/轮询/Inspect 代码闭环加固**；真 spawn 仍需 Build 权限 + 人工点按。  
 - **不得**写成 H1–H3 或 B1 真对话已通过；不 tag / 不 Release / 不 DMG。  
-- 真人：设置 → Computer 急停一次；设置 → Git → 验证连接（有 token 时）；App 内 A1–A5 点按。
+- 真人：设置 → Computer 急停一次；设置 → Git → 验证连接（有 token 时）；App 内 A1–A5 与委派子任务点按。
 
 ## 2026-08-01 · 桌面委派子任务（`x.ai/subagent/spawn`）阶段 0 收口
 

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import {
   extractSubagentSnapshotFields,
+  formatSubagentRowLabel,
   isActiveSubagentStatus,
   isTerminalSubagentStatus,
   normalizeSubagentToolStatus,
+  stripSubagentRowPrefix,
   subagentInspectBody,
 } from './subagentStatus.ts';
 
@@ -45,5 +47,12 @@ const failed = extractSubagentSnapshotFields({
 assert.equal(subagentInspectBody(failed!, 'empty'), 'boom');
 
 assert.equal(extractSubagentSnapshotFields(null), null);
+
+assert.equal(
+  formatSubagentRowLabel('Subtask', { type: 'explore', description: 'Read README' }),
+  'Subtask · explore · Read README',
+);
+assert.equal(stripSubagentRowPrefix('子任务 · explore · Read README', '子任务'), 'explore · Read README');
+assert.equal(stripSubagentRowPrefix('Subtask · plan · steps', 'Subtask'), 'plan · steps');
 
 console.log('subagentStatus.test.ts: ok');

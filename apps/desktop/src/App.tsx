@@ -187,6 +187,7 @@ import {
 import { settingsErrorMessage } from './lib/settingsFeedback';
 import {
   extractSubagentSnapshotFields,
+  formatSubagentRowLabel,
   isActiveSubagentStatus,
   normalizeSubagentToolStatus,
   subagentInspectBody,
@@ -2828,7 +2829,7 @@ function App() {
           ].filter(Boolean);
           return [{
             key: `subagent:${subagentId}`,
-            text: `子任务 · ${type}${description ? ` · ${description}` : ''}`,
+            text: formatSubagentRowLabel(t('subagentTreeLabelPrefix'), { type, description }),
             status: detail.length ? `running · ${detail.join(' · ')}` : 'running',
           }];
         });
@@ -3244,7 +3245,7 @@ function App() {
       setRecentProjects(pushRecentProject(path));
       localStorage.setItem('gorkx.project', path);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
+      window.alert(settingsErrorMessage(e));
     }
   };
 
@@ -3608,7 +3609,7 @@ function App() {
     try {
       await openWebPreview(url);
     } catch (error) {
-      alert(error instanceof Error ? error.message : String(error));
+      alert(settingsErrorMessage(error));
     }
   };
 
@@ -3753,7 +3754,7 @@ function App() {
         await exportSessionClipboard(active.sessionId, grokCmd || undefined);
         alert(t('exportSessionClipboard'));
       } catch (fallbackError) {
-        alert(fallbackError instanceof Error ? fallbackError.message : String(error));
+        alert(settingsErrorMessage(fallbackError ?? error));
       }
     }
   };
@@ -3781,7 +3782,7 @@ function App() {
       await writeTextFile(path, serializeSessionBundle(bundle));
       alert(`${t('sessionBundleExportDone')}: ${path}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : String(error));
+      alert(settingsErrorMessage(error));
     }
   };
 
@@ -3804,7 +3805,7 @@ function App() {
       try {
         bundle = parseSessionBundleText(await readTextFile(path));
       } catch (error) {
-        alert(`${t('sessionBundleInvalid')}: ${error instanceof Error ? error.message : String(error)}`);
+        alert(`${t('sessionBundleInvalid')}: ${settingsErrorMessage(error)}`);
         return;
       }
       const proceed = await askAction({
@@ -3849,7 +3850,7 @@ function App() {
         if (owned) await client.stop().catch(() => {});
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : String(error));
+      alert(settingsErrorMessage(error));
     }
   };
 
@@ -3877,7 +3878,7 @@ function App() {
       await exportSessionTrace(active.sessionId, path, grokCmd || undefined);
       alert(`${t('traceExportDone')}: ${path}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : String(error));
+      alert(settingsErrorMessage(error));
     }
   };
 
@@ -3897,7 +3898,7 @@ function App() {
       appendLine(active.id, { id: nid(), role: 'system', text: `${t('traceUploadDone')}${result ? `: ${result}` : ''}` });
       alert(t('traceUploadDone'));
     } catch (error) {
-      alert(error instanceof Error ? error.message : String(error));
+      alert(settingsErrorMessage(error));
     }
   };
 
@@ -3914,7 +3915,7 @@ function App() {
           const path = await captureScreenRegion();
           await addAttachmentPaths([path]);
         } catch (e) {
-          alert(e instanceof Error ? e.message : String(e));
+          alert(settingsErrorMessage(e));
         }
         return;
       case 'open-web-source':
@@ -4008,7 +4009,7 @@ function App() {
           setNewTaskPermissionRules(next);
           localStorage.setItem('gorkx.newTaskPermissionRules', JSON.stringify(next));
         } catch (error) {
-          alert(error instanceof Error ? error.message : String(error));
+          alert(settingsErrorMessage(error));
         }
         return;
       }
@@ -4029,7 +4030,7 @@ function App() {
           patchThread(current.id, { pendingSearchScope: scope });
           appendLine(current.id, { id: nid(), role: 'system', text: scope ? t('searchScopeQueued') : t('searchScopeCleared') });
         } catch (error) {
-          alert(error instanceof Error ? error.message : String(error));
+          alert(settingsErrorMessage(error));
         }
         return;
       }
@@ -4427,7 +4428,7 @@ function App() {
         return out;
       });
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      alert(settingsErrorMessage(e));
     }
   };
 
@@ -4560,7 +4561,7 @@ function App() {
           appendLine(id, {
             id: nid(),
             role: 'system',
-            text: `plan mode: ${e instanceof Error ? e.message : String(e)}`,
+            text: `plan mode: ${settingsErrorMessage(e)}`,
           });
         }
       } else {
@@ -4825,7 +4826,7 @@ function App() {
       void reconcileRunningSubagents(id, source.client, loaded.sessionId || child.sessionId);
     } catch (error) {
       patchThread(source.id, {
-        error: `${t('forkSessionFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        error: `${t('forkSessionFailed')}: ${settingsErrorMessage(error)}`,
       });
     } finally {
       patchThread(source.id, { busy: false });
@@ -4850,7 +4851,7 @@ function App() {
       setRewindDialog({ threadId: source.id, points });
     } catch (error) {
       patchThread(source.id, {
-        error: `${t('rewindFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        error: `${t('rewindFailed')}: ${settingsErrorMessage(error)}`,
       });
     } finally {
       patchThread(source.id, { busy: false });
@@ -4904,7 +4905,7 @@ function App() {
       setRewindDialog({
         ...dialog,
         busy: false,
-        error: `${t('rewindFailed')}: ${error instanceof Error ? error.message : String(error)}`,
+        error: `${t('rewindFailed')}: ${settingsErrorMessage(error)}`,
       });
     } finally {
       patchThread(source.id, { busy: false });
@@ -9140,7 +9141,10 @@ function App() {
           appendOrMerge(
             threadId,
             'tool',
-            `子任务 · ${roleLabel} · ${started.description}`,
+            formatSubagentRowLabel(t('subagentTreeLabelPrefix'), {
+              type: roleLabel,
+              description: started.description,
+            }),
             `subagent:${started.subagentId}`,
             { toolStatus: 'running', toolKind: 'subagent' },
           );
