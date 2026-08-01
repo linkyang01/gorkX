@@ -2556,13 +2556,31 @@ function App() {
     [appendLine, appendOrMerge, enqueueApproval, patchThread],
   );
 
+  /** Map kernel/voice failures to short desktop copy (never raw stack traces). */
+  const humanizeVoiceError = useCallback((error: unknown): string => {
+    const raw = error instanceof Error ? error.message : String(error);
+    const lower = raw.toLowerCase();
+    if (/method not found|not (?:exposed|available)|unsupported/i.test(raw)) return t('voiceUnsupported');
+    if (/denied|not authorized|permission|tcc|privacy/i.test(raw)) return t('voiceErrorDenied');
+    if (/no (?:input )?device|no microphone|device not found/i.test(raw)) return t('voiceErrorNoDevice');
+    if (/no speech|silence|timeout/i.test(raw)) return t('voiceErrorNoSpeech');
+    if (/network|offline|connection/i.test(raw)) return t('voiceErrorNetwork');
+    if (/session|not found|closed|exited/i.test(raw)) return t('voiceErrorSessionClosed');
+    // Keep a short engine phrase when it is already human-readable.
+    if (raw.length > 0 && raw.length <= 160 && !/[{}\[\]]/.test(raw) && !lower.includes('stack')) return raw;
+    return t('voiceErrorGeneric');
+  }, []);
+
   /**
    * Toggle the engine-owned macOS voice pipeline. A finalized transcript only
    * edits the draft: sending remains an explicit user action.
    */
   const toggleNativeVoice = useCallback(async () => {
     const current = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
-    if (!current?.client || !current.sessionId) return;
+    if (!current?.client || !current.sessionId) {
+      setVoiceError(t('voiceNeedTask'));
+      return;
+    }
     const sessionId = current.sessionId;
     setVoiceError(null);
     try {
@@ -2585,9 +2603,9 @@ function App() {
     } catch (error) {
       setVoiceListeningSessionId(null);
       setVoiceInterim('');
-      setVoiceError(error instanceof Error ? error.message : t('voiceErrorGeneric'));
+      setVoiceError(humanizeVoiceError(error));
     }
-  }, [voiceListeningSessionId]);
+  }, [humanizeVoiceError, voiceListeningSessionId]);
 
   useEffect(() => {
     toggleNativeVoiceRef.current = () => { void toggleNativeVoice(); };
@@ -8169,11 +8187,13 @@ function App() {
                     </div>
                     <button
                       type="button"
-                      className={`composer-icon-btn voice-btn${voiceListeningSessionId === active.sessionId ? ' listening' : ''}`}
+                      className={`composer-icon-btn voice-btn${voiceListeningSessionId === active.sessionId ? ' listening' : ''}${voiceError ? ' voice-error' : ''}`}
                       title={
-                        voiceListeningSessionId === active.sessionId
-                          ? t('voiceInputStop')
-                          : t('voiceInput')
+                        !active.client || !active.sessionId
+                          ? t('voiceNeedTask')
+                          : voiceListeningSessionId === active.sessionId
+                            ? t('voiceInputStop')
+                            : t('voiceInputHint')
                       }
                       aria-label={
                         voiceListeningSessionId === active.sessionId

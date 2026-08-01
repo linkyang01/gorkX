@@ -4968,6 +4968,11 @@ button.pill:hover {
   animation: voice-pulse 1.4s ease-in-out infinite;
 }
 
+.composer-icon-btn.voice-btn.voice-error {
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.1);
+}
+
 .mic-icon {
   display: block;
 }
@@ -4988,6 +4993,10 @@ button.pill:hover {
   font-size: 11.5px;
   color: var(--muted);
   text-align: right;
+}
+
+.voice-hint[role='alert'] {
+  color: #b45309;
 }
 
 .btn-icon {

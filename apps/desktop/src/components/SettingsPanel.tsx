@@ -542,6 +542,13 @@ export function SettingsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, section, project, onRefreshHooks]);
 
+  // Open the Computer section ready-to-act: refresh Accessibility + lease state.
+  useEffect(() => {
+    if (!isOpen || section !== 'computer') return;
+    void refreshComputerAccess();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, section]);
+
   const refreshHooks = () => {
     if (!onRefreshHooks) return;
     setHooksBusy(true);
@@ -555,8 +562,27 @@ export function SettingsPanel({
     if (!onManageHooks) return;
     setHooksBusy(true);
     void onManageHooks(action)
-      .then(setHooksSnap)
-      .catch((error) => setMsg(error instanceof Error ? error.message : String(error)))
+      .then((snap) => {
+        setHooksSnap(snap);
+        if (action.type === 'trust') setMsg(t('settingsHooksTrusted'));
+        else if (action.type === 'untrust') setMsg(t('settingsHooksUntrusted'));
+        else if (action.type === 'reload') setMsg(t('settingsHooksReloaded'));
+        else if (action.type === 'enable') setMsg(t('settingsHooksEnabledOk'));
+        else if (action.type === 'disable') setMsg(t('settingsHooksDisabledOk'));
+        else if (action.type === 'add') setMsg(t('settingsHooksAddedOk'));
+        else if (action.type === 'remove') setMsg(t('settingsHooksRemovedOk'));
+        if (snap.loadErrors?.length) {
+          setMsg(`${t('settingsHooksLoadError')}: ${snap.loadErrors.slice(0, 3).join(' · ')}`);
+        }
+      })
+      .catch((error) => {
+        const raw = error instanceof Error ? error.message : String(error);
+        if (/hook_name|invalid params/i.test(raw)) {
+          setMsg(t('settingsHooksWireError'));
+        } else {
+          setMsg(raw || t('settingsHooksActionFailed'));
+        }
+      })
       .finally(() => setHooksBusy(false));
   };
 
@@ -2651,11 +2677,34 @@ export function SettingsPanel({
                   </button>
                 </div>
                 {computerAccess ? (
-                  <p className="hint" style={{ marginTop: 10 }}>
-                    {computerAccess.granted ? t('settingsComputerControlPermissionGranted') : t('settingsComputerControlPermissionMissing')}
-                    {' · '}{computerAccess.enabled ? t('settingsComputerControlStateEnabled') : t('settingsComputerControlStateDisabled')}
-                  </p>
-                ) : null}
+                  <div className="settings-card muted-block" style={{ marginTop: 10 }}>
+                    <div className="settings-row-title">{t('settingsComputerControlStepsTitle')}</div>
+                    <ol className="settings-list" style={{ marginTop: 8 }}>
+                      <li>
+                        {computerAccess.granted
+                          ? t('settingsComputerControlStepPermissionOk')
+                          : t('settingsComputerControlStepPermissionNeed')}
+                      </li>
+                      <li>
+                        {computerAccess.enabled
+                          ? t('settingsComputerControlStepEnabledOk')
+                          : t('settingsComputerControlStepEnabledNeed')}
+                      </li>
+                      <li>{t('settingsComputerControlStepActions')}</li>
+                      <li>{t('settingsComputerControlStepStop')}</li>
+                    </ol>
+                    <p className="hint" style={{ marginTop: 8 }}>
+                      {computerAccess.granted ? t('settingsComputerControlPermissionGranted') : t('settingsComputerControlPermissionMissing')}
+                      {' · '}
+                      {computerAccess.enabled ? t('settingsComputerControlStateEnabled') : t('settingsComputerControlStateDisabled')}
+                    </p>
+                    {computerAccess.detail ? (
+                      <p className="settings-row-hint" style={{ marginTop: 6 }}>{computerAccess.detail}</p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="hint" style={{ marginTop: 10 }}>{t('settingsComputerControlCheckFirst')}</p>
+                )}
                 {computerMcpStatus ? <p className="hint" style={{ marginTop: 8 }}>{computerMcpStatus}</p> : null}
                 <div className="field-row" style={{ marginTop: 8 }}>
                   <label className="field" style={{ margin: 0, minWidth: 150 }}>
@@ -2904,7 +2953,11 @@ export function SettingsPanel({
                           {hooksSnap.projectTrusted ? t('settingsHooksTrusted') : t('settingsHooksUntrusted')}
                         </p>
                         {hooksSnap.loadErrors?.length ? (
-                          <p className="settings-row-hint">{t('settingsHooksLoadError')}</p>
+                          <pre className="ext-msg err" style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                            {t('settingsHooksLoadError')}
+                            {'\n'}
+                            {hooksSnap.loadErrors.slice(0, 8).join('\n')}
+                          </pre>
                         ) : null}
                         {hooksSnap.hooks.length ? (
                           <div className="settings-list" style={{ marginTop: 10 }}>
