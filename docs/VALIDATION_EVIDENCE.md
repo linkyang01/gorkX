@@ -133,6 +133,20 @@
 
 **阶段 1 出口仍未达成。** 不打 tag / 不发 Release / 不做 DMG。
 
+## 2026-08-01 · 验收清单 A+B 执行（按建议）
+
+| 范围 | 结果 | 边界 |
+|---|---|---|
+| A1–A5 入口 | **源码接线 19/19 检查通过**；`tsc` + `test:stages` 通过 | 未启动 GUI 真人点按 |
+| 语音路由 | `--voice-controls`：start/stop/shutdown 守卫通过 | 无麦克风采集 |
+| 桌面 ACP | `--desktop-controls` 全绿 | 无模型请求 |
+| B 认证 | App 登录副本：`authenticate`、`session/info`（无 token 字段）、subagent list/get/cancel/spawn（缺父拒） | 副本已删 |
+| B1 真对话 | **未做** | 需 App 人工 |
+| B2–B3 App UI | **未做点按**；ACP 与源码支持已有 | 见 `DESKTOP_ACCEPTANCE_CHECKLIST.md` 记录 |
+| 发布 | 不构成 H1–H3 通过；不 tag/Release/DMG | — |
+
+详见 `docs/DESKTOP_ACCEPTANCE_CHECKLIST.md` 文末「2026-08-01 执行记录」。
+
 ## 2026-08-01 · 进程/记忆/Worktree 空状态可操作
 
 | 面板 | 变更 | 边界 |

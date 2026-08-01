@@ -70,3 +70,52 @@
 ```
 
 通过项写入 `VALIDATION_EVIDENCE.md` 对应日期小节；失败不标 Real。
+
+---
+
+## 2026-08-01 执行记录（按建议：A + B）
+
+| 字段 | 值 |
+|------|-----|
+| 日期 | 2026-08-01 |
+| 构建 | `658c6ae`（`origin/main`）；内核 `grok 0.2.116 (dd04f39)` |
+| 账号 | App 登录副本可用（ACP `cached_token` 成功） |
+
+### A 入口可达
+
+| # | 结果 | 证据类型 | 说明 |
+|---|------|----------|------|
+| A1 | **通过（源码接线）** | 静态 | 顶栏 `setExtOpen` / `setMemoryOpen` / `setScheduledOpen` / `setApprovalInboxOpen` 均存在 |
+| A2 | **通过（源码接线）** | 静态 | `⌘/` + ⇧⌘ A/B/M/S/P/I 与 i18n 说明齐备 |
+| A3 | **通过（源码接线）** | 静态 | `voiceNeedTask` + `humanizeVoiceError`；ACP `voice start/stop/shutdown` 路由通过（无采集） |
+| A4 | **通过（源码接线）** | 静态 | Skills/MCP/插件空状态含下一步按钮 |
+| A5 | **通过（源码接线）** | 静态 | 计划空状态含新建 + 建议 |
+
+> A 项未在本会话启动 GUI 点按；源码 + `tsc` + `test:stages` + ACP 无认证探针已绿。
+
+### B 会话主路径
+
+| # | 结果 | 证据类型 | 说明 |
+|---|------|----------|------|
+| B1 | **未验收** | — | 需 App 内人工发真实消息看流式 |
+| B2 | **部分** | 源码 | Composer / ⇧⌘B → `SubagentSpawnPanel`；默认只读在面板源码中 |
+| B3 | **部分（ACP）** | 运行时 | 历史会话：spawn→completed/cancel 有证据；本会话 `--subagent-controls`：spawn 路由拒缺父、list/get/cancel 通过；**非** App 点按 |
+| B4 | **通过（源码接线）** | 静态 | ⇧⌘P 切换 `processOpen` |
+| B5 | **部分（ACP）** | 运行时 | `_x.ai/session/info` 返回无 token 的 auth 快照；App 面板未点按 |
+| B6 | **通过（源码接线）** | 静态 | 时间线只 `onJump` 本地 DOM，不发 prompt |
+| B7 | **通过（源码接线）** | 静态 | 跨任务入队 `setApprovalInboxOpen(true)`；内联卡仍在 |
+
+### 门禁命令（本会话）
+
+```
+npx tsc --noEmit                          → 通过
+npm run test:stages                       → 通过
+node scripts/verify-grok-acp.mjs … --desktop-controls --voice-controls → 通过
+… --authenticated --subagent-controls --session-info → 通过
+```
+
+### 阻塞 / 下一步
+
+- **人工**：在本机打开 gorkX.app，按 A1–A5 与 B1–B3 各点一次，把 ☐ 改成真人结果。  
+- **B1 / 完整 B2–B3 UI / E1–E3** 仍未用 GUI 闭环。  
+- 不把本记录写成「A+B 人工全绿」或发布候选。
