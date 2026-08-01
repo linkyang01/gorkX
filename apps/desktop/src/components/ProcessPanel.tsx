@@ -1,6 +1,13 @@
 import { useEffect, useRef } from 'react';
 import type { ChatLine } from './MessageList';
-import { sanitizeText, summarizeError, toolKindLabel } from '../lib/chatFormat';
+import {
+  humanizeEngineError,
+  isAgentProcessExited,
+  isGrokBuildAccessDenied,
+  sanitizeText,
+  summarizeError,
+  toolKindLabel,
+} from '../lib/chatFormat';
 import { humanToolTitle } from '../lib/toolHuman';
 import { IconClose, IconThought, IconTool, IconSystem, IconWarning, IconRefresh } from './UiIcons';
 import { t } from '../lib/i18n';
@@ -112,10 +119,10 @@ export function ProcessPanel({
                       <span className="muted">
                         {' '}
                         ·{' '}
-                        {/fail/i.test(line.toolStatus)
-                          ? '失败'
+                        {/fail|error/i.test(line.toolStatus)
+                          ? t('processToolFailed')
                           : /complete|done|success/i.test(line.toolStatus)
-                            ? '已完成'
+                            ? t('processToolComplete')
                             : line.toolStatus}
                       </span>
                     ) : null}
@@ -129,16 +136,34 @@ export function ProcessPanel({
                 </div>
               );
             }
-            const looksLikeDump =
-              clean.length > 160
-              || /API error|Internal error|status\s*403|\\u001b|\u001b\[/i.test(clean);
-            const systemBody = looksLikeDump ? summarizeError(clean) : clean.slice(0, 2000);
+            const human = humanizeEngineError(clean);
+            let systemBody: string;
+            let truncated = false;
+            if (
+              isGrokBuildAccessDenied(clean)
+              || human === 'GROKX_BUILD_ACCESS_DENIED'
+            ) {
+              systemBody = t('taskErrorBuildAccessDenied');
+            } else if (isAgentProcessExited(clean) || human === 'GROKX_AGENT_PROCESS_EXITED') {
+              systemBody = t('agentProcessExited');
+            } else {
+              const looksLikeDump =
+                clean.length > 160
+                || /API error|Internal error|status\s*403|\\u001b|\u001b\[/i.test(clean);
+              if (looksLikeDump) {
+                systemBody = human && human !== clean ? human : summarizeError(clean);
+                truncated = clean.length > systemBody.length;
+              } else {
+                systemBody = clean.slice(0, 2000);
+                truncated = clean.length > 2000;
+              }
+            }
             return (
               <div key={line.id} className="process-item system">
                 <div className="process-item-label">
                   <IconSystem size={13} /> {t('system')}
                 </div>
-                <pre className="process-item-body">{systemBody}{looksLikeDump && clean.length > systemBody.length ? '\n…' : ''}</pre>
+                <pre className="process-item-body">{systemBody}{truncated ? '\n…' : ''}</pre>
               </div>
             );
           })

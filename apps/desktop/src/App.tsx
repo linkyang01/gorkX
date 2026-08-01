@@ -177,7 +177,9 @@ import {
 import { captureScreenRegion } from './lib/host';
 import { withConversationPresentation } from './lib/conversationPresentation';
 import {
+  AGENT_PROCESS_EXITED,
   humanizeEngineError,
+  isAgentProcessExited,
   isGrokBuildAccessDenied,
   isInjectedUserPromptEcho,
   sanitizeText,
@@ -1151,11 +1153,17 @@ function App() {
           || humanizeEngineError(th.error) === 'GROKX_BUILD_ACCESS_DENIED'
         ) {
           stepLabel = t('taskErrorBuildAccessTitle');
+        } else if (
+          isAgentProcessExited(th.error)
+          || humanizeEngineError(th.error) === 'GROKX_AGENT_PROCESS_EXITED'
+        ) {
+          stepLabel = t('agentProcessExited');
         } else if (requiresAccountReauthentication(th.error)) {
           stepLabel = t('taskErrorSignInRequired');
         } else {
           const human = humanizeEngineError(th.error);
-          stepLabel = (human || info.step || t('taskFailedTitle')).slice(0, 120);
+          if (human === 'GROKX_AGENT_PROCESS_EXITED') stepLabel = t('agentProcessExited');
+          else stepLabel = (human || info.step || t('taskFailedTitle')).slice(0, 120);
         }
       }
       rows.push({
@@ -2107,9 +2115,13 @@ function App() {
     if (isGrokBuildAccessDenied(detail) || humanizeEngineError(detail) === 'GROKX_BUILD_ACCESS_DENIED') {
       return t('taskErrorBuildAccessDenied');
     }
+    if (isAgentProcessExited(detail) || humanizeEngineError(detail) === 'GROKX_AGENT_PROCESS_EXITED') {
+      return t('agentProcessExited');
+    }
     if (requiresAccountReauthentication(detail)) return t('taskErrorSignInRequired');
     const human = humanizeEngineError(detail);
     if (human === 'GROKX_BUILD_ACCESS_DENIED') return t('taskErrorBuildAccessDenied');
+    if (human === 'GROKX_AGENT_PROCESS_EXITED') return t('agentProcessExited');
     return human || t('taskFailedVisible');
   }, []);
 
@@ -2658,7 +2670,8 @@ function App() {
           queue: null,
           // If the prompt/session request already gave us a useful reason,
           // do not replace it with the generic process-exit symptom.
-          error: existingError || 'Agent process exited',
+          // Store the stable English token; UI maps it via i18n.
+          error: existingError || AGENT_PROCESS_EXITED,
         });
         // Skip the generic exit line when we already recorded a real cause
         // (especially Build 403 — re-saying "exited" only adds noise).
@@ -2666,7 +2679,7 @@ function App() {
           appendLine(threadId, {
             id: nid(),
             role: 'system',
-            text: 'Agent process exited',
+            text: t('agentProcessExited'),
           });
         }
         // Permanent access denial cannot be fixed by reconnecting the process.
@@ -5940,7 +5953,7 @@ function App() {
     try {
       const client = initial.client ?? await reconnectThread(id);
       const sessionId = initial.sessionId;
-      if (!client) throw new Error('The task is not connected');
+      if (!client) throw new Error(t('taskNotConnected'));
       const preview = await client.repairSession(sessionId, true);
       if (!preview.repaired) {
         appendLine(id, { id: nid(), role: 'system', text: t('sessionRepairNoop') });

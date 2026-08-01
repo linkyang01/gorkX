@@ -25,6 +25,19 @@ export function isGrokBuildAccessDenied(raw: string | null | undefined): boolean
     && /grok\s*build|build is coming/i.test(s);
 }
 
+/** Stable engine token written when the ACP child process exits without a prior error. */
+export const AGENT_PROCESS_EXITED = 'Agent process exited';
+
+/** True for the stored process-exit token (any locale wording we may have shown). */
+export function isAgentProcessExited(raw: string | null | undefined): boolean {
+  const s = sanitizeText(raw || '');
+  return (
+    /^agent process exited$/i.test(s)
+    || /^agent\s*进程已退出$/i.test(s)
+    || s === AGENT_PROCESS_EXITED
+  );
+}
+
 /**
  * Prefer a short, desktop-facing explanation over raw JSON-RPC / stderr dumps.
  * Keeps the original string available for "View error" when callers store it.
@@ -34,6 +47,9 @@ export function humanizeEngineError(raw: string | null | undefined): string {
   if (!s) return '';
   if (isGrokBuildAccessDenied(s)) {
     return 'GROKX_BUILD_ACCESS_DENIED';
+  }
+  if (isAgentProcessExited(s)) {
+    return 'GROKX_AGENT_PROCESS_EXITED';
   }
   // Prefer the inner data.message from JSON-RPC style envelopes.
   const dataMsg =

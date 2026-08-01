@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {
+  AGENT_PROCESS_EXITED,
   humanizeEngineError,
+  isAgentProcessExited,
   isGrokBuildAccessDenied,
   sanitizeText,
   summarizeError,
@@ -25,6 +27,9 @@ assert.equal(
   ),
   'GROKX_BUILD_ACCESS_DENIED',
 );
+assert.equal(isAgentProcessExited(AGENT_PROCESS_EXITED), true);
+assert.equal(isAgentProcessExited('Agent process exited'), true);
+assert.equal(humanizeEngineError(AGENT_PROCESS_EXITED), 'GROKX_AGENT_PROCESS_EXITED');
 assert.match(summarizeError('spawn failed: No such file or directory'), /No such file|spawn failed/i);
 
 console.log('chatFormat.test.ts: ok');
