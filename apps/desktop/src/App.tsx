@@ -6057,6 +6057,16 @@ function App() {
           </button>
           <button
             type="button"
+            className={taskInfoOpen ? 'chrome-btn on' : 'chrome-btn'}
+            title={t('taskInfoTitle')}
+            aria-label={t('taskInfoTitle')}
+            disabled={!active?.client || !active?.sessionId}
+            onClick={() => setTaskInfoOpen(true)}
+          >
+            <span aria-hidden style={{ fontSize: 12, fontWeight: 700 }}>i</span>
+          </button>
+          <button
+            type="button"
             className={reviewOpen ? 'chrome-btn on' : 'chrome-btn'}
             title={t('reviewTitle')}
             aria-label={t('reviewToggle')}

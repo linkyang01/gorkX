@@ -252,13 +252,28 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
         <div className="ext-list">
           {tab === 'skills' ? (
             skills.length === 0 ? (
-              <div className="hint">{t('extNoSkills')}</div>
+              <div className="ext-empty-card">
+                <p className="hint" style={{ margin: 0 }}>{t('extNoSkills')}</p>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('extNoSkillsHint')}</p>
+                <div className="field-row" style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm primary-sm"
+                    onClick={() => void openSkillsDir().catch((e) => setMsg(String(e)))}
+                  >
+                    {t('extOpenSkillsDir')}
+                  </button>
+                  <button type="button" className="btn btn-sm" disabled={loading} onClick={() => void refresh()}>
+                    {t('extRefresh')}
+                  </button>
+                </div>
+              </div>
             ) : (
               skills.map((s) => (
                 <div key={`${s.scope}:${s.path}`} className="ext-row">
                   <div className="ext-row-main">
                     <div className="ext-row-title">
-                      <span className="mono">/{s.name}</span>
+                      <strong>{s.name}</strong>
                       <span className="pill">{s.scope}</span>
                       {!s.userInvocable ? <span className="pill">{t('extNotSlash')}</span> : null}
                     </div>
@@ -354,7 +369,32 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
               ))
             ) : (
             mcp.length === 0 ? (
-              <div className="hint">{t('extNoMcp')}</div>
+              <div className="ext-empty-card">
+                <p className="hint" style={{ margin: 0 }}>{t('extNoMcp')}</p>
+                <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('extNoMcpHint')}</p>
+                <div className="field-row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm primary-sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setBusy(true);
+                      void enablePlaywrightChromeMcp(grokCmd || undefined)
+                        .then((s) => {
+                          setMsg(s);
+                          return refresh();
+                        })
+                        .catch((e) => setMsg(String(e)))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    {t('enableChromeMcp')}
+                  </button>
+                  <button type="button" className="btn btn-sm" disabled={loading} onClick={() => void refresh()}>
+                    {t('extRefresh')}
+                  </button>
+                </div>
+              </div>
             ) : (
               mcp.map((m) => (
                 <div key={`${m.scope}:${m.name}`} className="ext-row">
@@ -428,7 +468,15 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                 </button>
               </div>
               {plugins.length === 0 ? (
-                <div className="hint">{t('extNoPlugins')}</div>
+                <div className="ext-empty-card">
+                  <p className="hint" style={{ margin: 0 }}>{t('extNoPlugins')}</p>
+                  <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('extNoPluginsHint')}</p>
+                  <div className="field-row" style={{ marginTop: 10 }}>
+                    <button type="button" className="btn btn-sm primary-sm" onClick={() => setTab('market')}>
+                      {t('marketplace')}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 plugins.map((p) => (
                   <div key={`${p.scope}:${p.name}`} className="ext-row">
@@ -592,7 +640,10 @@ export function ExtensionsPanel({ open, onClose, project, grokCmd, onRunSkill, l
                 </button>
               </div>
               {marketSources.length === 0 && !marketRaw ? (
-                <div className="hint">{t('marketNoSources')}</div>
+                <div className="ext-empty-card">
+                  <p className="hint" style={{ margin: 0 }}>{t('marketNoSources')}</p>
+                  <p className="settings-row-hint" style={{ marginTop: 8 }}>{t('marketNoSourcesHint')}</p>
+                </div>
               ) : null}
               {marketSources.map((src, i) => {
                 const o = (src && typeof src === 'object' ? src : {}) as Record<string, unknown>;

@@ -6344,6 +6344,14 @@ button.pill:hover {
   background: var(--glass-soft);
 }
 
+.ext-empty-card {
+  margin: 8px 0 12px;
+  padding: 14px 14px 12px;
+  border: 1px dashed var(--border, rgba(127, 127, 127, 0.35));
+  border-radius: 10px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+}
+
 .ext-list {
   display: flex;
   flex-direction: column;
