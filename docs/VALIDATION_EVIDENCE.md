@@ -4,6 +4,22 @@
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
 
+## 2026-08-01 · ONE_SHOT 一条龙（α–δ）
+
+> 触发：用户「一条龙完成，全做了」。计划：`docs/ONE_SHOT_COMPLETION_PLAN.md`。  
+> 摘要：`docs/evidence/one-shot-20260801/SUMMARY.md`。
+
+| 批次 | 结果 |
+|---|---|
+| α 门禁 | tsc / stages / cargo 88 / patches / ACP desktop+voice / build:app / bundle **全绿** |
+| β 实机 | 子任务 explore **completed**；主 `session/prompt` **403** |
+| γ 清单 | A/B 结构项 PASS；GUI 录像 / H1–H3 **未过** |
+| δ 发版 | 候选 `gorkX.app` 有；**无** tag/Release/DMG（无版本句+公证） |
+
+**出口：** 定义 A **达成**；定义 B **未达成**（服务端 Build 主会话 403 + 人工闸门 + 未批 tag）。
+
+---
+
 ## 2026-08-01 · 正式完备条（Formal completeness bar）
 
 > 目标：桌面优先映射 + 编码核心可证 + ACP 可达 + 门禁绿 + 诚实 H1/H2/H3 阻塞记录。  

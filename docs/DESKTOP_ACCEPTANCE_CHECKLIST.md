@@ -159,3 +159,16 @@ node scripts/verify-grok-acp.mjs … --desktop-controls --voice-controls → 通
 
 **正式完备条：** 自动门禁 + 映射诚实 + 阻塞书面化 = **达标（候选包）**。  
 **不**宣称人工全绿或新 tag/DMG。
+
+---
+
+## 2026-08-01 ONE_SHOT 一条龙结果
+
+| 批次 | 结果 |
+|------|------|
+| α | 自动门禁全绿；候选 app 包绿 |
+| β | 子任务 ACP completed；主聊天 403 |
+| γ | 结构 A1/A2/B2/B4/B5 PASS；真人 GUI/H* 未做 |
+| δ | 未 tag / 未 Release / 未 DMG |
+
+定义 A 候选：**达成**。定义 B 全量发版叙事：**未达成**。

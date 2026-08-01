@@ -8,3 +8,5 @@ apps/desktop/dist/
 .env
 apps/desktop/src-tauri/resources/grok
 vendor/grok-build/
+# keep summaries; ignore bulky local dumps if added later
+docs/evidence/**/*.tar.gz

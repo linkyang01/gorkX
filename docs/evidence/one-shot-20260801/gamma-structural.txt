@@ -1,0 +1,10 @@
+A1_ext=True
+A1_memory=True
+A1_sched=True
+A1_approval=True
+A2_shortcuts=True
+B2_spawn=True
+B4_process=True
+B5_taskinfo=True
+offline_banner=True
+reconnect_taskinfo=True
