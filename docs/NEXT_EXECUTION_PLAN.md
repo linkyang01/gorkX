@@ -22,7 +22,7 @@
 |---|---|
 | **0** 子 Agent WIP 收口 | **已完成** |
 | **正式完备条**（本目标） | **加强达标**：门禁全绿 + 25 主路径 + 暗色白底守卫 + ACP 主 prompt PASS + 子任务 completed；见 `docs/evidence/one-shot-complete-20260801/SUMMARY.md` |
-| **1** H1/H2/H3 发布阻断 | **未达成**：需干净机 / endpoint / 麦克风真人证据；机器侧 1.0.0 门禁已全绿 |
+| **1** H1/H2/H3 发布阻断 | **未达成**：需干净机 / endpoint / 麦克风真人证据；机器侧 1.0.0 门禁已全绿。2026-08-08 真实隔离回复已到达服务端但账号收到 `403 Grok Build is coming soon`，不能写成真实对话通过 |
 | **2** 深化 Real | **ACP 级主对话与子任务已有 live 证据**；App GUI 点按 / 重开恢复仍待人工 |
 | **3** 连接器闭环 | Calendar 等 **Soon**；GitHub 代码已有，revoke live 待人工 |
 

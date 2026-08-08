@@ -8,11 +8,19 @@ DESKTOP="$ROOT/apps/desktop"
 APP_DEFAULT="$DESKTOP/src-tauri/target/release/bundle/macos/gorkX.app"
 APP_PATH="${GORKX_APP_PATH:-$APP_DEFAULT}"
 USER_APPROVED_SHIP="${GORKX_USER_APPROVED_SHIP:-0}"
+REAL_PROMPT_PASSED="${GORKX_REAL_PROMPT_PASSED:-0}"
+CLEAN_INSTALL_PASSED="${GORKX_CLEAN_INSTALL_PASSED:-0}"
+THIRD_PARTY_MODEL_PASSED="${GORKX_THIRD_PARTY_MODEL_PASSED:-0}"
+MICROPHONE_PASSED="${GORKX_MICROPHONE_PASSED:-0}"
 
 echo "=== gorkX release readiness ==="
 echo "root: $ROOT"
 echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "user_approved_ship: $USER_APPROVED_SHIP (only set GORKX_USER_APPROVED_SHIP=1 with explicit user approval)"
+echo "real_prompt_passed: $REAL_PROMPT_PASSED (requires a recorded real authenticated Grok Build reply)"
+echo "clean_install_passed: $CLEAN_INSTALL_PASSED (requires a recorded clean-machine install/login/reopen run)"
+echo "third_party_model_passed: $THIRD_PARTY_MODEL_PASSED (requires a recorded real provider reply)"
+echo "microphone_passed: $MICROPHONE_PASSED (requires a recorded macOS dictation run)"
 echo
 
 stage_ok=0
@@ -73,12 +81,20 @@ echo "--- public ship decision ---"
 cd "$ROOT"
 export STAGE_OK="$stage_ok" BUNDLE_OK="$bundle_ok" SL="$signing_level" ARCH="$arch_host"
 export GORKX_USER_APPROVED_SHIP="$USER_APPROVED_SHIP"
+export GORKX_REAL_PROMPT_PASSED="$REAL_PROMPT_PASSED"
+export GORKX_CLEAN_INSTALL_PASSED="$CLEAN_INSTALL_PASSED"
+export GORKX_THIRD_PARTY_MODEL_PASSED="$THIRD_PARTY_MODEL_PASSED"
+export GORKX_MICROPHONE_PASSED="$MICROPHONE_PASSED"
 node --experimental-strip-types -e '
 import { evaluateReleaseGates } from "./apps/desktop/src/lib/releaseGates.ts";
 const arch = process.env.ARCH || "";
 const r = evaluateReleaseGates({
   stageTestsPass: process.env.STAGE_OK === "1",
   bundleEngineOk: process.env.BUNDLE_OK === "1",
+  realPromptPassed: process.env.GORKX_REAL_PROMPT_PASSED === "1",
+  cleanInstallPassed: process.env.GORKX_CLEAN_INSTALL_PASSED === "1",
+  thirdPartyModelPassed: process.env.GORKX_THIRD_PARTY_MODEL_PASSED === "1",
+  microphonePassed: process.env.GORKX_MICROPHONE_PASSED === "1",
   signingLevel: (process.env.SL || "none"),
   archVerified: arch === "arm64" || arch === "x86_64" ? [arch] : [],
   windowsTrialPassed: false,

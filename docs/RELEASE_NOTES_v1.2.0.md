@@ -26,20 +26,27 @@ cards; slash commands remain an expert compatibility path.
 ## Verification
 
 The release candidate has passed the source lock, patch apply, kernel build,
-ACP no-model-request probes, TypeScript/stage tests, Rust tests/check, and
-arm64 App-only bundle verification. See
+ACP no-model-request probes, the authenticated 1.0.0 route regression,
+TypeScript/stage tests, Rust tests/check, and arm64 App-only bundle
+verification. See
 [`docs/VALIDATION_EVIDENCE.md`](VALIDATION_EVIDENCE.md) for commands and
 hashes.
 
 ## Honest boundaries
 
-- A real authenticated prompt, provider quota fields, third-party endpoint
-  inference, and microphone transcription still require a user-authorized
-  acceptance run. The candidate does not fabricate those results.
+- A real authenticated prompt was attempted with a disposable copy and reached
+  the provider, which returned `403 Forbidden: Grok Build is coming soon. You
+  don't have access now.` for this account. Provider quota fields, third-party
+  endpoint inference, and microphone transcription still require a
+  user-authorized acceptance run in an account with Grok Build inference
+  access. The candidate does not fabricate those results.
 - Calendar, Slack, Feishu, Notion and Drive remain clearly marked Soon until a
   complete official authorization chain exists.
 - The candidate is macOS Apple Silicon and normally ad-hoc signed. A published
   DMG, tag and GitHub Release are deliberately separate release actions.
+- The public-release gate also requires recorded real-reply, clean-install,
+  third-party-model and microphone acceptance evidence; a green local build
+  alone cannot enable publication.
 
 ## Install after publication
 
