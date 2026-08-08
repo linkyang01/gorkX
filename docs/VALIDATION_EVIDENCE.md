@@ -3,6 +3,37 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-08 · gorkX 1.2.0 / Grok Build 1.0.0 内核升级候选
+
+| 项 | 结果 |
+|---|---|
+| 上游锁定 | `xai-org/grok-build` `afbc0fb710320c7add294c2106d447ecc3e3af2e`，版本 `grok 1.0.0`；官方更新说明见 [Grok Build Changelog](https://x.ai/build/changelog) |
+| 补丁队列 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build`：0001–0007 **PASS**，均可在干净 worktree 直接应用 |
+| 内核构建 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok`：**PASS**；资源版本 `grok 1.0.0 (afbc0fb)`，SHA-256 `a90ec8caeeaa1019e6ea83ce88621578a74f7f476f7d9b86431a07e91b84de7d` |
+| ACP 无认证探针 | `verify-grok-acp.mjs`：initialize、原生 voice start/stop/shutdown、desktop actions、billing/auto-topup guards、session search、prompt history/suggestion、session bundle、client fs capability、disable web search、model catalog reload **PASS** |
+| 前端门禁 | `npx tsc --noEmit`、`npm run test:stages`、`npm run build` **PASS**；Vite 仅保留既有大 chunk warning |
+| Rust 门禁 | `cargo test` **88 passed**；`cargo check` **PASS** |
+| App 包 | `npm run build:app` + `verify-macos-app-bundle.sh` **PASS**；arm64 `.app`（CFBundle `1.2.0`）包含 `grok 1.0.0 (afbc0fb)`、许可证和第三方声明；未生成 DMG、未打 tag、未发 GitHub Release |
+| 发布就绪脚本 | `scripts/verify-release-readiness.sh`：候选包 **READY**；公共发布仍被明确用户批准、签名/公证与跨平台警告拦截 |
+| 桌面 1.0 适配 | 会话列表消费 `lastTurnSummary`；权限卡保留完整脚本并支持展开/复制；扩展 Skills/Plugins 按名称排序并折叠展示全部项目；计划审批弹窗可在执行前切换内核返回的模型 |
+
+### ACP 逐项兼容性结论
+
+| 路由类别 | 1.0.0 结论 | gorkX 处理 |
+|---|---|---|
+| 基线 `initialize` / `session/new` / `session/load` / `session/prompt` | 保持 ACP 基线；返回模型目录与会话状态 | 继续使用标准 ACP 生命周期；版本信息改为 1.2.0 |
+| 原生语音 `x.ai/voice/*` | 路由仍由内核提供；无认证缺失会话守卫可达 | 继续调用上游 CoreAudio/STT，不另做浏览器语音 |
+| 规划与审批 `x.ai/ask_user_question` / `x.ai/exit_plan_mode` | 响应形状兼容；计划审阅可保留完整 Markdown | 桌面弹窗展示原生内容、复制，并提供执行前模型切换 |
+| 桌面动作 `x.ai/desktop/*` | 0005 补丁在 1.0.0 新架构重放成功 | 继续复用 Workflow/Goal/command 原生控制面，不重写 Agent 循环 |
+| 会话/账单/搜索/任务包/模型目录刷新 | native route + auth/missing-session guards 均通过；`_x.ai/internal/reload_models` 以 1.0.0 实际探针确认 | UI 只显示服务器返回值；配置保存后对运行中的内核发起受控目录刷新；缺字段不估算 |
+| 0001–0007 扩展路由 | 全部在干净 worktree apply-check 通过并进入包内二进制 | 对标准/`_x.ai` 兼容拼写按探针结果路由；不把 Method not found 写成成功 |
+
+### 当前仍需真人验收
+
+- 真实 OAuth 会话下的首轮对话、额度/账单字段、三方模型真实请求仍需用户账户验收；本轮没有用测试请求伪造额度。
+- macOS 麦克风授权后真实语音转写仍是 H3；ACP 路由本身已通过无采集探针。
+- H1 干净机安装、H2 三方 endpoint、GitHub OAuth revoke round-trip 仍未完成。
+
 
 ## 2026-08-01 · 发布 gorkX 1.1.0
 

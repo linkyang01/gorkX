@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
-import type { PlanApprovalRequest } from '../lib/acpClient';
+import type { ModelInfo, PlanApprovalRequest } from '../lib/acpClient';
 import { t } from '../lib/i18n';
 import { MarkdownView } from './MarkdownView';
 
 interface Props {
   request: PlanApprovalRequest;
   onAnswer: (outcome: 'approved' | 'cancelled' | 'abandoned', feedback?: string) => void;
+  /** Grok Build 1.0 permits changing the active model while reviewing a plan. */
+  availableModels?: ModelInfo[];
+  currentModelId?: string;
+  onModelChange?: (modelId: string) => void;
 }
 
 /** Native `exit_plan_mode` gate: user sees the engine's plan before execution can begin. */
-export function PlanApprovalPrompt({ request, onAnswer }: Props) {
+export function PlanApprovalPrompt({ request, onAnswer, availableModels = [], currentModelId, onModelChange }: Props) {
   const [feedback, setFeedback] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -49,6 +53,24 @@ export function PlanApprovalPrompt({ request, onAnswer }: Props) {
           <span className="plan-approval-badge">{t('modePlan')}</span>
         </header>
         <p className="plan-approval-explain">{t('planApprovalExplain')}</p>
+        {availableModels.length > 1 && onModelChange ? (
+          <div className="plan-model-picker" aria-label={t('planApprovalModelTitle')}>
+            <span className="plan-model-picker-label">{t('planApprovalModelTitle')}</span>
+            <div className="plan-model-picker-options">
+              {availableModels.map((model) => (
+                <button
+                  key={model.modelId}
+                  type="button"
+                  className={`plan-model-option${currentModelId === model.modelId ? ' active' : ''}`}
+                  title={model.description || model.modelId}
+                  onClick={() => onModelChange(model.modelId)}
+                >
+                  {model.name || model.modelId}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="plan-approval-content">
           {hasPlan ? (
             <MarkdownView text={request.planContent ?? ''} className="plan-approval-markdown" />

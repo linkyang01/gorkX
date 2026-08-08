@@ -439,6 +439,14 @@ export function SettingsPanel({
   const [browserBusy, setBrowserBusy] = useState(false);
   const [extHubSnap, setExtHubSnap] = useState<ExtensionsSnapshot | null>(null);
   const [extHubBusy, setExtHubBusy] = useState(false);
+  const extHubSkills = useMemo(
+    () => [...(extHubSnap?.skills ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [extHubSnap?.skills],
+  );
+  const extHubPlugins = useMemo(
+    () => [...(extHubSnap?.plugins ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [extHubSnap?.plugins],
+  );
   const [worktreePreview, setWorktreePreview] = useState<Array<{ path: string; branch?: string; bare?: boolean }>>([]);
   const [worktreePreviewBusy, setWorktreePreviewBusy] = useState(false);
   const [mcpDoctorOut, setMcpDoctorOut] = useState<string | null>(null);
@@ -2906,31 +2914,34 @@ export function SettingsPanel({
                     {t('settingsExtRefresh')}
                   </button>
                 </div>
-                {extHubSnap?.skills?.length ? (
-                  <ul className="settings-list" style={{ marginTop: 10, maxHeight: 140, overflow: 'auto' }}>
-                    {extHubSnap.skills.slice(0, 8).map((s) => (
-                      <li key={`${s.scope}-${s.name}`}>
-                        <strong>{s.name}</strong>
-                        <span className="muted"> · {s.scope}</span>
-                        {s.description ? <div className="settings-row-hint">{s.description}</div> : null}
-                      </li>
-                    ))}
-                  </ul>
+                {extHubSkills.length ? (
+                  <details className="ext-group" style={{ marginTop: 10 }}>
+                    <summary>{t('settingsExtSkillsGroup').replace('{n}', String(extHubSkills.length))}</summary>
+                    <ul className="settings-list" style={{ marginTop: 8, maxHeight: 220, overflow: 'auto' }}>
+                      {extHubSkills.map((s) => (
+                        <li key={`${s.scope}-${s.name}`}>
+                          <strong>{s.name}</strong>
+                          <span className="muted"> · {s.scope}</span>
+                          {s.description ? <div className="settings-row-hint">{s.description}</div> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 ) : !extHubBusy ? (
                   <p className="muted" style={{ marginTop: 8 }}>{t('settingsExtSkillsEmpty')}</p>
                 ) : null}
-                {extHubSnap?.plugins?.length ? (
-                  <>
-                    <div className="settings-row-title" style={{ marginTop: 12 }}>{t('settingsExtPluginsList')}</div>
-                    <ul className="settings-list" style={{ maxHeight: 120, overflow: 'auto' }}>
-                      {extHubSnap.plugins.slice(0, 8).map((p) => (
+                {extHubPlugins.length ? (
+                  <details className="ext-group" style={{ marginTop: 10 }}>
+                    <summary>{t('settingsExtPluginsGroup').replace('{n}', String(extHubPlugins.length))}</summary>
+                    <ul className="settings-list" style={{ marginTop: 8, maxHeight: 180, overflow: 'auto' }}>
+                      {extHubPlugins.map((p) => (
                         <li key={`${p.scope}-${p.name}`}>
                           <strong>{p.name}</strong>
                           <span className="muted"> · {p.enabled ? t('settingsExtEnabled') : t('settingsExtDisabled')}</span>
                         </li>
                       ))}
                     </ul>
-                  </>
+                  </details>
                 ) : null}
                 <div className="field-row" style={{ marginTop: 12 }}>
                   <button

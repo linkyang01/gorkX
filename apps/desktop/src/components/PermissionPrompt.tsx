@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PermissionRequest } from '../lib/acpClient';
 import { t } from '../lib/i18n';
 import { humanPermissionOptionLabel, summarizePermissionTool } from '../lib/toolHuman';
@@ -9,6 +10,7 @@ interface Props {
 
 /** Visible, per-tool ACP approval prompt. The App owns the agent response. */
 export function PermissionPrompt({ request, onAnswer }: Props) {
+  const [copied, setCopied] = useState(false);
   const summary = summarizePermissionTool(request.toolCall ?? request.raw);
   const extraOptions = (request.options ?? []).filter((option) => {
     // Avoid duplicating the standard allow/reject affordances with engine labels.
@@ -28,7 +30,26 @@ export function PermissionPrompt({ request, onAnswer }: Props) {
           {summary.command ? (
             <div className="perm-cmd-block">
               <div className="perm-cmd-label">{t('permissionCommand')}</div>
-              <pre className="perm-cmd">{summary.command}</pre>
+              {summary.command.length > 400 ? (
+                <details className="perm-script-details">
+                  <summary>{t('permissionExpandScript')}</summary>
+                  <pre className="perm-cmd">{summary.command}</pre>
+                </details>
+              ) : (
+                <pre className="perm-cmd">{summary.command}</pre>
+              )}
+              <button
+                type="button"
+                className="btn btn-sm perm-copy-script"
+                onClick={() => {
+                  void navigator.clipboard.writeText(summary.command!).then(() => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1600);
+                  }).catch(() => setCopied(false));
+                }}
+              >
+                {copied ? t('permissionScriptCopied') : t('permissionCopyScript')}
+              </button>
             </div>
           ) : null}
           <details className="perm-raw">

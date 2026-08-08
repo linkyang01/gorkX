@@ -1,6 +1,6 @@
 /**
  * ACP JSON-RPC client over Tauri agent bridge (NDJSON stdio).
- * Verified against grok 0.2.x agent stdio (2026-07).
+ * Verified against Grok Build 1.0.x agent stdio (2026-08).
  *
  * Lifecycle: start → initialize → authenticate(cached_token) → session/new → session/prompt
  */
@@ -585,7 +585,7 @@ export interface UserQuestionRequest {
 export type UserQuestionAnswers = Record<string, string[]>;
 export type UserQuestionAnnotations = Record<string, { preview?: string; notes?: string }>;
 
-/** Exact Grok Build ACP response for `x.ai/ask_user_question` (kernel 0.2.110). */
+/** Exact Grok Build ACP response for `x.ai/ask_user_question` (Grok Build 1.0). */
 export function userQuestionAcceptedResult(
   answers: UserQuestionAnswers,
   annotations?: UserQuestionAnnotations,
@@ -616,7 +616,7 @@ export interface PlanApprovalRequest {
   raw: unknown;
 }
 
-/** Exact Grok Build ACP response for `x.ai/exit_plan_mode` (kernel 0.2.110). */
+/** Exact Grok Build ACP response for `x.ai/exit_plan_mode` (Grok Build 1.0). */
 export function planApprovalResult(
   outcome: 'approved' | 'cancelled' | 'abandoned',
   feedback?: string,
@@ -1374,6 +1374,8 @@ export class AcpClient {
       cwd?: string;
       modelId?: string;
       lastChangeUnixMs?: number;
+      /** Short previous-turn summary supplied by Grok Build 1.0 dashboard roster. */
+      lastTurnSummary?: string | null;
     }>
   > {
     const raw = (await this.request(
@@ -1391,6 +1393,11 @@ export class AcpClient {
       cwd: s.cwd as string | undefined,
       modelId: s.modelId as string | undefined,
       lastChangeUnixMs: s.lastChangeUnixMs as number | undefined,
+      lastTurnSummary: typeof s.lastTurnSummary === 'string'
+        ? s.lastTurnSummary.trim().slice(0, 240)
+        : typeof s.last_turn_summary === 'string'
+          ? s.last_turn_summary.trim().slice(0, 240)
+          : null,
     }));
   }
 
@@ -1573,7 +1580,7 @@ export class AcpClient {
     try {
       raw = await this.request('x.ai/session/info', { sessionId }, 15_000);
     } catch (error) {
-      // The bundled 0.2.110 compatibility server exposes this endpoint under
+      // The bundled Grok Build 1.0 compatibility server exposes this endpoint under
       // the underscored route. Only fall back for a missing method so actual
       // session errors remain visible to the person using the app.
       if (!/method not found/i.test(error instanceof Error ? error.message : String(error))) throw error;

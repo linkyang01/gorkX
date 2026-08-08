@@ -495,6 +495,7 @@ interface RecentSession {
   cwd?: string;
   modelId?: string;
   lastChangeUnixMs?: number;
+  lastTurnSummary?: string | null;
 }
 
 
@@ -6663,6 +6664,11 @@ function App() {
                                 </span>
                                 {label}
                               </span>
+                              {s.lastTurnSummary ? (
+                                <span className="thread-summary" title={s.lastTurnSummary}>
+                                  {s.lastTurnSummary}
+                                </span>
+                              ) : null}
                             </button>
                             <button
                               type="button"
@@ -9237,6 +9243,9 @@ function App() {
         <PlanApprovalPrompt
           request={activeApproval.request}
           onAnswer={(outcome, feedback) => void answerPlanApproval(outcome, feedback)}
+          availableModels={availableModels}
+          currentModelId={active?.modelId || modelId || availableModels[0]?.modelId}
+          onModelChange={(next) => void changeModel(next)}
         />
       ) : null}
       {activeApproval?.kind === 'trust' ? (

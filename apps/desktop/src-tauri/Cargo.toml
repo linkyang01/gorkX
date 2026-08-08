@@ -1,6 +1,6 @@
 [package]
 name = "gorkx"
-version = "1.1.0"
+version = "1.2.0"
 description = "gorkX — Codex-class desktop command center for Grok Build"
 authors = ["gorkX contributors"]
 license = "Apache-2.0"

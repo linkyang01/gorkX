@@ -1,8 +1,10 @@
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
-index 6e675c8..210e3fd 100644
+index 2848709..37da76e 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
-@@ -60,9 +60,9 @@ impl MvpAgent {
+@@ -55,11 +55,11 @@ impl MvpAgent {
+         use crate::agent::config::CodebaseIndexingSetting;
+ 
          // Gate 1: client type
 -        if !matches!(client_type, ClientType::GrokWeb) {
 +        if !matches!(client_type, ClientType::GrokWeb | ClientType::Desktop) {
@@ -15,7 +17,7 @@ index 6e675c8..210e3fd 100644
              );
              return Err(CodeNavEligibility::ClientNotWeb);
 diff --git a/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs b/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
-index 1ec8a0b..bf45413 100644
+index 7a54538..40943d7 100644
 --- a/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
 +++ b/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
 @@ -422,7 +422,7 @@ fn resolve_cwd(

@@ -616,7 +616,7 @@ pub fn models_list_available(model: CustomModelRow) -> Result<ModelCatalogResult
     let url = model_catalog_url(base, backend);
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
-        .user_agent("gorkX-model-catalog/0.5.1")
+        .user_agent("gorkX-model-catalog/1.2.0")
         .build()
         .map_err(|e| e.to_string())?;
     let mut request = client.get(&url).header("Accept", "application/json");
@@ -673,7 +673,7 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
     let backend = normalized_backend(&model.api_backend);
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(25))
-        .user_agent("gorkX-model-test/0.5.1")
+        .user_agent("gorkX-model-test/1.2.0")
         .build()
         .map_err(|e| e.to_string())?;
 
