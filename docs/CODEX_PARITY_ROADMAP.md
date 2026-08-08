@@ -4,6 +4,8 @@
 >
 > 北极星：gorkX 是可安装、可维护、以 **Grok Build fork** 为内核的桌面编码 Agent；对齐 Codex 的编码工作流，不伪装成 ChatGPT 全产品。
 
+> 当前受控候选（2026-08-08）：gorkX `1.2.0` + Grok Build `1.0.0 (afbc0fb)`；文中较早的 0.2.x 版本仅是历史证据，不能当作当前包版本。
+
 ## 1. 产品边界
 
 ### 必须做到
@@ -24,7 +26,7 @@
 
 | 域 | 当前 | 到 Codex 工作流的缺口 |
 |---|---|---|
-| 独立内核 | 包内引擎、App `GROK_HOME`、Doctor、包验收；上游 commit 锁定、来源校验与源码 ACP 初始化已具备；包内 `0.2.116 (dd04f39)` 已完成源码重建与 ACP 桌面控制探针 | 缺 fresh authenticated two-turn evidence，以及干净 Mac 的安装、登录、重开人工闭环 |
+| 独立内核 | 包内引擎、App `GROK_HOME`、Doctor、包验收；上游 commit 锁定、来源校验与源码 ACP 初始化已具备；包内 `1.0.0 (afbc0fb)` 已完成源码重建、认证控制回归与 ACP 桌面控制探针 | 缺真实模型回复权限，以及干净 Mac 的安装、登录、重开人工闭环 |
 | 日常编码 | 任务、流式 ACP、权限、终端、Review、工作树、记忆可用 | Plan/Review 的成熟度仍受内核质量影响 |
 | 多模型 | API/兼容网关、Keychain、分组、连接测试及任务/会话切换可用；包内引擎已隔离验证自定义 `[model.*]` 经 ACP `session/set_model` 接受 | 缺订阅 OAuth、账号用量聚合；ChatGPT/Claude 网页订阅不冒充 API 登录 |
 | Hooks/MCP | MCP/插件入口与 Playwright MCP 配置、诊断可用；项目规则通过 `AGENTS.md` 真实管理；可丢弃项目 ACP 已验证 Hook 发现/信任/重载/移除/启停（`hook_name`）及 SessionStart 真实 command 执行写 marker | 设置页人工点按、失败提示 UX、连接器产品化仍待完成；不得把 ACP 控制面写成完整产品验收 |

@@ -61,6 +61,10 @@ assert.equal(platformMaturity('linux'), 'eval');
 const blocked = evaluateReleaseGates({
   stageTestsPass: true,
   bundleEngineOk: true,
+  realPromptPassed: false,
+  cleanInstallPassed: false,
+  thirdPartyModelPassed: false,
+  microphonePassed: false,
   signingLevel: 'adhoc',
   archVerified: ['arm64'],
   windowsTrialPassed: false,
@@ -75,6 +79,10 @@ assert.equal(blocked.releaseCandidateReady, true);
 const shippable = evaluateReleaseGates({
   stageTestsPass: true,
   bundleEngineOk: true,
+  realPromptPassed: true,
+  cleanInstallPassed: true,
+  thirdPartyModelPassed: true,
+  microphonePassed: true,
   signingLevel: 'notarized',
   archVerified: ['arm64', 'x86_64'],
   windowsTrialPassed: true,

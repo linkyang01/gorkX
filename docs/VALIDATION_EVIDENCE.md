@@ -3,6 +3,40 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-08 · gorkX 1.2.0 / Grok Build 1.0.0 内核升级候选
+
+| 项 | 结果 |
+|---|---|
+| 上游锁定 | `xai-org/grok-build` `afbc0fb710320c7add294c2106d447ecc3e3af2e`，版本 `grok 1.0.0`；官方更新说明见 [Grok Build Changelog](https://x.ai/build/changelog) |
+| 补丁队列 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build`：0001–0007 **PASS**，均可在干净 worktree 直接应用 |
+| 内核构建 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok`：**PASS**；资源版本 `grok 1.0.0 (afbc0fb)`，SHA-256 `a90ec8caeeaa1019e6ea83ce88621578a74f7f476f7d9b86431a07e91b84de7d` |
+| ACP 无认证探针 | `verify-grok-acp.mjs`：initialize、原生 voice start/stop/shutdown、desktop actions、billing/auto-topup guards、session search、prompt history/suggestion、session bundle、client fs capability、disable web search、model catalog reload **PASS** |
+| ACP 认证态 1.0.0 回归 | 使用 App 登录目录的一次性副本执行 `--authenticated --session-info --session-controls --runtime-controls --subagent-controls --hooks-controls --voice-controls --client-fs-write --disable-web-search --model-reload`：`session/new/load`、Plan、session info、fork、rewind points、Hooks、Worktree、子代理生命周期、语音守卫和模型刷新 **PASS**；未发送模型提示词 |
+| ACP 真实回复探针 | 使用同类一次性认证副本执行 `--authenticated --resource`：**未通过**；沙箱内试跑受网络代理限制，放行一次受控网络后请求已真正到达服务端，但返回 `403 Forbidden: Grok Build is coming soon. You don't have access now.`。该结果证明当前账号没有 Grok Build 推理权限，不是本地 ACP 路由问题；不伪造额度或模型成功 |
+| 本机 CLI 真实额度/请求 | 本机已安装 `grok 1.0.0 (3cd0d0cbcebe)`；官方 `grok models` 返回唯一可用模型 `grok-4.5`。同一登录下的最小 `grok --single` 请求到达服务端并返回 `403 personal-team-blocked:spending-limit`。官方 `/v1/billing?format=credits` 返回 `creditUsagePercent: 100.0`、`GrokBuild: 7%`、`GrokImagine: 92%`、`GrokChat: 1%`、本周期无 on-demand 余额；gorkX 现在将该错误显示为“额度或订阅限制”，并提供官方使用量入口，不把失败伪装成登录或进程错误 |
+| 前端门禁 | `npx tsc --noEmit`、`npm run test:stages`、`npm run build` **PASS**；Vite 仅保留既有大 chunk warning |
+| Rust 门禁 | `cargo test` **88 passed**；`cargo check` **PASS** |
+| App 包 | `npm run build:app` + `verify-macos-app-bundle.sh` **PASS**；arm64 `.app`（CFBundle `1.2.0`）包含 `grok 1.0.0 (afbc0fb)`、许可证和第三方声明；未生成 DMG、未打 tag、未发 GitHub Release |
+| 发布就绪脚本 | `scripts/verify-release-readiness.sh`：候选包 **READY**；公共发布现在还会硬性拦截真实回复、干净机重开、三方模型、麦克风四项真人证据，以及签名/架构/批准条件 |
+| 桌面 1.0 适配 | 会话列表消费 `lastTurnSummary`；权限卡保留完整脚本并支持展开/复制；扩展 Skills/Plugins 按名称排序并折叠展示全部项目；计划审批弹窗可在执行前切换内核返回的模型 |
+
+### ACP 逐项兼容性结论
+
+| 路由类别 | 1.0.0 结论 | gorkX 处理 |
+|---|---|---|
+| 基线 `initialize` / `session/new` / `session/load` / `session/prompt` | 保持 ACP 基线；返回模型目录与会话状态 | 继续使用标准 ACP 生命周期；版本信息改为 1.2.0 |
+| 原生语音 `x.ai/voice/*` | 路由仍由内核提供；无认证缺失会话守卫可达 | 继续调用上游 CoreAudio/STT，不另做浏览器语音 |
+| 规划与审批 `x.ai/ask_user_question` / `x.ai/exit_plan_mode` | 响应形状兼容；计划审阅可保留完整 Markdown | 桌面弹窗展示原生内容、复制，并提供执行前模型切换 |
+| 桌面动作 `x.ai/desktop/*` | 0005 补丁在 1.0.0 新架构重放成功 | 继续复用 Workflow/Goal/command 原生控制面，不重写 Agent 循环 |
+| 会话/账单/搜索/任务包/模型目录刷新 | native route + auth/missing-session guards 均通过；`_x.ai/internal/reload_models` 以 1.0.0 实际探针确认 | UI 只显示服务器返回值；配置保存后对运行中的内核发起受控目录刷新；缺字段不估算 |
+| 0001–0007 扩展路由 | 全部在干净 worktree apply-check 通过并进入包内二进制 | 对标准/`_x.ai` 兼容拼写按探针结果路由；不把 Method not found 写成成功 |
+
+### 当前仍需真人验收
+
+- 真实 OAuth 会话下的首轮对话、额度/账单字段、三方模型真实请求仍需在账号获得 Grok Build 推理权限后验收；本轮 1.0.0 隔离回复探针已到达服务端但收到 403，没有用测试请求伪造额度。
+- macOS 麦克风授权后真实语音转写仍是 H3；ACP 路由本身已通过无采集探针。
+- H1 干净机安装、H2 三方 endpoint、GitHub OAuth revoke round-trip 仍未完成。
+
 
 ## 2026-08-01 · 发布 gorkX 1.1.0
 

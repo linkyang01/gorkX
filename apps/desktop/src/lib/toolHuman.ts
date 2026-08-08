@@ -230,11 +230,10 @@ export function summarizePermissionTool(toolCall: unknown): PermissionSummary {
     kindLabel,
     title: title.length > 120 ? `${title.slice(0, 120)}…` : title,
     description,
-    command: command
-      ? command.length > 400
-        ? `${command.slice(0, 400)}…`
-        : command
-      : undefined,
+    // Keep the complete script available to the desktop approval card. The
+    // card constrains height and lets the user expand/copy it; truncating here
+    // would hide the exact operation Grok Build is asking to run.
+    command: command ? command.slice(0, 8_000) : undefined,
   };
 }
 

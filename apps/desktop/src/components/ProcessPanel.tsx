@@ -4,6 +4,7 @@ import {
   humanizeEngineError,
   isAgentProcessExited,
   isGrokBuildAccessDenied,
+  isGrokQuotaBlocked,
   sanitizeText,
   summarizeError,
   toolKindLabel,
@@ -154,6 +155,11 @@ export function ProcessPanel({
               || human === 'GROKX_BUILD_ACCESS_DENIED'
             ) {
               systemBody = t('taskErrorBuildAccessDenied');
+            } else if (
+              isGrokQuotaBlocked(clean)
+              || human === 'GROKX_QUOTA_BLOCKED'
+            ) {
+              systemBody = t('taskErrorQuotaBlocked');
             } else if (isAgentProcessExited(clean) || human === 'GROKX_AGENT_PROCESS_EXITED') {
               systemBody = t('agentProcessExited');
             } else {

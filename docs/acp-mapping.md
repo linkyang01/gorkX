@@ -1,6 +1,6 @@
 # gorkX ↔ Grok ACP mapping
 
-Probed against `grok 0.2.103` `agent stdio` (2026-07).
+Probed against the bundled `grok 1.0.0 (afbc0fb)` `agent stdio` (2026-08).
 
 ## Lifecycle (required)
 
@@ -35,6 +35,27 @@ spawn: grok agent stdio
    { cwd? }
    → { result: { sessions: [{ sessionId, title, cwd, modelId, lastChangeUnixMs, … }] } }
 ```
+
+## 1.0.0 route-diff audit
+
+The locked 1.0.0 source was compared with the previous 0.2.x route inventory
+before rebuilding. The visible additions are `x.ai/closeOutcome`,
+`x.ai/local_workspace`, `x.ai/queue/changed`, and
+`x.ai/session/add_local_workspace`. The first two are internal/local-workspace
+coordination surfaces and the last is the queue/session notification path; no
+new user-facing desktop flow is inferred from their names alone.
+
+The old reload spellings disappeared from some source string inventories during
+the 1.0 refactor, but the `InternalMethod` dispatch still exposes
+`_x.ai/internal/reload_models` (the route gorkX calls). The 1.0.0 ACP probe
+confirmed that route, plus the standard spelling fallback policy for the
+session-control adapters. A `Method not found` response is never treated as a
+successful capability.
+
+The complete repeatable route evidence is in the 2026-08-08 section of
+`VALIDATION_EVIDENCE.md`; it covers baseline lifecycle, voice, desktop actions,
+billing, search, prompt history/suggestion, session bundles, model reload and
+all 0001–0007 patch-backed extensions.
 
 ## Diff panel note
 

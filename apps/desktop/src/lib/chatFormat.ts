@@ -25,6 +25,12 @@ export function isGrokBuildAccessDenied(raw: string | null | undefined): boolean
     && /grok\s*build|build is coming/i.test(s);
 }
 
+/** True when the provider rejected a turn because credits/subscription quota is exhausted. */
+export function isGrokQuotaBlocked(raw: string | null | undefined): boolean {
+  const s = sanitizeText(raw || '');
+  return /personal-team-blocked\s*:\s*spending-limit|run out of credits|need a grok subscription|spending[- ]limit|insufficient credits/i.test(s);
+}
+
 /** Stable engine token written when the ACP child process exits without a prior error. */
 export const AGENT_PROCESS_EXITED = 'Agent process exited';
 
@@ -48,6 +54,9 @@ export function humanizeEngineError(raw: string | null | undefined): string {
   if (isGrokBuildAccessDenied(s)) {
     return 'GROKX_BUILD_ACCESS_DENIED';
   }
+  if (isGrokQuotaBlocked(s)) {
+    return 'GROKX_QUOTA_BLOCKED';
+  }
   if (isAgentProcessExited(s)) {
     return 'GROKX_AGENT_PROCESS_EXITED';
   }
@@ -58,6 +67,7 @@ export function humanizeEngineError(raw: string | null | undefined): string {
   if (dataMsg) {
     const unescaped = dataMsg.replace(/\\"/g, '"').replace(/\\n/g, ' ').trim();
     if (isGrokBuildAccessDenied(unescaped)) return 'GROKX_BUILD_ACCESS_DENIED';
+    if (isGrokQuotaBlocked(unescaped)) return 'GROKX_QUOTA_BLOCKED';
     if (unescaped.length >= 12 && unescaped.length <= 240) return unescaped;
   }
   const api =
@@ -65,6 +75,7 @@ export function humanizeEngineError(raw: string | null | undefined): string {
     || s.match(/status\s*403[^\n]*:\s*([^\n"{}]+)/i)?.[1]?.trim();
   if (api && api.length <= 240) {
     if (isGrokBuildAccessDenied(api) || isGrokBuildAccessDenied(s)) return 'GROKX_BUILD_ACCESS_DENIED';
+    if (isGrokQuotaBlocked(api) || isGrokQuotaBlocked(s)) return 'GROKX_QUOTA_BLOCKED';
     return api;
   }
   return summarizeError(s);
@@ -133,6 +144,7 @@ export function toolTitle(text: string, kind?: string, status?: string): string 
 export function summarizeError(text: string): string {
   const s = sanitizeText(text);
   if (isGrokBuildAccessDenied(s)) return 'GROKX_BUILD_ACCESS_DENIED';
+  if (isGrokQuotaBlocked(s)) return 'GROKX_QUOTA_BLOCKED';
   const m =
     s.match(/Terminal error:[^\n]+/i) ||
     s.match(/spawn failed:[^\n]+/i) ||

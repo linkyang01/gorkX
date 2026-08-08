@@ -1,6 +1,6 @@
 //! Explicit, foreground-only macOS Computer actions.
 //!
-//! Grok Build 0.2.116 does not expose a native local mouse/keyboard ACP tool.
+//! Grok Build 1.0.0 does not expose a native local mouse/keyboard ACP tool.
 //! This module therefore owns the user-facing control surface and the
 //! optional app-owned MCP bridge: every action requires an enabled session and
 //! is sent to the current foreground application through macOS System Events.

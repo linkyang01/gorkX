@@ -60,6 +60,14 @@ export interface ReleaseGateInput {
   stageTestsPass: boolean;
   /** verify-macos-app-bundle (engine + isolated GROK_HOME) */
   bundleEngineOk: boolean;
+  /** One real authenticated Grok Build prompt completed successfully. */
+  realPromptPassed: boolean;
+  /** Clean-machine install, login, first task and reopen evidence. */
+  cleanInstallPassed: boolean;
+  /** One user-configured third-party endpoint produced a real reply. */
+  thirdPartyModelPassed: boolean;
+  /** macOS microphone permission, dictation and editable draft evidence. */
+  microphonePassed: boolean;
   signingLevel: SigningLevel;
   /** Architectures that completed install+login+real project+bundle engine verify */
   archVerified: readonly HostArch[];
@@ -87,6 +95,10 @@ export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult
 
   if (!input.stageTestsPass) blockers.push('Stage A–F automated tests have not all passed');
   if (!input.bundleEngineOk) blockers.push('macOS app bundle engine verification failed or missing');
+  if (!input.realPromptPassed) blockers.push('No real authenticated Grok Build prompt acceptance evidence');
+  if (!input.cleanInstallPassed) blockers.push('No clean-machine install/login/reopen acceptance evidence');
+  if (!input.thirdPartyModelPassed) blockers.push('No real third-party model endpoint acceptance evidence');
+  if (!input.microphonePassed) blockers.push('No real macOS microphone transcription acceptance evidence');
 
   if (!opensWithoutTerminalBypass(input.signingLevel)) {
     if (input.signingLevel === 'none') {
@@ -129,6 +141,10 @@ export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult
     input.userApprovedShip &&
     input.stageTestsPass &&
     input.bundleEngineOk &&
+    input.realPromptPassed &&
+    input.cleanInstallPassed &&
+    input.thirdPartyModelPassed &&
+    input.microphonePassed &&
     opensWithoutTerminalBypass(input.signingLevel) &&
     archs.has('arm64') &&
     archs.has('x86_64');

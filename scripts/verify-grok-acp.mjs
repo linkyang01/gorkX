@@ -48,6 +48,8 @@
 // it does not create a session or write a file.
 // --disable-web-search starts the exact root-flag + agent invocation used by
 // gorkX when a user turns off web research. It sends no model request.
+// --model-reload checks the hot model-catalog reload route used after a
+// provider changes; it sends no model request and accepts either ACP spelling.
 // --agent-profile verifies the portable agent-profile object contract carried
 // in ACP session/new. It creates no prompt and changes only the isolated test
 // session.
@@ -61,7 +63,7 @@ import { spawn } from 'node:child_process';
 
 const [bin, ...options] = process.argv.slice(2);
 if (!bin) {
-  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--cloud-controls] [--billing-controls] [--session-search] [--prompt-history] [--prompt-suggestion] [--session-bundle] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--agent-profile] [--agent-profile-name <name>]');
+  console.error('usage: node scripts/verify-grok-acp.mjs /path/to/grok [--authenticated] [--worktree] [--resource] [--custom-model] [--session-controls] [--runtime-controls] [--rewind-execute] [--subagent-controls] [--hooks-controls] [--btw] [--session-info] [--voice-controls] [--desktop-controls] [--cloud-controls] [--billing-controls] [--session-search] [--prompt-history] [--prompt-suggestion] [--session-bundle] [--hunk-controls] [--client-fs-write] [--disable-web-search] [--model-reload] [--agent-profile] [--agent-profile-name <name>]');
   process.exit(2);
 }
 const authenticated = options.includes('--authenticated');
@@ -86,6 +88,7 @@ const sessionBundleSmoke = options.includes('--session-bundle');
 const hunkControlsSmoke = options.includes('--hunk-controls');
 const clientFileWriteSmoke = options.includes('--client-fs-write');
 const disableWebSearchSmoke = options.includes('--disable-web-search');
+const modelReloadSmoke = options.includes('--model-reload');
 const agentProfileSmoke = options.includes('--agent-profile');
 const agentProfileNameIndex = options.indexOf('--agent-profile-name');
 const agentProfileName = agentProfileNameIndex >= 0 ? options[agentProfileNameIndex + 1] : '';
@@ -101,7 +104,7 @@ if (rewindExecuteSmoke && !resourceSmoke) {
   console.error('--rewind-execute requires --resource so the isolated session has a real checkpoint');
   process.exit(2);
 }
-const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--cloud-controls', '--billing-controls', '--session-search', '--prompt-history', '--prompt-suggestion', '--session-bundle', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--agent-profile', '--agent-profile-name']);
+const knownOptions = new Set(['--authenticated', '--worktree', '--resource', '--custom-model', '--session-controls', '--runtime-controls', '--rewind-execute', '--subagent-controls', '--hooks-controls', '--btw', '--session-info', '--voice-controls', '--desktop-controls', '--cloud-controls', '--billing-controls', '--session-search', '--prompt-history', '--prompt-suggestion', '--session-bundle', '--hunk-controls', '--client-fs-write', '--disable-web-search', '--model-reload', '--agent-profile', '--agent-profile-name']);
 if (options.some((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)) {
   console.error(`unknown option: ${options.find((option, index) => !knownOptions.has(option) && index !== agentProfileNameIndex + 1)}`);
   process.exit(2);
@@ -348,6 +351,40 @@ try {
         console.log(`PASS: ACP ${method} (native read route and auth guard, no mutation)`);
       }
     }
+  }
+
+  if (modelReloadSmoke) {
+    let method = '_x.ai/internal/reload_models';
+    try {
+      const result = unwrapResult(await request(method, {}, 15_000));
+      if (result != null && typeof result !== 'object') {
+        throw new Error(`${method} returned an unexpected shape`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/method not found/i.test(message)) {
+        if (!/authentication required|run .*login|not authenticated|auth|session/i.test(message)) {
+          throw new Error(`${method} did not reach the native catalog reload route: ${message}`);
+        }
+        console.log(`PASS: ACP ${method} (native route and guard, no model request)`);
+        method = '';
+      }
+      if (method) {
+        method = 'x.ai/internal/reload_models';
+        try {
+          const result = unwrapResult(await request(method, {}, 15_000));
+          if (result != null && typeof result !== 'object') {
+            throw new Error(`${method} returned an unexpected shape`);
+          }
+        } catch (legacyError) {
+          const legacyMessage = legacyError instanceof Error ? legacyError.message : String(legacyError);
+          if (!/authentication required|run .*login|not authenticated|auth|session/i.test(legacyMessage)) {
+            throw new Error(`${method} did not reach the native catalog reload route: ${legacyMessage}`);
+          }
+        }
+      }
+    }
+    console.log(`PASS: ACP model catalog reload (${method || '_x.ai/internal/reload_models'} route/guard, no model request)`);
   }
 
   if (sessionSearchSmoke) {

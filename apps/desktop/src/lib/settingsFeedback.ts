@@ -6,6 +6,7 @@
 import {
   humanizeEngineError,
   isGrokBuildAccessDenied,
+  isGrokQuotaBlocked,
   sanitizeText,
 } from './chatFormat.ts';
 import { t } from './i18n.ts';
@@ -18,6 +19,9 @@ export function settingsErrorMessage(error: unknown): string {
 
   if (isGrokBuildAccessDenied(s) || humanizeEngineError(s) === 'GROKX_BUILD_ACCESS_DENIED') {
     return t('taskErrorBuildAccessDenied');
+  }
+  if (isGrokQuotaBlocked(s) || humanizeEngineError(s) === 'GROKX_QUOTA_BLOCKED') {
+    return t('taskErrorQuotaBlocked');
   }
 
   if (
@@ -106,6 +110,7 @@ export function settingsErrorMessage(error: unknown): string {
   if (
     human
     && human !== 'GROKX_BUILD_ACCESS_DENIED'
+    && human !== 'GROKX_QUOTA_BLOCKED'
     && human !== 'GROKX_AGENT_PROCESS_EXITED'
     && human.length <= 240
   ) {

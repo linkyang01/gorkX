@@ -3,4 +3,4 @@
  * package manifests when preparing a release; all renderer consumers import
  * it here so the update checker and ACP handshake cannot drift apart.
  */
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg"><strong>↓ Download gorkX 1.0.0 for macOS Apple Silicon</strong></a><br />
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ Download gorkX 1.1.0 for macOS Apple Silicon</strong></a><br />
   <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a></sub>
 </p>
 
@@ -93,11 +93,11 @@ Windows and Linux are not GA in this release.
 
 ### Install from the DMG (recommended)
 
-**Release:** [gorkX 1.0.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) ·
-full notes: [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)
+**Release:** [gorkX 1.1.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.1.0) ·
+full notes: [`docs/RELEASE_NOTES_v1.1.0.md`](docs/RELEASE_NOTES_v1.1.0.md)
 
 1. **Download** the installer:
-   - **[gorkX_1.0.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**
+   - **[gorkX_1.1.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**
    - Or open [All releases](https://github.com/linkyang01/gorkX/releases) and pick the latest `*.dmg`.
 2. **Open the DMG** (double-click in Finder).
 3. **Drag `gorkX` into Applications** (the Applications shortcut in the window).
@@ -132,9 +132,9 @@ Then open gorkX again from Applications (or Spotlight).
 #### Optional: verify the download
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.0.0_aarch64.dmg
+shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
 # expected:
-# b24bd3c16a9447a36b17ecb77b5bebc320fec343a2586131a14d9df065f6f88c
+# c93f996018f3c8293727af025c2ed9cae3854908f7b7aa50ce72e8b8c0e22734
 ```
 
 ### Update / rollback
@@ -206,7 +206,7 @@ gorkX ships a focused, production-ready path for **macOS Apple Silicon** today. 
 
 For auditable detail, see the [feature matrix](docs/FEATURES.md). For product direction, see the [product development plan](docs/PRODUCT_DEVELOPMENT_PLAN.md).
 
-**Formal release (v1.0.0 Stable):** the single executable plan is
+**Release execution plan:** the single executable plan is
 [`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md). In a development
 session, say **「按方案做」** to run it end-to-end to a release candidate
 (tag / Release / DMG still need your explicit approval).
@@ -242,7 +242,7 @@ If gorkX helps, please **star the repository** and share it with someone ready t
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.0.0（macOS Apple Silicon）</strong></a><br />
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.1.0（macOS Apple Silicon）</strong></a><br />
   <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
@@ -312,11 +312,11 @@ Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目�
 
 ### 用 DMG 安装（推荐）
 
-**版本：** [gorkX 1.0.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.0.0) ·
-完整说明见 [`docs/RELEASE_NOTES_v1.0.0.md`](docs/RELEASE_NOTES_v1.0.0.md)
+**版本：** [gorkX 1.1.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.1.0) ·
+完整说明见 [`docs/RELEASE_NOTES_v1.1.0.md`](docs/RELEASE_NOTES_v1.1.0.md)
 
 1. **下载**安装包：
-   - **[gorkX_1.0.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.0.0/gorkX_1.0.0_aarch64.dmg)**
+   - **[gorkX_1.1.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**
    - 或打开 [全部版本](https://github.com/linkyang01/gorkX/releases)，选择最新的 `*.dmg`
 2. **双击打开 DMG**。
 3. 把窗口里的 **gorkX** **拖到「应用程序」**（Applications）里。
@@ -351,9 +351,9 @@ xattr -dr com.apple.quarantine /Applications/gorkX.app
 #### 可选：校验下载文件
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.0.0_aarch64.dmg
+shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
 # 期望值为：
-# b24bd3c16a9447a36b17ecb77b5bebc320fec343a2586131a14d9df065f6f88c
+# c93f996018f3c8293727af025c2ed9cae3854908f7b7aa50ce72e8b8c0e22734
 ```
 
 ### 更新与回滚
@@ -425,7 +425,7 @@ gorkX 当前以 **macOS Apple Silicon** 为主力交付路径。更多工作平�
 
 如需逐项核对，见[功能矩阵](docs/FEATURES.md)；产品方向见[产品开发计划](docs/PRODUCT_DEVELOPMENT_PLAN.md)。
 
-**正式版（v1.0.0 Stable）唯一执行方案：**
+**正式版发布执行方案：**
 [`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md)。  
 在开发会话中说 **「按方案做」**，即可按该方案连续执行到发布候选完成  
 （打 tag / 发 Release / 上传 DMG 仍须你明确批准）。

@@ -2,8 +2,8 @@
 # Update only through the documented upstream-sync process and ACP regression gate.
 [upstream]
 repository = "https://github.com/xai-org/grok-build.git"
-commit = "dd04f397b1d02f2272b092555669dfba1f01bc85"
-observed_at = "2026-07-31"
+commit = "afbc0fb710320c7add294c2106d447ecc3e3af2e"
+observed_at = "2026-08-08"
 license_sha256 = "116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28"
 third_party_notices_sha256 = "7b7c315403c596f9b7a13bb562553ee4fd4c05da8672f95bcaa02a125eea2947"
 
@@ -16,6 +16,6 @@ target = "release"
 # A local app-only bundle was rebuilt from this lock and passed the bundle and
 # ACP initialize gates. This records the expected runtime for the next
 # controlled release; it does not imply that a GitHub release was published.
-version = "grok 0.2.116"
-revision_prefix = "dd04f397b1d0"
+version = "grok 1.0.0"
+revision_prefix = "afbc0fb71032"
 source_revision_verified = true
