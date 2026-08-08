@@ -13,6 +13,7 @@
 | ACP 无认证探针 | `verify-grok-acp.mjs`：initialize、原生 voice start/stop/shutdown、desktop actions、billing/auto-topup guards、session search、prompt history/suggestion、session bundle、client fs capability、disable web search、model catalog reload **PASS** |
 | ACP 认证态 1.0.0 回归 | 使用 App 登录目录的一次性副本执行 `--authenticated --session-info --session-controls --runtime-controls --subagent-controls --hooks-controls --voice-controls --client-fs-write --disable-web-search --model-reload`：`session/new/load`、Plan、session info、fork、rewind points、Hooks、Worktree、子代理生命周期、语音守卫和模型刷新 **PASS**；未发送模型提示词 |
 | ACP 真实回复探针 | 使用同类一次性认证副本执行 `--authenticated --resource`：**未通过**；沙箱内试跑受网络代理限制，放行一次受控网络后请求已真正到达服务端，但返回 `403 Forbidden: Grok Build is coming soon. You don't have access now.`。该结果证明当前账号没有 Grok Build 推理权限，不是本地 ACP 路由问题；不伪造额度或模型成功 |
+| 本机 CLI 真实额度/请求 | 本机已安装 `grok 1.0.0 (3cd0d0cbcebe)`；官方 `grok models` 返回唯一可用模型 `grok-4.5`。同一登录下的最小 `grok --single` 请求到达服务端并返回 `403 personal-team-blocked:spending-limit`。官方 `/v1/billing?format=credits` 返回 `creditUsagePercent: 100.0`、`GrokBuild: 7%`、`GrokImagine: 92%`、`GrokChat: 1%`、本周期无 on-demand 余额；gorkX 现在将该错误显示为“额度或订阅限制”，并提供官方使用量入口，不把失败伪装成登录或进程错误 |
 | 前端门禁 | `npx tsc --noEmit`、`npm run test:stages`、`npm run build` **PASS**；Vite 仅保留既有大 chunk warning |
 | Rust 门禁 | `cargo test` **88 passed**；`cargo check` **PASS** |
 | App 包 | `npm run build:app` + `verify-macos-app-bundle.sh` **PASS**；arm64 `.app`（CFBundle `1.2.0`）包含 `grok 1.0.0 (afbc0fb)`、许可证和第三方声明；未生成 DMG、未打 tag、未发 GitHub Release |

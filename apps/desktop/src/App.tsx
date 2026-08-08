@@ -181,6 +181,7 @@ import {
   humanizeEngineError,
   isAgentProcessExited,
   isGrokBuildAccessDenied,
+  isGrokQuotaBlocked,
   isInjectedUserPromptEcho,
   sanitizeText,
 } from './lib/chatFormat';
@@ -1168,6 +1169,11 @@ function App() {
         ) {
           stepLabel = t('taskErrorBuildAccessTitle');
         } else if (
+          isGrokQuotaBlocked(th.error)
+          || humanizeEngineError(th.error) === 'GROKX_QUOTA_BLOCKED'
+        ) {
+          stepLabel = t('taskErrorQuotaTitle');
+        } else if (
           isAgentProcessExited(th.error)
           || humanizeEngineError(th.error) === 'GROKX_AGENT_PROCESS_EXITED'
         ) {
@@ -2128,6 +2134,9 @@ function App() {
     if (isGrokBuildAccessDenied(detail) || humanizeEngineError(detail) === 'GROKX_BUILD_ACCESS_DENIED') {
       return t('taskErrorBuildAccessDenied');
     }
+    if (isGrokQuotaBlocked(detail) || humanizeEngineError(detail) === 'GROKX_QUOTA_BLOCKED') {
+      return t('taskErrorQuotaBlocked');
+    }
     if (isAgentProcessExited(detail) || humanizeEngineError(detail) === 'GROKX_AGENT_PROCESS_EXITED') {
       return t('agentProcessExited');
     }
@@ -2155,7 +2164,9 @@ function App() {
         ? {
             title: isGrokBuildAccessDenied(detail)
               ? t('taskErrorBuildAccessTitle')
-              : t('taskFailedTitle'),
+              : isGrokQuotaBlocked(detail)
+                ? t('taskErrorQuotaTitle')
+                : t('taskFailedTitle'),
           }
         : {}),
     });
@@ -2624,7 +2635,7 @@ function App() {
       };
 
       client.onStderr = (line) => {
-        if (!/error|Error|panic|failed|403|Forbidden|coming soon/i.test(line)) return;
+        if (!/error|Error|panic|failed|403|Forbidden|coming soon|spending|credits|subscription/i.test(line)) return;
         const detail = sanitizeText(line);
         if (!detail) return;
         // Permanent entitlement denial: fail the task once with friendly copy,
@@ -2647,8 +2658,26 @@ function App() {
           markTaskFailed(threadId, detail);
           return;
         }
+        if (
+          isGrokQuotaBlocked(detail)
+          || humanizeEngineError(detail) === 'GROKX_QUOTA_BLOCKED'
+        ) {
+          const live = threadsRef.current.find((thread) => thread.id === threadId);
+          if (
+            live?.error
+            && (
+              isGrokQuotaBlocked(live.error)
+              || humanizeEngineError(live.error) === 'GROKX_QUOTA_BLOCKED'
+            )
+          ) {
+            return;
+          }
+          autoReconnectTried.current.add(threadId);
+          markTaskFailed(threadId, detail);
+          return;
+        }
         const human = humanizeEngineError(detail);
-        if (!human || human === 'GROKX_BUILD_ACCESS_DENIED') return;
+        if (!human || human === 'GROKX_BUILD_ACCESS_DENIED' || human === 'GROKX_QUOTA_BLOCKED') return;
         const live = threadsRef.current.find((thread) => thread.id === threadId);
         const last = live?.lines[live.lines.length - 1];
         if (last?.role === 'system' && last.text === human) return;
@@ -2673,6 +2702,9 @@ function App() {
         const buildDenied =
           isGrokBuildAccessDenied(existingError)
           || humanizeEngineError(existingError) === 'GROKX_BUILD_ACCESS_DENIED';
+        const quotaBlocked =
+          isGrokQuotaBlocked(existingError)
+          || humanizeEngineError(existingError) === 'GROKX_QUOTA_BLOCKED';
         patchThread(threadId, {
           busy: false,
           client: null,
@@ -2692,7 +2724,7 @@ function App() {
           });
         }
         // Permanent access denial cannot be fixed by reconnecting the process.
-        if (buildDenied) {
+        if (buildDenied || quotaBlocked) {
           autoReconnectTried.current.add(threadId);
           return;
         }
@@ -7729,14 +7761,18 @@ function App() {
                       ? t('accountSignInAgain')
                       : isGrokBuildAccessDenied(active.error)
                         ? t('taskErrorBuildAccessTitle')
-                        : t('taskFailedVisible')}
+                        : isGrokQuotaBlocked(active.error)
+                          ? t('taskErrorQuotaTitle')
+                          : t('taskFailedVisible')}
                   </strong>
                   <p>
                     {isGrokBuildAccessDenied(active.error)
                       ? t('taskErrorBuildAccessDenied')
-                      : requiresAccountReauthentication(active.error)
-                        ? t('taskErrorSignInHint')
-                        : t('taskErrorDialogHint')}
+                      : isGrokQuotaBlocked(active.error)
+                        ? t('taskErrorQuotaBlocked')
+                        : requiresAccountReauthentication(active.error)
+                          ? t('taskErrorSignInHint')
+                          : t('taskErrorDialogHint')}
                   </p>
                 </div>
                 <div className="task-error-card-actions">
@@ -7748,6 +7784,15 @@ function App() {
                       onClick={() => void reauthenticateTask(active.id)}
                     >
                       {taskReauthBusy ? t('taskErrorSignInWorking') : t('taskErrorSignIn')}
+                    </button>
+                  ) : null}
+                  {isGrokQuotaBlocked(active.error) ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm primary-sm"
+                      onClick={() => void openUrlSafe('https://grok.com/imagine?_s=usage')}
+                    >
+                      {t('quotaOpenWebsite')}
                     </button>
                   ) : null}
                   {isRepairableSessionError(active.error) ? (

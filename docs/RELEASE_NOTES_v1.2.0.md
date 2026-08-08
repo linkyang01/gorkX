@@ -36,10 +36,14 @@ hashes.
 
 - A real authenticated prompt was attempted with a disposable copy and reached
   the provider, which returned `403 Forbidden: Grok Build is coming soon. You
-  don't have access now.` for this account. Provider quota fields, third-party
-  endpoint inference, and microphone transcription still require a
-  user-authorized acceptance run in an account with Grok Build inference
-  access. The candidate does not fabricate those results.
+  don't have access now.`. A second minimal request through the locally installed
+  Grok Build 1.0 CLI reached the provider and returned
+  `personal-team-blocked:spending-limit`; the official billing response reported
+  `creditUsagePercent: 100.0` and `GrokBuild: 7%`. gorkX surfaces this as a
+  quota/subscription limit and links to the official usage page. Provider
+  entitlement, third-party endpoint inference, and microphone transcription
+  still require a user-authorized acceptance run in an eligible account. The
+  candidate does not fabricate those results.
 - Calendar, Slack, Feishu, Notion and Drive remain clearly marked Soon until a
   complete official authorization chain exists.
 - The candidate is macOS Apple Silicon and normally ad-hoc signed. A published

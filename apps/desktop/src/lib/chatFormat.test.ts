@@ -4,6 +4,7 @@ import {
   humanizeEngineError,
   isAgentProcessExited,
   isGrokBuildAccessDenied,
+  isGrokQuotaBlocked,
   sanitizeText,
   summarizeError,
 } from './chatFormat.ts';
@@ -45,6 +46,15 @@ assert.equal(
     'API error (status 403 Forbidden): Grok Build is coming soon. You don\'t have access now.',
   ),
   'GROKX_BUILD_ACCESS_DENIED',
+);
+
+const quotaBlocked =
+  'API error (status 403 Forbidden): personal-team-blocked:spending-limit: You have run out of credits or need a Grok subscription.';
+assert.equal(isGrokQuotaBlocked(quotaBlocked), true);
+assert.equal(humanizeEngineError(quotaBlocked), 'GROKX_QUOTA_BLOCKED');
+assert.equal(
+  humanizeEngineError(JSON.stringify({ message: 'Internal error', data: { message: quotaBlocked } })),
+  'GROKX_QUOTA_BLOCKED',
 );
 
 console.log('chatFormat.test.ts: ok');

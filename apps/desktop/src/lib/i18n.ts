@@ -109,6 +109,9 @@ const dict = {
     taskErrorBuildAccessTitle: 'Grok Build not available',
     taskErrorBuildAccessDenied:
       'This Grok account cannot use Grok Build yet (server 403: coming soon / no access). SuperGrok chat alone is not enough — open Grok Build access for the account, or sign in with an entitled account. gorkX cannot bypass this.',
+    taskErrorQuotaTitle: 'Grok quota or subscription limit',
+    taskErrorQuotaBlocked:
+      'Grok rejected this turn because the current account hit its provider quota or spending limit. Check the official usage page or add an eligible subscription/credits; gorkX cannot override provider limits.',
     taskErrorDialogTitle: 'Task error details',
     taskErrorDialogHint: 'This is the exact error reported by the engine or connection. You can copy it for diagnosis.',
     taskInfoPrivacy: 'Coding data, retention, and training',
@@ -2222,6 +2225,9 @@ const dict = {
     taskErrorBuildAccessTitle: '暂无 Grok Build 权限',
     taskErrorBuildAccessDenied:
       '当前 Grok 账号还不能使用 Grok Build（服务端 403：coming soon / 无访问权）。仅有 SuperGrok 聊天权限不够 — 需为该账号开通 Build，或换有权限的账号登录。gorkX 无法绕过此限制。',
+    taskErrorQuotaTitle: 'Grok 额度或订阅已达到限制',
+    taskErrorQuotaBlocked:
+      'Grok 服务端拒绝了本次请求：当前账号已达到提供方额度或消费上限。请打开官方使用量页面，或补充可用订阅/额度；gorkX 无法绕过服务端限制。',
     taskErrorDialogTitle: '任务错误详情',
     taskErrorDialogHint: '这是引擎或连接返回的原始错误信息，可复制后用于诊断。',
     taskInfoPrivacy: '代码数据、留存与训练',
