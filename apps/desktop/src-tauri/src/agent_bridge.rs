@@ -178,6 +178,12 @@ fn agent_cli_args(
         args.push(rule.clone());
     }
     args.push("agent".into());
+    // A desktop task owns its ACP process and its App GROK_HOME. Never attach
+    // to the CLI/TUI shared leader: a reused leader can carry an older kernel,
+    // model catalog, or credential state and make a fresh 1.0 task look like
+    // the pre-release "coming soon" route. The bundled 1.0 CLI supports this
+    // flag on every agent transport.
+    args.push("--no-leader".into());
     match permission_mode {
         "full" => args.push("--always-approve".into()),
         _ => {}
@@ -855,7 +861,7 @@ mod tests {
             &[],
             &[],
         );
-        assert_eq!(enabled, vec!["agent", "--reasoning-effort", "high", "stdio"]);
+        assert_eq!(enabled, vec!["agent", "--no-leader", "--reasoning-effort", "high", "stdio"]);
 
         let disabled = agent_cli_args(
             "full",
@@ -885,6 +891,7 @@ mod tests {
                 "--deny",
                 "Bash",
                 "agent",
+                "--no-leader",
                 "--always-approve",
                 "stdio",
             ]

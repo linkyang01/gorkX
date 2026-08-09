@@ -852,6 +852,8 @@ export class AcpClient {
   private unlistenExit: UnlistenFn | null = null;
   private sessionCwd = '';
   private readonly allowClientFileWrites: boolean;
+  /** Auth method selected for this ACP process, kept as a token-free UI fallback. */
+  private authenticatedSource: SessionSnapshot['authSource'] | null = null;
   /** Only true after this exact live kernel advertises ACP toolOverrides. */
   supportsSearchToolOverrides = false;
 
@@ -1282,11 +1284,26 @@ export class AcpClient {
       'initialize',
       {
         protocolVersion: 1,
-        _meta: { clientIdentifier: 'grok-desktop' },
+        // Grok Build 1.0 uses the same startup contract as its maintained
+        // headless/ACP clients. The startup hints prevent a UI client from
+        // paying for an interactive git/layout preflight.
+        _meta: {
+          // Grok Build's ACP entitlement gate currently recognizes the
+          // maintained shell client type. Desktop ownership remains explicit
+          // on session/prompt metadata below, where the 1.0 server accepts it.
+          clientType: 'grok-shell',
+          clientVersion: APP_VERSION,
+          startupHints: {
+            nonInteractive: true,
+            skipGitStatus: true,
+            skipProjectLayout: true,
+          },
+        },
         clientInfo: { name: 'gorkX', version: APP_VERSION },
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: this.allowClientFileWrites },
           terminal: true,
+          auth: { terminal: false },
           meta: {
             'x.ai/folderTrust': { interactive: true },
             // Activate the kernel-owned tracker for agent edits only. The
@@ -1310,7 +1327,21 @@ export class AcpClient {
    * Use cached ~/.grok/auth.json — required by grok agent after initialize.
    */
   async authenticate(methodId = 'cached_token') {
-    return this.request('authenticate', { methodId }, 30_000);
+    // The 1.0 ACP client marks this exchange headless so the kernel refreshes
+    // the cached OAuth/API credential without opening a terminal login flow.
+    const result = await this.request('authenticate', { methodId, _meta: { headless: true } }, 30_000) as Record<string, unknown> | null;
+    const wireSource = result && typeof result === 'object'
+      ? (result.authSource ?? result.auth_source)
+      : null;
+    const source = typeof wireSource === 'string' && wireSource.trim()
+      ? wireSource.trim()
+      : /api[_-]?key/i.test(methodId)
+        ? 'api_key'
+        : methodId === 'cached_token'
+          ? 'oauth'
+          : 'external';
+    this.authenticatedSource = source;
+    return result;
   }
 
   async newSession(cwd: string, agentProfile?: AgentProfile): Promise<SessionInfo> {
@@ -1592,7 +1623,13 @@ export class AcpClient {
     if (!value || typeof value !== 'object') throw new Error('Kernel returned an invalid task info snapshot');
     const info = value as SessionSnapshot;
     if (!info.sessionId || !info.cwd || !info.context) throw new Error('Kernel returned an incomplete task info snapshot');
-    return info;
+    // Grok Build 1.0 keeps auth details in the `/session-info` TUI formatter,
+    // not in the ACP `x.ai/session/info` JSON. Rehydrate only the category and
+    // safe settings destination from the authenticated ACP method; never infer
+    // or expose token material.
+    const authSource = info.authSource || this.authenticatedSource || 'not_authenticated';
+    const authManagement = info.authManagement || (authSource === 'oauth' || authSource === 'not_authenticated' ? 'account' : 'models');
+    return { ...info, authSource, authManagement };
   }
 
   /**

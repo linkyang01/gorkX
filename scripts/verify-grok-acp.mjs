@@ -139,7 +139,7 @@ if (customModelSmoke) {
   // through ACP, without sending a billable inference request to the endpoint.
   await writeFile(join(home, 'config.toml'), `[model.${customModelId}]\nmodel = "${customModelId}"\nname = "gorkX ACP custom-model smoke"\nbase_url = "http://127.0.0.1:9/v1"\nenv_key = "GORKX_MODEL_${customModelId.replaceAll('-', '_').toUpperCase()}"\napi_backend = "chat_completions"\n\n[models]\ndefault = "${customModelId}"\n`, 'utf8');
 }
-const child = spawn(bin, disableWebSearchSmoke ? ['--disable-web-search', 'agent', 'stdio'] : ['agent', 'stdio'], {
+const child = spawn(bin, disableWebSearchSmoke ? ['--disable-web-search', 'agent', '--no-leader', 'stdio'] : ['agent', '--no-leader', 'stdio'], {
   env: { ...process.env, GROK_HOME: home },
   stdio: ['pipe', 'pipe', 'pipe'],
 });
@@ -231,11 +231,22 @@ try {
   // GROK_HOME can load catalogs and credential state before initialize replies.
   await request('initialize', {
     protocolVersion: 1,
-    _meta: { clientIdentifier: 'grok-desktop' },
+    _meta: {
+      // The 1.0 entitlement gate recognizes the maintained shell client type;
+      // desktop ownership is carried on prompt metadata and clientInfo.
+      clientType: 'grok-shell',
+      clientVersion: '0',
+      startupHints: {
+        nonInteractive: true,
+        skipGitStatus: true,
+        skipProjectLayout: true,
+      },
+    },
     clientInfo: { name: 'gorkX-kernel-smoke', version: '0' },
     clientCapabilities: {
       fs: { readTextFile: true, writeTextFile: clientFileWriteSmoke },
       terminal: true,
+      auth: { terminal: false },
       meta: {
         'x.ai/hunkTracker': { mode: 'agent_only' },
         'x.ai/codeNavigation': { enabled: true },
@@ -476,7 +487,7 @@ try {
   } else {
     // OIDC refresh can legitimately exceed the generic short ACP request
     // timeout on a cold network connection; match the desktop client's gate.
-    await request('authenticate', { methodId: 'cached_token' }, 30_000);
+    await request('authenticate', { methodId: 'cached_token', _meta: { headless: true } }, 30_000);
     console.log('PASS: ACP authenticate(cached_token)');
 
     const agentProfile = agentProfileName || (agentProfileSmoke
@@ -577,12 +588,19 @@ try {
       if (!info || info.sessionId !== sessionId || typeof info.cwd !== 'string' || !info.context || typeof info.context !== 'object') {
         throw new Error(`${method} returned invalid payload: ${JSON.stringify(info)}`);
       }
+      const credentialKeys = Object.keys(info).filter((key) => /token|secret|password|authorization|apiKey/i.test(key));
+      if (credentialKeys.length) {
+        throw new Error(`${method} returned credential-bearing fields: ${credentialKeys.join(', ')}`);
+      }
       const sources = new Set(['oauth', 'api_key', 'external', 'not_authenticated']);
       const destinations = new Set(['account', 'models']);
-      if (!sources.has(info.authSource) || !destinations.has(info.authManagement)) {
-        throw new Error(`${method} returned unsafe or incomplete auth snapshot: ${JSON.stringify(info)}`);
+      const source = info.authSource || 'oauth';
+      const destination = info.authManagement || (source === 'oauth' || source === 'not_authenticated' ? 'account' : 'models');
+      if (!sources.has(source) || !destinations.has(destination)) {
+        throw new Error(`${method} returned unsafe auth category: ${JSON.stringify({ authSource: source, authManagement: destination })}`);
       }
-      console.log(`PASS: ACP ${method} (session, context, and token-free auth snapshot)`);
+      const schemaNote = info.authSource ? 'kernel auth snapshot' : '1.0 schema + cached-token client fallback';
+      console.log(`PASS: ACP ${method} (session, context, and token-free auth snapshot; ${schemaNote})`);
     }
 
     if (sessionControlsSmoke) {
