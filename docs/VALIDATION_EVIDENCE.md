@@ -9,6 +9,7 @@
 |---|---|
 | 上游锁定 | `kernel/grok-build.lock.toml` 锁定 `8a14c91d88875a831a38b3a066b1683116bcb31c`；`git ls-remote https://github.com/xai-org/grok-build.git HEAD refs/heads/main` 返回同一提交；官方 Changelog 当前最新为 Grok Build `v1.0.0` |
 | 补丁 0001–0007 | `scripts/verify-grok-kernel-source.sh vendor/grok-build` 与 `scripts/verify-grok-kernel-patches.sh vendor/grok-build` **PASS**；七个 patch 均在锁定源码上 `git apply --check` 通过 |
+| 最新 ACP 路由矩阵 | `verify-grok-acp.mjs` 无认证复跑 `voice`、desktop actions、hunk/code/Git、cloud/billing guards、session search、prompt history/suggestion、session bundle、model reload **PASS**；未发送模型提示词 |
 | 锁定源码重建 | `scripts/verify-grok-kernel-build.sh` **PASS**；临时 worktree 应用七个补丁后 release 构建完成，版本 `grok 1.0.0 (8a14c91) [stable]`，并生成上游 LICENSE / THIRD-PARTY-NOTICES；无认证 ACP baseline **PASS** |
 | ACP 初始化合同 | 桌面与探针统一使用 `clientType=grok-shell`、1.0 `startupHints`、`auth.terminal=false`、`authenticate _meta.headless=true`、`agent --no-leader stdio`；避免旧 leader 复用和 1.0 entitlement 误判 |
 | ACP 认证控制矩阵 | 一次性 App home / 临时 Git 项目：session new/load/info、Plan、rename、fork、repair、rewind points、model reload、voice start/stop/shutdown、desktop actions、Hooks、hunk/code/Git、session search、prompt history/suggestion/bundle、subagent list/get/cancel/spawn guards、client fs capability **PASS**；rename/fork/rewind 使用当前内核实际暴露的 `_x.ai/*` 路由 |
