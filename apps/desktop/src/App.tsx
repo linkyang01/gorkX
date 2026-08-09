@@ -8045,6 +8045,84 @@ function App() {
             })()}
             <div className="composer-dock">
               <div
+                className="composer-quick-actions"
+                role="toolbar"
+                aria-label={t('conversationQuickActions')}
+              >
+                {!active.busy ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm conversation-quick-btn"
+                    title={
+                      active.sessionId && active.client
+                        ? t('plusSpawnSubagentHint')
+                        : t('subagentSpawnNoTask')
+                    }
+                    onClick={() => setSubagentSpawnOpen(true)}
+                  >
+                    {t('plusSpawnSubagent')}
+                  </button>
+                ) : null}
+                {active.sessionId && active.client && !active.busy && active.lines.some((line) => line.role === 'assistant') ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm conversation-quick-btn"
+                    title={t('promptSuggestionButtonHint')}
+                    disabled={promptSuggestionBusy}
+                    onClick={() => void requestPromptSuggestion()}
+                  >
+                    {promptSuggestionBusy ? t('promptSuggestionWorking') : t('promptSuggestionButton')}
+                  </button>
+                ) : null}
+                {active.busy && composerAtts.length === 0 ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm conversation-quick-btn"
+                    title={t('followUpAsideHint')}
+                    disabled={!draft.trim() || asideBusyThreadId === active.id}
+                    onClick={() => void askAsideDraft()}
+                  >
+                    {asideBusyThreadId === active.id ? t('followUpAsideWorking') : t('followUpAside')}
+                  </button>
+                ) : null}
+                {active.busy && composerAtts.length === 0 ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm conversation-quick-btn"
+                    title={t('followUpInterjectHint')}
+                    disabled={!draft.trim()}
+                    onClick={() => void interjectDraft()}
+                  >
+                    {t('followUpInterject')}
+                  </button>
+                ) : null}
+                {activeFollowUpMode === 'queue' ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm conversation-quick-btn"
+                    title={t('followUpQueueHint')}
+                    disabled={!draft.trim()}
+                    onClick={() => {
+                      const text = draft.trim();
+                      if (!text) return;
+                      if (active.client && active.sessionId) {
+                        void queueNativeFollowUp(active, text);
+                      } else {
+                        setQueuedFollowUps((prev) => ({ ...prev, [active.id]: text }));
+                      }
+                      setDraft('');
+                      appendLine(active.id, {
+                        id: nid(),
+                        role: 'system',
+                        text: `${t('followUpQueued')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
+                      });
+                    }}
+                  >
+                    {t('followUpQueue')}
+                  </button>
+                ) : null}
+              </div>
+              <div
                 className={`composer${dragOver ? ' drag-over' : ''}`}
                 onDragEnter={(e) => {
                   e.preventDefault();
@@ -8318,78 +8396,6 @@ function App() {
                 ) : null}
                 <div className="composer-send-row">
                   <div className="composer-toolbar-left">
-                    {!active.busy ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={
-                          active.sessionId && active.client
-                            ? t('plusSpawnSubagentHint')
-                            : t('subagentSpawnNoTask')
-                        }
-                        onClick={() => setSubagentSpawnOpen(true)}
-                      >
-                        {t('plusSpawnSubagent')}
-                      </button>
-                    ) : null}
-                    {active.sessionId && active.client && !active.busy && active.lines.some((line) => line.role === 'assistant') ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('promptSuggestionButtonHint')}
-                        disabled={promptSuggestionBusy}
-                        onClick={() => void requestPromptSuggestion()}
-                      >
-                        {promptSuggestionBusy ? t('promptSuggestionWorking') : t('promptSuggestionButton')}
-                      </button>
-                    ) : null}
-                    {active.busy && composerAtts.length === 0 ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('followUpAsideHint')}
-                        disabled={!draft.trim() || asideBusyThreadId === active.id}
-                        onClick={() => void askAsideDraft()}
-                      >
-                        {asideBusyThreadId === active.id ? t('followUpAsideWorking') : t('followUpAside')}
-                      </button>
-                    ) : null}
-                    {active.busy && composerAtts.length === 0 ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('followUpInterjectHint')}
-                        disabled={!draft.trim()}
-                        onClick={() => void interjectDraft()}
-                      >
-                        {t('followUpInterject')}
-                      </button>
-                    ) : null}
-                    {activeFollowUpMode === 'queue' ? (
-                      <button
-                        type="button"
-                        className="btn btn-sm composer-btw-btn"
-                        title={t('followUpQueueHint')}
-                        disabled={!draft.trim()}
-                        onClick={() => {
-                          const text = draft.trim();
-                          if (!text) return;
-                          if (active.client && active.sessionId) {
-                            void queueNativeFollowUp(active, text);
-                          } else {
-                            setQueuedFollowUps((prev) => ({ ...prev, [active.id]: text }));
-                          }
-                          setDraft('');
-                          appendLine(active.id, {
-                            id: nid(),
-                            role: 'system',
-                            text: `${t('followUpQueued')}: ${text.slice(0, 160)}${text.length > 160 ? '…' : ''}`,
-                          });
-                        }}
-                      >
-                        {t('followUpQueue')}
-                      </button>
-                    ) : null}
                     <div className="plus-wrap">
                       <button
                         type="button"

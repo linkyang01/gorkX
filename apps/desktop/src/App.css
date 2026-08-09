@@ -1562,6 +1562,42 @@ body {
   color: var(--text);
 }
 
+/* Session-level actions sit in a separate strip immediately above the
+ * composer. They never occupy the input surface itself. Their visibility
+ * follows the native Grok Build turn state: idle shows delegation/suggestion,
+ * while a running turn shows follow-up controls. */
+.composer-quick-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  max-width: var(--chat-max);
+  margin: 0 auto;
+  padding: 0 2px 8px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.conversation-quick-btn {
+  color: var(--text-2);
+  border-color: var(--hairline);
+  background: var(--glass-fill);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.conversation-quick-btn:hover:not(:disabled),
+.conversation-quick-btn:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--hairline));
+  background: var(--bg-hover);
+}
+
+.conversation-quick-btn:disabled {
+  opacity: 0.5;
+}
+
 .main-title {
   font-weight: 600;
   font-size: 15px;
@@ -7320,11 +7356,6 @@ button.pill:hover {
 }
 
 .btw-card-error { color: var(--danger); }
-
-.composer-btw-btn {
-  color: var(--plan);
-  border-color: color-mix(in srgb, var(--plan) 34%, var(--hairline));
-}
 
 .prompt-suggestion-card {
   display: flex;

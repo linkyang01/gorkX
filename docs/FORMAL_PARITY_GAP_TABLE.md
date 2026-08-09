@@ -14,7 +14,7 @@
 | 6 | Worktree create/list/switch | Worktree panel | Real | Code + ACP worktree |
 | 7 | Memory Remember/Forget/Flush | Memory panel / ⇧⌘M | Real (+ flush Kernel) | Code |
 | 8 | Skills Run / MCP / plugins | Extensions / ⇧⌘E | Real | Code; empty-state CTAs |
-| 9 | Subagent spawn/tree/stop/inspect | Composer / Process / ⇧⌘B | Kernel-wired | ACP **real** spawn→running→**completed**+output; GUI 委派面板点击、默认只读和退出重开已通过 2026-08-09；实际按下 GUI「启动子任务」仍待真人验收 |
+| 9 | Subagent spawn/tree/stop/inspect | Composer 上方快捷条 / Process / ⇧⌘B | Kernel-wired | ACP **real** spawn→running→**completed**+output；GUI 委派面板、默认只读、实际启动、进程 `running→completed`、结果回传和退出重开已通过 2026-08-09；停止/Inspect 各分支仍需分别点按 |
 | 10 | Hooks trust/reload/enable | Settings → Hooks | Kernel-wired | ACP hooks; **human click 未验收** |
 | 11 | Computer screenshot/click/stop | Settings → Computer | Real w/ boundary | Emergency stop code; **live Accessibility 未验收** |
 | 12 | GitHub OAuth + verify + PR | Settings → Git / Review | Real confirmation-gated | githubFeedback; **web revoke live 未验收** |
@@ -38,5 +38,5 @@
 - **H2** user-supplied third-party endpoint true reply.
 - **H3** microphone dictation → draft, no auto-send.
 - **B1** ACP 与 App GUI 首轮/重开：**PASS**；多工具长回合仍需单独真人走查。
-- **B3 GUI** 委派面板与只读引导：**PASS**；真正启动子任务后树/停止/Inspect 的 App 点按仍待真人验收（ACP 完成证据已有）。
+- **B3 GUI** 委派面板、只读引导、启动、进程完成和结果回传：**PASS**；停止/Inspect 各分支仍待分别点按验收。
 - Tag / notarized DMG / GitHub Release: **user approval only**.
