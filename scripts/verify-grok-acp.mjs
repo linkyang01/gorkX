@@ -55,7 +55,7 @@
 // session.
 // --agent-profile-name <name> verifies a named, kernel-discovered profile;
 // names are bounded identifiers and never file paths.
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -179,6 +179,43 @@ child.stdout.on('data', (chunk) => {
     if (!line.trim()) continue;
     try {
       const message = JSON.parse(line);
+      // ACP reverse requests are part of the client contract, not debug noise.
+      // In particular, a resource_link prompt is resolved by the kernel via
+      // fs/read_text_file before it can complete the model turn. Keep this
+      // probe deliberately narrow: it can read only the explicit disposable
+      // CWD and returns a normal ACP error for every other client request.
+      if (message.method && message.id !== undefined && message.id !== null) {
+        const method = String(message.method);
+        const params = message.params && typeof message.params === 'object' ? message.params : {};
+        const path = typeof params.path === 'string' ? params.path : '';
+        const fullPath = path.startsWith('/') ? path : join(cwd, path);
+        if (method === 'fs/read_text_file' || method === 'fs/readTextFile') {
+          const root = resolve(cwd);
+          const resolvedPath = resolve(fullPath);
+          const insideCwd = resolvedPath === root || resolvedPath.startsWith(`${root}/`);
+          const read = insideCwd
+            ? readFile(resolvedPath, 'utf8')
+            : Promise.reject(new Error('probe only permits files inside the disposable CWD'));
+          void read
+            .then((content) => {
+              child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { content } })}\n`);
+            })
+            .catch((error) => {
+              child.stdin.write(`${JSON.stringify({
+                jsonrpc: '2.0',
+                id: message.id,
+                error: { code: -32000, message: error instanceof Error ? error.message : String(error) },
+              })}\n`);
+            });
+        } else {
+          child.stdin.write(`${JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: { code: -32601, message: `Method not found: ${method}` },
+          })}\n`);
+        }
+        continue;
+      }
       const waiter = pending.get(message.id);
       if (waiter) {
         pending.delete(message.id);

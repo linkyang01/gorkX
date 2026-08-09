@@ -30,7 +30,7 @@ if (!existsSync(grok)) {
   process.exit(2);
 }
 
-const child = spawn(grok, ['agent', 'stdio'], {
+const child = spawn(grok, ['agent', '--no-leader', 'stdio'], {
   cwd: projectDir,
   env: { ...process.env, HOME: authDir, GROK_HOME: authDir },
   stdio: ['pipe', 'pipe', 'pipe'],
@@ -84,11 +84,26 @@ function sleep(ms) {
 try {
   await req('initialize', {
     protocolVersion: 1,
+    _meta: {
+      // Match Grok Build 1.0's maintained headless/ACP client contract. The
+      // desktop identity remains on clientInfo and prompt/session metadata.
+      clientType: 'grok-shell',
+      clientVersion: '1.0.0',
+      startupHints: {
+        nonInteractive: true,
+        skipGitStatus: true,
+        skipProjectLayout: true,
+      },
+    },
     clientInfo: { name: 'gorkx-live-subagent', version: '1.0.0' },
-    clientCapabilities: { fs: { readTextFile: true } },
+    clientCapabilities: {
+      fs: { readTextFile: true },
+      terminal: true,
+      auth: { terminal: false },
+    },
   });
   console.log('PASS: initialize');
-  await req('authenticate', { methodId: 'cached_token' });
+  await req('authenticate', { methodId: 'cached_token', _meta: { headless: true } });
   console.log('PASS: authenticate(cached_token)');
   const created = await req('session/new', { cwd: projectDir, mcpServers: [] });
   const sessionId = created.sessionId || created.session_id;

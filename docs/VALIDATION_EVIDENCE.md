@@ -3,6 +3,24 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-09 · Grok Build 1.0.0 完整机器验收
+
+| 项 | 结果 |
+|---|---|
+| 上游锁定 | `kernel/grok-build.lock.toml` 锁定 `8a14c91d88875a831a38b3a066b1683116bcb31c`；`git ls-remote https://github.com/xai-org/grok-build.git HEAD refs/heads/main` 返回同一提交；官方 Changelog 当前最新为 Grok Build `v1.0.0` |
+| 补丁 0001–0007 | `scripts/verify-grok-kernel-source.sh vendor/grok-build` 与 `scripts/verify-grok-kernel-patches.sh vendor/grok-build` **PASS**；七个 patch 均在锁定源码上 `git apply --check` 通过 |
+| 锁定源码重建 | `scripts/verify-grok-kernel-build.sh` **PASS**；临时 worktree 应用七个补丁后 release 构建完成，版本 `grok 1.0.0 (8a14c91) [stable]`，并生成上游 LICENSE / THIRD-PARTY-NOTICES；无认证 ACP baseline **PASS** |
+| ACP 初始化合同 | 桌面与探针统一使用 `clientType=grok-shell`、1.0 `startupHints`、`auth.terminal=false`、`authenticate _meta.headless=true`、`agent --no-leader stdio`；避免旧 leader 复用和 1.0 entitlement 误判 |
+| ACP 认证控制矩阵 | 一次性 App home / 临时 Git 项目：session new/load/info、Plan、rename、fork、repair、rewind points、model reload、voice start/stop/shutdown、desktop actions、Hooks、hunk/code/Git、session search、prompt history/suggestion/bundle、subagent list/get/cancel/spawn guards、client fs capability **PASS**；rename/fork/rewind 使用当前内核实际暴露的 `_x.ai/*` 路由 |
+| ACP 真实回合 | `--authenticated --resource --rewind-execute` **PASS**：resource_link 由验证客户端响应 `fs/read_text_file`，两轮模型提示完成；conversation-only rewind preview (`force=false`)、commit (`force=true`) 与 reload **PASS** |
+| 真实子任务 | `verify-live-subagent-spawn.mjs` **PASS**：隔离 read-only explore 子任务从 spawn → poll → `completed`，返回短输出 |
+| 自定义模型 | 隔离 `[model.gorkx-acp-custom-smoke]` 公告和 `session/set_model` **PASS**；端点固定为 `127.0.0.1:9`，未发送推理请求 |
+| 前端 / Rust | `npx tsc --noEmit`、`npm run test:stages`（全部 stage A–G）、`npm run build` **PASS**；`cargo test` **88 passed**、`cargo check` **PASS** |
+| App Bundle | `npm run build:app`、`verify-macos-app-bundle.sh` **PASS**；arm64 `.app`，包内 `grok 1.0.0 (8a14c91)`、LICENSE/NOTICE 齐全；包内 ACP initialize 和 authenticated resource-link prompt **PASS**；包内与 resources 二进制 SHA-256 均为 `5473b393f0802c5b30ab5ea9a2e524aeb5dba2e230e7ba6fe1c0c1dcb647a980` |
+| Web 构建警告 | Vite 报告主 chunk `610.52 kB` 超过默认 500 kB 提示；生产构建和 `verify-desktop-web-build.sh` 体积/按需加载门禁均 **PASS**，该提示未被伪装成错误或通过调高阈值隐藏 |
+| 外部 / 真人门槛 | 干净 Mac 安装登录重开、用户自有第三方 endpoint 真实回复、macOS 麦克风授权转写仍未由机器探针替代；云环境列表 native route 已达 provider，但本账号返回 provider-side `Internal error`，桌面应显示错误而非假造空列表 |
+| 发布状态 | 仅完成源码提交、验证和 App-only bundle；未打 tag、未发 GitHub Release、未生成/上传 DMG |
+
 ## 2026-08-08 · gorkX 1.2.0 / Grok Build 1.0.0 内核升级候选
 
 | 项 | 结果 |

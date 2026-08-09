@@ -6,7 +6,7 @@ cards; slash commands remain an expert compatibility path.
 
 ## Highlights
 
-- **Grok Build 1.0.0 kernel** — source-locked to `afbc0fb71032`, rebuilt with
+- **Grok Build 1.0.0 kernel** — source-locked to `8a14c91d8887`, rebuilt with
   the maintained 0001–0007 ACP patch series and bundled with upstream license
   notices.
 - **Native voice path retained** — the composer microphone continues to use
@@ -25,25 +25,25 @@ cards; slash commands remain an expert compatibility path.
 
 ## Verification
 
-The release candidate has passed the source lock, patch apply, kernel build,
-ACP no-model-request probes, the authenticated 1.0.0 route regression,
-TypeScript/stage tests, Rust tests/check, and arm64 App-only bundle
-verification. See
+The release candidate has passed the source lock, all seven patch apply checks,
+the locked source rebuild, authenticated 1.0.0 ACP route regression, a real
+resource-link model turn plus conversation-only rewind, live subagent
+completion, TypeScript/stage tests, Rust tests/check, and arm64 App-only
+bundle verification. The final bundle's resource binary was re-probed through
+ACP. See
 [`docs/VALIDATION_EVIDENCE.md`](VALIDATION_EVIDENCE.md) for commands and
 hashes.
 
 ## Honest boundaries
 
-- A real authenticated prompt was attempted with a disposable copy and reached
-  the provider, which returned `403 Forbidden: Grok Build is coming soon. You
-  don't have access now.`. A second minimal request through the locally installed
-  Grok Build 1.0 CLI reached the provider and returned
-  `personal-team-blocked:spending-limit`; the official billing response reported
-  `creditUsagePercent: 100.0` and `GrokBuild: 7%`. gorkX surfaces this as a
-  quota/subscription limit and links to the official usage page. Provider
-  entitlement, third-party endpoint inference, and microphone transcription
-  still require a user-authorized acceptance run in an eligible account. The
-  candidate does not fabricate those results.
+- The current authenticated acceptance account completed isolated ACP model
+  turns, attachment reading, rewind preview/commit, and a live read-only
+  subagent. Cloud-environment listing reached the native provider route but
+  returned a provider-side `Internal error` for this account; gorkX surfaces
+  that error instead of inventing an empty connected workspace. A user's own
+  third-party endpoint and microphone transcription still require their
+  credentials and macOS permission, so neither is claimed as universally
+  verified.
 - Calendar, Slack, Feishu, Notion and Drive remain clearly marked Soon until a
   complete official authorization chain exists.
 - The candidate is macOS Apple Silicon and normally ad-hoc signed. A published

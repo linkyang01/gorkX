@@ -1,6 +1,6 @@
 # gorkX ↔ Grok ACP mapping
 
-Probed against the bundled `grok 1.0.0 (afbc0fb)` `agent stdio` (2026-08).
+Probed against the bundled `grok 1.0.0 (8a14c91)` `agent stdio` (2026-08).
 
 ## Lifecycle (required)
 
