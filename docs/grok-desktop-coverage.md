@@ -21,7 +21,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Model / effort | Subscription and custom-model picker; effort is applied at engine spawn | ✅ |
 | Permission modes | Default / Auto / Full chooser + permission cards | ✅ |
 | Plan mode | ACP mode, Review plan and execute/retry controls | 🟡 engine plan quality decides the result |
-| Native subagents | Persisted tree; `+ → Delegate a subtask`; list_running + get on reconnect; Inspect/Stop; new task → **Use one agent only** | 🟡 ACP-level read-only worktree spawn→completed/cancel recorded; Inspect recognizes `completed`/`cancelled`/`failed`. App click-through and quit/reopen human acceptance remain |
+| Native subagents | Persisted tree; `+ → Delegate a subtask`; list_running + get on reconnect; Inspect/Stop; new task → **Use one agent only** | 🟡 ACP-level read-only worktree spawn→completed/cancel recorded; the 2026-08-09 App click-through and quit/reopen persistence passed. Inspect/Stop remain focused manual checks for live/finished child rows |
 | Compact | Native ACP compact button plus automatic threshold handling | 🟡 engine decides compaction availability |
 | Current-task usage | Task information panel → native session usage read | 🟡 aggregate tokens and cost appear only when the active Grok Build session supplies them; no cost is inferred from subscription quota or local daily counters |
 | Coding-data privacy | Task information → native privacy setting | ✅ cached OAuth state and confirmed `x.ai/privacy/setCodingDataRetention`; API-key and team-managed states remain unavailable rather than guessed |
