@@ -3,6 +3,19 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-10 · Grok Build 上游刷新至 75e73f3
+
+| 项 | 结果 |
+|---|---|
+| 上游锁定 | `git ls-remote https://github.com/xai-org/grok-build.git HEAD refs/heads/main` 返回 `75e73f3d6ac0350d211f12ae7d57c2c0aad72576`；`kernel/grok-build.lock.toml` 已更新并记录 `observed_at = 2026-08-10`。源码提交说明包含启动/模型预取、沙箱钩子、工作区状态、文本框 Home/End 和仪表盘徽章修复。 |
+| 补丁 0001–0007 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` **PASS**；七个补丁均在新锁定源码上 `git apply --check` 通过。 |
+| ACP 路由审计 | 对比 `8a14c91..75e73f3` 的 ACP 相关启动/会话/工作区代码，并用新二进制逐项探测；无认证完整矩阵中 voice、interject/btw、memory/repair/goal/command、workflow、hunk/code/Git、cloud、billing、session search/history/suggestion/bundle、model reload、client FS 和 web-search 开关均 **PASS**。未发现已接入路由被移除。 |
+| 锁定源码重建 | `scripts/verify-grok-kernel-build.sh` **PASS**；临时 worktree 应用七个补丁后 release 构建完成，版本 `grok 1.0.0 (75e73f3)`，LICENSE/THIRD-PARTY-NOTICES 校验通过，源码构建 ACP initialize **PASS**。 |
+| App Bundle | `npm run build:app`、`verify-macos-app-bundle.sh` **PASS**；arm64 `.app` 包内版本 `grok 1.0.0 (75e73f3)`，包内与 resources 二进制 SHA-256 均为 `49321f257410f0b14149f9bd95a76cf947480046d0e8d62684e31f826393697d`，许可证和第三方声明齐全。 |
+| 前端 / Rust | `npx tsc --noEmit`、`npm run test:stages`（stage A–G）、`npm run build` **PASS**；Vite 仍仅报告主 chunk 超过 500 kB 的既有警告；`cargo test` **88 passed**、`cargo check` **PASS**。 |
+| 认证边界 | 新二进制认证回归在 `authenticate(cached_token)` 超时；隔离副本的 `auth.json` `expires_at` 已过期，日志为 `No auth credentials for cli-chat-proxy`。因此本条不把旧提交的认证证据移植到新提交，也不宣称新提交已完成真实模型回合；重新登录后需重跑认证矩阵。 |
+| 发布状态 | 本地源码、锁定内核和 App-only 候选包已更新；未打 tag、未发 GitHub Release、未生成/上传 DMG。干净机安装、重新认证后的真实回合、第三方 endpoint 和麦克风真人验收仍按发布门槛执行。 |
+
 ## 2026-08-09 · Grok Build 1.0.0 完整机器验收
 
 | 项 | 结果 |

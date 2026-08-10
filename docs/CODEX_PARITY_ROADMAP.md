@@ -4,7 +4,7 @@
 >
 > 北极星：gorkX 是可安装、可维护、以 **Grok Build fork** 为内核的桌面编码 Agent；对齐 Codex 的编码工作流，不伪装成 ChatGPT 全产品。
 
-> 当前受控候选（2026-08-09）：gorkX `1.2.0` + Grok Build `1.0.0 (8a14c91)`；文中较早的 0.2.x 版本仅是历史证据，不能当作当前包版本。
+> 当前受控候选（2026-08-10）：gorkX `1.2.0` + Grok Build `1.0.0 (75e73f3)`；文中较早的 0.2.x 版本仅是历史证据，不能当作当前包版本。
 
 ## 1. 产品边界
 
@@ -59,7 +59,7 @@ Local worker or hosted worker
 
 **出口**：每个 gorkX 版本都可回答“内核来自哪个 commit、有哪些补丁、升级是否通过回归”；包内二进制在隔离 `GROK_HOME` 通过 ACP 对话测试。
 
-**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/verify-grok-kernel-patches.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。当前锁定提交 `8a14c91…`（Grok Build `1.0.0`）已完成源码重建、认证控制回归、真实 resource-link prompt / rewind、子任务 completed 和 App Bundle ACP 探针。认证回归仍针对显式的一次性 App home 与可丢弃项目执行；`--custom-model` 会额外写入一次性 `[model.*]` 并验证 ACP 公告和 `session/set_model`，不发送模型提示词。当前受控队列包含 0001–0007 补丁；这不等同于发布 GitHub Release。补丁队列由 `kernel/patches/series` 明确排序；构建只在临时 Git worktree 应用已验证补丁，绝不接受锁定源检出的未记录修改。认证回归加 `--worktree` 时只在显式的临时 Git CWD 创建隔离 Worktree；加 `--resource` 时发送一条最小模型请求并由验证客户端响应 `fs/read_text_file`，用临时文本文件验证标准 `resource_link`。每次受控内核构建都会同时生成上游 `LICENSE` 与完整 `THIRD-PARTY-NOTICES`，macOS bundle 验收会拒绝缺少它们。认证回归要求显式、独立的 `GORKX_ACP_TEST_AUTH_DIR`、`GORKX_ACP_TEST_PROJECT_DIR` 和 `--authenticated`，脚本会拒绝标准用户 `GROK_HOME`。当前 stdio 将会话控制、Hooks 与子代理控制暴露在 `_x.ai/*` 兼容路由；门禁同时探测标准与运行时路由，避免将源码命名误判成产品能力。
+**当前门禁命令**：`scripts/sync-grok-kernel-source.sh`、`scripts/verify-grok-kernel-source.sh`、`scripts/verify-grok-kernel-patches.sh`、`scripts/build-grok-kernel.sh <output>`、`node scripts/verify-grok-acp.mjs <output>`、`scripts/verify-macos-app-bundle.sh <app>`。当前锁定提交 `75e73f3…`（Grok Build `1.0.0`）已完成源码重建、0001–0007 补丁重放、无认证完整 ACP 矩阵和 App Bundle 探针；新提交的认证矩阵需重新登录后补跑，不能沿用旧提交的认证证据。认证回归仍针对显式的一次性 App home 与可丢弃项目执行；`--custom-model` 会额外写入一次性 `[model.*]` 并验证 ACP 公告和 `session/set_model`，不发送模型提示词。当前受控队列包含 0001–0007 补丁；这不等同于发布 GitHub Release。补丁队列由 `kernel/patches/series` 明确排序；构建只在临时 Git worktree 应用已验证补丁，绝不接受锁定源检出的未记录修改。认证回归加 `--worktree` 时只在显式的临时 Git CWD 创建隔离 Worktree；加 `--resource` 时发送一条最小模型请求并由验证客户端响应 `fs/read_text_file`，用临时文本文件验证标准 `resource_link`。每次受控内核构建都会同时生成上游 `LICENSE` 与完整 `THIRD-PARTY-NOTICES`，macOS bundle 验收会拒绝缺少它们。认证回归要求显式、独立的 `GORKX_ACP_TEST_AUTH_DIR`、`GORKX_ACP_TEST_PROJECT_DIR` 和 `--authenticated`，脚本会拒绝标准用户 `GROK_HOME`。当前 stdio 将会话控制、Hooks 与子代理控制暴露在 `_x.ai/*` 兼容路由；门禁同时探测标准与运行时路由，避免将源码命名误判成产品能力。
 
 运行时不执行 `grok update`：它不能更新本仓库的 source lock，也会绕过构建与 ACP 回归门禁。设置页只报告包内内核版本；升级必须走上面的源码同步、构建和验证流程。
 

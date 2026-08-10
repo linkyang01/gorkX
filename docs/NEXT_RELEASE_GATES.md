@@ -9,7 +9,7 @@
 > 已完成的可复跑本地证据记录在 `VALIDATION_EVIDENCE.md`；它不能替代
 > 本文要求的干净机器与真实账号人工闭环。
 
-> 当前候选已进入 gorkX `1.2.0` / Grok Build `1.0.0 (8a14c91)` 复验；下文
+> 当前候选已进入 gorkX `1.2.0` / Grok Build `1.0.0 (75e73f3)` 复验；下文
 > 仍保留 Beta 门槛编号，当前机器侧证据以 `VALIDATION_EVIDENCE.md` 的
 > 2026-08-09 条目为准。
 

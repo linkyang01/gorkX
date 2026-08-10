@@ -2,7 +2,7 @@
 
 See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 
-Current controlled runtime: Grok Build **1.0.0** (`8a14c91d8887`) with the
+Current controlled runtime: Grok Build **1.0.0** (`75e73f3d6ac`) with the
 ordered `0001–0007` patch series. Older version strings in historical evidence
 sections describe the package that was tested at that time.
 
