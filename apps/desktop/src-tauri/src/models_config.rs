@@ -972,7 +972,7 @@ pub fn config_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{catalog_model_ids, default_backend, has_generated_text, model_catalog_url, parse_inline_table_assign, toml_inline_table, validate_base_url, validate_provider_request_metadata, CustomModelRow};
+    use super::{apply_provider_request_metadata, catalog_model_ids, default_backend, has_generated_text, model_catalog_url, parse_inline_table_assign, toml_inline_table, validate_base_url, validate_provider_request_metadata, CustomModelRow};
     use std::collections::BTreeMap;
 
     #[test]
@@ -1050,6 +1050,34 @@ mod tests {
         model.query_params.clear();
         model.env_http_headers.insert("X-Workspace".into(), "not a valid env name".into());
         assert!(validate_provider_request_metadata(&model).is_err());
+    }
+
+    #[test]
+    fn applies_query_and_static_headers_to_built_request() {
+        let model = CustomModelRow {
+            id: "gateway".into(),
+            model: "demo".into(),
+            name: "demo".into(),
+            base_url: "https://gateway.example/v1".into(),
+            api_key: String::new(),
+            has_keychain_secret: false,
+            has_plaintext_secret: false,
+            api_backend: default_backend(),
+            provider_label: "Gateway".into(),
+            query_params: BTreeMap::from([("api-version".into(), "2026-07-22".into())]),
+            extra_headers: BTreeMap::from([("X-Workspace".into(), "research".into())]),
+            env_http_headers: BTreeMap::new(),
+            context_window: None,
+        };
+        let request = apply_provider_request_metadata(
+            reqwest::blocking::Client::new().get("https://gateway.example/v1/models"),
+            &model,
+        )
+        .expect("metadata should validate")
+        .build()
+        .expect("request should build without a network call");
+        assert_eq!(request.url().query_pairs().find(|(k, _)| k == "api-version").map(|(_, v)| v.into_owned()), Some("2026-07-22".to_string()));
+        assert_eq!(request.headers().get("x-workspace").and_then(|v| v.to_str().ok()), Some("research"));
     }
 
     #[test]
