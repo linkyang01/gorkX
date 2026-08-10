@@ -6,7 +6,7 @@ cards; slash commands remain an expert compatibility path.
 
 ## Highlights
 
-- **Grok Build 1.0.0 kernel** — source-locked to `8a14c91d8887`, rebuilt with
+- **Grok Build 1.0.0 kernel** — source-locked to `75e73f3d6ac`, rebuilt with
   the maintained 0001–0007 ACP patch series and bundled with upstream license
   notices.
 - **Native voice path retained** — the composer microphone continues to use

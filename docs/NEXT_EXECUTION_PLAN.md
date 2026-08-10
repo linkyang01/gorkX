@@ -4,7 +4,7 @@
 > 原则：按阶段执行、每一步可验证；没有真实链路就标记限制，不得用静态 UI、slash 文本或本地假数据冒充完成。  
 > 范围：只更新源码和验证记录；**未经用户明确批准，不打 tag、不发 GitHub Release、不生成或上传 DMG**。
 
-## 0. 当前基线（2026-08-09）
+## 0. 当前基线（2026-08-10）
 
 | 项 | 值 |
 |---|---|
@@ -12,7 +12,7 @@
 | 分支 | `agent/grok-build-1.0-kernel`（与 `origin/agent/grok-build-1.0-kernel` 同步） |
 | 近期主线 | Grok Build 1.0.0 内核重放、原生语音 ACP、完整脚本权限卡、上一轮摘要、扩展分组、`build:app` 绿 |
 | 发布候选 | gorkX `1.2.0`（内核升级与桌面 1.0 适配）；README 仍指向已发布的 `1.1.0`，待发布动作成功后再切换下载链接 |
-| 包内 Grok Build | `1.0.0 (8a14c91)` + 补丁 0001–0007 |
+| 包内 Grok Build | `1.0.0 (75e73f3)` + 补丁 0001–0007 |
 | App 包 | `apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app`（CFBundle `1.2.0`，包内内核 `1.0.0`，`verify-macos-app-bundle` PASS） |
 | 功能矩阵 | `docs/FEATURES.md` · 对齐 `docs/DESKTOP_ALIGNMENT_PLAN.md` · 证据 `docs/VALIDATION_EVIDENCE.md` |
 
