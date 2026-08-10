@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ Download the latest public build</strong></a><br />
-  <sub>gorkX 1.1.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg"><strong>↓ Download gorkX 1.2.0</strong></a><br />
+  <sub>gorkX 1.2.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
 </p>
 
 <p align="center">
@@ -109,22 +109,22 @@ review, or from a messy note to a shareable deliverable.
 
 ### Install the public build
 
-1. Download **[gorkX 1.1.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**.
+1. Download **[gorkX 1.2.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg)**.
 2. Open the DMG and drag `gorkX` into **Applications**.
 3. Open gorkX and complete Grok sign-in in the browser.
 4. Choose a project folder, or start a standalone task, then describe the
    outcome you want.
 
-Public builds are ad-hoc signed rather than Apple-notarized Developer ID builds.
-If macOS blocks the first launch, use **System Settings → Privacy & Security →
-Open Anyway**. The direct DMG link above is the latest public build; the current
-1.2.0 development candidate is intentionally published only after its remaining
-real-account and macOS acceptance checks.
+This release is ad-hoc signed rather than an Apple-notarized Developer ID build
+and targets Apple Silicon only. If macOS blocks the first launch, use
+**System Settings → Privacy & Security → Open Anyway**. Third-party endpoint,
+clean-machine, and microphone acceptance remain account/device-dependent and are
+documented in the validation notes; they are not presented as universal claims.
 
 ### Verify the download (optional)
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
+shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
 # published checksums are listed with the release asset
 ```
 
@@ -162,8 +162,8 @@ gorkX is deliberately explicit about boundaries:
   state is shown.
 
 For the complete real / kernel-wired / staged capability map, see
-[`docs/FEATURES.md`](docs/FEATURES.md). For the current 1.2.0 candidate evidence,
-see [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md).
+[`docs/FEATURES.md`](docs/FEATURES.md). For the 1.2.0 validation evidence and
+known acceptance boundaries, see [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md).
 
 ## Run from source
 
@@ -211,8 +211,8 @@ welcome. If gorkX is useful to you, a star helps other builders find it.
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ 下载最新公开版本</strong></a><br />
-  <sub>gorkX 1.1.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.2.0</strong></a><br />
+  <sub>gorkX 1.2.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
 ## 为什么选择 gorkX
@@ -279,17 +279,17 @@ gorkX 同样适合：
 
 ### 安装公开版本
 
-1. 下载 **[gorkX 1.1.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**。
+1. 下载 **[gorkX 1.2.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg)**。
 2. 打开 DMG，把 `gorkX` 拖入“应用程序”。
 3. 打开 gorkX，在浏览器完成 Grok 登录。
 4. 选择项目文件夹，或直接开始一个独立任务，然后描述你要完成的结果。
 
-公开构建目前使用 ad-hoc 签名，不是 Apple notarized Developer ID。如果 macOS 阻止首次打开，请到“系统设置 → 隐私与安全性”点击“仍要打开”。上面的 DMG 是最新公开版本；当前 1.2.0 开发候选版会在真实账号和 macOS 验收完成后再公开发布。
+这个版本使用 ad-hoc 签名、仅支持 Apple Silicon，未做 Apple notarized Developer ID 公证。如果 macOS 阻止首次打开，请到“系统设置 → 隐私与安全性”点击“仍要打开”。第三方 endpoint、干净机器和麦克风验收仍取决于用户账号与设备，详见验收说明；不把它们包装成普遍已验证能力。
 
 ### 可选：校验下载文件
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
+shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
 # 已发布校验值会随 Release 资产提供
 ```
 
@@ -318,7 +318,7 @@ rm -rf ~/Library/Application\ Support/gorkX
 - 日历、Slack、飞书、Notion、Drive 等连接器会在官方授权链完整后逐步开放，不会显示假的“已连接”。
 
 完整的 Real / Kernel-wired / 分阶段能力表见
-[`docs/FEATURES.md`](docs/FEATURES.md)；当前 1.2.0 候选版的验收证据见
+[`docs/FEATURES.md`](docs/FEATURES.md)；1.2.0 的验收证据与已知边界见
 [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md)。
 
 ## 从源码运行

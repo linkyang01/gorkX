@@ -1,4 +1,7 @@
-# gorkX 1.2.0 Release Candidate
+# gorkX 1.2.0
+
+Released 2026-08-10 as Git tag `v1.2.0`. The Apple Silicon DMG is attached to
+the [GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.2.0).
 
 gorkX 1.2.0 updates the bundled Grok Build engine to **1.0.0** and keeps the
 desktop-first experience intact: normal users use buttons, panels and guided
@@ -25,7 +28,7 @@ cards; slash commands remain an expert compatibility path.
 
 ## Verification
 
-The release candidate has passed the source lock, all seven patch apply checks,
+This release has passed the source lock, all seven patch apply checks,
 the locked source rebuild, authenticated 1.0.0 ACP route regression, a real
 resource-link model turn plus conversation-only rewind, live subagent
 completion, TypeScript/stage tests, Rust tests/check, and arm64 App-only
@@ -46,14 +49,16 @@ hashes.
   verified.
 - Calendar, Slack, Feishu, Notion and Drive remain clearly marked Soon until a
   complete official authorization chain exists.
-- The candidate is macOS Apple Silicon and normally ad-hoc signed. A published
-  DMG, tag and GitHub Release are deliberately separate release actions.
-- The public-release gate also requires recorded real-reply, clean-install,
-  third-party-model and microphone acceptance evidence; a green local build
-  alone cannot enable publication.
+- The release is macOS Apple Silicon and ad-hoc signed, not Apple-notarized.
+  Users may need to choose **Open Anyway** on first launch. Intel is not included
+  in this asset.
+- A clean-machine install, a real third-party endpoint, and manual microphone
+  transcription acceptance were not completed in this account/device run. They
+  remain explicit follow-up acceptance items; this release does not claim those
+  paths are universally verified.
 
 ## Install after publication
 
-After the release is approved, download `gorkX_1.2.0_aarch64.dmg` from the
-GitHub Release, drag gorkX into Applications, and use **Open Anyway** if the
-ad-hoc signature is blocked by Gatekeeper.
+Download `gorkX_1.2.0_aarch64.dmg` from the GitHub Release, drag gorkX into
+Applications, and use **Open Anyway** if the ad-hoc signature is blocked by
+Gatekeeper.
