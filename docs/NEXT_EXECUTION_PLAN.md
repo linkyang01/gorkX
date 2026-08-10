@@ -2,18 +2,19 @@
 
 > 用途：交给 Grok 继续开发 gorkX。  
 > 原则：按阶段执行、每一步可验证；没有真实链路就标记限制，不得用静态 UI、slash 文本或本地假数据冒充完成。  
-> 范围：只更新源码和验证记录；**未经用户明确批准，不打 tag、不发 GitHub Release、不生成或上传 DMG**。
+> 范围：默认只更新源码和验证记录；**tag、GitHub Release、DMG 仍须用户明确批准**。
+> 本轮用户已批准，gorkX `1.2.0` 已完成 tag、DMG 和 GitHub Release；后续版本继续遵守同一批准规则。
 
 ## 0. 当前基线（2026-08-10）
 
 | 项 | 值 |
 |---|---|
 | 工作区 | `/Users/link/projects/gorkX` |
-| 分支 | `agent/grok-build-1.0-kernel`（与 `origin/agent/grok-build-1.0-kernel` 同步） |
+| 分支 | `main` 与 `agent/grok-build-1.0-kernel` 均指向 `99b5db4`；两者已同步 |
 | 近期主线 | Grok Build 1.0.0 内核重放、原生语音 ACP、完整脚本权限卡、上一轮摘要、扩展分组、`build:app` 绿 |
-| 发布候选 | gorkX `1.2.0`（内核升级与桌面 1.0 适配）；README 仍指向已发布的 `1.1.0`，待发布动作成功后再切换下载链接 |
+| 发布版本 | gorkX `1.2.0` 已公开发布；README 已指向 `v1.2.0`，Apple Silicon DMG、tag 和 GitHub Release 均可用 |
 | 包内 Grok Build | `1.0.0 (75e73f3)` + 补丁 0001–0007 |
-| App 包 | `apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app`（CFBundle `1.2.0`，包内内核 `1.0.0`，`verify-macos-app-bundle` PASS） |
+| App 包 | `v1.2.0` DMG 只读挂载后 `.app` 验证通过（CFBundle `1.2.0`，包内内核 `1.0.0`，`verify-macos-app-bundle` PASS） |
 | 功能矩阵 | `docs/FEATURES.md` · 对齐 `docs/DESKTOP_ALIGNMENT_PLAN.md` · 证据 `docs/VALIDATION_EVIDENCE.md` |
 
 ### 阶段完成度（诚实）
@@ -38,7 +39,7 @@
 2. **委派 GUI 录像**（⇧⌘B → 树 → 停止/Inspect）；ACP 已 completed。  
 3. **阶段 1**：H1 / H2 / H3 — **用户侧**；不得伪造。  
 4. **连接器**：仅当有官方 OAuth 链时推进；否则保持 Soon。  
-5. **发版**：仅在明确版本号 + 批准后 tag / DMG / Release。
+5. **后续发版**：下一版本仍须明确版本号、验收范围和用户批准后，才可 tag / DMG / Release；`v1.2.0` 本轮已完成。
 
 ### 门禁（每次合入前）
 
@@ -62,7 +63,7 @@ node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --desktop
 
 ## 2. 明确不做
 
-- 未批准：tag、GitHub Release、DMG 上传。  
+- 后续版本在未批准前：不打 tag、不发 GitHub Release、不上传 DMG；`v1.2.0` 已按批准完成。
 - 不在 App 层重写 Agent/Planner/Worker。  
 - 不把 TUI pager/vim/theme 伪造成 Agent 能力。  
 - 不把 SuperGrok 聊天权限写成 Grok Build 可用；**403 不得绕过**。  
@@ -70,7 +71,7 @@ node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --desktop
 
 ## 3. 给执行者的触发语
 
-> 打开 `docs/NEXT_EXECUTION_PLAN.md`，从「当前优先」继续。先跑门禁再改代码。无 Build 权限时做桌面 UX/接线/测试；有权限时优先 B1 真对话与委派 UI 闭环。未经用户明确批准，不打 tag、不发 Release、不做 DMG。
+> 打开 `docs/NEXT_EXECUTION_PLAN.md`，从「当前优先」继续。先跑门禁再改代码。无 Build 权限时做桌面 UX/接线/测试；有权限时优先 B1 真对话与委派 UI 闭环。后续版本未经用户明确批准，不打 tag、不发 Release、不做 DMG。
 
 ## 4. 与文档关系
 
