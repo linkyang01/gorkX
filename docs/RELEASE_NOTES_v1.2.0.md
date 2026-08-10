@@ -3,6 +3,8 @@
 Released 2026-08-10 as Git tag `v1.2.0`. The Apple Silicon DMG is attached to
 the [GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.2.0).
 
+**DMG SHA-256:** `b3847d3fcb67d6e947840ca07655271a8d85210d917a0c8d9be78114520dd3e7`
+
 gorkX 1.2.0 updates the bundled Grok Build engine to **1.0.0** and keeps the
 desktop-first experience intact: normal users use buttons, panels and guided
 cards; slash commands remain an expert compatibility path.

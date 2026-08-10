@@ -125,7 +125,7 @@ documented in the validation notes; they are not presented as universal claims.
 
 ```bash
 shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
-# published checksums are listed with the release asset
+# SHA-256: b3847d3fcb67d6e947840ca07655271a8d85210d917a0c8d9be78114520dd3e7
 ```
 
 ### Update and rollback
@@ -290,7 +290,7 @@ gorkX 同样适合：
 
 ```bash
 shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
-# 已发布校验值会随 Release 资产提供
+# SHA-256：b3847d3fcb67d6e947840ca07655271a8d85210d917a0c8d9be78114520dd3e7
 ```
 
 ### 更新与回退
