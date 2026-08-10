@@ -1,23 +1,24 @@
 # gorkX
 
 <p align="center">
-  <img src="docs/screenshots/00-icon.png" width="92" alt="gorkX" />
+  <img src="docs/screenshots/00-icon.png" width="96" alt="gorkX" />
 </p>
 
-<p align="center"><strong>Grok Build, made usable for real work.</strong></p>
+<p align="center"><strong>Grok Build, without the terminal tax.</strong></p>
 
 <p align="center">
-  gorkX is the calm desktop command center for turning a folder, a question, or a messy brief into work you can see, direct, and finish — without living in the terminal.
+  A calm, visual command center for turning a question, folder, or rough brief
+  into work you can direct, inspect, and finish.
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ Download gorkX 1.1.0 for macOS Apple Silicon</strong></a><br />
-  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">All releases</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ Download the latest public build</strong></a><br />
+  <sub>gorkX 1.1.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
 </p>
 
 <p align="center">
   <a href="#why-gorkx">Why gorkX</a> ·
-  <a href="#what-you-get">What you get</a> ·
+  <a href="#what-you-can-do">What you can do</a> ·
   <a href="#install">Install</a> ·
   <a href="#中文">中文</a>
 </p>
@@ -28,135 +29,143 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-111827.svg" />
 </p>
 
-![gorkX main workspace](docs/screenshots/02-main.jpg)
+![gorkX workspace](docs/screenshots/02-main.jpg)
 
 ## Why gorkX
 
-Grok Build is a strong agent engine. A terminal is rarely the best place to run a project, compare options, draft a document, or understand what changed. gorkX gives the engine a **desktop home** — so important work stays visible, steerable, and reviewable.
+Grok Build is the engine. gorkX is the place where work happens.
 
-### Advantages that matter day to day
+Instead of memorising commands, you describe the outcome: *turn these notes into
+a brief*, *compare these options*, *find the regression*, or *make this project
+ready to review*. gorkX keeps the response, tools, decisions, files, and next
+step in one visible workspace.
 
-| Advantage | What it means for you |
+It is designed for people who write code and people who simply have work to
+finish. The main path is buttons, panels, cards, and guided forms. Slash
+commands remain available for experts, but they are never the price of entry.
+
+## What you can do
+
+| You want to… | gorkX gives you… |
 |---|---|
-| **Outcome first** | Describe what you want done. Guided starters cover reading material, reports, research, decisions, planning, code exploration, and fixes — no command vocabulary required. |
-| **Real kernel, not a mock** | Ships a locked Grok Build engine, talks over ACP, and manages its own sessions under an app-owned `GROK_HOME`. One install. No separate CLI hunt. |
-| **Stay in control** | Stream the run, see tools and plans, answer with clear choices, approve permissions deliberately. High-risk steps stay visible and refuse-able. |
-| **Multi-task you can trust** | Run more than one task; switch freely. The **Run center** and **Decisions** inbox show real ACP status — not fake progress bars. |
-| **Results as a product** | **Deliverables** collect files and media the agent actually returned — open, preview, and safely edit text in-project. No silent “scan your disk and guess.” |
-| **Inspect before you accept** | Review diffs, plans, tool activity, and local Git state before you move on. |
-| **Context that survives** | Projects, durable tasks, local memory, search, archive/restore, and project instructions keep long work coherent. |
-| **Models you can verify** | Grok sign-in, plus real API / compatible providers with connection tests and provider · model shown on the task — web subscriptions are never dressed up as API logins. |
-| **Private by architecture** | App data stays under Application Support. Project folders stay project folders. No silent read of `~/.grok` or browser cookies. |
+| Start from a vague brief | Outcome starters for reports, research, meeting notes, email drafts, decision briefs, project plans, code exploration, fixes, features, and tests. |
+| Direct an agent without losing the plot | Streaming replies, visible tool activity, plan review, permission cards, structured questions, goals, follow-ups, and a live run centre. |
+| See useful answers clearly | Markdown, tables, compact charts, checklists, step cards, choices, Mermaid flows, and readable diff blocks rendered inside the conversation. |
+| Work safely in a real project | Project-scoped sessions, sandbox profiles, allow/deny rules, tool limits, terminal, worktrees, Review, and explicit confirmations for consequential actions. |
+| Review before accepting | Git status and diffs, agent-attributed changes, plan and tool history, code navigation, copy/export, and deliverables returned by the agent. |
+| Keep context across days | Durable tasks, archive/restore, local memory, project instructions, task search, prompt history, portable task packages, and a seven-day local usage trend. |
+| Run more than one thing | Independent tasks, native subagents, a task tree, a cross-task Decisions inbox, scheduled briefings, and recoverable running-task state. |
+| Use the tools you already have | Skills, MCP servers, plugins, Chrome/Playwright reading, screenshots, GitHub Device Flow, and guided provider setup. |
+| Choose a model honestly | Grok models from the live kernel plus API-compatible providers that pass a real connection test. Unverified models never appear connected; web subscriptions are never disguised as APIs. |
+| Speak instead of type | Grok Build's native macOS voice path places a finalized transcript into an editable draft and never sends it automatically. |
 
-Slash commands remain for experts. They are not the front door.
+### The real kernel inside
 
-## What you get
+The app bundles a source-locked Grok Build engine and talks to it over ACP stdio.
+Sessions, login, configuration, and memory live in an app-owned `GROK_HOME`, so
+gorkX does not silently borrow a separate CLI installation or browser cookies.
+The desktop shell adds clarity and persistence; the agent loop remains Grok
+Build's job.
 
-| You want to… | gorkX helps you… |
-|---|---|
-| Turn a vague brief into motion | Outcome starters, focused composer, goals, engine plans, approval cards when a decision is needed. |
-| Work on code or documents safely | Project-scoped tasks, file trust and permissions, terminal, worktrees, sandbox profiles, Review. |
-| Run several things at once | Independent tasks, run status, decision queue keyed to the right session. |
-| Ship something concrete | Deliverables panel, rich previews, safe text/Markdown edit, copy summary / open in Finder / export. |
-| Keep work moving on a rhythm | Scheduled briefings and follow-ups; optional plan-only background worker on macOS — external writes never run unattended. |
-| Collaborate when you’re ready | GitHub connect (official device flow), read PRs/checks, create PR or comment only after you confirm. |
-| Understand the run | Streaming answers, process view, tool history, task info, Chinese-first readable summaries. |
-| Speak instead of type | Native macOS voice capture into an **editable draft** — never auto-sent. |
-| Research with control | Open supplied web sources in a reading window; control whether web research is available to new tasks. |
+### A result you can hand off
 
-### Built for work around code, too
+When the engine returns a file or image, the **Deliverables** panel collects that
+actual output for preview, Finder reveal, or safe in-project editing. gorkX does
+not scan your disk and guess which files are “the result”.
 
-Reports, research briefs, ops checklists, content drafts, handoffs, and hard decisions use the same flow as coding. Capability without forcing every user to learn a command language.
+![Review and agent activity](docs/screenshots/03-review.jpg)
 
-## One clear flow
+![Memory that stays useful](docs/screenshots/01-memory.jpg)
 
-| Start | Direct | Verify | Remember |
+## The gorkX loop
+
+| 1 · Start | 2 · Direct | 3 · Verify | 4 · Continue |
 |---|---|---|---|
-| Pick a project and describe the outcome. | Steer with the composer, starters, choices, plans, and permissions. | Inspect changes, tools, plans, deliverables, and Git. | Keep useful context locally for the next task. |
+| Pick a project or begin a task without one. | Use the composer, quick actions, plans, choices, and permission cards. | Inspect the run, files, diff, plan, tools, and deliverables. | Save the context locally, schedule the next step, or hand off a clean result. |
 
-![Review panel showing agent activity](docs/screenshots/03-review.jpg)
+## Built for more than coding
 
-![Local memory management](docs/screenshots/01-memory.jpg)
+gorkX is equally comfortable with:
+
+- research and comparison;
+- reports, briefs, and meeting minutes;
+- email and document drafts;
+- decision preparation and project planning;
+- codebase exploration, debugging, feature work, and tests;
+- recurring personal or team routines.
+
+The same conversation can move from a source file to a table, from a plan to a
+review, or from a messy note to a shareable deliverable.
 
 ## Install
 
 ### Requirements
 
-| Item | Requirement |
-|---|---|
-| OS | **macOS 12** or later |
-| Chip | **Apple Silicon** (M1 / M2 / M3 / M4 …) — not Intel Mac |
-| Account | A **Grok** account for sign-in (browser OAuth inside the app) |
-| Optional | Your own API / OpenAI-compatible provider keys in Settings |
+- **macOS 12 or later**
+- **Apple Silicon** (M1, M2, M3, M4, and newer; Intel is not included in the
+  current public build)
+- A **Grok account** for browser sign-in
+- Optional: your own API or OpenAI-compatible provider credentials in Settings
 
-Windows and Linux are not GA in this release.
+### Install the public build
 
-### Install from the DMG (recommended)
+1. Download **[gorkX 1.1.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**.
+2. Open the DMG and drag `gorkX` into **Applications**.
+3. Open gorkX and complete Grok sign-in in the browser.
+4. Choose a project folder, or start a standalone task, then describe the
+   outcome you want.
 
-**Release:** [gorkX 1.1.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.1.0) ·
-full notes: [`docs/RELEASE_NOTES_v1.1.0.md`](docs/RELEASE_NOTES_v1.1.0.md)
+Public builds are ad-hoc signed rather than Apple-notarized Developer ID builds.
+If macOS blocks the first launch, use **System Settings → Privacy & Security →
+Open Anyway**. The direct DMG link above is the latest public build; the current
+1.2.0 development candidate is intentionally published only after its remaining
+real-account and macOS acceptance checks.
 
-1. **Download** the installer:
-   - **[gorkX_1.1.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**
-   - Or open [All releases](https://github.com/linkyang01/gorkX/releases) and pick the latest `*.dmg`.
-2. **Open the DMG** (double-click in Finder).
-3. **Drag `gorkX` into Applications** (the Applications shortcut in the window).
-4. **Eject** the disk image when finished (optional).
-5. Open **Applications → gorkX**.
-
-#### If macOS blocks first open (“unidentified developer” / damaged / can’t be opened)
-
-Current public builds use **ad-hoc signing** (not Apple notarized Developer ID). That is expected; it is not malware. Pick one:
-
-**A — System Settings (GUI)**
-
-1. Open **System Settings → Privacy & Security**.
-2. Scroll to the message about **gorkX** being blocked.
-3. Click **Open Anyway** / **Allow**, then confirm.
-
-**B — Terminal (one-shot quarantine clear)**
-
-```bash
-xattr -dr com.apple.quarantine /Applications/gorkX.app
-```
-
-Then open gorkX again from Applications (or Spotlight).
-
-#### First launch
-
-1. When prompted, complete **Grok sign-in in the browser**.
-2. Return to gorkX; the app stores sessions under its own App Support data (not your CLI `~/.grok`).
-3. Open a **project folder** (or start a free-standing task) and describe what you want done.
-4. Optional: **Settings → Models** to add API / compatible providers; secrets go to **macOS Keychain**.
-
-#### Optional: verify the download
+### Verify the download (optional)
 
 ```bash
 shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
-# expected:
-# c93f996018f3c8293727af025c2ed9cae3854908f7b7aa50ce72e8b8c0e22734
+# published checksums are listed with the release asset
 ```
 
-### Update / rollback
+### Update and rollback
 
-- **Update:** download a newer DMG from [Releases](https://github.com/linkyang01/gorkX/releases), drag over the old app in Applications.
-- **Rollback:** keep an older DMG; replace `/Applications/gorkX.app` with the previous version.
-- App data stays under `~/Library/Application Support/gorkX/` unless you delete it yourself.
-- Do **not** run a generic `grok update` CLI to “upgrade” the desktop app kernel.
+- Download a newer **gorkX DMG** from [GitHub Releases](https://github.com/linkyang01/gorkX/releases)
+  and replace the app in Applications.
+- Do not run a generic `grok update` command to update the desktop bundle. The
+  bundled kernel is source-controlled and is updated together with gorkX.
+- Your local data remains under `~/Library/Application Support/gorkX/`.
 
 ### Uninstall
 
-1. Quit gorkX.
-2. Move `/Applications/gorkX.app` to Trash.
-3. (Optional) remove local data:
+1. Quit gorkX and move `/Applications/gorkX.app` to Trash.
+2. Optional: remove local tasks, memory, and app-owned login data:
 
 ```bash
 rm -rf ~/Library/Application\ Support/gorkX
 ```
 
-### Run from source (developers)
+## Privacy and control
 
-Needs Node.js, Rust, and Xcode command-line tools.
+gorkX is deliberately explicit about boundaries:
+
+- App state and Grok sessions use an app-owned Application Support directory.
+- Project access is scoped to the folder you select; symlink escapes are refused.
+- API secrets stay in macOS Keychain or the provider environment, not in task
+  transcripts, SQLite, logs, or README examples.
+- Tools, writes, Git actions, cloud changes, diagnostics, and sharing use visible
+  confirmations where they matter.
+- Third-party connectors appear as connected only after their real authorization
+  path succeeds.
+- Calendar, Slack, Feishu, Notion, and Drive-style integrations are introduced
+  only when an official authorization chain is available; no fake “connected”
+  state is shown.
+
+For the complete real / kernel-wired / staged capability map, see
+[`docs/FEATURES.md`](docs/FEATURES.md). For the current 1.2.0 candidate evidence,
+see [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md).
+
+## Run from source
 
 ```bash
 git clone https://github.com/linkyang01/gorkX.git
@@ -165,57 +174,17 @@ npm install
 npm run tauri dev
 ```
 
-Optional development engine path:
-
-```bash
-export GORKX_GROK_CMD=/path/to/grok
-npm run tauri dev
-```
-
-To build a local `.app` only:
+Build a local App Bundle:
 
 ```bash
 npm run build:app
-# output: src-tauri/target/release/bundle/macos/gorkX.app
+# apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app
 ```
 
-## Private by architecture
-
-Application data stays separate from the folder you are working in. No separately installed Grok CLI required; no scan of `~/.grok`.
-
-```text
-~/Library/Application Support/gorkX/
-  gorkx.db       # task index and local app state
-  grok-home/     # app-owned Grok Build sessions, login, config, memory
-  runtime/       # optional managed runtime files
-```
-
-```text
-React + Tauri 2 desktop app
-projects · tasks · review · deliverables · memory · settings
-                  │
-                  │ ACP stdio
-                  ▼
-App-owned Grok Build kernel
-sessions · tools · models · voice · config
-```
-
-## Looking ahead
-
-gorkX ships a focused, production-ready path for **macOS Apple Silicon** today. Deeper workspace integrations and broader platforms continue to expand in the same spirit: real authorization, explicit confirmation, and no fake “connected” states.
-
-For auditable detail, see the [feature matrix](docs/FEATURES.md). For product direction, see the [product development plan](docs/PRODUCT_DEVELOPMENT_PLAN.md).
-
-**Release execution plan:** the single executable plan is
-[`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md). In a development
-session, say **「按方案做」** to run it end-to-end to a release candidate
-(tag / Release / DMG still need your explicit approval).
-
-## Development
+Useful checks:
 
 ```bash
-cd apps/desktop
-npm run typecheck
+npx tsc --noEmit
 npm run test:stages
 npm run build
 cd src-tauri && cargo test && cargo check
@@ -223,9 +192,9 @@ cd src-tauri && cargo test && cargo check
 
 ## Contribute
 
-Issues and pull requests are welcome. The best contributions make agents easier to direct, easier to audit, and more useful to people who have work to finish.
-
-If gorkX helps, please **star the repository** and share it with someone ready to move beyond the terminal-only loop.
+The best contributions make an agent easier to direct, easier to audit, and
+more useful to people who have work to finish. Issues and pull requests are
+welcome. If gorkX is useful to you, a star helps other builders find it.
 
 ## License
 
@@ -238,144 +207,121 @@ If gorkX helps, please **star the repository** and share it with someone ready t
 <p align="center"><strong>把 Grok Build 变成真正好用的桌面工作台。</strong></p>
 
 <p align="center">
-  gorkX 让一个文件夹、一个问题或一团乱麻的需求，变成看得见、能指挥、可交付的实际进展 —— 不必整日泡在终端里。
+  不用先学命令。说清楚你想完成什么，gorkX 帮你把过程、权限、结果和下一步放在一个看得见的工作空间里。
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.1.0（macOS Apple Silicon）</strong></a><br />
-  <sub>macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
-</p>
-
-<p align="center">
-  <a href="#为什么选择-gorkx">为什么是 gorkX</a> ·
-  <a href="#你能得到什么">你能得到什么</a> ·
-  <a href="#安装-1">安装</a> ·
-  <a href="#gorkx">English</a>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg"><strong>↓ 下载最新公开版本</strong></a><br />
+  <sub>gorkX 1.1.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
 ## 为什么选择 gorkX
 
-Grok Build 是很强的 Agent 引擎，但终端并不总是适合推进项目、比较方案、起草材料，或回看究竟发生了什么。gorkX 给它一个**桌面上的家**：真正重要的工作始终留在眼前、可指挥、可审阅。
+Grok Build 是内核，gorkX 是工作的桌面入口。
 
-### 日常真正有用的优势
+你可以直接说：**把这些笔记整理成简报、比较几个方案、找出这个缺陷、把项目准备好审阅**。不用记住命令，也不用在终端和多个窗口之间来回切换。gorkX 把回答、工具调用、权限请求、计划、文件和交付物留在同一个可回看的空间里。
 
-| 优势 | 对你意味着什么 |
+它既服务于开发，也服务于研究、写作、运营和日常办公。普通用户走按钮、面板、卡片和引导表单；熟悉命令的人仍然可以使用 slash 快捷方式。
+
+## 你能用它完成什么
+
+| 你想做什么 | gorkX 怎么帮你 |
 |---|---|
-| **从结果出发** | 说清楚要完成什么即可。阅读材料、写报告、调研决策、项目计划、代码探索与修复都有易懂入口，不必先学命令。 |
-| **真内核，不是壳** | 内置锁定版本的 Grok Build，经 ACP 通信，会话与配置在应用自管的 `GROK_HOME`。装好就能用，不用另找 CLI。 |
-| **人始终在回路里** | 流式过程、工具与计划可见；用选项回答问题；权限与高风险动作需你明确确认，可拒绝。 |
-| **可信的多任务** | 多个任务并行推进，随时切换。**运行中心**与**待处理决定**只反映真实 ACP 状态，不造假进度。 |
-| **成果就是产品单位** | **本次成果**汇总 Agent 明确回传的文件与媒体：打开、预览、在项目内安全编辑文本。不静默扫盘猜产出。 |
-| **先审阅，再接收** | 改动、计划、工具活动、本地 Git 状态都可直接检查。 |
-| **上下文不断线** | 项目、持久任务、本地记忆、搜索、归档恢复与项目指令，让长周期工作保持连贯。 |
-| **模型可验证** | Grok 登录 + 真实 API/兼容提供商；连接测试与任务上显示「提供商 · 模型」；网页订阅不会被说成 API 已连接。 |
-| **架构级隐私** | 应用数据在 Application Support；项目目录仍是项目目录。不偷偷读 `~/.grok` 或浏览器 Cookie。 |
+| 从一句模糊需求开始 | 阅读总结、报告、调研、会议纪要、邮件、决策简报、项目计划，以及探索代码、修缺陷、加功能、补测试等入口。 |
+| 始终知道 Agent 在做什么 | 流式回答、工具过程、计划审阅、权限卡、结构化问题、目标、后续建议和运行中心。 |
+| 让结果更容易阅读 | Markdown、表格、图表、清单、步骤卡、选项、Mermaid 流程图和 diff 都直接显示在会话里。 |
+| 安全处理真实项目 | 项目范围、沙箱、工具限制、allow/deny 规则、终端、工作树、Review 和重要操作确认。 |
+| 接受改动前先看清楚 | Git 状态和 diff、代理变更、计划、工具历史、代码导航、复制/导出和成果中心。 |
+| 让上下文延续下去 | 持久会话、归档恢复、本地记忆、项目指令、任务搜索、提示历史、任务包和近 7 天本地使用趋势。 |
+| 同时推进多个任务 | 独立任务、原生子 Agent、任务树、跨会话待处理事项、计划任务和可恢复的运行状态。 |
+| 连接已有工具 | Skills、MCP、插件、Chrome/Playwright、截图、GitHub 官方 Device Flow 和引导式模型配置。 |
+| 选择模型但不被假状态误导 | Grok 模型来自实时内核；第三方模型必须真实连接测试通过才显示为可用，网页订阅不会被包装成 API。 |
+| 用说话代替输入 | 使用 Grok Build 原生 macOS 语音链路，把最终听写放进可编辑草稿，绝不自动发送。 |
 
-熟练用户仍可使用斜杠命令；普通用户不需要先学会命令，才能把事情做好。
+### 内置的是真内核
 
-## 你能得到什么
+gorkX 内置源码锁定的 Grok Build，通过 ACP stdio 驱动 Agent。会话、登录、配置和记忆放在应用自管的 `GROK_HOME` 中，不会悄悄读取另一套 CLI 数据或浏览器 Cookie。桌面端负责把能力变得清楚、可操作、可持久化；Agent 循环仍由 Grok Build 负责。
 
-| 你想做的事 | gorkX 的体验 |
-|---|---|
-| 把模糊需求变成下一步 | 面向结果的快捷入口、专注输入、目标、内核计划，以及需要你决定时才出现的审批。 |
-| 安全处理代码或材料 | 项目范围任务、文件信任与权限、终端、工作树、沙箱与审阅。 |
-| 同时推进多项工作 | 独立任务、运行状态、按原任务归属的决定收件箱。 |
-| 留下可打开的成果 | 成果面板、富预览、安全编辑、复制摘要 / 在访达中显示 / 导出。 |
-| 按节奏跟进 | 定时简报与跟进；可选 macOS 后台（仅规划）；外发与改远端绝不会无人值守执行。 |
-| 需要时再连工作平台 | GitHub 官方设备授权；读 PR/检查；创建 PR 或评论须逐次确认。 |
-| 看懂一次 Agent 工作 | 流式回答、过程视图、工具记录、任务信息、中文优先的可读摘要。 |
-| 用说话代替输入 | 原生 macOS 采集与转写，结果进入**可编辑草稿**，绝不静默发送。 |
-| 有控制地调研 | 独立窗口打开你指定的网页资料；可控制新任务是否启用网页研究。 |
+### 结果可以直接交接
 
-### 不只服务开发者
+Agent 真正返回的文件或图片会进入**成果中心**，可以预览、在 Finder 中打开或安全编辑。gorkX 不会扫描你的硬盘，更不会猜哪个文件是“成果”。
 
-报告、调研简报、运营清单、内容草稿、项目交接和复杂决策，也适合这套流程。保留高手入口，但不要求每位用户先学一套命令语言。
+![Review 与代理活动](docs/screenshots/03-review.jpg)
 
-## 一条清晰的工作流
+![可持续使用的记忆](docs/screenshots/01-memory.jpg)
 
-| 开始 | 指挥 | 验证 | 记住 |
+## gorkX 的工作闭环
+
+| 1 · 开始 | 2 · 指挥 | 3 · 验收 | 4 · 延续 |
 |---|---|---|---|
-| 选择项目，描述想要的结果。 | 用输入框、快捷入口、选择项、计划和权限引导内核。 | 审阅改动、工具、计划、成果与 Git。 | 把真正有用的上下文留在本地，供下次使用。 |
+| 选择项目，或直接新建任务。 | 使用输入框、快捷操作、计划、选项和权限卡。 | 查看过程、文件、diff、计划、工具和成果。 | 保存上下文、安排下一步，或交接一个干净的结果。 |
+
+## 不只是写代码
+
+gorkX 同样适合：
+
+- 资料调研与方案对比；
+- 报告、简报、会议纪要和邮件草稿；
+- 决策准备与项目计划；
+- 代码库探索、缺陷定位、功能开发和测试；
+- 可重复的个人或团队工作流程。
+
+同一段会话可以从源文件走到表格，从计划走到审阅，也可以把一堆零散材料变成可交付文稿。
 
 ## 安装
 
-### 环境要求
+### 系统要求
 
-| 项目 | 要求 |
-|---|---|
-| 系统 | **macOS 12** 及以上 |
-| 芯片 | **Apple Silicon**（M1 / M2 / M3 / M4 等），**不支持** Intel Mac |
-| 账号 | 需要 **Grok** 账号（应用内浏览器登录） |
-| 可选 | 在「设置」里配置自己的 API / OpenAI 兼容提供商密钥 |
+- **macOS 12 或更高版本**
+- **Apple Silicon**（M1/M2/M3/M4 及更新芯片；当前公开版不包含 Intel）
+- 用于浏览器登录的 **Grok 账号**
+- 可选：在设置中配置自己的 API 或 OpenAI-compatible 模型
 
-本版本 Windows / Linux 尚未正式支持。
+### 安装公开版本
 
-### 用 DMG 安装（推荐）
+1. 下载 **[gorkX 1.1.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**。
+2. 打开 DMG，把 `gorkX` 拖入“应用程序”。
+3. 打开 gorkX，在浏览器完成 Grok 登录。
+4. 选择项目文件夹，或直接开始一个独立任务，然后描述你要完成的结果。
 
-**版本：** [gorkX 1.1.0 Stable](https://github.com/linkyang01/gorkX/releases/tag/v1.1.0) ·
-完整说明见 [`docs/RELEASE_NOTES_v1.1.0.md`](docs/RELEASE_NOTES_v1.1.0.md)
+公开构建目前使用 ad-hoc 签名，不是 Apple notarized Developer ID。如果 macOS 阻止首次打开，请到“系统设置 → 隐私与安全性”点击“仍要打开”。上面的 DMG 是最新公开版本；当前 1.2.0 开发候选版会在真实账号和 macOS 验收完成后再公开发布。
 
-1. **下载**安装包：
-   - **[gorkX_1.1.0_aarch64.dmg](https://github.com/linkyang01/gorkX/releases/download/v1.1.0/gorkX_1.1.0_aarch64.dmg)**
-   - 或打开 [全部版本](https://github.com/linkyang01/gorkX/releases)，选择最新的 `*.dmg`
-2. **双击打开 DMG**。
-3. 把窗口里的 **gorkX** **拖到「应用程序」**（Applications）里。
-4. 可按需弹出（推出）磁盘映像。
-5. 打开 **启动台 / 访达 → 应用程序 → gorkX**。
-
-#### 若首次打开被拦截（“无法验证开发者” / “已损坏” / 打不开）
-
-当前公开发布包是 **ad-hoc 签名**（尚未 Apple Developer ID 公证）。这是预期情况，不是病毒。任选一种方式：
-
-**方式 A — 系统设置（图形界面）**
-
-1. 打开 **系统设置 → 隐私与安全性**。
-2. 找到关于 **gorkX** 被拦截的提示。
-3. 点 **仍要打开** / **允许**，再确认一次。
-
-**方式 B — 终端一次清除隔离属性**
-
-```bash
-xattr -dr com.apple.quarantine /Applications/gorkX.app
-```
-
-然后从「应用程序」或 Spotlight 再打开 gorkX。
-
-#### 第一次启动
-
-1. 按提示在浏览器完成 **Grok 登录**。
-2. 回到 gorkX；会话与登录数据在应用自管目录（**不会**继承你本机 CLI 的 `~/.grok`）。
-3. 打开一个**项目文件夹**（或直接开自由任务），用自然语言描述要做的事。
-4. 可选：到 **设置 → 模型** 添加 API / 兼容提供商；密钥保存在 **macOS 钥匙串**。
-
-#### 可选：校验下载文件
+### 可选：校验下载文件
 
 ```bash
 shasum -a 256 ~/Downloads/gorkX_1.1.0_aarch64.dmg
-# 期望值为：
-# c93f996018f3c8293727af025c2ed9cae3854908f7b7aa50ce72e8b8c0e22734
+# 已发布校验值会随 Release 资产提供
 ```
 
-### 更新与回滚
+### 更新与回退
 
-- **更新：** 从 [Releases](https://github.com/linkyang01/gorkX/releases) 下载新 DMG，覆盖拖入「应用程序」。
-- **回滚：** 保留旧 DMG，用旧版替换 `/Applications/gorkX.app`。
-- 应用数据在 `~/Library/Application Support/gorkX/`，除非你手动删除，否则会保留。
-- **不要**用通用的 `grok update` 命令去“升级”桌面版内核。
+- 从 [GitHub Releases](https://github.com/linkyang01/gorkX/releases) 下载新的 gorkX DMG，覆盖“应用程序”中的旧版本。
+- 不要用通用 `grok update` 命令升级桌面内核；内核源码由 gorkX 锁定并随应用一起更新。
+- 本地数据默认保存在 `~/Library/Application Support/gorkX/`。
 
 ### 卸载
 
-1. 退出 gorkX。
-2. 将 `/Applications/gorkX.app` 移到废纸篓。
-3. （可选）删除本地数据：
+1. 退出 gorkX，把 `/Applications/gorkX.app` 移到废纸篓。
+2. 如需同时删除任务、记忆和应用登录数据，可执行：
 
 ```bash
 rm -rf ~/Library/Application\ Support/gorkX
 ```
 
-### 从源码运行（开发者）
+## 隐私与控制
 
-需要 Node.js、Rust 与 Xcode 命令行工具。
+- 应用状态和 Grok 会话使用独立的 Application Support 目录。
+- 项目访问限制在你选择的文件夹内，并拒绝通过符号链接越界。
+- API 密钥只进入 macOS Keychain 或提供商环境变量，不写入会话、SQLite、日志或示例文档。
+- 工具、写入、Git、云端操作、诊断和分享等重要动作会显示确认。
+- 第三方平台只有真实授权成功后才会显示为已连接。
+- 日历、Slack、飞书、Notion、Drive 等连接器会在官方授权链完整后逐步开放，不会显示假的“已连接”。
+
+完整的 Real / Kernel-wired / 分阶段能力表见
+[`docs/FEATURES.md`](docs/FEATURES.md)；当前 1.2.0 候选版的验收证据见
+[`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md)。
+
+## 从源码运行
 
 ```bash
 git clone https://github.com/linkyang01/gorkX.git
@@ -384,57 +330,17 @@ npm install
 npm run tauri dev
 ```
 
-开发时指定自己的内核：
-
-```bash
-export GORKX_GROK_CMD=/path/to/grok
-npm run tauri dev
-```
-
-仅本地打 `.app` 包：
+构建本地 App：
 
 ```bash
 npm run build:app
-# 产物：src-tauri/target/release/bundle/macos/gorkX.app
+# apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app
 ```
 
-## 数据与隐私
-
-应用数据与正在处理的项目目录分开保存。不要求另装 Grok CLI，也不会扫描 `~/.grok`。
-
-```text
-~/Library/Application Support/gorkX/
-  gorkx.db       # 任务索引与本地应用状态
-  grok-home/     # 应用自管的 Grok Build 会话、登录、配置、记忆
-  runtime/       # 可选的受管运行时文件
-```
-
-```text
-React + Tauri 2 桌面应用
-项目 · 任务 · 审阅 · 成果 · 记忆 · 设置
-                  │
-                  │ ACP stdio
-                  ▼
-应用自管的 Grok Build 内核
-会话 · 工具 · 模型 · 语音 · 配置
-```
-
-## 持续演进
-
-gorkX 当前以 **macOS Apple Silicon** 为主力交付路径。更多工作平台对接与跨平台覆盖会按同一原则推进：真实授权、逐次确认、从不假装“已连接”。
-
-如需逐项核对，见[功能矩阵](docs/FEATURES.md)；产品方向见[产品开发计划](docs/PRODUCT_DEVELOPMENT_PLAN.md)。
-
-**正式版发布执行方案：**
-[`docs/FORMAL_RELEASE_PLAN.md`](docs/FORMAL_RELEASE_PLAN.md)。  
-在开发会话中说 **「按方案做」**，即可按该方案连续执行到发布候选完成  
-（打 tag / 发 Release / 上传 DMG 仍须你明确批准）。
-
-## 开发与验证
+常用检查：
 
 ```bash
-cd apps/desktop
-npm run typecheck
+npx tsc --noEmit
 npm run test:stages
 npm run build
 cd src-tauri && cargo test && cargo check
@@ -442,9 +348,7 @@ cd src-tauri && cargo test && cargo check
 
 ## 参与贡献
 
-欢迎提交 Issue 和 PR。最有价值的贡献，是让 Agent 更容易指挥、更容易审阅，也让更多人能真正用它完成工作。
-
-如果 gorkX 对你有帮助，欢迎 **Star**，也请分享给仍被终端工作流困住的朋友。
+欢迎提交 Issue 和 Pull Request。最有价值的改进，是让 Agent 更容易指挥、更容易审阅，也更能帮助普通人把事情做完。如果 gorkX 对你有帮助，欢迎给仓库点个 Star。
 
 ## 许可证
 
