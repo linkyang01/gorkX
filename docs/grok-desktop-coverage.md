@@ -4,6 +4,10 @@ Living checklist for product and PR review. Runtime and kernel governance follow
 [`INDEPENDENT_APP_PLAN.md`](./INDEPENDENT_APP_PLAN.md); detailed real/half
 boundaries follow [`FEATURES.md`](./FEATURES.md).
 
+Current controlled runtime: Grok Build **1.0.0** (`75e73f3d6ac`), observed
+2026-08-10. Older package/version strings below are historical evidence for the
+run in which they were recorded.
+
 Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · ❌ not shipped
 
 ## Session & chat
@@ -29,7 +33,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Portable task bundle | `+ → Export portable task package` / `Import task package` | 🟡 native metadata/transcript export and restore through `session/state`, paginated `session/updates` and `session/import`; bounded, privacy-confirmed and project-picker gated; authenticated cross-device acceptance remains a release test |
 | Export | Toolbar / `+` menu file save; `/export` remains keyboard compatibility | ✅ |
 | Fork | Toolbar calls `_x.ai/session/fork`, creates a durable child task, then loads it while preserving the original task | ✅ isolated ACP gate verifies child load and unchanged parent |
-| Rewind / undo | Desktop lists `_x.ai/rewind/points`, makes the user choose a checkpoint and scope, then performs a non-mutating `force: false` preview. `+ → Undo last turn` and `/undo` enter the same flow; it commits with `force: true` only after explicit restore confirmation, and conflicts require a second acknowledgement. | ✅ package `0.2.116 (dd04f39)` passed the route compatibility probes; a fresh authenticated two-prompt preview/commit/reload run is still a release acceptance scenario |
+| Rewind / undo | Desktop lists `_x.ai/rewind/points`, makes the user choose a checkpoint and scope, then performs a non-mutating `force: false` preview. `+ → Undo last turn` and `/undo` enter the same flow; it commits with `force: true` only after explicit restore confirmation, and conflicts require a second acknowledgement. | ✅ bundled `grok 1.0.0 (75e73f3)` passed the authenticated two-prompt preview/commit/reload run on 2026-08-10; a clean-machine manual install remains a separate release gate |
 | Goal | Persistent goal console wired to `/goal`, plan and `update_goal` updates | ✅ shell; loop quality is engine-side |
 
 ## Worktree & review
