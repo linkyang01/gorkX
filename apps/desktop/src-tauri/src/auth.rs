@@ -90,34 +90,36 @@ pub struct AuthLoginResult {
 /// In-app browser login via OAuth **device code** — no Terminal.
 /// Opens the system browser, polls until the user finishes, writes App auth.json.
 #[tauri::command]
-pub async fn auth_login_browser() -> Result<AuthLoginResult, String> {
-    tauri::async_runtime::spawn_blocking(auth_login_browser_sync)
+pub async fn auth_login_browser(force: bool) -> Result<AuthLoginResult, String> {
+    tauri::async_runtime::spawn_blocking(move || auth_login_browser_sync(force))
         .await
         .map_err(|e| format!("login task: {e}"))?
 }
 
-fn auth_login_browser_sync() -> Result<AuthLoginResult, String> {
+fn auth_login_browser_sync(force: bool) -> Result<AuthLoginResult, String> {
     let _ = crate::paths::ensure_dirs();
     clear_logout_marker();
 
     // Fast path: still-valid *CLI-scoped* session from system ~/.grok
     let app_path = crate::paths::auth_json_path();
-    if let Some(home) = dirs::home_dir() {
-        let leg = home.join(".grok/auth.json");
-        if leg.is_file() {
-            if let Ok(leg_file) = load_auth_file(&leg) {
-                if access_token_usable(&leg_file, 0) {
-                    if let Some((tok, _, _)) = pick_session(&leg_file) {
-                        if token_has_cli_access(&tok) {
-                            let _ = std::fs::copy(&leg, &app_path);
-                            if let Ok(p) = ensure_bearer_token() {
-                                return Ok(AuthLoginResult {
-                                    ok: true,
-                                    email: p.email,
-                                    display_name: p.display_name,
-                                    note: "已从系统 Grok 会话同步登录".into(),
-                                    verification_uri: None,
-                                });
+    if !force {
+        if let Some(home) = dirs::home_dir() {
+            let leg = home.join(".grok/auth.json");
+            if leg.is_file() {
+                if let Ok(leg_file) = load_auth_file(&leg) {
+                    if access_token_usable(&leg_file, 0) {
+                        if let Some((tok, _, _)) = pick_session(&leg_file) {
+                            if token_has_cli_access(&tok) {
+                                let _ = std::fs::copy(&leg, &app_path);
+                                if let Ok(p) = ensure_bearer_token() {
+                                    return Ok(AuthLoginResult {
+                                        ok: true,
+                                        email: p.email,
+                                        display_name: p.display_name,
+                                        note: "已从系统 Grok 会话同步登录".into(),
+                                        verification_uri: None,
+                                    });
+                                }
                             }
                         }
                     }

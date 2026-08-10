@@ -1391,6 +1391,7 @@ export function SettingsPanel({
     try {
       const result = await startLoginFlow({
         onTick: (m) => setMsg(m),
+        force: true,
       });
       setMsg(result.note || t('subLoginDone'));
       if (result.account) setAccount(result.account);

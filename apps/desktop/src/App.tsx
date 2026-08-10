@@ -5954,7 +5954,7 @@ function App() {
   const reauthenticateTask = async (id: string) => {
     setTaskReauthBusy(true);
     try {
-      const result = await startLoginFlow();
+      const result = await startLoginFlow({ force: true });
       if (result.account) setAccount(result.account);
       if (!result.ok) {
         if (result.note) setAccountError(result.note);
@@ -7012,7 +7012,7 @@ function App() {
                       setAccountMenuOpen(false);
                       void (async () => {
                         try {
-                          const result = await startLoginFlow();
+                          const result = await startLoginFlow({ force: true });
                           if (result.account) setAccount(result.account);
                           if (result.ok) setAccountError(null);
                           else if (result.note) setAccountError(result.note);

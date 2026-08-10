@@ -12,8 +12,10 @@
 | ACP 路由审计 | 对比 `8a14c91..75e73f3` 的 ACP 相关启动/会话/工作区代码，并用新二进制逐项探测；无认证完整矩阵中 voice、interject/btw、memory/repair/goal/command、workflow、hunk/code/Git、cloud、billing、session search/history/suggestion/bundle、model reload、client FS 和 web-search 开关均 **PASS**。认证控制矩阵中 session、Plan、session info、rename/fork/rewind、模型、Hooks、Worktree、子代理、语音、账单、搜索/历史/任务包也 **PASS**；云环境列表到达 provider 但返回 provider-side `Internal error`。源码字面路由集合为旧版 329 / 新版 329，removed=0、added=0；未发现已接入路由被移除。 |
 | 锁定源码重建 | `scripts/verify-grok-kernel-build.sh` **PASS**；临时 worktree 应用七个补丁后 release 构建完成，版本 `grok 1.0.0 (75e73f3)`，LICENSE/THIRD-PARTY-NOTICES 校验通过，源码构建 ACP initialize **PASS**。 |
 | App Bundle | `npm run build:app`、`verify-macos-app-bundle.sh` **PASS**；arm64 `.app` 包内版本 `grok 1.0.0 (75e73f3)`，包内与 resources 二进制 SHA-256 均为 `49321f257410f0b14149f9bd95a76cf947480046d0e8d62684e31f826393697d`，许可证和第三方声明齐全。 |
-| 前端 / Rust | `npx tsc --noEmit`、`npm run test:stages`（stage A–G）、`npm run build` **PASS**；Vite 仍仅报告主 chunk 超过 500 kB 的既有警告；`cargo test` **88 passed**、`cargo check` **PASS**。 |
+| 前端 / Rust | `npx tsc --noEmit`、`npm run test:stages`（stage A–G）、`npm run build` **PASS**；Vite 仍仅报告主 chunk 超过 500 kB 的既有警告；本轮模型元数据加固后 `cargo test` **90 passed**、`cargo check` **PASS**。 |
 | 真实认证回合 | 账户菜单触发 OAuth 刷新后，`authenticate(cached_token)` **PASS**；`--authenticated --resource --rewind-execute` 的 resource-link 两轮提示、conversation-only rewind preview/commit/reload **PASS**；新内核真实 read-only explore 子任务 spawn → `completed`（output=`smoke`）**PASS**。 |
+| 强制重新登录 | 账户页“重新登录”、任务失效后的“重新登录”现在显式跳过本机 `~/.grok` 快速同步，启动官方 xAI Device Sign-in；本轮通过正式 `.app` 完成真实 OAuth 授权，回到 gorkX 后显示账户与 28% 周额度。 |
+| 第三方请求元数据 | `models_config` 现在将已配置的 `query_params`、静态安全 Header 和环境变量 Header 同时应用到模型目录/连接测试请求；静态 Authorization/API Key/token/query secret 被拒绝，密钥继续只走 Keychain/环境变量；新增安全校验单测 **PASS**。本机仍没有真实第三方凭据，因此 H2 真实回复门槛保持未通过。 |
 | 同机空白 HOME 补充验收 | 正式 `.app` 在临时空白 `HOME` 启动；退出预置账号后通过官方 `accounts.x.ai` Device Sign-in 完成登录，选择临时项目，GUI 真实首轮返回 `clean-machine-smoke`，退出再启动后任务和账号均恢复 **PASS**。该环境仍是开发机，只证明 App-owned 数据目录与登录/重开链路，不替代发布要求的干净 Mac H1。 |
 | 发布状态 | 本地源码、锁定内核和 App-only 候选包已更新；重新认证后的真实回合已通过；未打 tag、未发 GitHub Release、未生成/上传 DMG。干净机安装、第三方 endpoint 和麦克风真人验收仍按发布门槛执行。 |
 

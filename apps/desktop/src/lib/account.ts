@@ -145,6 +145,8 @@ export interface LoginFlowResult {
  */
 export async function startLoginFlow(opts?: {
   onTick?: (msg: string) => void;
+  /** Skip the local ~/.grok fast path and start a fresh device-code OAuth flow. */
+  force?: boolean;
 }): Promise<LoginFlowResult> {
   if (!isTauri()) {
     return { ok: false, importedFromSystem: false, note: 'not in app', account: null };
@@ -157,7 +159,7 @@ export async function startLoginFlow(opts?: {
       displayName?: string | null;
       note: string;
       verificationUri?: string | null;
-    }>('auth_login_browser');
+    }>('auth_login_browser', { force: Boolean(opts?.force) });
     const note = localizeAccountNote(r.note);
     opts?.onTick?.(note);
     const account = await fetchAccountSummary();

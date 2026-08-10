@@ -318,6 +318,104 @@ fn validate_base_url(raw: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn sensitive_request_field(raw: &str) -> bool {
+    let key = raw.trim().to_ascii_lowercase().replace('_', "-");
+    key == "authorization"
+        || key == "proxy-authorization"
+        || key == "cookie"
+        || key == "set-cookie"
+        || key == "api-key"
+        || key == "x-api-key"
+        || key == "apikey"
+        || key.contains("token")
+        || key.contains("secret")
+        || key.contains("password")
+}
+
+fn valid_environment_name(raw: &str) -> bool {
+    let mut chars = raw.chars();
+    let Some(first) = chars.next() else { return false; };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+        && raw.len() <= 128
+}
+
+fn validate_header_name(raw: &str, allow_secret: bool) -> Result<String, String> {
+    let name = raw.trim();
+    if name.is_empty() || name.len() > 160 {
+        return Err("请求头名称不能为空且不能超过 160 个字符".into());
+    }
+    if !allow_secret && sensitive_request_field(name) {
+        return Err("静态请求头不能保存 Authorization/API Key 等秘密；请改用 API Key 或环境变量请求头".into());
+    }
+    reqwest::header::HeaderName::from_bytes(name.as_bytes())
+        .map_err(|_| format!("无效的请求头名称：{name}"))?;
+    Ok(name.to_string())
+}
+
+fn validate_header_value(value: &str) -> Result<(), String> {
+    if value.len() > 2_048 || value.contains(['\n', '\r']) {
+        return Err("请求头值必须是单行且不超过 2048 个字符".into());
+    }
+    reqwest::header::HeaderValue::from_str(value)
+        .map_err(|_| "请求头值包含无效字符".to_string())?;
+    Ok(())
+}
+
+fn validate_provider_request_metadata(model: &CustomModelRow) -> Result<(), String> {
+    if model.query_params.len() > 32 || model.extra_headers.len() > 32 || model.env_http_headers.len() > 32 {
+        return Err("每类请求参数/请求头最多 32 项".into());
+    }
+    for (key, value) in &model.query_params {
+        if key.trim().is_empty() || key.len() > 160 || key.contains(['\n', '\r']) || value.len() > 1_000 || value.contains(['\n', '\r']) {
+            return Err("查询参数名称和值必须是单行文本".into());
+        }
+        if sensitive_request_field(key) {
+            return Err("查询参数不能保存 API Key、token 或 secret".into());
+        }
+    }
+    for (key, value) in &model.extra_headers {
+        validate_header_name(key, false)?;
+        validate_header_value(value)?;
+    }
+    for (key, env_name) in &model.env_http_headers {
+        validate_header_name(key, true)?;
+        let env_name = env_name.trim();
+        if !valid_environment_name(env_name) {
+            return Err(format!("无效的环境变量请求头名称：{env_name}"));
+        }
+    }
+    Ok(())
+}
+
+/// Apply the user-confirmed provider metadata to a real HTTP request. API keys
+/// remain in Keychain/environment; only the resolved value is placed in the
+/// in-flight request and never returned to the renderer.
+fn apply_provider_request_metadata(
+    mut request: reqwest::blocking::RequestBuilder,
+    model: &CustomModelRow,
+) -> Result<reqwest::blocking::RequestBuilder, String> {
+    validate_provider_request_metadata(model)?;
+    if !model.query_params.is_empty() {
+        let query = model
+            .query_params
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect::<Vec<_>>();
+        request = request.query(&query);
+    }
+    for (key, value) in &model.extra_headers {
+        request = request.header(key.as_str(), value.as_str());
+    }
+    for (key, env_name) in &model.env_http_headers {
+        let env_name = env_name.trim();
+        let value = std::env::var(env_name)
+            .map_err(|_| format!("环境变量请求头未设置：{env_name}"))?;
+        request = request.header(key.as_str(), value);
+    }
+    Ok(request)
+}
+
 /// Upsert one [model.<id>] block and optional default.
 #[tauri::command]
 pub fn models_list_custom() -> Result<ModelsConfigSnapshot, String> {
@@ -339,6 +437,7 @@ pub fn models_upsert_custom(model: CustomModelRow) -> Result<ModelsConfigSnapsho
     if model.model.trim().is_empty() {
         return Err("model id required".into());
     }
+    validate_provider_request_metadata(&model)?;
     let path = config_toml_path();
     let raw = fs::read_to_string(&path).unwrap_or_default();
     let section = format!("[model.{id}]");
@@ -627,6 +726,10 @@ pub fn models_list_available(model: CustomModelRow) -> Result<ModelCatalogResult
             request.header("Authorization", format!("Bearer {key}"))
         };
     }
+    request = match apply_provider_request_metadata(request, &model) {
+        Ok(request) => request,
+        Err(error) => return Ok(ModelCatalogResult { models: Vec::new(), status: 0, note: error }),
+    };
     let response = match request.send() {
         Ok(response) => response,
         Err(error) => return Ok(ModelCatalogResult {
@@ -745,6 +848,7 @@ pub fn models_test_connection(model: CustomModelRow) -> Result<ModelTestResult, 
             req = req.header("Authorization", format!("Bearer {key}"));
         }
     }
+    req = apply_provider_request_metadata(req, &model)?;
     let resp = match req.send() {
         Ok(r) => r,
         Err(e) => {
@@ -868,7 +972,7 @@ pub fn config_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::{catalog_model_ids, has_generated_text, model_catalog_url, parse_inline_table_assign, toml_inline_table, validate_base_url};
+    use super::{catalog_model_ids, default_backend, has_generated_text, model_catalog_url, parse_inline_table_assign, toml_inline_table, validate_base_url, validate_provider_request_metadata, CustomModelRow};
     use std::collections::BTreeMap;
 
     #[test]
@@ -900,6 +1004,52 @@ mod tests {
         let mut values = BTreeMap::new();
         values.insert("X-Test".to_string(), "unsafe\nvalue".to_string());
         assert!(toml_inline_table(&values).is_err());
+    }
+
+    #[test]
+    fn rejects_secret_static_headers_but_allows_env_header_names() {
+        let mut model = CustomModelRow {
+            id: "gateway".into(),
+            model: "demo".into(),
+            name: "demo".into(),
+            base_url: "https://gateway.example/v1".into(),
+            api_key: String::new(),
+            has_keychain_secret: false,
+            has_plaintext_secret: false,
+            api_backend: default_backend(),
+            provider_label: "Gateway".into(),
+            query_params: BTreeMap::new(),
+            extra_headers: BTreeMap::from([("Authorization".into(), "Bearer should-not-persist".into())]),
+            env_http_headers: BTreeMap::new(),
+            context_window: None,
+        };
+        assert!(validate_provider_request_metadata(&model).is_err());
+        model.extra_headers.clear();
+        model.env_http_headers.insert("Authorization".into(), "GORKX_GATEWAY_TOKEN".into());
+        assert!(validate_provider_request_metadata(&model).is_ok());
+    }
+
+    #[test]
+    fn rejects_sensitive_query_parameters_and_invalid_env_names() {
+        let mut model = CustomModelRow {
+            id: "gateway".into(),
+            model: "demo".into(),
+            name: "demo".into(),
+            base_url: "https://gateway.example/v1".into(),
+            api_key: String::new(),
+            has_keychain_secret: false,
+            has_plaintext_secret: false,
+            api_backend: default_backend(),
+            provider_label: "Gateway".into(),
+            query_params: BTreeMap::from([("api_key".into(), "nope".into())]),
+            extra_headers: BTreeMap::new(),
+            env_http_headers: BTreeMap::new(),
+            context_window: None,
+        };
+        assert!(validate_provider_request_metadata(&model).is_err());
+        model.query_params.clear();
+        model.env_http_headers.insert("X-Workspace".into(), "not a valid env name".into());
+        assert!(validate_provider_request_metadata(&model).is_err());
     }
 
     #[test]
