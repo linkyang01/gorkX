@@ -14,7 +14,7 @@
 | App Bundle | `npm run build:app`、`verify-macos-app-bundle.sh` **PASS**；arm64 `.app` 包内版本 `grok 1.0.0 (75e73f3)`，包内与 resources 二进制 SHA-256 均为 `49321f257410f0b14149f9bd95a76cf947480046d0e8d62684e31f826393697d`，许可证和第三方声明齐全。 |
 | 前端 / Rust | `npx tsc --noEmit`、`npm run test:stages`（stage A–G）、`npm run build` **PASS**；Vite 仍仅报告主 chunk 超过 500 kB 的既有警告；`cargo test` **88 passed**、`cargo check` **PASS**。 |
 | 真实认证回合 | 账户菜单触发 OAuth 刷新后，`authenticate(cached_token)` **PASS**；`--authenticated --resource --rewind-execute` 的 resource-link 两轮提示、conversation-only rewind preview/commit/reload **PASS**；新内核真实 read-only explore 子任务 spawn → `completed`（output=`smoke`）**PASS**。 |
-| 发布状态 | 本地源码、锁定内核和 App-only 候选包已更新；未打 tag、未发 GitHub Release、未生成/上传 DMG。干净机安装、重新认证后的真实回合、第三方 endpoint 和麦克风真人验收仍按发布门槛执行。 |
+| 发布状态 | 本地源码、锁定内核和 App-only 候选包已更新；重新认证后的真实回合已通过；未打 tag、未发 GitHub Release、未生成/上传 DMG。干净机安装、第三方 endpoint 和麦克风真人验收仍按发布门槛执行。 |
 
 ## 2026-08-09 · Grok Build 1.0.0 完整机器验收
 
