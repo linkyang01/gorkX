@@ -1,8 +1,8 @@
 diff --git a/crates/codegen/xai-grok-pager-bin/src/main.rs b/crates/codegen/xai-grok-pager-bin/src/main.rs
-index e51d104..485e71e 100644
+index 219d0488..2eb9e09a 100644
 --- a/crates/codegen/xai-grok-pager-bin/src/main.rs
 +++ b/crates/codegen/xai-grok-pager-bin/src/main.rs
-@@ -1064,6 +1064,12 @@ async fn run_agent_command(
+@@ -1062,6 +1062,12 @@ async fn run_agent_command(
      trust: bool,
      no_auto_update: bool,
      disable_web_search: bool,
@@ -15,19 +15,18 @@ index e51d104..485e71e 100644
      update_config: &UpdateConfig,
  ) -> Result<()> {
      let _signal_flush = tokio::spawn(async {
-@@ -1164,16 +1170,42 @@ async fn run_agent_command(
+@@ -1162,15 +1168,45 @@ async fn run_agent_command(
          raw_config: &raw_config,
          remote_settings: remote_settings.as_ref(),
          is_headless: !is_leader,
 -        cli_subagents: None,
-+        // `--no-subagents` is a force-disable for desktop ACP; `--subagents`
-+        // force-enable is not used on this path.
++        // `--no-subagents` is a force-disable for desktop ACP; an explicit
++        // enable flag is not used on this path.
 +        cli_subagents: if no_subagents { Some(false) } else { None },
          cli_web_search_model: None,
          cli_session_summary_model: None,
-         cli_experimental_memory: false,
--        cli_no_memory: false,
-+        cli_no_memory: no_memory,
+-        memory_enabled_override: None,
++        memory_enabled_override: if no_memory { Some(false) } else { None },
          disable_web_search,
          todo_gate: false,
          laziness_debug_log: None,
@@ -38,12 +37,16 @@ index e51d104..485e71e 100644
 +    let disallowed = cli_disallowed_tools.as_deref().and_then(|raw| {
 +        let tools: Vec<String> = raw
 +            .split(',')
-+            .map(|t| t.trim().to_string())
-+            .filter(|t| !t.is_empty())
++            .map(|tool| tool.trim().to_string())
++            .filter(|tool| !tool.is_empty())
 +            .collect();
-+        if tools.is_empty() { None } else { Some(tools) }
++        (!tools.is_empty()).then_some(tools)
 +    });
-+    if max_turns.is_some() || disallowed.is_some() || !allow_rules.is_empty() || !deny_rules.is_empty() {
++    if max_turns.is_some()
++        || disallowed.is_some()
++        || !allow_rules.is_empty()
++        || !deny_rules.is_empty()
++    {
 +        agent_config.cli_agent_overrides.max_turns = max_turns;
 +        agent_config.cli_agent_overrides.disallowed_tools = disallowed;
 +        if !allow_rules.is_empty() || !deny_rules.is_empty() {
@@ -51,16 +54,16 @@ index e51d104..485e71e 100644
 +                xai_grok_pager::headless::parse_permission_rules_lenient(&allow_rules, &deny_rules);
 +        }
 +    }
-+    // `--no-subagents` must force-disable even when config defaults to enabled.
-+    // `cli_subagents: Some(false)` alone is treated as "no enable flag" by
-+    // SubagentsConfig::resolve, so clamp the resolved runtime field here.
++    // `cli_subagents: Some(false)` is intentionally a no-enable signal in the
++    // config resolver. Clamp the resolved field as well so this force-disable
++    // remains authoritative when config.toml enables subagents.
 +    if no_subagents {
 +        agent_config.subagents_enabled = false;
 +    }
      let agent_memory_config = agent_config.memory_config.clone();
      let leader_eligible = matches!(
          &agent_args.mode,
-@@ -2008,6 +2040,12 @@ async fn async_main(args: PagerArgs) -> Result<()> {
+@@ -2013,6 +2049,12 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                      args.trust,
                      args.no_auto_update,
                      args.disable_web_search,

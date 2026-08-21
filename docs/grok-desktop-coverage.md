@@ -4,9 +4,10 @@ Living checklist for product and PR review. Runtime and kernel governance follow
 [`INDEPENDENT_APP_PLAN.md`](./INDEPENDENT_APP_PLAN.md); detailed real/half
 boundaries follow [`FEATURES.md`](./FEATURES.md).
 
-Current controlled runtime: Grok Build **1.0.0** (`75e73f3d6ac`), observed
-2026-08-10. Older package/version strings below are historical evidence for the
-run in which they were recorded.
+Current controlled runtime: Grok Build **1.0.6** (`19d42e35c07a`), observed
+2026-08-21 on the `agent/grok-build-1.0.6-sync` source branch. Older
+package/version strings below are historical evidence for the run in which they
+were recorded; this sync has not been tagged or published as a release.
 
 Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · ❌ not shipped
 

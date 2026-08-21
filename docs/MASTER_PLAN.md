@@ -120,12 +120,12 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Attachments / images | Drag-drop + preview | ✅ bounded local/resource-link/image attachment handling | A |
 | Export `/export`, `grok export` | Export Markdown / clipboard | ✅ | B |
 | Fork `/fork` | Fork thread | ✅ `_x.ai/session/fork` 已隔离验证 | B |
-| Rewind `/rewind` + `/undo` | Rewind / Undo UI | ✅ 包内 `1.0.0 (75e73f3)` 已完成 ACP 路由与 App-only bundle 验收；`+ → 撤销上一回合` 与 `/undo` 进入同一套预览/冲突确认流程；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
+| Rewind `/rewind` + `/undo` | Rewind / Undo UI | ✅ 当前包内 `1.0.6 (19d42e35)` 已完成 ACP 路由与 App-only bundle 验收；认证双回合预览/确认提交证据沿用上一锁定内核；`+ → 撤销上一回合` 与 `/undo` 进入同一套预览/冲突确认流程；三种回退范围和真实文件冲突仍须在有改动项目人工走查 | C |
 | 损坏会话修复 | 错误面板 → 修复会话历史 | ✅ `_x.ai/session/repair` 先 dry-run 显示修复范围，再经确认原子修复工具调用历史；仅对内核报告的工具配对/历史损坏错误显示 | C |
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | ✅ local schedules plus engine-advertised recurring task flow | C |
-| 运行中补充 | 桌面端“旁问” + “加入当前回合” + 下一回合队列 | ✅ 锁定 `1.0.0` 的 `_x.ai/btw` 与 `_x.ai/interject` 已接入运行中按钮；旁问返回独立答案，插入在内核安全点注入，不取消当前回合。旧内核拒绝时回退到下一轮队列；slash 仍保留为专家兼容入口。 | C |
+| 运行中补充 | 桌面端“旁问” + “加入当前回合” + 下一回合队列 | ✅ 当前锁定 `1.0.6` 的 `_x.ai/btw` 与 `_x.ai/interject` 路由探针通过，继续复用运行中按钮；认证回合质量仍需账号验收。旧内核拒绝时回退到下一轮队列；slash 仍保留为专家兼容入口。 | C |
 | `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
 ### 5.2 Worktree & git review

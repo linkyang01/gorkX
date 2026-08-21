@@ -1506,7 +1506,10 @@ pub fn model_context_info(model_id: Option<String>) -> Result<ModelContextInfo, 
     let mid = model_id
         .filter(|s| !s.trim().is_empty())
         .or_else(|| first_model_id(&models))
-        .unwrap_or_else(|| "grok-4.5".into());
+        // Grok Build 1.0.6 promotes Grok 4.6. Keep the fallback aligned with
+        // the engine catalog when a fresh install has not written a cache yet;
+        // cached/provider models still remain the source of truth.
+        .unwrap_or_else(|| "grok-4.6".into());
     let default = ModelContextInfo {
         model_id: mid.clone(),
         name: Some(mid.clone()),

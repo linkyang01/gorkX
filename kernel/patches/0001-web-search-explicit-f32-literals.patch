@@ -1,8 +1,8 @@
 diff --git a/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs b/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
-index 22113ea..21cf253 100644
+index cf7f61c0..5d0ec91b 100644
 --- a/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
 +++ b/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
-@@ -124,8 +124,8 @@ impl WebSearchClient {
+@@ -156,8 +156,8 @@ impl WebSearchClient {
              .input(query.to_string())
              .tools(vec![rs::Tool::WebSearch(web_search)])
              .store(false)
@@ -12,15 +12,4 @@ index 22113ea..21cf253 100644
 +            .top_p(0.95_f32)
              .max_output_tokens(8192u32)
              .build()
-             .map_err(|e| {
-@@ -215,8 +215,8 @@ impl WebSearchClient {
-             .input(query.to_string())
-             .tools(vec![rs::Tool::WebSearch(web_search)])
-             .store(false)
--            .temperature(0.1)
--            .top_p(0.95)
-+            .temperature(0.1_f32)
-+            .top_p(0.95_f32)
-             .max_output_tokens(8192u32)
-             .build()
-             .map_err(|e| {
+             .map_err(|e| err(format!("Failed to build request: {e}")))?;

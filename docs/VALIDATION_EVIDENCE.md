@@ -3,6 +3,24 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-21 · Grok Build 1.0.6 内核同步与桌面回归
+
+本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。它是下一版候选的
+机器侧证据，不代表已创建 tag、GitHub Release 或 DMG；公开版本仍是
+gorkX `1.2.0`。
+
+| 项 | 结果 |
+|---|---|
+| 上游锁定 | `xai-org/grok-build` 锁定 `19d42e35c07a9c9244f03f6df0c4c353f970d4f9`，上游包版本 `xai-grok-pager-bin 1.0.6`；`kernel/grok-build.lock.toml` 记录 `observed_at = 2026-08-21`、源码修订和许可证/第三方声明 SHA-256。官方源码与提交见 [grok-build](https://github.com/xai-org/grok-build) 与 [同步提交](https://github.com/xai-org/grok-build/commit/19d42e35c07a9c9244f03f6df0c4c353f970d4f9)。 |
+| 补丁 0001–0007 | `scripts/verify-grok-kernel-patches.sh vendor/grok-build` **PASS**；旧内核上无法直接应用的 0001、0002、0004、0005 已按 1.0.6 当前源码重做，七个补丁可在临时 worktree 顺序重放。 |
+| 锁定源码重建 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok` **PASS**；包内版本 `grok 1.0.6 (19d42e35)`，LICENSE / THIRD-PARTY-NOTICES 校验通过。 |
+| ACP 路由回归 | `node scripts/verify-grok-acp.mjs ... --voice-controls --desktop-controls --cloud-controls --billing-controls --session-search --prompt-history --prompt-suggestion --session-bundle --client-fs-write --disable-web-search --model-reload` **PASS**：原生语音 start/stop/shutdown、Goal/command/workflow 桌面动作、hunk/code/Git、云与账单守卫、会话搜索/历史/建议/任务包、模型刷新、客户端文件写能力和禁用 Web Search 均通过无认证控制面探针。该探针不发送模型提示词，也不启动麦克风。 |
+| 桌面侧接线 | `store.ts` 的无缓存模型上下文回退更新为 `grok-4.6`；运行时模型目录仍以内核和账号返回值为准，不在 App 内硬编码可用模型。 |
+| 前端 / Stage / Rust | `cd apps/desktop && npx tsc --noEmit` **PASS**；`npm run test:stages` stage A–G **PASS**；`npm run build` **PASS**；`cd apps/desktop/src-tauri && cargo check` **PASS**；`cargo test` **91 passed**。 |
+| App Bundle | `npm run build:app` 与 `scripts/verify-macos-app-bundle.sh apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app` **PASS**；arm64 `.app` 包内版本 `grok 1.0.6 (19d42e35)`，资源、许可证和隔离 `GROK_HOME` 均通过。未生成 DMG；当前开发包仍为 ad-hoc、未公证。 |
+| 既有警告 | Stage 测试仍报告 Node 的 `localStorage` experimental warning；Vite 仍报告主 chunk 超过 500 kB。这两项不影响退出码，属于后续性能/测试环境整理项。 |
+| 未覆盖边界 | 本轮没有用用户 OAuth 发起真实模型回合、三方模型请求或麦克风采集；这些能力仍需真实账号/设备人工验收，不能以无认证路由 PASS 代替。 |
+
 ## 2026-08-10 · Grok Build 上游刷新至 75e73f3
 
 | 项 | 结果 |

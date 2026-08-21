@@ -5,16 +5,16 @@
 > 范围：默认只更新源码和验证记录；**tag、GitHub Release、DMG 仍须用户明确批准**。
 > 本轮用户已批准，gorkX `1.2.0` 已完成 tag、DMG 和 GitHub Release；后续版本继续遵守同一批准规则。
 
-## 0. 当前基线（2026-08-10）
+## 0. 当前基线（2026-08-21）
 
 | 项 | 值 |
 |---|---|
 | 工作区 | `/Users/link/projects/gorkX` |
-| 分支 | `main` 与 `agent/grok-build-1.0-kernel` 均指向 `99b5db4`；两者已同步 |
-| 近期主线 | Grok Build 1.0.0 内核重放、原生语音 ACP、完整脚本权限卡、上一轮摘要、扩展分组、`build:app` 绿 |
-| 发布版本 | gorkX `1.2.0` 已公开发布；README 已指向 `v1.2.0`，Apple Silicon DMG、tag 和 GitHub Release 均可用 |
-| 包内 Grok Build | `1.0.0 (75e73f3)` + 补丁 0001–0007 |
-| App 包 | `v1.2.0` DMG 只读挂载后 `.app` 验证通过（CFBundle `1.2.0`，包内内核 `1.0.0`，`verify-macos-app-bundle` PASS） |
+| 分支 | `agent/grok-build-1.0.6-sync`；`main` 保留已发布的 `v1.2.0` 基线 |
+| 近期主线 | Grok Build 1.0.6 源码同步、0001–0007 补丁重放、原生语音 ACP、桌面动作 ACP、模型目录回归、`build:app` 绿 |
+| 发布版本 | gorkX `1.2.0` 仍是最近公开版本；本轮只提交源码同步，不创建新 tag、GitHub Release 或 DMG |
+| 包内 Grok Build | `1.0.6 (19d42e35)` + 补丁 0001–0007 |
+| App 包 | 本地 app-only bundle 验证通过（CFBundle `1.2.0`，包内内核 `1.0.6`，`verify-macos-app-bundle` PASS） |
 | 功能矩阵 | `docs/FEATURES.md` · 对齐 `docs/DESKTOP_ALIGNMENT_PLAN.md` · 证据 `docs/VALIDATION_EVIDENCE.md` |
 
 ### 阶段完成度（诚实）
@@ -23,7 +23,7 @@
 |---|---|
 | **0** 子 Agent WIP 收口 | **已完成** |
 | **正式完备条**（本目标） | **加强达标**：门禁全绿 + 25 主路径 + 暗色白底守卫 + ACP 主 prompt PASS + 子任务 completed；见 `docs/evidence/one-shot-complete-20260801/SUMMARY.md` |
-| **1** H1/H2/H3 发布阻断 | **未达成**：机器侧 1.0.0 门禁、隔离真实 ACP 回复和子任务已全绿；仍需干净机安装/重开、用户自己的三方 endpoint 与 macOS 麦克风真人证据 |
+| **1** H1/H2/H3 发布阻断 | **未达成**：机器侧 1.0.6 门禁、无认证 ACP 控制矩阵和 App 包已全绿；仍需干净机安装/重开、用户自己的三方 endpoint、真实账号模型回合与 macOS 麦克风真人证据 |
 | **2** 深化 Real | **ACP 级主对话与子任务已有 live 证据**；App GUI 点按 / 重开恢复仍待人工 |
 | **3** 连接器闭环 | Calendar 等 **Soon**；GitHub 代码已有，revoke live 待人工 |
 
