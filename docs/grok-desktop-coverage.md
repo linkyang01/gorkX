@@ -16,6 +16,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Surface | Desktop control | Status |
 |---|---|---|
 | New session | New task → ACP `session/new` + App index | ✅ |
+| Stop running turn | Composer or global `Esc` while a task is running | ✅ closes menus/dialogs first, then calls the live ACP cancel route; it never cancels a task while a decision modal is open |
 | Resume / search | App task restore; isolated Kernel Sessions search for recovery | ✅ |
 | Rename | Sidebar task rename; a live task also calls native `x.ai/session/rename` so Grok recovery/search stays aligned, while the App title persists as an offline fallback | ✅ |
 | Archive / delete | App archive; confirmed ACP session delete + local-index removal | ✅ |

@@ -849,6 +849,7 @@ function App() {
   const [actionPrompt, setActionPrompt] = useState<
     (ActionPromptRequest & { resolve: (v: string | null) => void }) | null
   >(null);
+  const cancelingTurnRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const permModeRef = useRef(perm);
   permModeRef.current = perm;
@@ -5512,12 +5513,49 @@ function App() {
     return last?.planEntries ?? [];
   }, [active]);
 
-  const cancelTurn = async () => {
-    if (!active?.client || !active.sessionId) return;
-    await active.client.cancel(active.sessionId);
-    patchThread(active.id, { busy: false });
-    appendLine(active.id, { id: nid(), role: 'system', text: t('stop') });
-  };
+  const cancelTurn = useCallback(async () => {
+    // Read the live ref so an Escape pressed while focus is outside the
+    // composer still cancels the selected task, without acting on a stale
+    // render of `active`.
+    const current = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+    if (!current?.client || !current.sessionId || !current.busy) return;
+    if (cancelingTurnRef.current === current.id) return;
+    cancelingTurnRef.current = current.id;
+    try {
+      await current.client.cancel(current.sessionId);
+      patchThread(current.id, { busy: false });
+      appendLine(current.id, { id: nid(), role: 'system', text: t('stop') });
+    } finally {
+      if (cancelingTurnRef.current === current.id) cancelingTurnRef.current = null;
+    }
+  }, [appendLine, patchThread]);
+
+  // Grok Build 1.0.6 treats a single Escape as a stop gesture. Keep menus and
+  // dialogs first-class: their own handlers prevent the event, while a running
+  // task is cancelled only when no modal/popover is asking the user to decide.
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      if (
+        slashOpen ||
+        atOpen ||
+        plusMenuOpen ||
+        modelPopOpen ||
+        permPopOpen ||
+        ctxPopOpen ||
+        accountMenuOpen ||
+        document.querySelector('.modal-backdrop, [role="dialog"]')
+      ) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && target.matches('input, textarea, [contenteditable="true"]')) return;
+      const current = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
+      if (!current?.busy || !current.client || !current.sessionId) return;
+      event.preventDefault();
+      void cancelTurn();
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [accountMenuOpen, atOpen, cancelTurn, ctxPopOpen, modelPopOpen, permPopOpen, plusMenuOpen, slashOpen]);
 
   /** Run a Goal console action through the native ACP bridge. */
   const runGoalCommand = async (
@@ -8376,8 +8414,15 @@ function App() {
                     if (handleComposerMenuKeys(e)) return;
                     if (e.key === 'Escape') {
                       if (capabilityArm) {
+                        e.preventDefault();
                         setCapabilityArm(null);
                         setDraft('');
+                        return;
+                      }
+                      if (active.busy) {
+                        e.preventDefault();
+                        void cancelTurn();
+                        return;
                       }
                     }
                     // Enter send · Shift+Enter newline

@@ -16,6 +16,7 @@ gorkX `1.2.0`。
 | 锁定源码重建 | `scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok` **PASS**；包内版本 `grok 1.0.6 (19d42e35)`，LICENSE / THIRD-PARTY-NOTICES 校验通过。 |
 | ACP 路由回归 | `node scripts/verify-grok-acp.mjs ... --voice-controls --desktop-controls --cloud-controls --billing-controls --session-search --prompt-history --prompt-suggestion --session-bundle --client-fs-write --disable-web-search --model-reload` **PASS**：原生语音 start/stop/shutdown、Goal/command/workflow 桌面动作、hunk/code/Git、云与账单守卫、会话搜索/历史/建议/任务包、模型刷新、客户端文件写能力和禁用 Web Search 均通过无认证控制面探针。该探针不发送模型提示词，也不启动麦克风。 |
 | 桌面侧接线 | `store.ts` 的无缓存模型上下文回退更新为 `grok-4.6`；运行时模型目录仍以内核和账号返回值为准，不在 App 内硬编码可用模型。 |
+| 桌面停止手势 | Composer 与全局键盘路径均支持单次 `Esc`：菜单/对话框优先关闭，空闲状态不产生请求，运行中的选中任务调用实时 ACP cancel；`desktopPrimaryEntries.test.ts` 已锁定入口存在。 |
 | 前端 / Stage / Rust | `cd apps/desktop && npx tsc --noEmit` **PASS**；`npm run test:stages` stage A–G **PASS**；`npm run build` **PASS**；`cd apps/desktop/src-tauri && cargo check` **PASS**；`cargo test` **91 passed**。 |
 | App Bundle | `npm run build:app` 与 `scripts/verify-macos-app-bundle.sh apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app` **PASS**；arm64 `.app` 包内版本 `grok 1.0.6 (19d42e35)`，资源、许可证和隔离 `GROK_HOME` 均通过。未生成 DMG；当前开发包仍为 ad-hoc、未公证。 |
 | 既有警告 | Stage 测试仍报告 Node 的 `localStorage` experimental warning；Vite 仍报告主 chunk 超过 500 kB。这两项不影响退出码，属于后续性能/测试环境整理项。 |

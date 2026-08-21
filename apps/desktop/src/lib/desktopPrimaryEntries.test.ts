@@ -38,6 +38,7 @@ const REQUIRED: Array<{ name: string; re: RegExp }> = [
   { name: 'fork session', re: /forkActiveSession|forkSession/ },
   { name: 'queue follow-up', re: /followUpQueue|queue/ },
   { name: 'desktop shortcuts catalog', re: /matchDesktopShortcut|desktopShortcut/ },
+  { name: 'escape stops running turn', re: /cancelTurn|btn-send-stop/ },
   { name: 'scheduled tasks panel', re: /ScheduledPanel|setScheduledOpen/ },
   { name: 'deliverables panel', re: /DeliverablesPanel|setDeliverablesOpen/ },
   { name: 'session bundle export/import', re: /exportSessionBundle|importSessionBundle|sessionBundleExport/ },
