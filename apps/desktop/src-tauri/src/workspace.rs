@@ -4,6 +4,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +36,9 @@ const MAX_AGENTS_BYTES: usize = 200_000;
 const MAX_CLIENT_WRITE_BYTES: usize = 1_000_000;
 const MAX_RESOURCE_ATTACHMENT_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_HOOK_DEFINITION_BYTES: usize = 200_000;
+const HOOK_VERIFICATION_PREFIX: &str = "gorkx-hook-verify-";
+const HOOK_VERIFICATION_MARKER_DIR: &str = ".grok/gorkx-hook-verification";
+const HOOK_VERIFICATION_HOOK_FILE: &str = "gorkx-session-start-verification.json";
 
 fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(cwd.trim());
@@ -270,6 +274,187 @@ pub fn workspace_write_hook_definition(
     let relative = format!(".grok/hooks/{name}");
     write_client_text_file(&root, &relative, &content)?;
     Ok(root.join(relative).display().to_string())
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookVerificationProject {
+    pub project_path: String,
+    pub marker_relative_path: String,
+    pub marker_token: String,
+    pub hook_file_name: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HookVerificationMarker {
+    pub status: String,
+    pub path: String,
+}
+
+fn hook_verification_token_is_safe(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    (8..=128).contains(&bytes.len())
+        && bytes[0].is_ascii_alphanumeric()
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn hook_verification_marker_path(
+    root: &Path,
+    marker_relative_path: &str,
+    marker_token: &str,
+) -> Result<PathBuf, String> {
+    if !hook_verification_token_is_safe(marker_token) {
+        return Err("Hook verification marker token is invalid".into());
+    }
+    let expected = format!("{HOOK_VERIFICATION_MARKER_DIR}/{marker_token}.marker");
+    if marker_relative_path.trim() != expected {
+        return Err("Hook verification marker must stay in the bounded project directory".into());
+    }
+    let relative = Path::new(marker_relative_path);
+    if relative.is_absolute()
+        || relative.components().any(|part| {
+            matches!(
+                part,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return Err("Hook verification marker path must be project-relative".into());
+    }
+    let parent = root.join(HOOK_VERIFICATION_MARKER_DIR);
+    if let Ok(meta) = fs::symlink_metadata(&parent) {
+        if meta.file_type().is_symlink() {
+            return Err("Refusing to read a Hook verification marker through a symlink".into());
+        }
+        if !meta.is_dir() {
+            return Err("Hook verification marker directory is not a directory".into());
+        }
+    }
+    let target = root.join(relative);
+    if let Ok(meta) = fs::symlink_metadata(&target) {
+        if meta.file_type().is_symlink() {
+            return Err("Refusing to read a Hook verification marker through a symlink".into());
+        }
+    }
+    Ok(target)
+}
+
+/// Create a disposable, Git-backed project for the Settings Hook verification
+/// flow. The engine's trust action requires a Git worktree root; the project is
+/// created directly under the OS temporary directory and never under the
+/// user's selected repository.
+#[tauri::command]
+pub fn workspace_create_hook_verification_project() -> Result<HookVerificationProject, String> {
+    let temp_root = std::env::temp_dir();
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    let project = temp_root.join(format!("{HOOK_VERIFICATION_PREFIX}{nonce}"));
+    fs::create_dir(&project)
+        .map_err(|e| format!("create temporary Hook verification project: {e}"))?;
+
+    let result = (|| -> Result<HookVerificationProject, String> {
+        fs::create_dir_all(project.join(".grok/hooks"))
+            .map_err(|e| format!("create temporary Hook directories: {e}"))?;
+        let git = Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&project)
+            .status()
+            .map_err(|e| format!("initialize temporary Hook project Git repository: {e}"))?;
+        if !git.success() {
+            return Err(format!("initialize temporary Hook project Git repository exited with {git}"));
+        }
+        let root = project
+            .canonicalize()
+            .map_err(|e| format!("resolve temporary Hook verification project: {e}"))?;
+        let marker_token = format!("gorkx-{nonce}");
+        let marker_relative_path = format!("{HOOK_VERIFICATION_MARKER_DIR}/{marker_token}.marker");
+        Ok(HookVerificationProject {
+            project_path: root.display().to_string(),
+            marker_relative_path,
+            marker_token,
+            hook_file_name: HOOK_VERIFICATION_HOOK_FILE.into(),
+        })
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&project);
+    }
+    result
+}
+
+/// Read only the fixed marker shape used by the verification flow. A missing
+/// marker is a normal negative result; the renderer must never turn it into a
+/// success or create it as a fallback.
+#[tauri::command]
+pub fn workspace_read_hook_verification_marker(
+    cwd: String,
+    marker_relative_path: String,
+    marker_token: String,
+) -> Result<HookVerificationMarker, String> {
+    let root = hook_verification_project_root(&cwd)?;
+    let target = hook_verification_marker_path(&root, &marker_relative_path, &marker_token)?;
+    let path = target.display().to_string();
+    let metadata = match fs::symlink_metadata(&target) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(HookVerificationMarker { status: "missing".into(), path });
+        }
+        Err(error) => return Err(format!("read Hook verification marker metadata: {error}")),
+    };
+    if !metadata.is_file() {
+        return Err("Hook verification marker is not a regular file".into());
+    }
+    if metadata.len() > 512 {
+        return Err("Hook verification marker is unexpectedly large".into());
+    }
+    let bytes = fs::read(&target).map_err(|e| format!("read Hook verification marker: {e}"))?;
+    let expected = format!("{marker_token}\n");
+    Ok(HookVerificationMarker {
+        status: if bytes == expected.as_bytes() { "match" } else { "mismatch" }.into(),
+        path,
+    })
+}
+
+fn hook_verification_project_root(raw: &str) -> Result<PathBuf, String> {
+    let requested = PathBuf::from(raw.trim());
+    if !requested.is_absolute() {
+        return Err("Hook verification project must be an absolute path".into());
+    }
+    let temp_root = std::env::temp_dir()
+        .canonicalize()
+        .map_err(|e| format!("resolve temporary directory: {e}"))?;
+    let parent = requested
+        .parent()
+        .ok_or_else(|| "Hook verification project has no parent".to_string())?
+        .canonicalize()
+        .map_err(|e| format!("resolve Hook verification project parent: {e}"))?;
+    let name = requested
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| "Hook verification project has no valid name".to_string())?;
+    if parent != temp_root || !name.starts_with(HOOK_VERIFICATION_PREFIX) {
+        return Err("Refusing to remove a non-temporary Hook verification project".into());
+    }
+    let meta = fs::symlink_metadata(&requested)
+        .map_err(|e| format!("read Hook verification project metadata: {e}"))?;
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err("Hook verification project is not a regular directory".into());
+    }
+    requested
+        .canonicalize()
+        .map_err(|e| format!("resolve Hook verification project: {e}"))
+}
+
+#[tauri::command]
+pub fn workspace_remove_hook_verification_project(project_path: String) -> Result<(), String> {
+    let root = hook_verification_project_root(&project_path)?;
+    fs::remove_dir_all(&root).map_err(|e| format!("remove temporary Hook verification project: {e}"))
 }
 
 /// ACP client-side text-file write. This is only called by the renderer when
@@ -611,7 +796,18 @@ pub fn read_workspace_file_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::{read_agents_file, safe_hook_file_name, walk, workspace_validate_resource_attachment, write_agents_file, write_client_text_file, FileHit};
+    use super::{
+        read_agents_file,
+        safe_hook_file_name,
+        walk,
+        workspace_create_hook_verification_project,
+        workspace_read_hook_verification_marker,
+        workspace_remove_hook_verification_project,
+        workspace_validate_resource_attachment,
+        write_agents_file,
+        write_client_text_file,
+        FileHit,
+    };
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -706,6 +902,57 @@ mod tests {
         .unwrap();
         assert!(path.ends_with("/.grok/hooks/startup.json"));
         assert_eq!(fs::read_to_string(path).unwrap(), content);
+        fs::remove_dir_all(project).unwrap();
+    }
+
+    #[test]
+    fn hook_verification_project_is_git_backed_and_marker_reader_is_strict() {
+        let verification = workspace_create_hook_verification_project().unwrap();
+        let project = Path::new(&verification.project_path);
+        assert!(project.join(".git").is_dir());
+        assert_eq!(verification.hook_file_name, "gorkx-session-start-verification.json");
+
+        let missing = workspace_read_hook_verification_marker(
+            verification.project_path.clone(),
+            verification.marker_relative_path.clone(),
+            verification.marker_token.clone(),
+        )
+        .unwrap();
+        assert_eq!(missing.status, "missing");
+
+        let marker = project.join(&verification.marker_relative_path);
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, format!("{}\n", verification.marker_token)).unwrap();
+        let matched = workspace_read_hook_verification_marker(
+            verification.project_path.clone(),
+            verification.marker_relative_path.clone(),
+            verification.marker_token.clone(),
+        )
+        .unwrap();
+        assert_eq!(matched.status, "match");
+        fs::write(&marker, "not-the-token\n").unwrap();
+        let mismatched = workspace_read_hook_verification_marker(
+            verification.project_path.clone(),
+            verification.marker_relative_path.clone(),
+            verification.marker_token,
+        )
+        .unwrap();
+        assert_eq!(mismatched.status, "mismatch");
+
+        workspace_remove_hook_verification_project(verification.project_path.clone()).unwrap();
+        assert!(!project.exists());
+    }
+
+    #[test]
+    fn hook_verification_cleanup_rejects_non_temporary_directory() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let project = std::env::temp_dir().join(format!("gorkx-not-verification-{nonce}"));
+        fs::create_dir_all(&project).unwrap();
+        let result = workspace_remove_hook_verification_project(project.display().to_string());
+        assert!(result.is_err());
         fs::remove_dir_all(project).unwrap();
     }
 

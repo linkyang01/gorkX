@@ -3433,6 +3433,28 @@ button.pill:hover {
   margin-top: 10px;
 }
 
+.hook-verification-steps {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.hook-verification-details {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--glass-border-dim);
+  border-radius: 10px;
+  background: var(--glass-soft);
+  overflow-wrap: anywhere;
+}
+
+.hook-verification-actions {
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 @media (max-width: 720px) {
   .hook-builder-grid {
     grid-template-columns: minmax(0, 1fr);

@@ -3,6 +3,22 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-22 · Hooks 临时项目真实验收闭环实现
+
+本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。本轮只提交源码与本验收记录；
+真实 Hook marker 尚未取得通过证据，因此没有创建 tag、GitHub Release、DMG 或上传发布资产。
+
+| 项 | 结果 |
+|---|---|
+| Settings 安全流程 | **已实现**：Settings → Hooks 创建 OS 临时目录下的全新 Git 项目，写入 App 固定的 `SessionStart` command Hook；创建控制任务后必须显式 `trust`、显式 `reload`，再启动第二个真实任务。marker 只由内核 Hook command 写入，renderer 仅按固定 token 读取；关闭 Settings 或点击清理会撤销临时 trust、停止临时任务、删除临时项目并移除最近项目引用。 |
+| 安全边界 | 临时项目名、Hook 文件名、marker 目录、token 和 command 均由 App 固定/校验；不接受用户命令、不访问任意路径、不以 UI 状态或超时伪造成功；missing、pre-existing、mismatch、Hook load error、任务失败均显示失败提示。 |
+| 自动测试 | `hookAuthoring.test.ts` 覆盖固定 `SessionStart` JSON、shell quoting、路径/文件名拒绝；`settingsFeedback.test.ts` 覆盖 marker 缺失/不匹配/已存在提示；完整 Rust 单测 **93/93 PASS**，包含临时 Git 项目、严格 marker reader、symlink/非临时目录清理拒绝；`node --check scripts/verify-grok-hook.mjs` **PASS**。 |
+| 前端门禁 | `npm run typecheck`、`npm run test:stages`（Stage A–G）、`npm run verify:web-bundle` **PASS**；Vite 仍报告既有主 chunk 大于 500 kB 的 warning。 |
+| Rust 门禁 | `cargo check`、`cargo test workspace --lib` **PASS**；`cargo fmt --check` 仍被仓库既有的大量未格式化代码阻断，本轮未把整库无关格式化混入提交。 |
+| 内核门禁 | `verify-grok-kernel-source.sh`、`verify-grok-kernel-patches.sh`（0001–0007）**PASS**；`verify-grok-kernel-build.sh` 在获批环境完成 11 分 18 秒 release 构建，版本 `grok 1.0.6 (19d42e35)`，锁定源码 ACP initialize baseline **PASS**；既有无认证 desktop ACP 控制面探针 **PASS**。 |
+| 真实 Hook 尝试 | **BLOCKED，不能记为验收通过**：使用 App 登录目录的一次性副本和一次性临时项目启动真实 `grok 1.0.6`；沙箱内首先被认证端点网络限制阻断，获批网络重跑后 `authenticate(cached_token)` 超时，内核日志为 `No auth credentials for cli-chat-proxy`。副本 `auth.json` 的 access token 已于 `2026-08-10` 过期；本次没有观察到 marker，也没有把 `session/new`/UI 状态当作 Hook 执行证据。每次尝试均清理临时项目。 |
+| 发布决定 | **未发布**：用户要求的“达到验收就发布”条件尚未满足，当前公开版本仍为 `1.2.0`；待 Settings 真实流程在重新登录/有效额度账号下取得 marker `match`、完成真实任务并留存输出后，再复跑发布门槛并决定是否发布。 |
+
 ## 2026-08-21 · Grok Build 1.0.6 内核同步与桌面回归
 
 本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。它是下一版候选的

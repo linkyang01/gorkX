@@ -190,6 +190,18 @@ import {
   type ComputerWorkspaceAction,
 } from '../lib/grokAdmin';
 import { fmt } from '../lib/usage';
+import {
+  buildHookVerificationDefinition,
+  writeProjectHook,
+} from '../lib/hookAuthoring';
+import {
+  createHookVerificationProject,
+  HOOK_VERIFICATION_TASK_PROMPT,
+  readHookVerificationMarker,
+  removeHookVerificationProject,
+  type HookVerificationMarkerStatus,
+  type HookVerificationProject,
+} from '../lib/hookVerification';
 import { HookBuilder } from './HookBuilder';
 
 
@@ -232,6 +244,20 @@ export type HookManagementAction =
   | { type: 'enable' | 'disable'; hookName: string }
   | { type: 'add' | 'remove'; path: string };
 
+type HookVerificationPhase = 'control-ready' | 'trusted' | 'reloaded' | 'running' | 'passed' | 'failed';
+
+interface HookVerificationState {
+  project: HookVerificationProject;
+  previousProject: string;
+  phase: HookVerificationPhase;
+  markerStatus: HookVerificationMarkerStatus | null;
+}
+
+export interface HookVerificationTaskResult {
+  ok: boolean;
+  error?: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -271,6 +297,16 @@ interface Props {
   hooksAvailable?: boolean;
   onRefreshHooks?: () => Promise<HooksSnapshot>;
   onManageHooks?: (action: HookManagementAction) => Promise<HooksSnapshot>;
+  /** Create a live ACP control task in the disposable Hook verification project. */
+  onOpenHookVerificationTask?: (projectPath: string) => Promise<HookVerificationTaskResult>;
+  /** Create the second live task whose SessionStart Hook must create the marker. */
+  onStartHookVerificationTask?: (projectPath: string, prompt: string) => Promise<HookVerificationTaskResult>;
+  /** Stop only tasks in the disposable verification project before cleanup. */
+  onStopHookVerificationTasks?: (projectPath: string) => Promise<void>;
+  /** Remove the disposable project from the App's recent-project list. */
+  onForgetHookVerificationProject?: (projectPath: string) => void;
+  /** Return to the project that was selected before the verification flow. */
+  onRestoreProject?: (projectPath: string) => void;
   /** Native Grok Build cloud-environment operations. Omitted when the engine is unavailable. */
   onListCloudEnvironments?: () => Promise<CloudEnvironment[]>;
   onCreateCloudEnvironment?: (input: CloudEnvironmentInput) => Promise<CloudEnvironment>;
@@ -350,7 +386,7 @@ function formatBillingPeriodType(type?: string): string | undefined {
 
 export function SettingsPanel({
   open: isOpen,
-  onClose,
+  onClose: closeSettings,
   grokCmd,
   onGrokCmd,
   status,
@@ -382,6 +418,11 @@ export function SettingsPanel({
   hooksAvailable,
   onRefreshHooks,
   onManageHooks,
+  onOpenHookVerificationTask,
+  onStartHookVerificationTask,
+  onStopHookVerificationTasks,
+  onForgetHookVerificationProject,
+  onRestoreProject,
   onListCloudEnvironments,
   onCreateCloudEnvironment,
   onUpdateCloudEnvironment,
@@ -504,6 +545,10 @@ export function SettingsPanel({
   const [projectInstructionsBusy, setProjectInstructionsBusy] = useState(false);
   const [hooksSnap, setHooksSnap] = useState<HooksSnapshot | null>(null);
   const [hooksBusy, setHooksBusy] = useState(false);
+  const [hookVerification, setHookVerification] = useState<HookVerificationState | null>(null);
+  const [hookVerificationBusy, setHookVerificationBusy] = useState(false);
+  const [hookVerificationMessage, setHookVerificationMessage] = useState<string | null>(null);
+  const [hookVerificationMessageError, setHookVerificationMessageError] = useState(false);
   const [todayTokenUsage, setTodayTokenUsage] = useState<DailyTokenUsage | null>(null);
   const [tokenUsageHistory, setTokenUsageHistory] = useState<DailyTokenUsage[]>([]);
   const [computerHubStatus, setComputerHubStatus] = useState<string | null>(null);
@@ -706,6 +751,197 @@ export function SettingsPanel({
       })
       .catch((error) => showErr(error))
       .finally(() => setHooksBusy(false));
+  };
+
+  const setHookVerificationFeedback = (message: string | null, isError = false) => {
+    setHookVerificationMessage(message);
+    setHookVerificationMessageError(isError);
+  };
+
+  const prepareHookVerification = async () => {
+    if (!onOpenHookVerificationTask) {
+      setHookVerificationFeedback(t('settingsHooksVerificationUnavailable'), true);
+      return;
+    }
+    setHookVerificationBusy(true);
+    setHookVerificationFeedback(null);
+    const previousProject = project || '';
+    let created: HookVerificationProject | null = null;
+    try {
+      created = await createHookVerificationProject();
+      const definition = buildHookVerificationDefinition(created);
+      await writeProjectHook(created.projectPath, created.hookFileName, definition);
+      const control = await onOpenHookVerificationTask(created.projectPath);
+      if (!control?.ok) {
+        throw new Error(control?.error || t('settingsHooksVerificationTaskFailed'));
+      }
+      const initialMarker = await readHookVerificationMarker(
+        created.projectPath,
+        created.markerRelativePath,
+        created.markerToken,
+      );
+      if (initialMarker.status !== 'missing') {
+        throw new Error(t('settingsHooksVerificationMarkerPreexisting'));
+      }
+      setHookVerification({
+        project: created,
+        previousProject,
+        phase: 'control-ready',
+        markerStatus: initialMarker.status,
+      });
+      setHookVerificationFeedback(t('settingsHooksVerificationControlReady'));
+    } catch (error) {
+      if (created) {
+        await removeHookVerificationProject(created.projectPath).catch(() => undefined);
+      }
+      setHookVerification(null);
+      setHookVerificationFeedback(settingsErrorMessage(error), true);
+    } finally {
+      setHookVerificationBusy(false);
+    }
+  };
+
+  const runHookVerificationAction = async (
+    action: { type: 'trust' | 'reload' },
+  ) => {
+    const current = hookVerification;
+    if (!current || !onManageHooks || !hooksAvailable) {
+      setHookVerificationFeedback(t('settingsHooksVerificationNeedControlTask'), true);
+      return;
+    }
+    setHookVerificationBusy(true);
+    setHooksBusy(true);
+    setHookVerificationFeedback(null);
+    try {
+      const snapshot = await onManageHooks(action);
+      setHooksSnap(snapshot);
+      if (snapshot.loadErrors?.length) {
+        throw new Error(`${t('settingsHooksVerificationReloadFailed')}: ${snapshot.loadErrors.slice(0, 3).join(' · ')}`);
+      }
+      if (!snapshot.projectTrusted) {
+        throw new Error(t('settingsHooksVerificationTrustRequired'));
+      }
+      const hasSessionStartHook = snapshot.hooks.some((hook) => /session.?start/i.test(hook.event));
+      if (action.type === 'reload' && !hasSessionStartHook) {
+        throw new Error(t('settingsHooksVerificationHookNotLoaded'));
+      }
+      const phase: HookVerificationPhase = action.type === 'trust' ? 'trusted' : 'reloaded';
+      setHookVerification((previous) => previous ? { ...previous, phase } : previous);
+      setHookVerificationFeedback(
+        action.type === 'trust'
+          ? t('settingsHooksVerificationTrusted')
+          : t('settingsHooksVerificationReloaded'),
+      );
+    } catch (error) {
+      setHookVerification((previous) => previous ? { ...previous, phase: 'failed' } : previous);
+      setHookVerificationFeedback(settingsErrorMessage(error), true);
+    } finally {
+      setHooksBusy(false);
+      setHookVerificationBusy(false);
+    }
+  };
+
+  const runHookVerificationTask = async () => {
+    const current = hookVerification;
+    if (!current || !onStartHookVerificationTask) {
+      setHookVerificationFeedback(t('settingsHooksVerificationUnavailable'), true);
+      return;
+    }
+    if (current.phase !== 'reloaded' || !hooksSnap?.projectTrusted) {
+      setHookVerificationFeedback(t('settingsHooksVerificationReloadRequired'), true);
+      return;
+    }
+    setHookVerificationBusy(true);
+    setHookVerificationFeedback(null);
+    setHookVerification((previous) => previous ? { ...previous, phase: 'running', markerStatus: 'missing' } : previous);
+    try {
+      // A fresh project must not contain a marker before the real task starts.
+      // The renderer only reads this file; it never creates or repairs it.
+      const before = await readHookVerificationMarker(
+        current.project.projectPath,
+        current.project.markerRelativePath,
+        current.project.markerToken,
+      );
+      if (before.status !== 'missing') {
+        throw new Error(t('settingsHooksVerificationMarkerPreexisting'));
+      }
+      const task = await onStartHookVerificationTask(
+        current.project.projectPath,
+        HOOK_VERIFICATION_TASK_PROMPT,
+      );
+      if (!task?.ok) {
+        throw new Error(task?.error || t('settingsHooksVerificationTaskFailed'));
+      }
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const marker = await readHookVerificationMarker(
+          current.project.projectPath,
+          current.project.markerRelativePath,
+          current.project.markerToken,
+        );
+        setHookVerification((previous) => previous ? { ...previous, markerStatus: marker.status } : previous);
+        if (marker.status === 'match') {
+          setHookVerification((previous) => previous ? { ...previous, phase: 'passed', markerStatus: 'match' } : previous);
+          setHookVerificationFeedback(t('settingsHooksVerificationPassed'));
+          return;
+        }
+        if (marker.status === 'mismatch') {
+          throw new Error(t('settingsHooksVerificationMarkerMismatch'));
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+      }
+      throw new Error(t('settingsHooksVerificationMarkerMissing'));
+    } catch (error) {
+      setHookVerification((previous) => previous ? { ...previous, phase: 'failed' } : previous);
+      setHookVerificationFeedback(settingsErrorMessage(error), true);
+    } finally {
+      setHookVerificationBusy(false);
+    }
+  };
+
+  const cleanupHookVerification = async (): Promise<boolean> => {
+    const current = hookVerification;
+    if (!current) return true;
+    if (!window.confirm(t('settingsHooksVerificationCleanupConfirm'))) return false;
+    setHookVerificationBusy(true);
+    setHookVerificationFeedback(null);
+    try {
+      // Revoke the temporary trust before stopping its sessions or deleting
+      // the project. A missing temp path must never remain trusted merely
+      // because cleanup happened after a failed task.
+      if (hooksSnap?.projectTrusted) {
+        if (!onManageHooks) throw new Error(t('settingsHooksNeedTask'));
+        const snapshot = await onManageHooks({ type: 'untrust' });
+        setHooksSnap(snapshot);
+        if (snapshot.projectTrusted) {
+          throw new Error(t('settingsHooksVerificationTrustRequired'));
+        }
+      }
+      await onStopHookVerificationTasks?.(current.project.projectPath);
+      await removeHookVerificationProject(current.project.projectPath);
+      onForgetHookVerificationProject?.(current.project.projectPath);
+      onRestoreProject?.(current.previousProject);
+      setHookVerification(null);
+      setHookVerificationFeedback(t('settingsHooksVerificationCleaned'));
+      return true;
+    } catch (error) {
+      setHookVerificationFeedback(settingsErrorMessage(error), true);
+      return false;
+    } finally {
+      setHookVerificationBusy(false);
+    }
+  };
+
+  // Closing Settings must not orphan a trusted temporary project. Complete
+  // the same revoke/stop/remove flow first, and only then close the panel.
+  const onClose = () => {
+    if (!hookVerification) {
+      closeSettings();
+      return;
+    }
+    void cleanupHookVerification().then((cleaned) => {
+      if (cleaned) closeSettings();
+    });
   };
 
   const addHookPath = async (directory: boolean) => {
@@ -3983,9 +4219,99 @@ export function SettingsPanel({
                   </p>
                 </div>
               ) : null}
-              {project ? <HookBuilder project={project} onSaved={() => { void refreshHooks(); }} /> : null}
-              <div className="settings-card">
-                <p className="settings-row-hint">{t('settingsHooksHint')}</p>
+              <div className="settings-card hook-verification-card">
+                <div className="settings-row-title">{t('settingsHooksVerificationTitle')}</div>
+                <p className="settings-row-hint">{t('settingsHooksVerificationHint')}</p>
+                {!hookVerification ? (
+                  <>
+                    <ol className="hook-verification-steps">
+                      <li>{t('settingsHooksVerificationStepProject')}</li>
+                      <li>{t('settingsHooksVerificationStepTrust')}</li>
+                      <li>{t('settingsHooksVerificationStepTask')}</li>
+                    </ol>
+                    <button
+                      type="button"
+                      className="btn primary"
+                      disabled={hookVerificationBusy || !onOpenHookVerificationTask}
+                      onClick={() => void prepareHookVerification()}
+                    >
+                      {hookVerificationBusy ? t('settingsHooksVerificationCreating') : t('settingsHooksVerificationCreate')}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="hook-verification-details">
+                      <div className="settings-row-hint">
+                        {t('settingsHooksVerificationProject')}: {hookVerification.project.projectPath}
+                      </div>
+                      <div className="settings-row-hint">
+                        {t('settingsHooksVerificationMarker')}: {hookVerification.project.markerRelativePath}
+                      </div>
+                      <div className="settings-row-hint">
+                        {t('settingsHooksVerificationStatus')}: {
+                          hookVerification.phase === 'control-ready' ? t('settingsHooksVerificationStatusControl')
+                            : hookVerification.phase === 'trusted' ? t('settingsHooksVerificationStatusTrusted')
+                              : hookVerification.phase === 'reloaded' ? t('settingsHooksVerificationStatusReloaded')
+                                : hookVerification.phase === 'running' ? t('settingsHooksVerificationStatusRunning')
+                                  : hookVerification.phase === 'passed' ? t('settingsHooksVerificationStatusPassed')
+                                    : t('settingsHooksVerificationStatusFailed')
+                        }
+                      </div>
+                      {hookVerification.markerStatus ? (
+                        <div className="settings-row-hint">
+                          {t('settingsHooksVerificationMarkerStatus')}: {hookVerification.markerStatus}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="field-row hook-verification-actions">
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={hookVerificationBusy || !hooksAvailable || hookVerification.phase === 'reloaded' || hookVerification.phase === 'passed'}
+                        onClick={() => void runHookVerificationAction({ type: 'trust' })}
+                      >
+                        {t('settingsHooksVerificationTrust')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={hookVerificationBusy || !hooksAvailable || !['trusted', 'reloaded'].includes(hookVerification.phase) || hookVerification.phase === 'passed'}
+                        onClick={() => void runHookVerificationAction({ type: 'reload' })}
+                      >
+                        {t('settingsHooksVerificationReload')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={hookVerificationBusy || hookVerification.phase !== 'reloaded' || !onStartHookVerificationTask}
+                        onClick={() => void runHookVerificationTask()}
+                      >
+                        {hookVerificationBusy && hookVerification.phase === 'running' ? t('settingsHooksVerificationRunning') : t('settingsHooksVerificationStartTask')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        disabled={hookVerificationBusy}
+                        onClick={() => void cleanupHookVerification()}
+                      >
+                        {t('settingsHooksVerificationCleanup')}
+                      </button>
+                    </div>
+                  </>
+                )}
+                <p className="settings-row-hint hook-builder-warning">{t('settingsHooksVerificationWarning')}</p>
+                {hookVerificationMessage ? (
+                  <p className={`settings-msg${hookVerificationMessageError ? ' err' : ''}`}>
+                    {hookVerificationMessage}
+                  </p>
+                ) : null}
+              </div>
+              {project && !hookVerification && !hookVerificationBusy ? (
+                <HookBuilder project={project} onSaved={() => { void refreshHooks(); }} />
+              ) : null}
+              {!hookVerification && !hookVerificationBusy ? (
+                <div className="settings-card">
+                  <p className="settings-row-hint">{t('settingsHooksHint')}</p>
                 {!hooksAvailable ? (
                   <div className="ext-empty-card" style={{ marginTop: 10 }}>
                     <p className="hint" style={{ margin: 0 }}>{t('settingsHooksNeedTask')}</p>
@@ -4085,7 +4411,8 @@ export function SettingsPanel({
                     ) : null}
                   </>
                 )}
-              </div>
+                </div>
+              ) : null}
             </>
           ) : null}
 

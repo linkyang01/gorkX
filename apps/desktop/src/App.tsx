@@ -57,7 +57,7 @@ import {
   type PromptQueueEntry,
   type PromptQueueState,
 } from './lib/acpClient';
-import type { ArchivedTaskRow, HookManagementAction, SettingsSection } from './components/SettingsPanel';
+import type { ArchivedTaskRow, HookManagementAction, HookVerificationTaskResult, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { TaskSearchDialog } from './components/TaskSearchDialog';
@@ -995,6 +995,7 @@ function App() {
   const createThreadRef = useRef<
     | ((opts?: {
         worktree?: boolean;
+        cwdOverride?: string;
         initialPrompt?: string;
         initialDisplay?: string;
         initialAttachments?: ComposerAttachment[];
@@ -1284,6 +1285,37 @@ function App() {
     const live = requireLiveHooksTask();
     return live.client!.manageHooks(live.sessionId!, action);
   }, [requireLiveHooksTask]);
+
+  const openHookVerificationTask = useCallback(async (
+    projectPath: string,
+    prompt = '',
+  ): Promise<HookVerificationTaskResult> => {
+    const cwd = projectPath.trim();
+    if (!cwd) return { ok: false, error: t('settingsHooksVerificationProjectFailed') };
+    // The verification project is selected explicitly before creating the ACP
+    // session. `cwdOverride` keeps this task out of the previously selected
+    // repository even while Settings is still open.
+    setProject(cwd);
+    setRecentProjects(pushRecentProject(cwd));
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    const result = await createThreadRef.current?.({
+      cwdOverride: cwd,
+      ...(prompt.trim()
+        ? { initialPrompt: prompt, initialDisplay: t('settingsHooksVerificationTaskDisplay') }
+        : {}),
+    });
+    return result ?? { ok: false, error: t('settingsHooksVerificationTaskFailed') };
+  }, []);
+
+  const stopHookVerificationTasks = useCallback(async (projectPath: string): Promise<void> => {
+    const scope = projectScopeKey(projectPath);
+    const scoped = threadsRef.current.filter((thread) =>
+      thread.projectKey === scope || thread.cwd === projectPath,
+    );
+    await Promise.all(scoped.map(async (thread) => {
+      await thread.client?.stop().catch(() => undefined);
+    }));
+  }, []);
 
   const manageWorkflow = useCallback(async (workflow: WorkflowRunUpdate, action: WorkflowManageAction) => {
     const live = threadsRef.current.find((thread) => thread.id === activeIdRef.current);
@@ -9042,6 +9074,11 @@ function App() {
         hooksAvailable={Boolean(active?.client && active?.sessionId)}
         onRefreshHooks={active?.client && active?.sessionId ? refreshLiveHooks : undefined}
         onManageHooks={active?.client && active?.sessionId ? manageLiveHooks : undefined}
+        onOpenHookVerificationTask={(path) => openHookVerificationTask(path)}
+        onStartHookVerificationTask={(path, prompt) => openHookVerificationTask(path, prompt)}
+        onStopHookVerificationTasks={stopHookVerificationTasks}
+        onForgetHookVerificationProject={(path) => removeProjectFromApp(path)}
+        onRestoreProject={(path) => setProject(path)}
         onListCloudEnvironments={() => withCloudClient((client) => client.listCloudEnvironments())}
         onCreateCloudEnvironment={(input) => withCloudClient((client) => client.createCloudEnvironment(input))}
         onUpdateCloudEnvironment={(id, input) => withCloudClient((client) => client.updateCloudEnvironment(id, input))}

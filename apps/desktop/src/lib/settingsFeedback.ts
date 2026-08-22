@@ -36,6 +36,16 @@ export function settingsErrorMessage(error: unknown): string {
     return t('settingsHooksWireError');
   }
 
+  if (/marker.*(preexist|already exist)|marker.*before.*task/i.test(s)) {
+    return t('settingsHooksVerificationMarkerPreexisting');
+  }
+  if (/marker.*mismatch|marker.*does not match|unexpected marker/i.test(s)) {
+    return t('settingsHooksVerificationMarkerMismatch');
+  }
+  if (/marker.*(missing|not (?:found|created))|verification.*marker/i.test(s)) {
+    return t('settingsHooksVerificationMarkerMissing');
+  }
+
   // Only map method-not-found when the surface is clearly Hooks-related.
   // Generic ACP "Method not found" (e.g. optional Review extensions) must stay
   // machine-detectable for hide-tab logic, not become a Hooks CTA.

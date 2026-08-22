@@ -21,6 +21,9 @@ assert.equal(computerStatusDetail('custom detail 42'), 'custom detail 42');
 // Optional ACP extensions: keep "method not found" recognizable (not Hooks CTA).
 assert.match(settingsErrorMessage('Method not found'), /method not found/i);
 assert.ok(settingsErrorMessage('hooks method not found').length > 4);
+assert.ok(settingsErrorMessage('Hook verification marker missing after real task').length > 4);
+assert.ok(settingsErrorMessage('Hook verification marker mismatch').length > 4);
+assert.ok(settingsErrorMessage('marker already existed before task').length > 4);
 
 assert.ok(settingsErrorMessage(new Error('fetch failed: ECONNREFUSED 127.0.0.1:9222')).length > 4);
 assert.ok(settingsErrorMessage('Keychain SecItemAdd failed: errSecAuthFailed').length > 4);
