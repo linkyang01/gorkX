@@ -8,6 +8,7 @@ source_dir="${GORKX_KERNEL_SOURCE:-$root/vendor/grok-build}"
 base_source_dir="$source_dir"
 patch_series="$root/kernel/patches/series"
 out="${1:-$root/apps/desktop/src-tauri/resources/grok}"
+build_target="${GORKX_BUILD_TARGET:-}"
 expected="$(sed -n 's/^commit = "\([0-9a-f]*\)"/\1/p' "$lock")"
 expected_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$lock")"
 # The lock stores the user-facing `grok 1.0.6`; the upstream build scripts
@@ -19,6 +20,10 @@ license_hash="$(sed -n 's/^license_sha256 = "\([0-9a-f]*\)"/\1/p' "$lock")"
 notices_hash="$(sed -n 's/^third_party_notices_sha256 = "\([0-9a-f]*\)"/\1/p' "$lock")"
 
 [[ -n "$expected" && -n "$expected_version" && -n "$compile_version" && -n "$package" && -n "$binary" && -n "$license_hash" && -n "$notices_hash" ]] || { echo "Invalid kernel lock: $lock" >&2; exit 2; }
+if [[ -n "$build_target" && ! "$build_target" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "Invalid GORKX_BUILD_TARGET: $build_target" >&2
+  exit 2
+fi
 command -v cargo >/dev/null || { echo "Rust cargo is required to build Grok Build." >&2; exit 2; }
 command -v dotslash >/dev/null || { echo "Grok Build requires dotslash for its pinned protoc; run: cargo install dotslash" >&2; exit 2; }
 [[ -f "$patch_series" ]] || { echo "Missing kernel patch series: $patch_series" >&2; exit 2; }
@@ -56,12 +61,20 @@ fi
 # into the desktop bundle is a release candidate, so stamp the exact locked
 # version at compile time; otherwise the shipped binary would silently bypass
 # the explicit trust step that the Settings acceptance flow is meant to prove.
-GROK_VERSION="$compile_version" cargo build --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
+build_args=(build --manifest-path "$source_dir/Cargo.toml" -p "$package" --release)
+if [[ -n "$build_target" ]]; then
+  build_args+=(--target "$build_target")
+fi
+GROK_VERSION="$compile_version" cargo "${build_args[@]}"
 # CI and local verification may isolate Cargo output with CARGO_TARGET_DIR.
 # Resolve the artifact from that directory instead of assuming a source-local
 # `target/`, while retaining the normal Cargo default when it is unset.
 target_dir="${CARGO_TARGET_DIR:-$source_dir/target}"
-artifact="$target_dir/release/$binary"
+if [[ -n "$build_target" ]]; then
+  artifact="$target_dir/$build_target/release/$binary"
+else
+  artifact="$target_dir/release/$binary"
+fi
 [[ -x "$artifact" ]] || { echo "Expected built binary missing: $artifact" >&2; exit 5; }
 [[ -f "$source_dir/LICENSE" ]] || { echo "Missing upstream LICENSE: $source_dir/LICENSE" >&2; exit 6; }
 [[ -f "$source_dir/THIRD-PARTY-NOTICES" ]] || { echo "Missing upstream third-party notices: $source_dir/THIRD-PARTY-NOTICES" >&2; exit 6; }

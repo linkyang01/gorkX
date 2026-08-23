@@ -73,7 +73,8 @@ const blocked = evaluateReleaseGates({
 });
 assert.equal(blocked.canShipPublicArtifacts, false);
 assert.ok(blocked.blockers.some((b) => /user approval|§7\.6|explicit/i.test(b)));
-assert.ok(blocked.warnings.some((b) => /Intel|x86_64/i.test(b)));
+assert.ok(blocked.blockers.some((b) => /Developer ID|notarization/i.test(b)));
+assert.ok(blocked.blockers.some((b) => /Intel|x86_64/i.test(b)));
 assert.equal(blocked.releaseCandidateReady, true);
 
 const shippable = evaluateReleaseGates({

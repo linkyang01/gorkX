@@ -11,7 +11,7 @@
 
 > 当前候选已进入 gorkX `1.2.0` 工作区 / Grok Build `1.0.6 (19d42e35)` 复验；下文
 > 仍保留 Beta 门槛编号，当前机器侧证据以 `VALIDATION_EVIDENCE.md` 的
-> 2026-08-21 条目为准。本轮未创建 tag、Release 或 DMG。
+> 2026-08-23 条目为准。本轮未创建 tag、Release 或 DMG。
 
 ## 版本定位
 
@@ -35,9 +35,14 @@ gorkX，就能登录 Grok、打开真实项目、由 Agent 读取/修改并审�
 
 ## 当前尚缺的发布验收
 
-1. 用真实用户可用的 API/兼容 endpoint 做一次多 Provider 全链路验收；没有可授权 endpoint 时，此项保持未通过，不能伪称多模型已完成。
-2. 在干净 macOS 完成一次独立安装、登录、真实会话、退出重开验收。
-3. 在有明确 macOS 麦克风授权的环境完成一次真实听写 → 编辑草稿 → 用户手动发送的验收。
+1. 在另一台干净 macOS（或真正隔离的 macOS VM）完成一次独立安装、登录、真实会话、退出重开验收；同机空白 `HOME` 不能替代这一项。
+2. 使用有效的 Developer ID Application 证书签名，并完成 Apple notarization 与 staple；ad-hoc 包不能作为公开下载资产。
+3. 在原生 Intel Mac 上完成 x86_64 安装、登录、真实项目任务与包内内核验收。Apple Silicon 上的 x86_64 交叉构建和 Rosetta 真实任务已通过，但只记为预检。
+
+2026-08-23 已补齐并记录：本地 Ollama 的 OpenAI-compatible endpoint 完成
+Settings 实时验证、模型选择与真实 App 任务回复；用户真人听写进入可编辑草稿并由用户
+手动发送；Settings 临时项目 SessionStart Hook 完成显式 trust、reload、真实任务与
+marker 闭环。证据见 `VALIDATION_EVIDENCE.md`，这些通过项不替代上面三项独立发布门。
 
 已完成且有 [VALIDATION_EVIDENCE.md](VALIDATION_EVIDENCE.md) 记录的当前机器侧项目：内核升级到 Grok Build 1.0.6、0001–0007 补丁重建、原生语音和桌面动作 ACP 路由探针、模型目录刷新、App Bundle 验收，以及普通用户路径不依赖输入 slash 指令的界面审计。原生检查点回退、真实 resource-link 和子任务的认证回合证据仍按上一锁定内核记录保留，不能被本轮无认证探针扩大解释。
 
@@ -45,7 +50,7 @@ gorkX，就能登录 Grok、打开真实项目、由 Agent 读取/修改并审�
 
 - GitHub 一键网页授权：gorkX 已使用 GitHub 官方 Device Flow；用户已完成一次浏览器确认并由应用实际验证 GitHub API 连接，也已在当前 gorkX 项目读取开放 PR（当前为空），并在公开测试仓库完成 PR、Checks 与评论详情的只读闭环。授权后的令牌只进入 macOS Keychain。仍需验收断开及每次远端写入确认。当前 OAuth scope 为 `read:user public_repo`；`public_repo` 可能允许公开仓库写入，故授权前 UI 必须明确披露，创建 PR 或评论仍必须逐次确认。私有仓库、组织策略或更细粒度范围继续使用用户创建的 fine-grained Token。
 - Computer 自动化：gorkX 已有 macOS Accessibility 权限检查、前台固定动作、一次性截图、App 自带 MCP 注册、跨进程控制租约与急停；仍需在真实授权环境完成 MCP 工具发现以及点击/按键/文字输入人工验收。原生 Computer ACP 仍未提供，因此不把 MCP 桥接说成内核原生能力。当前不支持后台采集、隐藏窗口或任意脚本。
-- Hooks：设置已提供真实的项目 `AGENTS.md` 指令编辑、项目 `.grok/hooks/*.json` 引导创建，以及内核 Hook 的读取、信任、启停、重载和移除控制；App 不自己执行 Hooks。仍需在包含真实 Hook 的项目中完成一次实际执行验收，才可将 Hook 自动化作为发布宣传重点。
+- Hooks：设置已提供真实的项目 `AGENTS.md` 指令编辑、项目 `.grok/hooks/*.json` 引导创建，以及内核 Hook 的读取、信任、启停、重载和移除控制；App 不自己执行 Hooks。2026-08-23 已完成受限 `SessionStart` Hook 的显式 trust、reload、真实任务、内核 marker 与 revoke 闭环，可在这些边界内说明已验证；不能把它扩大成任意命令免确认或 App 自行执行。
 - 直接使用 ChatGPT Plus / Claude Pro 网页订阅：不等同于 API 或合法的官方授权通道。
 
 这些能力可继续开发，但未完成时不能放入 v0.5.0 的“已支持”宣传；界面必须说明真实边界。

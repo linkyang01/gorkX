@@ -104,20 +104,20 @@ export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult
     if (input.signingLevel === 'none') {
       blockers.push('App is unsigned — Developer ID + notarization required for downloadable macOS builds');
     } else if (input.signingLevel === 'adhoc') {
-      warnings.push(
+      blockers.push(
         'App is ad-hoc signed only; users may need Gatekeeper workarounds until Developer ID + notarization',
       );
     } else if (input.signingLevel === 'developer_id') {
-      warnings.push('Developer ID signed but not notarized — notarize before public DMG distribution');
+      blockers.push('Developer ID signed but not notarized — notarize before public DMG distribution');
     }
   }
 
   const archs = new Set(input.archVerified.filter((a) => a === 'arm64' || a === 'x86_64'));
   if (!archs.has('arm64')) {
-    warnings.push('Apple Silicon (arm64) install+project verification evidence missing');
+    blockers.push('Apple Silicon (arm64) install+project verification evidence missing');
   }
   if (!archs.has('x86_64')) {
-    warnings.push('Intel (x86_64) install+project verification evidence missing');
+    blockers.push('Intel (x86_64) install+project verification evidence missing');
   }
 
   if (!input.windowsTrialPassed) {

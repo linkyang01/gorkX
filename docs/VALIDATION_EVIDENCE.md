@@ -3,13 +3,14 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
-## 2026-08-23 · Hooks 真实验收闭环与认证兼容修复通过，发布门禁复核
+## 2026-08-23 · Hooks 真实验收闭环、发布通道修复与跨架构复验
 
 本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。本轮只把内核真实写入的
 marker 作为证据：任务失败时即使观察到 marker 也仍判失败；没有用 UI 状态、超时
 或验证脚本自行写 marker。专项验收通过后，按仓库 Stage G 规则仍未创建 tag、
 GitHub Release、DMG 或上传发布资产。随后修复认证兼容问题，并在修复后的新 App
-包中重新完成清洁 HOME、真实任务和 Settings Hook 闭环；本轮临时凭据与项目均已删除。
+包中重新完成清洁 HOME、真实任务和 Settings Hook 闭环；又完成真实第三方模型、
+真人麦克风与 x86_64 产物的补充复验。一次性凭据、项目、模型配置和构建目录均已清理。
 
 | 项 | 结果 |
 |---|---|
@@ -21,9 +22,14 @@ GitHub Release、DMG 或上传发布资产。随后修复认证兼容问题，�
 | 修复后 Settings 重跑 | **PASS**：修复后二次真实点按生成临时项目 `gorkx-hook-verify-1787474014482984000`；初始 marker 为 `missing`，依次点击“明确授信项目”“重新加载 Hooks”“启动真实任务”，真实消息返回 `HOOK_VERIFICATION_TASK_OK`，状态变为“已确认 marker”，marker 为 `match`。项目由 Settings 删除，文件系统复核为不存在。 |
 | ACP 实证 | **PASS**：使用一次性认证副本和正确版本的真实 Grok Build，`verify-grok-hook.mjs --authenticated --no-prompt` 完成控制面、未授信不执行、显式 trust、显式 reload、Hook marker、revoke 和临时项目清理；同一脚本带真实 prompt 的重跑也完成真实任务，并确认任务期间 Hook marker 未被任务正文改写。此前错误版本候选出现的真实 HTTP 426 仅作为失败诊断，不作为最终通过依据。 |
 | 失败提示与测试 | **PASS**：`settingsFeedback.ts` 新增 Grok Build 版本过旧/426 的可读提示，`settingsFeedback.test.ts` 覆盖 426 形状；Settings 任务失败后再次只读 marker，若 marker 存在也明确显示“任务失败但观察到 marker，验证仍失败”，不会把 marker 单独升级为成功。既有 `hookAuthoring.test.ts`、Rust 临时项目/marker 安全测试继续纳入 Stage 门禁。 |
+| GitHub 发布通道 | **PASS**：通过 GitHub 官方 Device Flow 重新连接 `gh`，`gh auth status` 确认 `linkyang01` 账号与 `repo` / `workflow` scope 可用，仓库解析为 `linkyang01/gorkX`；仓库级 Git 已绕开失效的本机代理，直连 API 可读取 Release。仓库当前没有 Actions 工作流、发布 Secrets 或 Variables；这不是 CLI 未连接，而是尚未配置 Apple 发布凭据。未把 token 写入仓库或验收记录。 |
+| 第三方模型真实回复 | **PASS**：安装并启动官方 Ollama `0.32.15`，真实拉取 `qwen2.5:0.5b`；Settings → 模型与提供商 → 本地 Ollama 实际点击“验证并添加”，界面记录“已通过模型响应验证 · 2026/8/23 17:32:22”。随后在一次性 Git 项目中选择该模型并通过真实 gorkX 任务路径取得模型生成回复。小模型回复质量和工具调用意图不作为能力扩张，只证明用户配置的 OpenAI-compatible endpoint 完成真实协议响应与 App 任务调用。 |
+| macOS 麦克风真人验收 | **PASS**：由用户真实说话，输入区在“正在听”状态将“验收通过 麦克风真实验收通过”写入可编辑草稿，发送按钮可用；发送前草稿已单独观察。源码终态处理只调用 `setDraft`，没有自动发送；后续发送发生在用户接管 App 后，不把它描述成自动化操作。 |
+| x86_64 构建与运行预检 | **PARTIAL / 不关闭原生 Intel 门**：新增 `GORKX_BUILD_TARGET` 后，用锁定源码和七个补丁交叉构建 `x86_64-apple-darwin` 内核，版本 `grok 1.0.6 (19d42e35)`，ACP initialize 通过；Tauri x86_64 `.app` 的主程序、包内内核、许可证与隔离 `GROK_HOME` 校验通过。只启动该精确 x86_64 App，在 Rosetta 下打开一次性 Git 项目并通过本地 Ollama 启动真实任务、取得回复。该证据证明 x86_64 产物可构建和运行，不冒充原生 Intel Mac 安装验收。 |
+| 发布门禁与诊断修复 | **PASS**：ad-hoc / 未公证签名及缺少 arm64/x86_64 证据现均为 hard blocker；签名脚本使用绝对 App 路径和唯一临时报表，只在 Developer ID 签名存在时检查 staple；bundle 校验现在拒绝主程序与包内内核架构不匹配。readiness 不再把宿主机架构自动算作验收证据，只有显式且有记录的 `GORKX_ARCH_VERIFIED` 才进入判定，并支持合并两份独立架构证据。用户批准已存在时，失败提示不再误写成“或取得批准”。 |
 | 前端 / Rust / 内核门禁 | **PASS**：`npm run typecheck`、`npm run test:stages`（Stage A–G）、`npm run verify:web-bundle`、`cargo check`、完整 `cargo test`（95 passed）、内核 source/patch 校验、锁定 release 构建、无认证 ACP 控制面、源码构建 ACP baseline、`npm run build:app` 和包内版本校验均通过。Vite 仍有既有主 chunk 大于 500 kB warning；`cargo fmt --check` 仍被仓库既有未格式化代码阻断，本轮未混入无关格式化。 |
-| 清理 | **PASS**：两个本轮临时 Hook 项目均通过原生 ACP `untrust`，主 App trust store 对两个精确路径均为 `trusted = false`；临时项目目录、一次性认证副本、内核验证输出和一次性清理脚本均已移除，未进入提交。 |
-| 发布决定 | **专项通过、全局未发布**：以本轮真实 ACP/Settings 证据设置 `GORKX_REAL_PROMPT_PASSED=1`，并按用户的条件发布授权设置 `GORKX_USER_APPROVED_SHIP=1` 后运行 `bash scripts/verify-release-readiness.sh`，仍返回 `NO PUBLIC SHIP`。仓库当前仍缺干净机安装/重开、第三方 endpoint 真实回复、macOS 麦克风真人验收；当前 App 仅 ad-hoc 签名、未公证，Intel 安装证据也缺失。这些是 `docs/NEXT_RELEASE_GATES.md` 的独立阻断项，不能由 Hooks 专项通过替代。因此本轮只提交源码和本验收记录。 |
+| 清理 | **PASS**：两个临时 Hook 项目均通过原生 ACP `untrust`，主 App trust store 对两个精确路径均为 `trusted = false`；另一个旧 Hook 临时目录的精确路径不在 trust store。临时 Ollama 模型从 Settings 删除、一次性项目从侧栏移除，Ollama 服务已停止。两处系统临时目录内超过 9.7 GB 的模型、x86 构建缓存、内核副本、arm64 资源备份、验收项目及旧版固定 codesign 报表均按精确路径删除，复核无 `gorkx-*` 残留；Homebrew Ollama 安装、用户账号和其他配置未动。 |
+| 发布决定 | **候选通过、公开发布仍被真实门禁拒绝**：以已记录证据设置 `GORKX_REAL_PROMPT_PASSED=1`、`GORKX_THIRD_PARTY_MODEL_PASSED=1`、`GORKX_MICROPHONE_PASSED=1`、`GORKX_ARCH_VERIFIED=arm64`，并按用户发布授权设置 `GORKX_USER_APPROVED_SHIP=1` 后运行 `bash scripts/verify-release-readiness.sh`，仍返回 `NO PUBLIC SHIP`。H2 第三方模型和 H3 麦克风已关闭；剩余阻断仅为另一台干净 Mac 的安装/登录/重开、Developer ID 签名与 Apple 公证、原生 Intel Mac 的安装/项目证据。当前 Keychain 为 `0 valid identities`，仓库也没有对应 GitHub Secrets；本机 Parallels 没有可用 VM。故没有伪造 `GORKX_CLEAN_INSTALL_PASSED` / x86_64 证据，没有创建 tag、Release、DMG 或上传资产。 |
 
 ## 2026-08-22 · Hooks 临时项目真实验收闭环实现
 

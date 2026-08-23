@@ -37,7 +37,10 @@
 | arm64 | 安装 → 登录 → 真实项目一轮 → `verify-macos-app-bundle`（包内内核） |
 | x86_64 | 同上，在 Intel 机器或 x86_64 产物上分别完成 |
 
-本机脚本只报告 **当前 host 架构**；双架构「已验收」需要两套证据（或 CI matrix），不可单机冒充。
+宿主机架构只作诊断，不自动计入验收。双架构「已验收」需要两套独立的安装、登录和
+真实项目证据（或等价 CI matrix）；Apple Silicon 上的 x86_64 交叉构建与 Rosetta
+运行只能作为产物预检，不可冒充原生 Intel 验收。`verify-release-readiness.sh` 仅在
+明确提供有记录的 `GORKX_ARCH_VERIFIED` 时计算对应架构。
 
 ```bash
 # 当前架构的包内内核

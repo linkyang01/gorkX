@@ -12,6 +12,12 @@ REAL_PROMPT_PASSED="${GORKX_REAL_PROMPT_PASSED:-0}"
 CLEAN_INSTALL_PASSED="${GORKX_CLEAN_INSTALL_PASSED:-0}"
 THIRD_PARTY_MODEL_PASSED="${GORKX_THIRD_PARTY_MODEL_PASSED:-0}"
 MICROPHONE_PASSED="${GORKX_MICROPHONE_PASSED:-0}"
+ARCH_VERIFIED="${GORKX_ARCH_VERIFIED:-}"
+
+if [[ -n "$ARCH_VERIFIED" && ! "$ARCH_VERIFIED" =~ ^(arm64|x86_64)(,(arm64|x86_64))*$ ]]; then
+  echo "Invalid GORKX_ARCH_VERIFIED: $ARCH_VERIFIED (expected arm64,x86_64 or one architecture)" >&2
+  exit 2
+fi
 
 echo "=== gorkX release readiness ==="
 echo "root: $ROOT"
@@ -21,6 +27,7 @@ echo "real_prompt_passed: $REAL_PROMPT_PASSED (requires a recorded real authenti
 echo "clean_install_passed: $CLEAN_INSTALL_PASSED (requires a recorded clean-machine install/login/reopen run)"
 echo "third_party_model_passed: $THIRD_PARTY_MODEL_PASSED (requires a recorded real provider reply)"
 echo "microphone_passed: $MICROPHONE_PASSED (requires a recorded macOS dictation run)"
+echo "arch_verified: ${ARCH_VERIFIED:-none} (requires separate install+login+project evidence for every listed architecture)"
 echo
 
 stage_ok=0
@@ -68,6 +75,7 @@ echo "--- doctor ---"
 echo
 echo "--- host architecture ---"
 echo "host: $arch_host"
+echo "NOTE: host architecture is diagnostic only; it is never counted as acceptance evidence."
 echo "NOTE: dual-arch evidence needs separate arm64 and x86_64 install verifications."
 
 echo
@@ -79,15 +87,18 @@ echo "linux: eval — secrets/sandbox/desktop cost not approved for Beta"
 echo
 echo "--- public ship decision ---"
 cd "$ROOT"
-export STAGE_OK="$stage_ok" BUNDLE_OK="$bundle_ok" SL="$signing_level" ARCH="$arch_host"
+export STAGE_OK="$stage_ok" BUNDLE_OK="$bundle_ok" SL="$signing_level"
 export GORKX_USER_APPROVED_SHIP="$USER_APPROVED_SHIP"
 export GORKX_REAL_PROMPT_PASSED="$REAL_PROMPT_PASSED"
 export GORKX_CLEAN_INSTALL_PASSED="$CLEAN_INSTALL_PASSED"
 export GORKX_THIRD_PARTY_MODEL_PASSED="$THIRD_PARTY_MODEL_PASSED"
 export GORKX_MICROPHONE_PASSED="$MICROPHONE_PASSED"
+export GORKX_ARCH_VERIFIED="$ARCH_VERIFIED"
 node --experimental-strip-types -e '
 import { evaluateReleaseGates } from "./apps/desktop/src/lib/releaseGates.ts";
-const arch = process.env.ARCH || "";
+const archVerified = (process.env.GORKX_ARCH_VERIFIED || "")
+  .split(",")
+  .filter((arch) => arch === "arm64" || arch === "x86_64");
 const r = evaluateReleaseGates({
   stageTestsPass: process.env.STAGE_OK === "1",
   bundleEngineOk: process.env.BUNDLE_OK === "1",
@@ -96,14 +107,18 @@ const r = evaluateReleaseGates({
   thirdPartyModelPassed: process.env.GORKX_THIRD_PARTY_MODEL_PASSED === "1",
   microphonePassed: process.env.GORKX_MICROPHONE_PASSED === "1",
   signingLevel: (process.env.SL || "none"),
-  archVerified: arch === "arm64" || arch === "x86_64" ? [arch] : [],
+  archVerified,
   windowsTrialPassed: false,
   linuxBetaApproved: false,
   userApprovedShip: process.env.GORKX_USER_APPROVED_SHIP === "1",
 });
 console.log(JSON.stringify(r, null, 2));
 if (!r.canShipPublicArtifacts) {
-  console.log("\nNO PUBLIC SHIP: fix blockers or obtain explicit user approval for tag/Release/DMG.");
+  if (process.env.GORKX_USER_APPROVED_SHIP === "1") {
+    console.log("\nNO PUBLIC SHIP: explicit user approval is recorded; every listed blocker must still be resolved with real evidence.");
+  } else {
+    console.log("\nNO PUBLIC SHIP: resolve every listed blocker and obtain explicit user approval for tag/Release/DMG.");
+  }
   process.exit(2);
 }
 console.log("\nPUBLIC SHIP ALLOWED by automated gates (still require human final check).");
