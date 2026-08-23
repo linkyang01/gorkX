@@ -14,7 +14,7 @@
 | 完整 App 签名 | **PASS**：Tauri 使用 identity `-` 对主程序和完整 `.app` 重新签名；`codesign --verify --deep --strict` 返回 valid，Info.plist 与 sealed resources 均进入签名。旧 `1.2.0` App 因版本不匹配且签名不完整被新版门禁分别拒绝，未复用旧包。 |
 | DMG 真实复验 | **PASS**：`gorkX_1.3.0_aarch64.dmg` 只读挂载后，主程序与包内 Grok Build 均为 arm64，App 版本 `1.3.0`，内核版本 `grok 1.0.6 (19d42e35)`，许可证、隔离 `GROK_HOME` 和完整 App 签名均通过。SHA-256 `00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba`。 |
 | 受限发布门 | **PASS WITH EXPLICIT WAIVER**：`GORKX_RELEASE_SCOPE=arm64_adhoc`、`GORKX_LIMITED_RELEASE_WAIVER=1`、真实 prompt/第三方模型/麦克风证据与 `GORKX_ARCH_VERIFIED=arm64` 复跑，结果为 `canShipPublicArtifacts: true`、`blockers: []`。JSON 的 `waivers` 仍分别保留 clean-machine、Developer ID/notarization 与 x86_64 范围决定，不将其记为测试通过。 |
-| 发布状态 | **待上传**：源码、README、Release Notes、门禁与本记录将先提交；随后创建 tag `v1.3.0`、GitHub Release 并上传上述精确 DMG，上传后再回填远端核验结果。 |
+| 发布状态 | **PUBLISHED**：发布提交 `d5d46ab` 已快进到 `main`，annotated tag `v1.3.0` 解引用到同一提交；[GitHub Release v1.3.0](https://github.com/linkyang01/gorkX/releases/tag/v1.3.0) 为 Latest、非 draft、非 prerelease，资产 `gorkX_1.3.0_aarch64.dmg` 状态为 uploaded、大小 `69,669,173` bytes，GitHub digest 与本地均为 `sha256:00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba`。从公开 Release 重新下载后再次只读挂载，版本、arm64 架构、Grok Build 1.0.6、许可证、隔离 `GROK_HOME` 与完整 App 签名全部 **PASS**。 |
 
 ## 2026-08-23 · Hooks 真实验收闭环、发布通道修复与跨架构复验
 
