@@ -11,9 +11,11 @@ fi
 
 app_parent="$(cd "$(dirname "$app_input")" && pwd -P)"
 app_path="$app_parent/$(basename "$app_input")"
+expected_app_version="${GORKX_EXPECTED_APP_VERSION:-}"
 engine="$app_path/Contents/Resources/grok"
 engine_license="$app_path/Contents/Resources/grok-LICENSE"
 engine_notices="$app_path/Contents/Resources/grok-THIRD-PARTY-NOTICES"
+info_plist="$app_path/Contents/Info.plist"
 
 if [[ ! -f "$engine" || ! -x "$engine" ]]; then
   echo "Missing executable bundled engine: $engine" >&2
@@ -21,6 +23,20 @@ if [[ ! -f "$engine" || ! -x "$engine" ]]; then
 fi
 if [[ ! -s "$engine_license" || ! -s "$engine_notices" ]]; then
   echo "Missing bundled Grok Build license notices" >&2
+  exit 3
+fi
+if [[ ! -s "$info_plist" ]]; then
+  echo "Missing app Info.plist: $info_plist" >&2
+  exit 3
+fi
+
+bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist" 2>/dev/null || true)"
+if [[ -z "$bundle_version" ]]; then
+  echo "Missing CFBundleShortVersionString in: $info_plist" >&2
+  exit 3
+fi
+if [[ -n "$expected_app_version" && "$bundle_version" != "$expected_app_version" ]]; then
+  echo "App version mismatch: expected $expected_app_version, bundle reports $bundle_version" >&2
   exit 3
 fi
 
@@ -47,6 +63,7 @@ done
 echo "PASS: main binary: $(file -b "$exe")"
 echo "PASS: engine binary: $(file -b "$engine")"
 echo "PASS: bundled architectures: main=$main_archs engine=$engine_archs"
+echo "PASS: app version: $bundle_version"
 echo "PASS: host arch: $(uname -m)"
 
 probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/gorkx-bundle-check.XXXXXX")"

@@ -7,20 +7,32 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP="$ROOT/apps/desktop"
 APP_DEFAULT="$DESKTOP/src-tauri/target/release/bundle/macos/gorkX.app"
 APP_PATH="${GORKX_APP_PATH:-$APP_DEFAULT}"
+APP_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('$DESKTOP/package.json', 'utf8')).version")"
 USER_APPROVED_SHIP="${GORKX_USER_APPROVED_SHIP:-0}"
 REAL_PROMPT_PASSED="${GORKX_REAL_PROMPT_PASSED:-0}"
 CLEAN_INSTALL_PASSED="${GORKX_CLEAN_INSTALL_PASSED:-0}"
 THIRD_PARTY_MODEL_PASSED="${GORKX_THIRD_PARTY_MODEL_PASSED:-0}"
 MICROPHONE_PASSED="${GORKX_MICROPHONE_PASSED:-0}"
 ARCH_VERIFIED="${GORKX_ARCH_VERIFIED:-}"
+RELEASE_SCOPE="${GORKX_RELEASE_SCOPE:-full}"
+LIMITED_RELEASE_WAIVER="${GORKX_LIMITED_RELEASE_WAIVER:-0}"
 
 if [[ -n "$ARCH_VERIFIED" && ! "$ARCH_VERIFIED" =~ ^(arm64|x86_64)(,(arm64|x86_64))*$ ]]; then
   echo "Invalid GORKX_ARCH_VERIFIED: $ARCH_VERIFIED (expected arm64,x86_64 or one architecture)" >&2
   exit 2
 fi
+if [[ "$RELEASE_SCOPE" != "full" && "$RELEASE_SCOPE" != "arm64_adhoc" ]]; then
+  echo "Invalid GORKX_RELEASE_SCOPE: $RELEASE_SCOPE (expected full or arm64_adhoc)" >&2
+  exit 2
+fi
+if [[ "$LIMITED_RELEASE_WAIVER" != "0" && "$LIMITED_RELEASE_WAIVER" != "1" ]]; then
+  echo "Invalid GORKX_LIMITED_RELEASE_WAIVER: $LIMITED_RELEASE_WAIVER (expected 0 or 1)" >&2
+  exit 2
+fi
 
 echo "=== gorkX release readiness ==="
 echo "root: $ROOT"
+echo "app_version: $APP_VERSION"
 echo "date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "user_approved_ship: $USER_APPROVED_SHIP (only set GORKX_USER_APPROVED_SHIP=1 with explicit user approval)"
 echo "real_prompt_passed: $REAL_PROMPT_PASSED (requires a recorded real authenticated Grok Build reply)"
@@ -28,6 +40,8 @@ echo "clean_install_passed: $CLEAN_INSTALL_PASSED (requires a recorded clean-mac
 echo "third_party_model_passed: $THIRD_PARTY_MODEL_PASSED (requires a recorded real provider reply)"
 echo "microphone_passed: $MICROPHONE_PASSED (requires a recorded macOS dictation run)"
 echo "arch_verified: ${ARCH_VERIFIED:-none} (requires separate install+login+project evidence for every listed architecture)"
+echo "release_scope: $RELEASE_SCOPE"
+echo "limited_release_waiver: $LIMITED_RELEASE_WAIVER (only 1 after an explicit owner decision; waived gates remain visible in the audit result)"
 echo
 
 stage_ok=0
@@ -55,7 +69,7 @@ fi
 echo
 echo "--- App bundle engine ---"
 if [[ -d "$APP_PATH" ]]; then
-  if "$ROOT/scripts/verify-macos-app-bundle.sh" "$APP_PATH"; then
+  if GORKX_EXPECTED_APP_VERSION="$APP_VERSION" "$ROOT/scripts/verify-macos-app-bundle.sh" "$APP_PATH"; then
     bundle_ok=1
   fi
   if [[ -x "$ROOT/scripts/verify-macos-signing.sh" ]]; then
@@ -94,6 +108,8 @@ export GORKX_CLEAN_INSTALL_PASSED="$CLEAN_INSTALL_PASSED"
 export GORKX_THIRD_PARTY_MODEL_PASSED="$THIRD_PARTY_MODEL_PASSED"
 export GORKX_MICROPHONE_PASSED="$MICROPHONE_PASSED"
 export GORKX_ARCH_VERIFIED="$ARCH_VERIFIED"
+export GORKX_RELEASE_SCOPE="$RELEASE_SCOPE"
+export GORKX_LIMITED_RELEASE_WAIVER="$LIMITED_RELEASE_WAIVER"
 node --experimental-strip-types -e '
 import { evaluateReleaseGates } from "./apps/desktop/src/lib/releaseGates.ts";
 const archVerified = (process.env.GORKX_ARCH_VERIFIED || "")
@@ -111,6 +127,8 @@ const r = evaluateReleaseGates({
   windowsTrialPassed: false,
   linuxBetaApproved: false,
   userApprovedShip: process.env.GORKX_USER_APPROVED_SHIP === "1",
+  releaseScope: process.env.GORKX_RELEASE_SCOPE || "full",
+  limitedReleaseWaiver: process.env.GORKX_LIMITED_RELEASE_WAIVER === "1",
 });
 console.log(JSON.stringify(r, null, 2));
 if (!r.canShipPublicArtifacts) {
@@ -121,5 +139,5 @@ if (!r.canShipPublicArtifacts) {
   }
   process.exit(2);
 }
-console.log("\nPUBLIC SHIP ALLOWED by automated gates (still require human final check).");
+console.log(`\nPUBLIC SHIP ALLOWED for ${r.releaseScope} by automated gates (still require artifact verification).`);
 '

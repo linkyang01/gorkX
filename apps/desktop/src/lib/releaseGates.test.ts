@@ -92,6 +92,46 @@ const shippable = evaluateReleaseGates({
 });
 assert.equal(shippable.canShipPublicArtifacts, true);
 assert.equal(shippable.blockers.length, 0);
+assert.equal(shippable.waivers.length, 0);
+assert.equal(shippable.releaseScope, 'full');
+
+const limitedWithoutWaiver = evaluateReleaseGates({
+  stageTestsPass: true,
+  bundleEngineOk: true,
+  realPromptPassed: true,
+  cleanInstallPassed: false,
+  thirdPartyModelPassed: true,
+  microphonePassed: true,
+  signingLevel: 'adhoc',
+  archVerified: ['arm64'],
+  windowsTrialPassed: false,
+  linuxBetaApproved: false,
+  userApprovedShip: true,
+  releaseScope: 'arm64_adhoc',
+  limitedReleaseWaiver: false,
+});
+assert.equal(limitedWithoutWaiver.canShipPublicArtifacts, false);
+assert.ok(limitedWithoutWaiver.blockers.some((b) => /owner waiver/i.test(b)));
+
+const limitedArm64 = evaluateReleaseGates({
+  stageTestsPass: true,
+  bundleEngineOk: true,
+  realPromptPassed: true,
+  cleanInstallPassed: false,
+  thirdPartyModelPassed: true,
+  microphonePassed: true,
+  signingLevel: 'adhoc',
+  archVerified: ['arm64'],
+  windowsTrialPassed: false,
+  linuxBetaApproved: false,
+  userApprovedShip: true,
+  releaseScope: 'arm64_adhoc',
+  limitedReleaseWaiver: true,
+});
+assert.equal(limitedArm64.canShipPublicArtifacts, true);
+assert.equal(limitedArm64.blockers.length, 0);
+assert.equal(limitedArm64.waivers.length, 3);
+assert.equal(limitedArm64.releaseScope, 'arm64_adhoc');
 
 const paths = macosDiagnosticPaths('/Users/demo');
 assert.match(paths.grokHome, /gorkX\/grok-home/);

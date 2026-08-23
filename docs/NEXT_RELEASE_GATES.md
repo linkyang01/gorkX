@@ -44,6 +44,9 @@ Settings 实时验证、模型选择与真实 App 任务回复；用户真人听
 手动发送；Settings 临时项目 SessionStart Hook 完成显式 trust、reload、真实任务与
 marker 闭环。证据见 `VALIDATION_EVIDENCE.md`，这些通过项不替代上面三项独立发布门。
 
+同日，发布所有者明确批准 `v1.3.0` 以 Apple Silicon `arm64_adhoc` 范围正式
+发布。该决定通过独立 waiver 门记录，不改变以上完整分发门槛本身。
+
 已完成且有 [VALIDATION_EVIDENCE.md](VALIDATION_EVIDENCE.md) 记录的当前机器侧项目：内核升级到 Grok Build 1.0.6、0001–0007 补丁重建、原生语音和桌面动作 ACP 路由探针、模型目录刷新、App Bundle 验收，以及普通用户路径不依赖输入 slash 指令的界面审计。原生检查点回退、真实 resource-link 和子任务的认证回合证据仍按上一锁定内核记录保留，不能被本轮无认证探针扩大解释。
 
 ## 不阻断 v0.5.0 Beta，但必须诚实标识

@@ -3,6 +3,19 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-23 · gorkX 1.3.0 Apple Silicon 正式发布验收
+
+本条记录发布所有者随后作出的明确决定：`v1.3.0` 以 `arm64_adhoc` 范围正式
+发布。它是独立的风险豁免，不回写或伪造下方全量分发门槛的通过状态。
+
+| 项 | 结果 |
+|---|---|
+| 版本一致性 | **PASS**：`package.json`、`package-lock.json`、Tauri config、Cargo manifest/lock 与 renderer `APP_VERSION` 均为 `1.3.0`；Stage G 单测继续锁定五处版本一致。 |
+| 完整 App 签名 | **PASS**：Tauri 使用 identity `-` 对主程序和完整 `.app` 重新签名；`codesign --verify --deep --strict` 返回 valid，Info.plist 与 sealed resources 均进入签名。旧 `1.2.0` App 因版本不匹配且签名不完整被新版门禁分别拒绝，未复用旧包。 |
+| DMG 真实复验 | **PASS**：`gorkX_1.3.0_aarch64.dmg` 只读挂载后，主程序与包内 Grok Build 均为 arm64，App 版本 `1.3.0`，内核版本 `grok 1.0.6 (19d42e35)`，许可证、隔离 `GROK_HOME` 和完整 App 签名均通过。SHA-256 `00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba`。 |
+| 受限发布门 | **PASS WITH EXPLICIT WAIVER**：`GORKX_RELEASE_SCOPE=arm64_adhoc`、`GORKX_LIMITED_RELEASE_WAIVER=1`、真实 prompt/第三方模型/麦克风证据与 `GORKX_ARCH_VERIFIED=arm64` 复跑，结果为 `canShipPublicArtifacts: true`、`blockers: []`。JSON 的 `waivers` 仍分别保留 clean-machine、Developer ID/notarization 与 x86_64 范围决定，不将其记为测试通过。 |
+| 发布状态 | **待上传**：源码、README、Release Notes、门禁与本记录将先提交；随后创建 tag `v1.3.0`、GitHub Release 并上传上述精确 DMG，上传后再回填远端核验结果。 |
+
 ## 2026-08-23 · Hooks 真实验收闭环、发布通道修复与跨架构复验
 
 本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。本轮只把内核真实写入的

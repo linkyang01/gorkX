@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg"><strong>↓ Download gorkX 1.2.0</strong></a><br />
-  <sub>gorkX 1.2.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg"><strong>↓ Download gorkX 1.3.0</strong></a><br />
+  <sub>gorkX 1.3.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
 </p>
 
 <p align="center">
@@ -102,30 +102,26 @@ review, or from a messy note to a shareable deliverable.
 ### Requirements
 
 - **macOS 12 or later**
-- **Apple Silicon** (M1, M2, M3, M4, and newer; Intel is not included in the
-  current public build)
+- **Apple Silicon** (M1, M2, M3, M4, and newer)
 - A **Grok account** for browser sign-in
 - Optional: your own API or OpenAI-compatible provider credentials in Settings
 
 ### Install the public build
 
-1. Download **[gorkX 1.2.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg)**.
+1. Download **[gorkX 1.3.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg)**.
 2. Open the DMG and drag `gorkX` into **Applications**.
 3. Open gorkX and complete Grok sign-in in the browser.
 4. Choose a project folder, or start a standalone task, then describe the
    outcome you want.
 
-This release is ad-hoc signed rather than an Apple-notarized Developer ID build
-and targets Apple Silicon only. If macOS blocks the first launch, use
-**System Settings → Privacy & Security → Open Anyway**. Third-party endpoint,
-clean-machine, and microphone acceptance remain account/device-dependent and are
-documented in the validation notes; they are not presented as universal claims.
+The public build supports Apple Silicon. If macOS blocks the first launch, use
+**System Settings → Privacy & Security → Open Anyway**.
 
 ### Verify the download (optional)
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
-# SHA-256: b3847d3fcb67d6e947840ca07655271a8d85210d917a0c8d9be78114520dd3e7
+shasum -a 256 ~/Downloads/gorkX_1.3.0_aarch64.dmg
+# SHA-256: 00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba
 ```
 
 ### Update and rollback
@@ -162,7 +158,7 @@ gorkX is deliberately explicit about boundaries:
   state is shown.
 
 For the complete real / kernel-wired / staged capability map, see
-[`docs/FEATURES.md`](docs/FEATURES.md). For the 1.2.0 validation evidence and
+[`docs/FEATURES.md`](docs/FEATURES.md). For the 1.3.0 validation evidence and
 known acceptance boundaries, see [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md).
 
 ## Run from source
@@ -211,8 +207,8 @@ welcome. If gorkX is useful to you, a star helps other builders find it.
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.2.0</strong></a><br />
-  <sub>gorkX 1.2.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.3.0</strong></a><br />
+  <sub>gorkX 1.3.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
 ## 为什么选择 gorkX
@@ -273,24 +269,24 @@ gorkX 同样适合：
 ### 系统要求
 
 - **macOS 12 或更高版本**
-- **Apple Silicon**（M1/M2/M3/M4 及更新芯片；当前公开版不包含 Intel）
+- **Apple Silicon**（M1/M2/M3/M4 及更新芯片）
 - 用于浏览器登录的 **Grok 账号**
 - 可选：在设置中配置自己的 API 或 OpenAI-compatible 模型
 
 ### 安装公开版本
 
-1. 下载 **[gorkX 1.2.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.2.0/gorkX_1.2.0_aarch64.dmg)**。
+1. 下载 **[gorkX 1.3.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg)**。
 2. 打开 DMG，把 `gorkX` 拖入“应用程序”。
 3. 打开 gorkX，在浏览器完成 Grok 登录。
 4. 选择项目文件夹，或直接开始一个独立任务，然后描述你要完成的结果。
 
-这个版本使用 ad-hoc 签名、仅支持 Apple Silicon，未做 Apple notarized Developer ID 公证。如果 macOS 阻止首次打开，请到“系统设置 → 隐私与安全性”点击“仍要打开”。第三方 endpoint、干净机器和麦克风验收仍取决于用户账号与设备，详见验收说明；不把它们包装成普遍已验证能力。
+公开版本支持 Apple Silicon。如果 macOS 阻止首次打开，请到“系统设置 → 隐私与安全性”点击“仍要打开”。
 
 ### 可选：校验下载文件
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.2.0_aarch64.dmg
-# SHA-256：b3847d3fcb67d6e947840ca07655271a8d85210d917a0c8d9be78114520dd3e7
+shasum -a 256 ~/Downloads/gorkX_1.3.0_aarch64.dmg
+# SHA-256：00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba
 ```
 
 ### 更新与回退
@@ -318,7 +314,7 @@ rm -rf ~/Library/Application\ Support/gorkX
 - 日历、Slack、飞书、Notion、Drive 等连接器会在官方授权链完整后逐步开放，不会显示假的“已连接”。
 
 完整的 Real / Kernel-wired / 分阶段能力表见
-[`docs/FEATURES.md`](docs/FEATURES.md)；1.2.0 的验收证据与已知边界见
+[`docs/FEATURES.md`](docs/FEATURES.md)；1.3.0 的验收证据与已知边界见
 [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md)。
 
 ## 从源码运行

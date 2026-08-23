@@ -60,7 +60,17 @@ echo "authority: ${authority:-none}"
 echo "signature: ${signature_line:-none}"
 
 level="none"
-if [[ -n "$signature_line" || -n "$authority" ]]; then
+signature_valid=0
+echo
+echo "--- signature integrity ---"
+if codesign --verify --deep --strict --verbose=2 "$app_path" 2>&1; then
+  signature_valid=1
+  echo "codesign verify: valid"
+else
+  echo "codesign verify: invalid or incomplete"
+fi
+
+if [[ "$signature_valid" == "1" && ( -n "$signature_line" || -n "$authority" ) ]]; then
   if [[ "${signature_line:-}" == "adhoc" || "${authority:-}" == *"adhoc"* || -z "$authority" ]]; then
     level="adhoc"
   elif [[ "${authority:-}" == *"Developer ID"* ]]; then
@@ -92,6 +102,7 @@ else
 fi
 
 echo
+echo "SIGNATURE_VALID=$signature_valid"
 echo "SIGNING_LEVEL=$level"
 if [[ "$level" == "notarized" ]]; then
   echo "Gatekeeper download path: users should open without Terminal quarantine bypass"
@@ -101,5 +112,9 @@ else
 fi
 
 echo
-echo "PASS: signing report complete (level=$level)"
-exit 0
+if [[ "$signature_valid" == "1" ]]; then
+  echo "PASS: signing report complete (level=$level)"
+  exit 0
+fi
+echo "FAIL: app bundle signature is invalid or incomplete" >&2
+exit 4

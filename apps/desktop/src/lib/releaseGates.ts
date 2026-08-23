@@ -6,6 +6,8 @@
 
 export type SigningLevel = 'none' | 'adhoc' | 'developer_id' | 'notarized';
 
+export type PublicReleaseScope = 'full' | 'arm64_adhoc';
+
 export type HostArch = 'arm64' | 'x86_64' | 'other';
 
 export type PlatformTrack = 'macos' | 'windows' | 'linux';
@@ -77,6 +79,10 @@ export interface ReleaseGateInput {
   linuxBetaApproved: boolean;
   /** Explicit human approval to tag / Release / DMG — product plan §7.6 */
   userApprovedShip: boolean;
+  /** Full distribution, or an explicitly narrowed Apple Silicon release. */
+  releaseScope?: PublicReleaseScope;
+  /** Separate acknowledgement that the narrowed release intentionally waives full-distribution gates. */
+  limitedReleaseWaiver?: boolean;
 }
 
 export interface ReleaseGateResult {
@@ -86,24 +92,38 @@ export interface ReleaseGateResult {
   canShipPublicArtifacts: boolean;
   blockers: string[];
   warnings: string[];
+  /** Internal audit trail; never represented as completed acceptance evidence. */
+  waivers: string[];
+  releaseScope: PublicReleaseScope;
   platform: Record<PlatformTrack, PlatformMaturity>;
 }
 
 export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult {
   const blockers: string[] = [];
   const warnings: string[] = [];
+  const waivers: string[] = [];
+  const releaseScope = input.releaseScope ?? 'full';
+  const limitedReleaseWaived = releaseScope === 'arm64_adhoc' && input.limitedReleaseWaiver === true;
 
   if (!input.stageTestsPass) blockers.push('Stage A–F automated tests have not all passed');
   if (!input.bundleEngineOk) blockers.push('macOS app bundle engine verification failed or missing');
   if (!input.realPromptPassed) blockers.push('No real authenticated Grok Build prompt acceptance evidence');
-  if (!input.cleanInstallPassed) blockers.push('No clean-machine install/login/reopen acceptance evidence');
+  if (!input.cleanInstallPassed) {
+    if (limitedReleaseWaived) {
+      waivers.push('Release owner waived clean-machine install/login/reopen evidence for this arm64-only release');
+    } else {
+      blockers.push('No clean-machine install/login/reopen acceptance evidence');
+    }
+  }
   if (!input.thirdPartyModelPassed) blockers.push('No real third-party model endpoint acceptance evidence');
   if (!input.microphonePassed) blockers.push('No real macOS microphone transcription acceptance evidence');
 
-  if (!opensWithoutTerminalBypass(input.signingLevel)) {
-    if (input.signingLevel === 'none') {
-      blockers.push('App is unsigned — Developer ID + notarization required for downloadable macOS builds');
-    } else if (input.signingLevel === 'adhoc') {
+  if (input.signingLevel === 'none') {
+    blockers.push('App is unsigned — at least an ad-hoc signature is required for the arm64 build');
+  } else if (!opensWithoutTerminalBypass(input.signingLevel) && limitedReleaseWaived) {
+    waivers.push('Release owner waived Developer ID/notarization; artifact is not notarized');
+  } else if (!opensWithoutTerminalBypass(input.signingLevel)) {
+    if (input.signingLevel === 'adhoc') {
       blockers.push(
         'App is ad-hoc signed only; users may need Gatekeeper workarounds until Developer ID + notarization',
       );
@@ -117,7 +137,15 @@ export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult
     blockers.push('Apple Silicon (arm64) install+project verification evidence missing');
   }
   if (!archs.has('x86_64')) {
-    blockers.push('Intel (x86_64) install+project verification evidence missing');
+    if (limitedReleaseWaived) {
+      waivers.push('Release owner limited public support to arm64; x86_64 acceptance is out of scope');
+    } else {
+      blockers.push('Intel (x86_64) install+project verification evidence missing');
+    }
+  }
+
+  if (releaseScope === 'arm64_adhoc' && !input.limitedReleaseWaiver) {
+    blockers.push('No explicit owner waiver for the narrowed arm64 ad-hoc release scope');
   }
 
   if (!input.windowsTrialPassed) {
@@ -137,23 +165,35 @@ export function evaluateReleaseGates(input: ReleaseGateInput): ReleaseGateResult
     // RC can be ad-hoc for internal; public ship needs notarization + approval
     input.signingLevel !== 'none';
 
-  const canShipPublicArtifacts =
+  const commonShipReady =
     input.userApprovedShip &&
     input.stageTestsPass &&
     input.bundleEngineOk &&
     input.realPromptPassed &&
-    input.cleanInstallPassed &&
     input.thirdPartyModelPassed &&
     input.microphonePassed &&
+    archs.has('arm64');
+
+  const fullShipReady =
+    input.cleanInstallPassed &&
     opensWithoutTerminalBypass(input.signingLevel) &&
-    archs.has('arm64') &&
     archs.has('x86_64');
+
+  const limitedShipReady =
+    limitedReleaseWaived &&
+    input.signingLevel !== 'none';
+
+  const canShipPublicArtifacts =
+    commonShipReady &&
+    (releaseScope === 'full' ? fullShipReady : limitedShipReady);
 
   return {
     releaseCandidateReady,
     canShipPublicArtifacts,
     blockers,
     warnings,
+    waivers,
+    releaseScope,
     platform: {
       macos: platformMaturity('macos'),
       windows: platformMaturity('windows'),

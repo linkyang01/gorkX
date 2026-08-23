@@ -86,6 +86,10 @@ scripts/verify-macos-signing.sh   apps/desktop/src-tauri/target/release/bundle/m
 
 - 必须：A–F 测试、bundle 引擎 OK、**notarized**、arm64+x86_64 证据、**用户明确批准**
 - 未批准时 `canShipPublicArtifacts = false`（即使功能齐全）
+- 发布所有者也可明确选择 `arm64_adhoc` 范围：仍必须通过自动测试、包内内核、
+  真实 prompt、第三方模型、麦克风、arm64 证据、完整 App ad-hoc 签名和人工批准；
+  另需独立设置 `GORKX_LIMITED_RELEASE_WAIVER=1`。脚本会把未进入该范围的完整分发
+  条件写入 `waivers`，不会把它们记成通过。
 
 ```bash
 # 仅检查；默认拒绝公开 ship
@@ -93,6 +97,9 @@ scripts/verify-release-readiness.sh
 
 # 仅在用户明确说「可以打 tag/发 DMG」后：
 # GORKX_USER_APPROVED_SHIP=1 scripts/verify-release-readiness.sh
+
+# 仅在发布所有者明确批准 Apple Silicon 受限范围后：
+# GORKX_RELEASE_SCOPE=arm64_adhoc GORKX_LIMITED_RELEASE_WAIVER=1 ...
 ```
 
 ## 6. 与 v0.5.0 Beta 门槛的关系
