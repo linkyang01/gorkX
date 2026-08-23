@@ -11,6 +11,11 @@ assert.ok(
     'API error (status 403 Forbidden): Grok Build is coming soon. You don\'t have access now.',
   ).length > 10,
 );
+assert.ok(
+  settingsErrorMessage(
+    'API error (status 426 Upgrade Required): Your Grok CLI version is outdated. Please update via `grok update`.',
+  ).length > 10,
+);
 
 assert.match(computerStatusDetail('Emergency stop applied. No further local Computer action will run until re-enabled.'), /./);
 assert.match(computerStatusDetail('Foreground Computer controls are enabled. Use the emergency stop button to disable them.'), /./);

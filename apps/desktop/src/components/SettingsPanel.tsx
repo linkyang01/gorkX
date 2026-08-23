@@ -870,7 +870,21 @@ export function SettingsPanel({
         HOOK_VERIFICATION_TASK_PROMPT,
       );
       if (!task?.ok) {
-        throw new Error(task?.error || t('settingsHooksVerificationTaskFailed'));
+        // The SessionStart Hook can run before the model request is accepted
+        // by the service. Read the marker even when the task reports an error,
+        // but keep the verification failed: a marker alone is never a task
+        // success signal.
+        const failedTaskMarker = await readHookVerificationMarker(
+          current.project.projectPath,
+          current.project.markerRelativePath,
+          current.project.markerToken,
+        );
+        setHookVerification((previous) => previous ? { ...previous, markerStatus: failedTaskMarker.status } : previous);
+        const taskError = task?.error || t('settingsHooksVerificationTaskFailed');
+        if (failedTaskMarker.status === 'match') {
+          throw new Error(`${taskError} ${t('settingsHooksVerificationMarkerObservedTaskFailed')}`);
+        }
+        throw new Error(taskError);
       }
       const deadline = Date.now() + 30_000;
       while (Date.now() < deadline) {

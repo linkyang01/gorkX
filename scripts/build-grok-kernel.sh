@@ -9,12 +9,16 @@ base_source_dir="$source_dir"
 patch_series="$root/kernel/patches/series"
 out="${1:-$root/apps/desktop/src-tauri/resources/grok}"
 expected="$(sed -n 's/^commit = "\([0-9a-f]*\)"/\1/p' "$lock")"
+expected_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$lock")"
+# The lock stores the user-facing `grok 1.0.6`; the upstream build scripts
+# expect only the semver component in GROK_VERSION.
+compile_version="${expected_version#* }"
 package="$(sed -n 's/^package = "\([^"]*\)"/\1/p' "$lock")"
 binary="$(sed -n 's/^binary = "\([^"]*\)"/\1/p' "$lock")"
 license_hash="$(sed -n 's/^license_sha256 = "\([0-9a-f]*\)"/\1/p' "$lock")"
 notices_hash="$(sed -n 's/^third_party_notices_sha256 = "\([0-9a-f]*\)"/\1/p' "$lock")"
 
-[[ -n "$expected" && -n "$package" && -n "$binary" && -n "$license_hash" && -n "$notices_hash" ]] || { echo "Invalid kernel lock: $lock" >&2; exit 2; }
+[[ -n "$expected" && -n "$expected_version" && -n "$compile_version" && -n "$package" && -n "$binary" && -n "$license_hash" && -n "$notices_hash" ]] || { echo "Invalid kernel lock: $lock" >&2; exit 2; }
 command -v cargo >/dev/null || { echo "Rust cargo is required to build Grok Build." >&2; exit 2; }
 command -v dotslash >/dev/null || { echo "Grok Build requires dotslash for its pinned protoc; run: cargo install dotslash" >&2; exit 2; }
 [[ -f "$patch_series" ]] || { echo "Missing kernel patch series: $patch_series" >&2; exit 2; }
@@ -47,7 +51,12 @@ if [[ ${#patches[@]} -gt 0 ]]; then
 fi
 # Keep compiler and build-script diagnostics visible: a source lock is not a
 # verified runtime until this exact build has produced its binary and notices.
-cargo build --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
+# The upstream folder-trust gate deliberately treats an unstamped local build
+# as development software and auto-trusts repo-local hooks.  The binary copied
+# into the desktop bundle is a release candidate, so stamp the exact locked
+# version at compile time; otherwise the shipped binary would silently bypass
+# the explicit trust step that the Settings acceptance flow is meant to prove.
+GROK_VERSION="$compile_version" cargo build --manifest-path "$source_dir/Cargo.toml" -p "$package" --release
 # CI and local verification may isolate Cargo output with CARGO_TARGET_DIR.
 # Resolve the artifact from that directory instead of assuming a source-local
 # `target/`, while retaining the normal Cargo default when it is unset.

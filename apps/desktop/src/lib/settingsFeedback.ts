@@ -23,6 +23,11 @@ export function settingsErrorMessage(error: unknown): string {
   if (isGrokQuotaBlocked(s) || humanizeEngineError(s) === 'GROKX_QUOTA_BLOCKED') {
     return t('taskErrorQuotaBlocked');
   }
+  if (
+    /426|upgrade required|grok.?cli.*outdated|outdated.*grok.?cli|grok update/i.test(s)
+  ) {
+    return t('settingsErrorKernelVersion');
+  }
 
   if (
     /open a connected task|settingsHooksNeedTask|先打开.*任务|connected task first|not connected|尚未连接/i.test(
