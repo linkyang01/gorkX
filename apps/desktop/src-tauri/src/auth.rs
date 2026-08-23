@@ -271,7 +271,11 @@ fn auth_login_browser_sync(force: bool) -> Result<AuthLoginResult, String> {
             let provider_key = format!("{OIDC_ISSUER}::{OIDC_CLIENT_ID}");
             let mut entry = Map::new();
             entry.insert("key".into(), json!(access));
-            entry.insert("auth_mode".into(), json!("oauth"));
+            // Grok Build's auth schema calls this interactive OIDC session
+            // mode `oidc`.  `oauth` is not a valid wire value and makes the
+            // engine reject the freshly-created auth.json before a task can
+            // start.
+            entry.insert("auth_mode".into(), json!("oidc"));
             entry.insert("refresh_token".into(), json!(refresh));
             entry.insert("expires_at".into(), json!(expires_at));
             entry.insert("oidc_issuer".into(), json!(OIDC_ISSUER));
@@ -781,6 +785,72 @@ fn load_auth_file(path: &Path) -> Result<AuthFile, String> {
     })
 }
 
+/// Migrate the auth mode written by older gorkX builds before handing the
+/// App-owned auth.json to Grok Build. Only the App's first-party x.ai OIDC
+/// entries are eligible; an unrelated provider using the generic `oauth`
+/// label must fail closed instead of being reclassified.
+pub fn prepare_engine_auth() -> Result<(), String> {
+    let path = crate::paths::auth_json_path();
+    if !path.is_file() {
+        return Ok(());
+    }
+
+    let raw = std::fs::read_to_string(&path).map_err(|e| format!("read auth.json: {e}"))?;
+    let mut root: Value =
+        serde_json::from_str(&raw).map_err(|e| format!("parse auth.json: {e}"))?;
+    if !normalize_legacy_oauth_auth_modes(&mut root) {
+        return Ok(());
+    }
+
+    let pretty = serde_json::to_string_pretty(&root)
+        .map_err(|e| format!("serialize migrated auth.json: {e}"))?;
+    std::fs::write(&path, format!("{pretty}\n"))
+        .map_err(|e| format!("write migrated auth.json: {e}"))?;
+    Ok(())
+}
+
+fn normalize_legacy_oauth_auth_modes(root: &mut Value) -> bool {
+    let Some(obj) = root.as_object_mut() else {
+        return false;
+    };
+
+    let mut changed = false;
+    if is_first_party_legacy_oauth_entry(None, obj) {
+        obj.insert("auth_mode".into(), json!("oidc"));
+        changed = true;
+    }
+
+    let keys: Vec<String> = obj.keys().cloned().collect();
+    for key in keys {
+        let Some(entry) = obj.get_mut(&key).and_then(Value::as_object_mut) else {
+            continue;
+        };
+        if is_first_party_legacy_oauth_entry(Some(&key), entry) {
+            entry.insert("auth_mode".into(), json!("oidc"));
+            changed = true;
+        }
+    }
+    changed
+}
+
+fn is_first_party_legacy_oauth_entry(
+    provider_key: Option<&str>,
+    entry: &Map<String, Value>,
+) -> bool {
+    if entry.get("auth_mode").and_then(Value::as_str) != Some("oauth") {
+        return false;
+    }
+
+    let issuer = entry
+        .get("oidc_issuer")
+        .and_then(Value::as_str)
+        .or_else(|| provider_key.and_then(|key| key.split_once("::").map(|(issuer, _)| issuer)));
+    issuer
+        .map(str::trim)
+        .map(|issuer| issuer.trim_end_matches('/'))
+        == Some(OIDC_ISSUER.trim_end_matches('/'))
+}
+
 fn select_provider_key(obj: &Map<String, Value>) -> Option<String> {
     let mut best: Option<(String, u64)> = None;
     for (k, v) in obj {
@@ -1260,5 +1330,39 @@ mod tests {
             let (y, m, d) = civil_from_days(days);
             assert_eq!(days_from_civil(y, m, d), Some(days));
         }
+    }
+
+    #[test]
+    fn normalize_first_party_legacy_oauth_to_oidc() {
+        let mut root = json!({
+            "https://auth.x.ai::client": {
+                "key": "redacted-token",
+                "auth_mode": "oauth",
+                "oidc_issuer": "https://auth.x.ai/"
+            }
+        });
+
+        assert!(normalize_legacy_oauth_auth_modes(&mut root));
+        assert_eq!(
+            root["https://auth.x.ai::client"]["auth_mode"],
+            json!("oidc")
+        );
+    }
+
+    #[test]
+    fn do_not_reclassify_unrelated_oauth_provider() {
+        let mut root = json!({
+            "https://login.example.test::client": {
+                "key": "redacted-token",
+                "auth_mode": "oauth",
+                "oidc_issuer": "https://login.example.test"
+            }
+        });
+
+        assert!(!normalize_legacy_oauth_auth_modes(&mut root));
+        assert_eq!(
+            root["https://login.example.test::client"]["auth_mode"],
+            json!("oauth")
+        );
     }
 }

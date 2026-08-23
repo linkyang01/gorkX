@@ -3,21 +3,25 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
-## 2026-08-23 · Hooks 真实验收闭环通过与发布门禁复核
+## 2026-08-23 · Hooks 真实验收闭环与认证兼容修复通过，发布门禁复核
 
 本条记录对应源码分支 `agent/grok-build-1.0.6-sync`。本轮只把内核真实写入的
 marker 作为证据：任务失败时即使观察到 marker 也仍判失败；没有用 UI 状态、超时
 或验证脚本自行写 marker。专项验收通过后，按仓库 Stage G 规则仍未创建 tag、
-GitHub Release、DMG 或上传发布资产。
+GitHub Release、DMG 或上传发布资产。随后修复认证兼容问题，并在修复后的新 App
+包中重新完成清洁 HOME、真实任务和 Settings Hook 闭环；本轮临时凭据与项目均已删除。
 
 | 项 | 结果 |
 |---|---|
 | 版本闸门修复 | **PASS**：第一次锁定构建暴露出显示版本错误 `grok grok 1.0.6`，构建闸门拒绝该产物；`scripts/build-grok-kernel.sh` 已将锁文件中的用户显示版本拆为编译期裸版本 `1.0.6`，最终资源和 App 包均报告 `grok 1.0.6 (19d42e35)`。这保证发布候选不会因错误版本字符串绕过服务端版本合同，也不会因开发态版本自动授信。 |
 | Settings 实际点按 | **PASS**：用修正后的源码构建 `.app`，Settings → Hooks 实际创建 OS 临时 Git 项目和固定受限 `SessionStart` Hook；控制任务初始 marker 为 `missing`。随后依次实际点击“明确授信项目”“重新加载 Hooks”“启动真实任务”，每一步均由真实 ACP 返回结果推进，不是状态注入。 |
 | Settings 真实任务 | **PASS**：真实任务消息返回 `HOOK_VERIFICATION_TASK_OK`；随后 Settings 只读 marker 得到 `match`，界面显示“已确认 marker”和“通过：Grok Build 在真实 SessionStart 任务中创建了 marker”。marker 由 Hook command 创建，gorkX 没有补写。 |
+| 认证 schema 兼容 | **PASS**：真实清洁 HOME 复核发现旧版 gorkX OAuth 登录写入的 `auth_mode: "oauth"` 会被 Grok Build 1.0.6 拒绝；已改为新登录直接写 `oidc`，并在启动 App-owned Agent 前仅将带 `https://auth.x.ai` issuer 的旧版 App 条目迁移为 `oidc`，不改写不明/第三方 issuer。Rust 单测覆盖 first-party migration 与 third-party fail-closed，认证修复后的真实任务返回 `CLEAN_HOME_TASK_OK`。 |
+| 清洁 HOME 真实重开 | **PASS（开发机隔离 HOME）**：从无 App auth.json 的临时 HOME 通过官方 xAI Device Sign-in 完成真实登录，选择一次性 Git 项目，真实任务返回 `CLEAN_HOME_TASK_OK`；退出并重新打开同一 App 包后，账号仍显示已连接，任务卡和返回文本仍可查看。该证据证明 App-owned 登录/持久化/重开链路，不扩大解释为另一台 Mac 的安装验收。 |
+| 修复后 Settings 重跑 | **PASS**：修复后二次真实点按生成临时项目 `gorkx-hook-verify-1787474014482984000`；初始 marker 为 `missing`，依次点击“明确授信项目”“重新加载 Hooks”“启动真实任务”，真实消息返回 `HOOK_VERIFICATION_TASK_OK`，状态变为“已确认 marker”，marker 为 `match`。项目由 Settings 删除，文件系统复核为不存在。 |
 | ACP 实证 | **PASS**：使用一次性认证副本和正确版本的真实 Grok Build，`verify-grok-hook.mjs --authenticated --no-prompt` 完成控制面、未授信不执行、显式 trust、显式 reload、Hook marker、revoke 和临时项目清理；同一脚本带真实 prompt 的重跑也完成真实任务，并确认任务期间 Hook marker 未被任务正文改写。此前错误版本候选出现的真实 HTTP 426 仅作为失败诊断，不作为最终通过依据。 |
 | 失败提示与测试 | **PASS**：`settingsFeedback.ts` 新增 Grok Build 版本过旧/426 的可读提示，`settingsFeedback.test.ts` 覆盖 426 形状；Settings 任务失败后再次只读 marker，若 marker 存在也明确显示“任务失败但观察到 marker，验证仍失败”，不会把 marker 单独升级为成功。既有 `hookAuthoring.test.ts`、Rust 临时项目/marker 安全测试继续纳入 Stage 门禁。 |
-| 前端 / Rust / 内核门禁 | **PASS**：`npm run typecheck`、`npm run test:stages`（Stage A–G）、`npm run verify:web-bundle`、`cargo check`、完整 `cargo test`（93 passed）、内核 source/patch 校验、锁定 release 构建、无认证 ACP 控制面、源码构建 ACP baseline、`npm run build:app` 和包内版本校验均通过。Vite 仍有既有主 chunk 大于 500 kB warning；`cargo fmt --check` 仍被仓库既有未格式化代码阻断，本轮未混入无关格式化。 |
+| 前端 / Rust / 内核门禁 | **PASS**：`npm run typecheck`、`npm run test:stages`（Stage A–G）、`npm run verify:web-bundle`、`cargo check`、完整 `cargo test`（95 passed）、内核 source/patch 校验、锁定 release 构建、无认证 ACP 控制面、源码构建 ACP baseline、`npm run build:app` 和包内版本校验均通过。Vite 仍有既有主 chunk 大于 500 kB warning；`cargo fmt --check` 仍被仓库既有未格式化代码阻断，本轮未混入无关格式化。 |
 | 清理 | **PASS**：两个本轮临时 Hook 项目均通过原生 ACP `untrust`，主 App trust store 对两个精确路径均为 `trusted = false`；临时项目目录、一次性认证副本、内核验证输出和一次性清理脚本均已移除，未进入提交。 |
 | 发布决定 | **专项通过、全局未发布**：以本轮真实 ACP/Settings 证据设置 `GORKX_REAL_PROMPT_PASSED=1`，并按用户的条件发布授权设置 `GORKX_USER_APPROVED_SHIP=1` 后运行 `bash scripts/verify-release-readiness.sh`，仍返回 `NO PUBLIC SHIP`。仓库当前仍缺干净机安装/重开、第三方 endpoint 真实回复、macOS 麦克风真人验收；当前 App 仅 ad-hoc 签名、未公证，Intel 安装证据也缺失。这些是 `docs/NEXT_RELEASE_GATES.md` 的独立阻断项，不能由 Hooks 专项通过替代。因此本轮只提交源码和本验收记录。 |
 

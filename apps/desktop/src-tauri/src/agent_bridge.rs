@@ -266,6 +266,7 @@ pub async fn agent_start(
         &deny,
     );
     let _ = paths::ensure_dirs();
+    crate::auth::prepare_engine_auth()?;
     let working_directory = resolve_agent_working_directory(working_directory)?;
 
     let mut command = Command::new(&bin);
