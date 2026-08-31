@@ -288,6 +288,7 @@ import {
   deriveCurrentStep,
   deriveTaskRunPhase,
   isTaskStalled,
+  promptCompletionNotice,
   resolveBusyFollowUpMode,
   shouldShowInRunCenter,
   type TaskRunPhase,
@@ -2215,6 +2216,18 @@ function App() {
       void refreshAccount();
     }
   }, [appendLine, patchThread, refreshAccount, visibleTaskError]);
+
+  const appendPromptCompletionNotice = useCallback(
+    (threadId: string, result: unknown, stoppedCopy = t('systemStopReason')) => {
+      const notice = promptCompletionNotice(result);
+      if (!notice) return;
+      const text = notice.kind === 'hook_blocked'
+        ? t('systemHookBlocked')
+        : stoppedCopy.replace('{reason}', notice.reason);
+      appendLine(threadId, { id: nid(), role: 'system', text });
+    },
+    [appendLine],
+  );
 
   const appendOrMerge = useCallback(
     (
@@ -4687,13 +4700,7 @@ function App() {
             enginePrompt,
             attachmentResourceLinks(initialAttachments),
           );
-          if (result?.stopReason && result.stopReason !== 'end_turn') {
-            appendLine(id, {
-              id: nid(),
-              role: 'system',
-              text: t('systemStopReason').replace('{reason}', String(result.stopReason)),
-            });
-          }
+          appendPromptCompletionNotice(id, result);
           patchThread(id, {
             memoryInjected: true,
             memoryInject: null,
@@ -5303,7 +5310,8 @@ function App() {
         } catch {
           // Fallback: send as normal slash to agent
           try {
-            await client.prompt(sessionId, text);
+            const result = await client.prompt(sessionId, text);
+            appendPromptCompletionNotice(agent.id, result);
           } catch (e2) {
             patchThread(agent.id, {
               error: e2 instanceof Error ? e2.message : String(e2),
@@ -5372,7 +5380,8 @@ function App() {
             appendLine(agent.id, { id: nid(), role: 'user', text: arg });
             patchThread(agent.id, { busy: true, error: null });
             try {
-              await client.prompt(sessionId, arg);
+              const result = await client.prompt(sessionId, arg);
+              appendPromptCompletionNotice(agent.id, result);
             } catch (e) {
               patchThread(agent.id, {
                 error: e instanceof Error ? e.message : String(e),
@@ -5467,13 +5476,7 @@ function App() {
         attachmentResourceLinks(atts),
         agent.pendingSearchScope,
       );
-      if (result?.stopReason && result.stopReason !== 'end_turn') {
-        appendLine(agent.id, {
-          id: nid(),
-          role: 'system',
-          text: t('systemStopReason').replace('{reason}', String(result.stopReason)),
-        });
-      }
+      appendPromptCompletionNotice(agent.id, result);
       if (markInjected) {
         patchThread(agent.id, { memoryInjected: true, memoryInject: null });
       }
@@ -5707,13 +5710,7 @@ function App() {
       setCapabilityArm(null);
       setDraft((d) => (d.trim().startsWith('/plan') ? '' : d));
       patchThread(active.id, { chatMode: 'agent' });
-      if (result?.stopReason && result.stopReason !== 'end_turn') {
-        appendLine(active.id, {
-          id: nid(),
-          role: 'system',
-          text: t('applyPlanStop').replace('{reason}', String(result.stopReason)),
-        });
-      }
+      appendPromptCompletionNotice(active.id, result, t('applyPlanStop'));
     } catch (e) {
       const msg = settingsErrorMessage(e);
       patchThread(active.id, {

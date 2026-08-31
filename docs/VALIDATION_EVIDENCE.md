@@ -3,6 +3,21 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-31 · Grok Build 1.0.12 内核同步与桌面回归
+
+本条记录对应源码分支 `agent/grok-build-1.0.12-sync`。只记录本轮实际通过的
+机器侧检查；没有创建 tag、发布 GitHub Release、生成 DMG 或上传发布资产。
+
+| 项 | 结果 |
+|---|---|
+| 锁定源码 | **PASS**：`kernel/grok-build.lock.toml` 锁定 `xai-org/grok-build` 提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`；`scripts/verify-grok-kernel-source.sh` 通过，`source_revision_verified = true` 仅在完成重建和版本校验后更新。 |
+| 补丁重放 | **PASS**：`scripts/verify-grok-kernel-patches.sh` 逐一对 `0001`–`0007` 执行 `git apply --check`，七个补丁全部通过；构建脚本在锁定提交的临时 worktree 中按 `kernel/patches/series` 顺序重放。 |
+| Bundled kernel | **PASS**：`CARGO_TARGET_DIR="$PWD/.cache/kernel-target" scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok` 完成 release 构建；资源版本为 `grok 1.0.12 (bc7f02eddd3d)`，binary SHA-256=`3900246994a28e64343a3d77ba61c0600582cbaf4c0e95580dd844a8294b32c7`，LICENSE / THIRD-PARTY-NOTICES SHA-256 分别为锁定值 `116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28` / `7b7c315403c596f9b7a13bb562553ee4fd4c05da8672f95bcaa02a125eea2947`。 |
+| ACP 控制面 | **PASS**：使用新 bundled kernel 运行 `verify-grok-acp.mjs` 完整无认证控制矩阵；initialize、voice、interject/btw、memory/repair/goal/desktop actions、hunk/code/Git、cloud/billing guards、session search/history/suggestion/bundle、client FS、禁用 Web Search 和 model reload 均通过。认证扩展仍未冒充通过。 |
+| 前端门禁 | **PASS**：`npm run typecheck`、`npm run build`、`npm run test:stages`（Stage A–G）和 `npm run verify:web-bundle` 均通过；Stage B 包含 Hook 终态回归。Vite 继续报告既有大 chunk warning，不影响退出码。 |
+| Rust 门禁 | **PASS**：`cargo check` 和 `cargo test --workspace --lib` 通过，96/96 tests passed。 |
+| Hook 阻止提示 | **PASS**：前端识别 Grok Build 1.0.12 的 `_meta.cancellationCategory=HookDenied`，显示上游语义 “Turn blocked by a hook.”；普通取消仍显示通用停止原因；`node --experimental-strip-types src/lib/taskRunStatus.test.ts` 及 Stage B 回归通过。 |
+
 ## 2026-08-23 · gorkX 1.3.0 Apple Silicon 正式发布验收
 
 本条记录发布所有者随后作出的明确决定：`v1.3.0` 以 `arm64_adhoc` 范围正式

@@ -5,6 +5,52 @@
 
 export type TaskRunPhase = 'running' | 'awaiting_decision' | 'failed' | 'idle';
 
+export type PromptCompletionNotice =
+  | { kind: 'hook_blocked' }
+  | { kind: 'stopped'; reason: string };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function isHookBlockedText(value: string | null): boolean {
+  return Boolean(value && /^turn blocked by a hook(?:\s+in\b.*)?[.!]?$/i.test(value));
+}
+
+/**
+ * Normalize terminal PromptResponse metadata for the user-facing transcript.
+ * Grok Build emits `_meta.cancellationCategory: "HookDenied"` for the
+ * upstream “Turn blocked by a hook” outcome; that category must take
+ * precedence over the generic `stopReason: "cancelled"`.
+ */
+export function promptCompletionNotice(result: unknown): PromptCompletionNotice | null {
+  const root = asRecord(result);
+  if (!root) return null;
+
+  const meta = asRecord(root._meta);
+  const category = nonEmptyString(
+    meta?.cancellationCategory ??
+      meta?.cancellation_category ??
+      root.cancellationCategory ??
+      root.cancellation_category,
+  );
+  if (category?.replace(/[_-]/g, '').toLowerCase() === 'hookdenied') {
+    return { kind: 'hook_blocked' };
+  }
+
+  const stopReason = nonEmptyString(root.stopReason ?? root.stop_reason);
+  const message = nonEmptyString(root.message);
+  if (isHookBlockedText(stopReason) || isHookBlockedText(message)) {
+    return { kind: 'hook_blocked' };
+  }
+  if (!stopReason || stopReason.toLowerCase() === 'end_turn') return null;
+  return { kind: 'stopped', reason: stopReason.slice(0, 160) };
+}
+
 /** Default quiet window before a busy task is considered stalled (ms). */
 export const DEFAULT_STALL_MS = 90_000;
 

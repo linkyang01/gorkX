@@ -1,10 +1,10 @@
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
-index 1027c440..e67b0a13 100644
+index d95fe3eb..59a2e29e 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
-@@ -2262,6 +2262,16 @@ impl acp::Agent for MvpAgent {
-                 crate::extensions::feedback::handle(self, &args).await
-             }
+@@ -2328,6 +2328,16 @@ impl acp::Agent for MvpAgent {
+             "x.ai/feedback" | "x.ai/feedback/dismiss" | "x.ai/feedback/upload-trace"
+             | "x.ai/btw" => crate::extensions::feedback::handle(self, &args).await,
              "x.ai/recap" => crate::extensions::recap::handle(self, &args).await,
 +            "x.ai/desktop/workflow/launch" => {
 +                crate::extensions::desktop_actions::launch(self, &args).await
@@ -24,7 +24,7 @@ new file mode 100644
 index 00000000..18064c40
 --- /dev/null
 +++ b/crates/codegen/xai-grok-shell/src/extensions/desktop_actions.rs
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,177 @@
 +//! Structured actions used by desktop clients.
 +//!
 +//! These routes are thin adapters over the existing session actor. They do not
@@ -193,6 +193,7 @@ index 00000000..18064c40
 +            admission: None,
 +            tool_overrides_update: None,
 +            respond_to,
++            prompt_admitted: None,
 +            persist_ack: None,
 +            parsed_prompt_tx: None,
 +        })
@@ -214,10 +215,10 @@ index 55703911..bcea579a 100644
  pub mod fs;
  pub mod git;
 diff --git a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
-index 31926e02..b82e50a1 100644
+index 6f3d8126..87dacd28 100644
 --- a/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
 +++ b/crates/codegen/xai-grok-shell/src/session/acp_session_impl/run_loop.rs
-@@ -1846,6 +1846,25 @@ pub(super) async fn run_session(
+@@ -1964,6 +1964,25 @@ pub(super) async fn run_session(
                                  s.handle_recap(auto).await;
                              });
                          }
@@ -244,10 +245,10 @@ index 31926e02..b82e50a1 100644
                              let s = session.clone();
                              tokio::task::spawn_local(async move {
 diff --git a/crates/codegen/xai-grok-shell/src/session/commands.rs b/crates/codegen/xai-grok-shell/src/session/commands.rs
-index 30e83252..44b57621 100644
+index 78c53258..5aef2895 100644
 --- a/crates/codegen/xai-grok-shell/src/session/commands.rs
 +++ b/crates/codegen/xai-grok-shell/src/session/commands.rs
-@@ -813,6 +813,19 @@ pub enum SessionCommand {
+@@ -860,6 +860,19 @@ pub enum SessionCommand {
          /// `false` for an explicit `/recap`.
          auto: bool,
      },

@@ -1,8 +1,8 @@
 diff --git a/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs b/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
-index cf7f61c0..5d0ec91b 100644
+index f4f639a4..0004efb5 100644
 --- a/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
 +++ b/crates/codegen/xai-grok-tools/src/implementations/web_search/client.rs
-@@ -156,8 +156,8 @@ impl WebSearchClient {
+@@ -158,8 +158,8 @@ impl WebSearchClient {
              .input(query.to_string())
              .tools(vec![rs::Tool::WebSearch(web_search)])
              .store(false)

@@ -1,5 +1,5 @@
 diff --git a/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs b/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
-index 111ae64..48c8102 100644
+index 111ae644..48c81023 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/handlers/session.rs
 @@ -28,6 +28,28 @@ fn backfill_session_summary(summary: &mut Summary) {
@@ -45,10 +45,10 @@ index 111ae64..48c8102 100644
      };
  
 diff --git a/crates/codegen/xai-grok-shell/src/session/acp_types.rs b/crates/codegen/xai-grok-shell/src/session/acp_types.rs
-index f7b03a9..5a1b3b8 100644
+index 7f21abdd..028c96dd 100644
 --- a/crates/codegen/xai-grok-shell/src/session/acp_types.rs
 +++ b/crates/codegen/xai-grok-shell/src/session/acp_types.rs
-@@ -562,6 +562,12 @@ pub fn model_display_name(
+@@ -580,6 +580,12 @@ pub fn model_display_name(
  pub struct SessionInfoResponse {
      pub session_id: String,
      pub cwd: String,

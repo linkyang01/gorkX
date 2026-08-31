@@ -125,7 +125,7 @@ Legend: ✅ have · 🟡 partial · ❌ missing · — N/A desktop (TUI-only chr
 | Context `/context` | Task Info panel: live model, turns and context breakdown | ✅ `_x.ai/session/info` 已隔离验证；命令仅保留给熟练用户 | B |
 | Goal `/goal` | “设定目标”表单 + persisted banner + agent status/pause/resume/clear | ✅ shell；执行质量仍由内核/模型决定 | C |
 | `/loop` | Scheduler panel | ✅ local schedules plus engine-advertised recurring task flow | C |
-| 运行中补充 | 桌面端“旁问” + “加入当前回合” + 下一回合队列 | ✅ 当前锁定 `1.0.6` 的 `_x.ai/btw` 与 `_x.ai/interject` 路由探针通过，继续复用运行中按钮；认证回合质量仍需账号验收。旧内核拒绝时回退到下一轮队列；slash 仍保留为专家兼容入口。 | C |
+| 运行中补充 | 桌面端“旁问” + “加入当前回合” + 下一回合队列 | ✅ 当前锁定 `1.0.12` 的 `_x.ai/btw` 与 `_x.ai/interject` 路由探针通过，继续复用运行中按钮；认证回合质量仍需账号验收。旧内核拒绝时回退到下一轮队列；slash 仍保留为专家兼容入口。 | C |
 | `/imagine*` | 图片/视频生成表单（账号/引擎门控） | 🟡 | later |
 
 ### 5.2 Worktree & git review

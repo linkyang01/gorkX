@@ -65,7 +65,7 @@ gorkX 不显示可点击的语音输入入口。
 | 图片/视频工具总开关 | 在 App 自管 `config.toml` 提供“媒体工具”设置，并在内核重启后以实际公告的命令为准 | 已接入：设置可独立开关图片或视频工具；新启动的内核读取 App 自管配置，实际可用性仍由账号与引擎决定 |
 | `/session-info` 账户来源 | 用 ACP 的会话信息显示“OAuth / API Key”和对应管理入口；不显示令牌 | 已通过受控 ACP 补丁接入；内核只返回认证类别与账户/模型设置去向，不返回令牌、用户 ID 或凭证路径 |
 | TUI `/doctor fix` | 仅对与桌面相关、可逆且有明确确认的修复做 UI；绝不静默改 shell 配置 | 现知 `ssh-wrap` 不适用于 App 主路径，保留为终端说明 |
-| 会话、权限、MCP、重复调用修复 | 由受控内核更新继承，并加入 ACP 回归场景 | 已升级到锁定源码 `1.0.6 (19d42e35)`；无认证初始化、桌面控制、会话搜索、账单守卫、原生语音和相关 ACP 路由门禁已通过；认证 resource-link/rewind 回合与真实子任务沿用上一锁定内核证据，第三方 endpoint、真实模型回合与麦克风仍按发布门槛验收 |
+| 会话、权限、MCP、重复调用修复 | 由受控内核更新继承，并加入 ACP 回归场景 | 已升级到锁定源码 `1.0.12 (bc7f02eddd3d)`；无认证初始化、桌面控制、会话搜索、账单守卫、原生语音和相关 ACP 路由门禁已通过；App Bundle、认证 resource-link/rewind 回合与真实子任务沿用上一锁定内核证据，第三方 endpoint、真实模型回合与麦克风仍按发布门槛验收 |
 | macOS Voice Mode 内存优化 | 通过内核 ACP 语音扩展接入麦克风与转写事件 | 已通过维护的 ACP 补丁接入内核原生语音控制面；设置中的语音输入使用 macOS 采集与流式转写，转写只进入可编辑草稿。控制面门禁已通过，真实麦克风转写仍需用户授权的 macOS 人工验收 |
 
 **许可：** 上游 Apache-2.0 — 修改与再分发须保留 NOTICE/版权声明（关于页 + 发行物）。
@@ -552,7 +552,7 @@ Grok Build 已支持自定义模型（`[model.*]`）：`base_url`、`api_key`/`e
 | 真实订阅额度与计费详情 | ✅ 设置 → 使用情况和计费直接读取 Grok Build `x.ai/billing` / `x.ai/auto-topup-rule` |
 | 登录命令带 `GROK_HOME` | ✅ |
 | 锁定源码内核的本地 app-only bundle | ✅ 包内 `Resources/grok`、LICENSE / THIRD-PARTY-NOTICES 与 ACP `initialize` 已通过 bundle 门禁；不等同于发行 |
-| 受控内核来源、补丁与 ACP 回归 | ✅ lock、补丁序列、构建、隔离 `GROK_HOME`、无认证 ACP 控制矩阵与 App-only bundle 门禁已在仓库中；包内 `1.0.6 (19d42e35)` 已完成重建和许可证校验；真实 resource-link / rewind、子任务的认证证据沿用上一锁定内核；干净机、三方 endpoint、真实模型回合、麦克风仍按发布门槛执行 |
+| 受控内核来源、补丁与 ACP 回归 | ✅ lock、补丁序列、构建、隔离 `GROK_HOME` 与无认证 ACP 控制矩阵门禁已在仓库中；包内 `1.0.12 (bc7f02eddd3d)` 已完成重建和许可证校验；当前未生成 App Bundle，真实 resource-link / rewind、子任务的认证证据沿用上一锁定内核；干净机、三方 endpoint、真实模型回合、麦克风仍按发布门槛执行 |
 | 干净机只装包验收 | ⏳ 尚未在一台没有既有 Grok 数据的 Mac 上，完成「安装 → App 内登录 → 发真实消息 → 重开续聊」人工闭环 |
 | 自定义模型经 ACP `session/set_model` | ✅ 已以隔离配置验证引擎公告并接受配置；未用用户额度发送模型提示词 |
 | 多 Provider 的真实推理 | ⏳ 设置、Keychain、协议探测和任务级选择已具备；每个用户 endpoint 仍须由其凭据进行真实测试 |

@@ -4,8 +4,8 @@ Living checklist for product and PR review. Runtime and kernel governance follow
 [`INDEPENDENT_APP_PLAN.md`](./INDEPENDENT_APP_PLAN.md); detailed real/half
 boundaries follow [`FEATURES.md`](./FEATURES.md).
 
-Current controlled runtime: Grok Build **1.0.6** (`19d42e35c07a`), observed
-2026-08-21 on the `agent/grok-build-1.0.6-sync` source branch. Older
+Current controlled runtime: Grok Build **1.0.12** (`bc7f02eddd3d`), observed
+2026-08-31 on the `agent/grok-build-1.0.12-sync` source branch. Older
 package/version strings below are historical evidence for the run in which they
 were recorded; this sync has not been tagged or published as a release.
 
@@ -17,6 +17,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 |---|---|---|
 | New session | New task → ACP `session/new` + App index | ✅ |
 | Stop running turn | Composer or global `Esc` while a task is running | ✅ closes menus/dialogs first, then calls the live ACP cancel route; it never cancels a task while a decision modal is open |
+| Hook-blocked turn | ACP `PromptResponse._meta.cancellationCategory=HookDenied` | 🟡 renders the upstream “Turn blocked by a hook.” copy; the 1.0.12 wire mapping and fallback wording are regression-tested, while no new authenticated Hook turn is claimed |
 | Resume / search | App task restore; isolated Kernel Sessions search for recovery | ✅ |
 | Rename | Sidebar task rename; a live task also calls native `x.ai/session/rename` so Grok recovery/search stays aligned, while the App title persists as an offline fallback | ✅ |
 | Archive / delete | App archive; confirmed ACP session delete + local-index removal | ✅ |
@@ -52,7 +53,7 @@ Legend: ✅ real end-to-end · 🟡 wired with a stated engine/product limit · 
 | Surface | Desktop control | Status |
 |---|---|---|
 | MCP / Skills / Plugins | Discover and manage through App `GROK_HOME`; add remote HTTPS HTTP/SSE MCP from a native form; refresh the live task inventory | ✅ engine capability governs individual entries. The desktop can re-read the current inventory, while configuration changes that need a process reload ask the user to reconnect rather than pretending a hidden hot-refresh ACP route exists. Headers, secrets and arbitrary local commands remain advanced configuration |
-| Hooks | Active-task settings loads discovered hooks; guided project Hook creation; explicit reload, trust/untrust and enable/disable controls | ✅ real Settings acceptance completed with a disposable Git project, bounded SessionStart definition, initial marker absence, explicit trust/reload, real task, kernel-written marker, revoke and cleanup; the App never executes or fabricates the marker |
+| Hooks | Active-task settings loads discovered hooks; guided project Hook creation; explicit reload, trust/untrust and enable/disable controls | 🟡 real Settings acceptance remains recorded with a disposable Git project; current 1.0.12 HookDenied terminal handling is wire-mapped and regression-tested, but no new authenticated Hook turn is claimed |
 | Memory | Browse, search, remember, forget, local compact and per-project injection; start a private one-off task without memory | ✅ |
 
 ## Account and independent kernel
@@ -93,4 +94,4 @@ scripts/verify-grok-kernel-patches.sh
 scripts/verify-macos-app-bundle.sh "apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app"
 ```
 
-Updated: 2026-08-01 — see also `DESKTOP_ALIGNMENT_PLAN.md` (slash picks open desktop controls)
+Updated: 2026-08-31 — see also `DESKTOP_ALIGNMENT_PLAN.md` (slash picks open desktop controls)

@@ -5,6 +5,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +41,21 @@ const MAX_HOOK_DEFINITION_BYTES: usize = 200_000;
 const HOOK_VERIFICATION_PREFIX: &str = "gorkx-hook-verify-";
 const HOOK_VERIFICATION_MARKER_DIR: &str = ".grok/gorkx-hook-verification";
 const HOOK_VERIFICATION_HOOK_FILE: &str = "gorkx-session-start-verification.json";
+
+fn set_private_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let mut permissions = fs::metadata(path)
+            .map_err(|e| format!("read temporary Hook directory permissions: {e}"))?
+            .permissions();
+        permissions.set_mode(0o700);
+        fs::set_permissions(path, permissions)
+            .map_err(|e| format!("restrict temporary Hook directory: {e}"))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
 
 fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(cwd.trim());
@@ -326,6 +343,21 @@ fn hook_verification_marker_path(
     {
         return Err("Hook verification marker path must be project-relative".into());
     }
+    let grok_dir = root.join(".grok");
+    match fs::symlink_metadata(&grok_dir) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            return Err(
+                "Refusing to read a Hook verification marker through a symlinked .grok directory"
+                    .into(),
+            )
+        }
+        Ok(meta) if !meta.is_dir() => {
+            return Err("Hook verification .grok path is not a directory".into())
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("read Hook verification .grok directory: {error}")),
+    }
     let parent = root.join(HOOK_VERIFICATION_MARKER_DIR);
     if let Ok(meta) = fs::symlink_metadata(&parent) {
         if meta.file_type().is_symlink() {
@@ -360,8 +392,13 @@ pub fn workspace_create_hook_verification_project() -> Result<HookVerificationPr
         .map_err(|e| format!("create temporary Hook verification project: {e}"))?;
 
     let result = (|| -> Result<HookVerificationProject, String> {
-        fs::create_dir_all(project.join(".grok/hooks"))
+        set_private_directory(&project)?;
+        let grok_dir = project.join(".grok");
+        let hooks_dir = grok_dir.join("hooks");
+        fs::create_dir_all(&hooks_dir)
             .map_err(|e| format!("create temporary Hook directories: {e}"))?;
+        set_private_directory(&grok_dir)?;
+        set_private_directory(&hooks_dir)?;
         let git = Command::new("git")
             .args(["init", "--quiet"])
             .current_dir(&project)
@@ -811,6 +848,8 @@ mod tests {
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     #[cfg(unix)]
     #[test]
@@ -911,6 +950,18 @@ mod tests {
         let project = Path::new(&verification.project_path);
         assert!(project.join(".git").is_dir());
         assert_eq!(verification.hook_file_name, "gorkx-session-start-verification.json");
+        #[cfg(unix)]
+        {
+            assert_eq!(fs::metadata(project).unwrap().permissions().mode() & 0o777, 0o700);
+            assert_eq!(
+                fs::metadata(project.join(".grok/hooks"))
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+        }
 
         let missing = workspace_read_hook_verification_marker(
             verification.project_path.clone(),
@@ -941,6 +992,30 @@ mod tests {
 
         workspace_remove_hook_verification_project(verification.project_path.clone()).unwrap();
         assert!(!project.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn hook_verification_marker_refuses_symlinked_grok_directory() {
+        use std::os::unix::fs::symlink;
+
+        let verification = workspace_create_hook_verification_project().unwrap();
+        let project = Path::new(&verification.project_path);
+        let outside = project.with_file_name(format!("gorkx-hook-outside-{}", verification.marker_token));
+        fs::create_dir(&outside).unwrap();
+        fs::remove_dir_all(project.join(".grok")).unwrap();
+        symlink(&outside, project.join(".grok")).unwrap();
+
+        let result = workspace_read_hook_verification_marker(
+            verification.project_path.clone(),
+            verification.marker_relative_path,
+            verification.marker_token,
+        );
+        assert!(result.unwrap_err().contains("symlinked .grok"));
+
+        fs::remove_file(project.join(".grok")).unwrap();
+        workspace_remove_hook_verification_project(verification.project_path).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]

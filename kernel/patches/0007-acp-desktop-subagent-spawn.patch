@@ -1,8 +1,8 @@
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
-index 2207286..7eeb377 100644
+index 8723e99e..8de760b2 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
-@@ -2963,6 +2963,82 @@ impl MvpAgent {
+@@ -2903,6 +2903,82 @@ impl MvpAgent {
              .cancel(subagent_id)
              .await
      }
@@ -86,10 +86,10 @@ index 2207286..7eeb377 100644
          &self,
          parent_session_id: &str,
 diff --git a/crates/codegen/xai-grok-shell/src/extensions/task.rs b/crates/codegen/xai-grok-shell/src/extensions/task.rs
-index 319f1e3..438c80e 100644
+index f51c2b97..36cb694f 100644
 --- a/crates/codegen/xai-grok-shell/src/extensions/task.rs
 +++ b/crates/codegen/xai-grok-shell/src/extensions/task.rs
-@@ -58,6 +58,36 @@ pub struct CancelSubagentRequest {
+@@ -81,6 +81,36 @@ pub struct CancelSubagentRequest {
      pub subagent_id: String,
  }
  
@@ -126,7 +126,7 @@ index 319f1e3..438c80e 100644
  /// Wire mirror of the coordinator's [`SubagentCancelOutcome`], `kind`-tagged so
  /// a client can branch and read the already-finished `status`. Sent alongside
  /// the legacy `cancelled` bool: a new pager prefers this, an old one ignores it.
-@@ -407,6 +437,38 @@ pub(crate) async fn handle_scheduler(agent: &MvpAgent, args: &acp::ExtRequest) -
+@@ -430,6 +460,38 @@ pub(crate) async fn handle_scheduler(agent: &MvpAgent, args: &acp::ExtRequest) -
  /// Handle `x.ai/subagent/*` extension methods.
  pub(crate) async fn handle_subagent(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
      match args.method.as_ref() {
@@ -165,7 +165,7 @@ index 319f1e3..438c80e 100644
          "x.ai/subagent/cancel" => {
              let req: CancelSubagentRequest = parse(args)?;
              tracing::info!(subagent_id = %req.subagent_id, "Cancelling subagent via ext method");
-@@ -561,6 +623,17 @@ mod tests {
+@@ -595,6 +657,17 @@ mod tests {
          assert_eq!(json["subagents"], serde_json::json!([]));
      }
  

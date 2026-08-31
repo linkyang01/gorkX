@@ -1,8 +1,8 @@
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
-index 2848709..37da76e 100644
+index df30eac9..6f104e00 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/code_nav.rs
-@@ -55,11 +55,11 @@ impl MvpAgent {
+@@ -56,11 +56,11 @@ impl MvpAgent {
          use crate::agent::config::CodebaseIndexingSetting;
  
          // Gate 1: client type
@@ -17,10 +17,10 @@ index 2848709..37da76e 100644
              );
              return Err(CodeNavEligibility::ClientNotWeb);
 diff --git a/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs b/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
-index 7a54538..40943d7 100644
+index 8c28795d..20dc1a8f 100644
 --- a/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
 +++ b/crates/codegen/xai-grok-shell/src/extensions/code_nav.rs
-@@ -422,7 +422,7 @@ fn resolve_cwd(
+@@ -423,7 +423,7 @@ fn resolve_cwd(
  fn eligibility_error(reason: CodeNavEligibility) -> acp::Error {
      let msg = match reason {
          CodeNavEligibility::ClientNotWeb => {

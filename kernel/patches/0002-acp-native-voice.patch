@@ -1,8 +1,8 @@
 diff --git a/Cargo.lock b/Cargo.lock
-index 8a467ba2..9ce39135 100644
+index 44230b43..d113226a 100644
 --- a/Cargo.lock
 +++ b/Cargo.lock
-@@ -14260,6 +14260,7 @@ dependencies = [
+@@ -14279,6 +14279,7 @@ dependencies = [
   "xai-grok-test-support",
   "xai-grok-tools",
   "xai-grok-version",
@@ -11,11 +11,11 @@ index 8a467ba2..9ce39135 100644
   "xai-hooks-plugins-types",
   "xai-hunk-tracker",
 diff --git a/crates/codegen/xai-grok-shell/Cargo.toml b/crates/codegen/xai-grok-shell/Cargo.toml
-index d0e3e017..da49b755 100644
+index 03ec01db..2525b396 100644
 --- a/crates/codegen/xai-grok-shell/Cargo.toml
 +++ b/crates/codegen/xai-grok-shell/Cargo.toml
-@@ -159,6 +159,7 @@ xai-grok-config = { workspace = true }
- xai-grok-config-types = { workspace = true }
+@@ -167,6 +167,7 @@ xai-grok-config-types = { workspace = true }
+ xai-dirs = { workspace = true }
  xai-grok-memory = { workspace = true }
  xai-grok-hooks = { path = "../xai-grok-hooks" }
 +xai-grok-voice = { path = "../xai-grok-voice", default-features = false, features = ["audio"] }
@@ -23,10 +23,10 @@ index d0e3e017..da49b755 100644
  xai-grok-plugin-marketplace = { path = "../xai-grok-plugin-marketplace" }
  xai-file-utils = { path = "../xai-file-utils" }
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
-index 0598e0c0..1027c440 100644
+index 664aad8b..d95fe3eb 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs
-@@ -2244,6 +2244,10 @@ impl acp::Agent for MvpAgent {
+@@ -2311,6 +2311,10 @@ impl acp::Agent for MvpAgent {
              }
              "x.ai/session/repair" => crate::extensions::repair::handle(self, &args).await,
              "x.ai/session/usage" => crate::extensions::usage::handle(self, &args).await,
@@ -38,11 +38,11 @@ index 0598e0c0..1027c440 100644
                  crate::extensions::memory::handle(self, &args).await
              }
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
-index 874aeafa..500a1769 100644
+index 5909f485..8723e99e 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/agent_ops.rs
 @@ -2419,6 +2419,7 @@ impl MvpAgent {
-         let (subagent_event_tx, subagent_event_rx) = tokio::sync::mpsc::unbounded_channel();
+         let (subagent_event_tx, subagent_event_rx) = crate::agent::subagent::subagent_coordinator_channel();
          let activity = crate::agent::activity::AgentActivity::default();
          let instance = Self {
 +            voice_commands: RefCell::new(HashMap::new()),
@@ -50,10 +50,10 @@ index 874aeafa..500a1769 100644
              session_registry: SessionRegistry::default(),
              resident_roster_titles: RefCell::new(HashMap::new()),
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
-index 5cc38519..f83cd0c1 100644
+index e3457603..c35ff285 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs
-@@ -736,6 +736,10 @@ struct RetainedResources {
+@@ -748,6 +748,10 @@ struct RetainedResources {
  /// `resident_roster_titles`.
  type RosterDisplayCache = HashMap<String, (Option<String>, Option<String>)>;
  pub struct MvpAgent {
@@ -64,16 +64,16 @@ index 5cc38519..f83cd0c1 100644
      /// LEADER-SAFE(shared): `Send + Sync` mirror of per-session activity for the
      /// leader's auto-update checker, which cannot read the `!Send` maps. Expires
      /// when the actor exits. See [`crate::agent::activity::AgentActivity`].
-@@ -1424,6 +1428,7 @@ mod agent_ops;
- mod acp_agent;
+@@ -1498,6 +1502,7 @@ mod acp_agent;
  pub(crate) mod reasoning_effort;
  mod session_setup;
+ mod subagent_spawn;
 +mod voice;
  use session_registry::SessionRegistry;
  pub(crate) use session_lifecycle::RegistrySnapshot;
  pub(super) use super::ext_parsers;
 diff --git a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
-index 805dfb78..7757ce9d 100644
+index 82c0061a..8700c421 100644
 --- a/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/session_lifecycle.rs
 @@ -197,6 +197,9 @@ impl MvpAgent {

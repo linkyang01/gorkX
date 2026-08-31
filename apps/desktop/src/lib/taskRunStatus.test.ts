@@ -8,6 +8,7 @@ import {
   deriveCurrentStep,
   deriveTaskRunPhase,
   isTaskStalled,
+  promptCompletionNotice,
   resolveBusyFollowUpMode,
   shouldShowInRunCenter,
   DEFAULT_STALL_MS,
@@ -108,5 +109,27 @@ assert.equal(
 // Busy follow-up mode
 assert.equal(resolveBusyFollowUpMode({ busy: false }), 'none');
 assert.equal(resolveBusyFollowUpMode({ busy: true }), 'queue');
+
+// Grok Build 1.0.12 hook-denied regression: preserve the upstream wording
+// instead of reducing `_meta.cancellationCategory=HookDenied` to "cancelled".
+assert.deepEqual(
+  promptCompletionNotice({
+    stopReason: 'cancelled',
+    _meta: { cancellationCategory: 'HookDenied' },
+  }),
+  { kind: 'hook_blocked' },
+);
+assert.deepEqual(
+  promptCompletionNotice({ stopReason: 'Turn blocked by a hook in 0.7s.' }),
+  { kind: 'hook_blocked' },
+);
+assert.deepEqual(
+  promptCompletionNotice({
+    stopReason: 'cancelled',
+    _meta: { cancellationCategory: 'PermissionCancelled' },
+  }),
+  { kind: 'stopped', reason: 'cancelled' },
+);
+assert.equal(promptCompletionNotice({ stopReason: 'end_turn' }), null);
 
 console.log('taskRunStatus.test.ts: ok');

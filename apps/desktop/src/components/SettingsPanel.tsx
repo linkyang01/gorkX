@@ -251,6 +251,8 @@ interface HookVerificationState {
   previousProject: string;
   phase: HookVerificationPhase;
   markerStatus: HookVerificationMarkerStatus | null;
+  /** Remains true after a successful trust action, even if a later refresh fails. */
+  trustConfirmed: boolean;
 }
 
 export interface HookVerificationTaskResult {
@@ -788,14 +790,50 @@ export function SettingsPanel({
         previousProject,
         phase: 'control-ready',
         markerStatus: initialMarker.status,
+        trustConfirmed: false,
       });
       setHookVerificationFeedback(t('settingsHooksVerificationControlReady'));
     } catch (error) {
+      let cleanupError: unknown = null;
       if (created) {
-        await removeHookVerificationProject(created.projectPath).catch(() => undefined);
+        // A control task may already have been created before a later setup
+        // step fails. Stop it before deleting its cwd, then remove the
+        // temporary project from the desktop index and restore the prior cwd.
+        try {
+          await onStopHookVerificationTasks?.(created.projectPath);
+        } catch (stopError) {
+          cleanupError = stopError;
+        }
+        if (!cleanupError) {
+          try {
+            await removeHookVerificationProject(created.projectPath);
+          } catch (removeError) {
+            cleanupError = removeError;
+          }
+        }
+        if (!cleanupError) {
+          onForgetHookVerificationProject?.(created.projectPath);
+          onRestoreProject?.(previousProject);
+        }
       }
-      setHookVerification(null);
-      setHookVerificationFeedback(settingsErrorMessage(error), true);
+      if (created && cleanupError) {
+        // Keep the project handle visible so the user can retry the bounded
+        // cleanup. Do not claim that a failed cleanup removed the project.
+        setHookVerification({
+          project: created,
+          previousProject,
+          phase: 'failed',
+          markerStatus: null,
+          trustConfirmed: false,
+        });
+        setHookVerificationFeedback(
+          `${settingsErrorMessage(error)}\n${t('settingsHooksVerificationCleanupFailed')}`,
+          true,
+        );
+      } else {
+        setHookVerification(null);
+        setHookVerificationFeedback(settingsErrorMessage(error), true);
+      }
     } finally {
       setHookVerificationBusy(false);
     }
@@ -826,7 +864,11 @@ export function SettingsPanel({
         throw new Error(t('settingsHooksVerificationHookNotLoaded'));
       }
       const phase: HookVerificationPhase = action.type === 'trust' ? 'trusted' : 'reloaded';
-      setHookVerification((previous) => previous ? { ...previous, phase } : previous);
+      setHookVerification((previous) => previous ? {
+        ...previous,
+        phase,
+        trustConfirmed: previous.trustConfirmed || action.type === 'trust',
+      } : previous);
       setHookVerificationFeedback(
         action.type === 'trust'
           ? t('settingsHooksVerificationTrusted')
@@ -923,8 +965,10 @@ export function SettingsPanel({
       // Revoke the temporary trust before stopping its sessions or deleting
       // the project. A missing temp path must never remain trusted merely
       // because cleanup happened after a failed task.
-      if (hooksSnap?.projectTrusted) {
-        if (!onManageHooks) throw new Error(t('settingsHooksNeedTask'));
+      if (current.trustConfirmed || hooksSnap?.projectTrusted) {
+        // Trust is a safety-relevant side effect. Require a live management
+        // path and fail closed if the current task can no longer revoke it.
+        if (!onManageHooks || !hooksAvailable) throw new Error(t('settingsHooksNeedTask'));
         const snapshot = await onManageHooks({ type: 'untrust' });
         setHooksSnap(snapshot);
         if (snapshot.projectTrusted) {
