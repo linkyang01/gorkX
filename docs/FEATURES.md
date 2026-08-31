@@ -2,10 +2,11 @@
 
 See **`docs/MASTER_PLAN.md`** and **`docs/INDEPENDENT_APP_PLAN.md`**.
 
-Current controlled runtime for the next controlled build: Grok Build **1.0.12**
-(`bc7f02eddd3d`) with the ordered `0001–0007` patch series. Older version
-strings in historical evidence lines describe the package that was tested at
-that time; no public release has been created for this sync yet.
+Current public runtime: gorkX **1.3.1** ships Grok Build **1.0.12**
+(`bc7f02eddd3d`) with the ordered `0001–0007` patch series in an Apple Silicon
+`arm64_adhoc` DMG. Older version strings in historical evidence lines describe
+the package that was tested at that time; full distribution gates remain
+explicitly scoped in `VALIDATION_EVIDENCE.md`.
 
 **Rule:** no fake product surfaces. Real = works end-to-end. Half = wired to engine/local with limits. Planned = not shipped.
 

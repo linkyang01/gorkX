@@ -3,6 +3,23 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-31 · gorkX 1.3.1 Apple Silicon arm64_adhoc 发布
+
+本条记录对应 gorkX `1.3.1` 发布候选和 Grok Build `1.0.12`；公开范围明确为
+Apple Silicon `arm64_adhoc`。完整分发门槛仍未被豁免为“已通过”：干净机安装/登录/重开、
+Developer ID 与 Apple 公证、原生 Intel 验收继续保留在 waiver 中。
+
+| 项 | 结果 |
+|---|---|
+| 版本一致性 | **PASS**：`apps/desktop/package.json`、`package-lock.json`、Tauri config、Cargo manifest/lock 与 renderer `APP_VERSION` 均为 `1.3.1`；Stage G 版本单测通过。 |
+| 锁定源码与补丁 | **PASS**：锁定 `xai-org/grok-build` 提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`；source verification、0001–0007 `git apply --check` 与按 series 重放均通过。 |
+| Bundled kernel | **PASS**：release 构建后资源为 `grok 1.0.12 (bc7f02eddd3d)`；binary SHA-256=`3900246994a28e64343a3d77ba61c0600582cbaf4c0e95580dd844a8294b32c7`，LICENSE / THIRD-PARTY-NOTICES SHA-256=`116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28` / `7b7c315403c596f9b7a13bb562553ee4fd4c05da8672f95bcaa02a125eea2947`。 |
+| ACP 与前端 | **PASS**：新 bundled kernel 的无认证完整 ACP 控制矩阵通过；`npm run typecheck`、`npm run build`、`npm run test:stages`（Stage A–G）与 `npm run verify:web-bundle` 通过；`HookDenied` / “Turn blocked by a hook” 回归通过。 |
+| Rust | **PASS**：`cargo check` 与 `cargo test --workspace --lib` 通过，96/96 tests passed。 |
+| 当前真实认证回合 | **PASS**：隔离 App-owned 登录副本与一次性 Git 项目执行 `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --resource`；`initialize`、`authenticate(cached_token)`、`session/new`、`session/load`、真实 `session/prompt` resource-link 和后续只读控制检查均通过，临时目录已清理。 |
+| App / DMG | **PASS**：App 与 DMG 只读核验均为 arm64，App 版本 `1.3.1`、包内内核 `grok 1.0.12 (bc7f02eddd3d)`、许可证/声明、隔离 `GROK_HOME` 通过；签名完整性通过但级别为 `adhoc`，未公证。DMG 大小 `71,006,820` bytes，SHA-256=`c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62`。 |
+| 受限发布门 | **PASS WITH EXPLICIT WAIVER**：以用户本轮发布授权、`GORKX_RELEASE_SCOPE=arm64_adhoc`、`GORKX_LIMITED_RELEASE_WAIVER=1`、当前真实 prompt、既有真实第三方模型/麦克风证据和 `GORKX_ARCH_VERIFIED=arm64` 运行 `scripts/verify-release-readiness.sh`；结果 `releaseCandidateReady: true`、`canShipPublicArtifacts: true`、`blockers: []`。waiver 明确保留 clean-machine、Developer ID/notarization 和 x86_64 范围，不将其写成通过。 |
+
 ## 2026-08-31 · Grok Build 1.0.12 内核同步与桌面回归
 
 本条记录对应源码分支 `agent/grok-build-1.0.12-sync`。只记录本轮实际通过的

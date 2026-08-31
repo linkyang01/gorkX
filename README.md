@@ -12,8 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg"><strong>↓ Download gorkX 1.3.0</strong></a><br />
-  <sub>gorkX 1.3.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.1/gorkX_1.3.1_aarch64.dmg"><strong>↓ Download gorkX 1.3.1</strong></a><br />
+  <sub>gorkX 1.3.1 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">all releases</a></sub>
 </p>
 
 <p align="center">
@@ -108,7 +108,7 @@ review, or from a messy note to a shareable deliverable.
 
 ### Install the public build
 
-1. Download **[gorkX 1.3.0 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg)**.
+1. Download **[gorkX 1.3.1 for macOS Apple Silicon](https://github.com/linkyang01/gorkX/releases/download/v1.3.1/gorkX_1.3.1_aarch64.dmg)**.
 2. Open the DMG and drag `gorkX` into **Applications**.
 3. Open gorkX and complete Grok sign-in in the browser.
 4. Choose a project folder, or start a standalone task, then describe the
@@ -120,8 +120,8 @@ The public build supports Apple Silicon. If macOS blocks the first launch, use
 ### Verify the download (optional)
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.3.0_aarch64.dmg
-# SHA-256: 00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba
+shasum -a 256 ~/Downloads/gorkX_1.3.1_aarch64.dmg
+# SHA-256: c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62
 ```
 
 ### Update and rollback
@@ -158,7 +158,7 @@ gorkX is deliberately explicit about boundaries:
   state is shown.
 
 For the complete real / kernel-wired / staged capability map, see
-[`docs/FEATURES.md`](docs/FEATURES.md). For the 1.3.0 validation evidence and
+[`docs/FEATURES.md`](docs/FEATURES.md). For the 1.3.1 validation evidence and
 known acceptance boundaries, see [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md).
 
 ## Run from source
@@ -207,8 +207,8 @@ welcome. If gorkX is useful to you, a star helps other builders find it.
 </p>
 
 <p align="center">
-  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg"><strong>↓ 下载 gorkX 1.3.0</strong></a><br />
-  <sub>gorkX 1.3.0 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
+  <a href="https://github.com/linkyang01/gorkX/releases/download/v1.3.1/gorkX_1.3.1_aarch64.dmg"><strong>↓ 下载 gorkX 1.3.1</strong></a><br />
+  <sub>gorkX 1.3.1 · macOS 12+ · Apple Silicon · <a href="https://github.com/linkyang01/gorkX/releases">查看全部版本</a></sub>
 </p>
 
 ## 为什么选择 gorkX
@@ -275,7 +275,7 @@ gorkX 同样适合：
 
 ### 安装公开版本
 
-1. 下载 **[gorkX 1.3.0（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.3.0/gorkX_1.3.0_aarch64.dmg)**。
+1. 下载 **[gorkX 1.3.1（macOS Apple Silicon）](https://github.com/linkyang01/gorkX/releases/download/v1.3.1/gorkX_1.3.1_aarch64.dmg)**。
 2. 打开 DMG，把 `gorkX` 拖入“应用程序”。
 3. 打开 gorkX，在浏览器完成 Grok 登录。
 4. 选择项目文件夹，或直接开始一个独立任务，然后描述你要完成的结果。
@@ -285,8 +285,8 @@ gorkX 同样适合：
 ### 可选：校验下载文件
 
 ```bash
-shasum -a 256 ~/Downloads/gorkX_1.3.0_aarch64.dmg
-# SHA-256：00d212cfb6e9d498a9eb1fac282215c9feca34da8b65d50ae78f4d6e75040fba
+shasum -a 256 ~/Downloads/gorkX_1.3.1_aarch64.dmg
+# SHA-256：c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62
 ```
 
 ### 更新与回退
@@ -314,7 +314,7 @@ rm -rf ~/Library/Application\ Support/gorkX
 - 日历、Slack、飞书、Notion、Drive 等连接器会在官方授权链完整后逐步开放，不会显示假的“已连接”。
 
 完整的 Real / Kernel-wired / 分阶段能力表见
-[`docs/FEATURES.md`](docs/FEATURES.md)；1.3.0 的验收证据与已知边界见
+[`docs/FEATURES.md`](docs/FEATURES.md)；1.3.1 的验收证据与已知边界见
 [`docs/VALIDATION_EVIDENCE.md`](docs/VALIDATION_EVIDENCE.md)。
 
 ## 从源码运行

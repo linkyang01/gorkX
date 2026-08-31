@@ -3,18 +3,18 @@
 > 用途：交给 Grok 继续开发 gorkX。  
 > 原则：按阶段执行、每一步可验证；没有真实链路就标记限制，不得用静态 UI、slash 文本或本地假数据冒充完成。  
 > 范围：默认只更新源码和验证记录；**tag、GitHub Release、DMG 仍须用户明确批准**。
-> 上一轮用户已批准，gorkX `1.3.0` 已完成 tag、DMG 和 GitHub Release；本轮后续同步继续遵守同一批准规则。
+> 本轮用户已明确批准，gorkX `1.3.1` 按 Apple Silicon `arm64_adhoc` 范围完成发布；后续版本继续遵守同一批准规则。
 
 ## 0. 当前基线（2026-08-31）
 
 | 项 | 值 |
 |---|---|
 | 工作区 | `/Users/link/projects/gorkX` |
-| 分支 | `agent/grok-build-1.0.12-sync`；`main` 保留已发布的 `v1.3.0` 基线 |
+| 分支 | `agent/grok-build-1.0.12-sync`；本轮发布后 `main` 更新到 `v1.3.1` |
 | 近期主线 | Grok Build 1.0.12 锁定源码同步、0001–0007 补丁重放、bundled kernel 重建、前端/Rust/无认证 ACP 控制面回归 |
-| 发布版本 | gorkX `1.3.0` 是最近公开版本；本轮只提交源码与验证证据，不创建新 tag、GitHub Release 或 DMG |
+| 发布版本 | gorkX `1.3.1`；Apple Silicon `arm64_adhoc` 已按批准范围发布；完整分发门禁仍保留为 waiver |
 | 包内 Grok Build | `1.0.12 (bc7f02eddd3d)` + 补丁 0001–0007 |
-| App 包 | 本轮未生成 App/DMG；上一锁定内核的 app-only bundle 记录保留为历史证据 |
+| App 包 | `gorkX_1.3.1_aarch64.dmg` 已生成并只读核验；SHA-256=`c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62` |
 | 功能矩阵 | `docs/FEATURES.md` · 对齐 `docs/DESKTOP_ALIGNMENT_PLAN.md` · 证据 `docs/VALIDATION_EVIDENCE.md` |
 
 ### 阶段完成度（诚实）
@@ -39,7 +39,7 @@
 2. **委派 GUI 录像**（⇧⌘B → 树 → 停止/Inspect）；ACP 已 completed。  
 3. **阶段 1**：H1 / H2 / H3 — **用户侧**；不得伪造。  
 4. **连接器**：仅当有官方 OAuth 链时推进；否则保持 Soon。  
-5. **后续发版**：下一版本仍须明确版本号、验收范围和用户批准后，才可 tag / DMG / Release；`v1.2.0` 本轮已完成。
+5. **后续发版**：下一版本仍须明确版本号、验收范围和用户批准后，才可 tag / DMG / Release；当前公开版本为 `v1.3.1`。
 
 ### 门禁（每次合入前）
 
