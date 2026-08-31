@@ -3,6 +3,27 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-31 · Grok Build 1.0.12 sync 本次复核
+
+本节只记录本次会话实际执行并得到的结果。开始复核时工作树没有未提交的
+kernel patch 或 Hook 源码差异；`kernel/patches/series` 中的 0001–0007 已逐一检查，
+没有修改补丁内容。代码审查发现 `apps/desktop/src/App.tsx` 的
+`stopHookVerificationTasks` 会吞掉 `agent_stop` 错误，已改为停止失败即向上抛出，
+让清理流程保留项目句柄并阻止删除仍可能运行的临时项目。本次没有创建 tag、DMG、
+GitHub Release 或上传资产。
+
+| 项 | 结果 |
+|---|---|
+| 锁定源码与补丁 | **PASS**：`scripts/verify-grok-kernel-source.sh vendor/grok-build` 验证锁定提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`；`scripts/verify-grok-kernel-patches.sh vendor/grok-build` 的 0001–0007 全部 `git apply --check` 通过，按 series 重放也在内核构建中通过。 |
+| 桌面前端（修复后） | **PASS**：`cd apps/desktop && npm run test:stages` 的 Stage A–G、`npm run typecheck`、`npm run verify:web-bundle` 均通过；Stage A 包含 `hookAuthoring.test.ts` / `settingsFeedback.test.ts`，Stage B 包含 Hook 终态回归。bundle 初始 JS gzip 为 `186907/512000` bytes；Vite 的大 chunk 为非阻断 warning。 |
+| 桌面 E2E（修复后） | **PASS**：`cd apps/desktop && npm run test:e2e -- --reporter=line`，Playwright `1 passed (1.6s)`。沙箱首次启动本地服务时遇到 `127.0.0.1:1420` 的 `EPERM`，随后使用相同测试命令完成实际 E2E；未把首次环境失败写成通过。 |
+| Rust 门禁 | **PASS**：`cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check`、`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked`、`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --all-targets --locked -- -D warnings` 均通过；`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --lib --locked` 为 **104 passed; 0 failed**。Rust workspace 测试包含严格 marker、符号链接拒绝和临时目录清理保护。 |
+| 供应链 | **PASS（范围明确）**：`scripts/verify-supply-chain.sh` 重跑通过，cargo-deny 的 advisories/bans/licenses/sources 与 OSV-Scanner npm lockfile 均通过；输出中的重复 crate / 未匹配 allowed-license 为既有允许项，`cargo-audit` 未安装仅作为 INFO。首次沙箱执行因 advisory DB lock 路径只读未完成，不计为通过。 |
+| Kernel release 构建 | **PASS**：使用本机已缓存的 rg 与 DotSlash `protoc`，在隔离临时输出目录实际完成锁定源码和七个补丁的 release 构建；产物版本 `grok 1.0.12 (bc7f02eddd3d)`，binary SHA-256=`fd013422c698cc5f008fd8c1e634afe026b5b2838f3577f1f2c3d5272c53136d`，LICENSE / THIRD-PARTY-NOTICES SHA-256 分别为 `116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28` / `7b7c315403c596f9b7a13bb562553ee4fd4c05da8672f95bcaa02a125eea2947`。首次未覆盖工具路径的沙箱尝试因网络下载与 `/dev/stdout` 权限限制失败，未计为通过；最终构建使用 `/private/tmp/gorkx-kernel-1.0.12.SUAuAq/grok`，未替换 bundled resource。 |
+| Kernel ACP 控制面 | **PASS（无认证范围）**：使用上述新构建产物执行 `verify-grok-acp.mjs` 的 voice、desktop、cloud、billing、session、history、suggestion、bundle、client-FS、禁用 Web Search、model reload 等矩阵，全部通过；脚本明确 `SKIP` authenticated session/extensions gate。 |
+| Hook 验证安全 | **PASS（自动化/代码审查范围）**：前端 Hook authoring/settings 回归，以及 Rust 的 marker 严格读取、符号链接拒绝、0700 临时项目和 cleanup guard 测试通过；清理停止失败的 fail-closed 修复已通过修复后的 Stage A–G、类型检查、bundle 和 E2E。**本次未执行**带认证的真实 Hook 任务、一次性 marker 生成或 Settings 手工点按，因此不新增真实 marker 证据。 |
+| 未关闭的边界 | **NOT RUN / NOT CLAIMED**：没有执行 authenticated ACP/Hook real-task gate、真实账号/麦克风验收、CI runner、签名/公证或发布动作；`.cache/` 与 E2E 生成的 `apps/desktop/test-results/` 均不属于提交范围。 |
+
 ## 2026-08-31 · 后续开发收口与真实门禁复核
 
 本节记录本次“把后续开发全做完”实际完成的源码、依赖、安全门禁和内核重建。

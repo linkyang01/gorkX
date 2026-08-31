@@ -1341,7 +1341,10 @@ function App() {
       thread.projectKey === scope || thread.cwd === projectPath,
     );
     await Promise.all(scoped.map(async (thread) => {
-      await thread.client?.stop().catch(() => undefined);
+      // Cleanup must not delete a trusted temporary project while an engine
+      // task may still be running. Propagate stop failures so the caller keeps
+      // the project handle visible and surfaces a retryable cleanup error.
+      if (thread.client) await thread.client.stop();
     }));
   }, []);
 
