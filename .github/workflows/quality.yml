@@ -1,0 +1,168 @@
+name: gorkX quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gorkx-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-quality:
+    name: Source, Rust, browser and supply-chain gates
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout locked source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Set up Go for OSV-Scanner
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.26.2'
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # pinned stable-toolchain action revision
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Install Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Install locked JavaScript dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Install security scanners
+        run: |
+          cargo install --locked cargo-deny
+          go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.5.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Playwright Chromium
+        working-directory: apps/desktop
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete reproducible quality gate
+        run: ./scripts/verify-quality.sh
+
+  compatibility:
+    name: Web compatibility (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Install locked JavaScript dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      - name: Run frontend regression stages
+        working-directory: apps/desktop
+        run: npm run test:stages
+
+      - name: Typecheck and production web build
+        working-directory: apps/desktop
+        run: |
+          npm run typecheck
+          npm run build
+
+  kernel:
+    name: Locked Grok Build source and bundled-kernel rebuild
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout gorkX source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.x'
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # pinned stable-toolchain action revision
+        with:
+          toolchain: stable
+
+      - name: Fetch and verify the exact upstream commit
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/xai-org/grok-build.git vendor/grok-build
+          git -C vendor/grok-build fetch --depth 1 origin bc7f02eddd3d84085849dc19ed216f11c23b0571
+          git -C vendor/grok-build checkout --detach bc7f02eddd3d84085849dc19ed216f11c23b0571
+
+      - name: Install the upstream pinned-protoc launcher
+        run: cargo install --locked dotslash
+
+      - name: Rebuild locked kernel and run ACP baseline
+        run: ./scripts/verify-grok-kernel-build.sh
+
+  sbom:
+    name: SPDX SBOM and license inventory
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Generate SPDX JSON with Syft
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: .
+          format: spdx-json
+          output-file: gorkx.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Archive SBOM evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gorkx-spdx-sbom
+          path: gorkx.spdx.json
+          if-no-files-found: error
+          retention-days: 30
+
+  dependency-review:
+    name: Review newly introduced dependencies
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Dependency review
+        uses: actions/dependency-review-action@595b5aeba73380359d98a5e087f648dbb0edce1b # v4.7.3

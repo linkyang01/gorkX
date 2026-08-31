@@ -1,9 +1,12 @@
 # Supply-chain policy for the Rust desktop backend.
-# Run from the repository root with `cargo deny check --manifest-path
-# apps/desktop/src-tauri/Cargo.toml`.
+# Run from the repository root with `cargo deny --manifest-path
+# apps/desktop/src-tauri/Cargo.toml --config deny.toml check`.
 
 [advisories]
 version = 2
+# Direct workspace dependencies must be maintained; transitive platform
+# bindings remain visible as warnings until their upstream stack moves.
+unmaintained = "workspace"
 yanked = "deny"
 
 [bans]
@@ -16,6 +19,7 @@ version = 2
 confidence-threshold = 0.8
 allow = [
   "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
   "BSD-2-Clause",
   "BSD-3-Clause",
   "CC0-1.0",

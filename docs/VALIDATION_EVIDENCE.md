@@ -3,6 +3,23 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-08-31 · 后续开发收口与真实门禁复核
+
+本节记录本次“把后续开发全做完”实际完成的源码、依赖、安全门禁和内核重建。
+提交只包含源码、锁文件、脚本、CI 配置与证据文档；没有 tag、Release、DMG 或上传资产。
+
+| 项 | 结果 |
+|---|---|
+| 任务/审批生命周期 | **PASS**：`taskLifecycle.ts` 把发送、重连、内核队列、本地 fallback、忙时 `/btw`、审批去重/选择/按任务清理、取消/失败/进程退出状态收敛为可测纯函数；`taskLifecycle.test.ts` 已接入 Stage B。 |
+| ACP 契约 | **PASS**：`acpContract.test.ts` 使用官方 `@agentclientprotocol/sdk` in-process agent/client，实测 initialize、session/new、permission、session/update、end_turn、session/cancel/cancelled，并再次完成完整握手。 |
+| Hook 阻止文案 | **PASS**：`taskRunStatus.test.ts` 覆盖 `HookDenied`、`stopReason`、`stop_reason`、`message` 中的上游 “Turn blocked by a hook” 变体；普通取消语义保持独立。 |
+| Web UI 核心流 | **PASS**：`GORKX_CARGO_OFFLINE=1 ./scripts/verify-quality.sh` 内的 Playwright Chromium 实际打开 Vite Web UI，home composer、slash listbox、Escape、`+` capability menu 均通过。 |
+| 前端与 Rust 统一门禁 | **PASS**：同一统一命令完成 Stage A–G、TypeScript、生产 Web 构建、bundle 体积/懒加载检查、Rust fmt/check/clippy `-D warnings` 与 Rust **104/104** 单测。Vite 大 chunk 仍为非阻断 warning。 |
+| 依赖修复与供应链 | **PASS（范围明确）**：`portable-pty` 升至维护中的 `0.9.0`，移除已弃用 `serial` 链；`event-listener` 升至修复版 `5.4.2`；本地 `cargo-deny 0.20.2` 对正式 `aarch64-apple-darwin` 图的 advisories/bans/licenses/sources 全通过，OSV-Scanner `2.5.1` 对 npm 锁文件报告 `No issues found`。Linux GTK3 传递图仍是实验平台单独门槛。 |
+| 锁定内核与补丁 | **PASS**：`bc7f02eddd3d84085849dc19ed216f11c23b0571` 已复核，0001–0007 七个补丁按 series 顺序均可重放。 |
+| Bundled kernel 重建 | **PASS**：`CARGO_TARGET_DIR="$PWD/.cache/kernel-target" scripts/build-grok-kernel.sh apps/desktop/src-tauri/resources/grok` 完成 release 构建；资源报告 `grok 1.0.12 (bc7f02eddd3d)`，binary SHA-256=`d5032fdfa5adb049022dbc35cabede8e869ab2076844aefa40082c51a6646aea`，LICENSE / THIRD-PARTY-NOTICES SHA-256 仍分别为 `116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28` / `7b7c315403c596f9b7a13bb562553ee4fd4c05da8672f95bcaa02a125eea2947`；重建后 bundled kernel ACP initialize 通过。 |
+| 真实发布边界 | **未关闭**：CI runner 首次执行、Developer ID/公证、Tauri updater 密钥、干净 Mac、原生 Intel、真实账号/Hook/麦克风等仍不能由本地 Web/协议 fixture 推断；本次没有执行发布动作。 |
+
 ## 2026-08-31 · gorkX 1.3.1 Apple Silicon arm64_adhoc 发布
 
 本条记录对应 gorkX `1.3.1` 发布候选和 Grok Build `1.0.12`；公开范围明确为
@@ -36,6 +53,22 @@ Developer ID 与 Apple 公证、原生 Intel 验收继续保留在 waiver 中。
 | Hook 阻止文案回归 | **PASS**：`cd apps/desktop && node --experimental-strip-types src/lib/taskRunStatus.test.ts`；上游 `Turn blocked by a hook` 的 `stopReason`、`stop_reason`、`message` 与 `HookDenied` 均识别为 Hook 阻止，普通取消仍保持原语义。 |
 | 锁定内核源码、补丁与 ACP | **PASS**：`scripts/verify-grok-kernel-source.sh`、`scripts/verify-grok-kernel-patches.sh`、`node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok`；锁定提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`，0001–0007 重放检查和无认证 ACP initialize 均通过。 |
 | 变更一致性 | **PASS**：`bash -n scripts/verify-quality.sh scripts/verify-supply-chain.sh` 与 `git diff --check` 通过；`.cache/`、`target/`、`node_modules/` 未纳入源码提交范围。 |
+
+## 2026-08-31 · 8 分质量提升 P1/P2 代码与安全门禁
+
+本节只记录本轮已经在本机实际执行并退出成功的检查；GitHub runner、真实签名、
+updater 密钥和跨平台原生 App 仍单独列为未执行，不从配置文件推断通过。
+
+| 项 | 结果 |
+|---|---|
+| 任务生命周期策略 | **PASS**：`node --experimental-strip-types apps/desktop/src/lib/taskLifecycle.test.ts`；覆盖空提交、重连、内核队列、本地 fallback、`/btw` 忙时旁问、审批去重/选择/按任务清理，以及失败/取消/进程退出后 busy、queue、approval 一致性。 |
+| ACP 官方 SDK 契约 | **PASS**：`node --experimental-strip-types apps/desktop/src/lib/acpContract.test.ts`；使用现有 `@agentclientprotocol/sdk` in-process agent/client，实际走 initialize、session/new、permission request、session/update、end_turn、session/cancel/cancelled，并再次完成完整握手。 |
+| 浏览器 Web UI 冒烟 | **PASS**：`cd apps/desktop && npm run test:e2e -- --reporter=line`；Playwright Chromium 真实打开 Vite Web UI，验证 home composer、slash listbox、Escape 关闭和 `+` capability menu。该项不替代 Tauri 原生权限/Keychain/真实内核回合。 |
+| Updater manifest 形状回归 | **PASS**：`cd apps/desktop && npm run test:stage-g`；验证合法 semver/HTTPS/签名/SHA-256，以及 HTTP、缺签名反向拒绝。没有把该脚本写成密码学签名验证。 |
+| npm 依赖漏洞 | **PASS**：`cd apps/desktop && npm audit --omit=dev --audit-level=high --json` 返回生产依赖 high/critical 为 `0`；全量 audit 修复 `nanoid` / `postcss` 传递版本后返回总漏洞 `0`。 |
+| 统一门禁接线 | **PASS（源码级）**：`verify-quality.sh` 已包含 Playwright；`quality.yml` 接入 cargo-deny、OSV-Scanner、Rustfmt/Clippy、SBOM、依赖审查、内核重建和 Ubuntu/macOS/Windows Web 矩阵；Actions 使用不可变 commit SHA。GitHub runner 尚未在本台执行，不将配置写成 CI PASS。 |
+| 严格签名门禁 | **已实现，未通过/未执行**：`verify-release-signing.sh` 要求 Developer ID、TeamIdentifier 和 Gatekeeper；当前 `signingIdentity: "-"` 的 ad-hoc 候选不能通过，故不创建伪造签名证据。 |
+| 供应链本机 Rust/npm 扫描 | **PASS（范围明确）**：`./scripts/verify-supply-chain.sh`；cargo-deny `0.20.2` 对正式 `aarch64-apple-darwin` Rust 图的 advisories/bans/licenses/sources 通过，OSV-Scanner `2.5.1` 对 npm 锁文件报告 `No issues found`。`cargo-audit` 未安装，仅保留为可选补充；Linux GTK3 实验图不从该 PASS 推断。 |
 
 ## 2026-08-31 · Grok Build 1.0.12 内核同步与桌面回归
 

@@ -17,6 +17,7 @@ echo "=== gorkX source quality ==="
 (cd "$DESKTOP" && npm run typecheck)
 (cd "$DESKTOP" && npm run build)
 "$ROOT/scripts/verify-desktop-web-build.sh"
+(cd "$DESKTOP" && npm run test:e2e -- --reporter=line)
 cargo fmt --manifest-path "$RUST/Cargo.toml" --all -- --check
 cargo check --manifest-path "$RUST/Cargo.toml" "${CARGO_FLAGS[@]}"
 cargo clippy --manifest-path "$RUST/Cargo.toml" --lib --all-targets "${CARGO_FLAGS[@]}" -- -D warnings

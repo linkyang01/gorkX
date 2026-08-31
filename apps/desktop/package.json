@@ -13,12 +13,13 @@
     "build:app": "tauri build --bundles app",
     "typecheck": "tsc --noEmit",
     "test:stage-a": "node --experimental-strip-types src/lib/panelLayout.test.ts && node --experimental-strip-types src/lib/designTokens.test.ts && node --experimental-strip-types src/lib/appearance.test.ts && node --experimental-strip-types src/lib/diagnosticsSummary.test.ts && node --experimental-strip-types src/lib/conversationPresentation.test.ts && node --experimental-strip-types src/lib/taskToolLimits.test.ts && node --experimental-strip-types src/lib/taskPermissionRules.test.ts && node --experimental-strip-types src/lib/updates.test.ts && node --experimental-strip-types src/lib/billing.test.ts && node --experimental-strip-types src/lib/promptHistory.test.ts && node --experimental-strip-types src/lib/promptSuggestion.test.ts && node --experimental-strip-types src/lib/sessionBundle.test.ts && node --experimental-strip-types src/lib/promptQueue.test.ts && node --experimental-strip-types src/lib/hookAuthoring.test.ts && node --experimental-strip-types src/lib/chatFormat.test.ts && node --experimental-strip-types src/lib/settingsFeedback.test.ts",
-    "test:stage-b": "node --experimental-strip-types src/lib/taskRunStatus.test.ts && node --experimental-strip-types src/lib/subagentStatus.test.ts && node --experimental-strip-types src/lib/desktopShortcuts.test.ts && node --experimental-strip-types src/lib/desktopPrimaryEntries.test.ts",
+    "test:stage-b": "node --experimental-strip-types src/lib/taskRunStatus.test.ts && node --experimental-strip-types src/lib/taskLifecycle.test.ts && node --experimental-strip-types src/lib/acpContract.test.ts && node --experimental-strip-types src/lib/subagentStatus.test.ts && node --experimental-strip-types src/lib/desktopShortcuts.test.ts && node --experimental-strip-types src/lib/desktopPrimaryEntries.test.ts",
+    "test:e2e": "playwright test",
     "test:stage-c": "node --experimental-strip-types src/lib/deliverables.test.ts",
     "test:stage-d": "node --experimental-strip-types src/lib/connectors.test.ts && node --experimental-strip-types src/lib/githubFeedback.test.ts",
     "test:stage-e": "node --experimental-strip-types src/lib/scheduled.test.ts",
     "test:stage-f": "node --experimental-strip-types src/lib/modelVerify.test.ts",
-    "test:stage-g": "node --experimental-strip-types src/lib/releaseGates.test.ts",
+    "test:stage-g": "node --experimental-strip-types src/lib/releaseGates.test.ts && node ../../scripts/verify-updater-manifest.test.mjs",
     "test:stages": "npm run test:stage-a && npm run test:stage-b && npm run test:stage-c && npm run test:stage-d && npm run test:stage-e && npm run test:stage-f && npm run test:stage-g"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

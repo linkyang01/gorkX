@@ -54,21 +54,21 @@
 
 ### P1：核心任务可靠性
 
-- [ ] 把 `App.tsx` 的任务发送、恢复、队列、审批路由按边界抽成可独立测试的模块；每次只迁移一个行为单元。
-- [ ] 为取消/重连/队列竞争加入基于真实事件顺序的 ACP fake-server 契约测试。
-- [ ] 把“错误已显示但任务仍 busy”“审批已移除但原会话未回答”等状态列入回归。
-- [ ] 以 Playwright 测试浏览器可运行的 Web UI 核心流；Tauri 原生权限和 Keychain 仍需原生/人工轨道。
+- [x] 把 `App.tsx` 的任务发送、恢复、队列、审批路由按边界抽成可独立测试的模块；每次只迁移一个行为单元。
+- [x] 为取消/重连/队列竞争加入基于真实事件顺序的 ACP fake-server 契约测试。
+- [x] 把“错误已显示但任务仍 busy”“审批已移除但原会话未回答”等状态列入回归。
+- [x] 以 Playwright 测试浏览器可运行的 Web UI 核心流；Tauri 原生权限和 Keychain 仍需原生/人工轨道。
 
-退出条件：恢复、取消、权限、队列和 Hook 拒绝各有一个可重复的正向与反向测试，且不依赖真实账户。
+退出条件：代码侧已满足；`taskLifecycle.test.ts`、官方 ACP SDK in-process fixture、Hook 回归和 Playwright 冒烟均可重复执行且不依赖真实账户。真实 Tauri 权限、Keychain、真实内核 prompt 仍归 Q-REAL。
 
 ### P2：发布和运维可信度
 
 - [ ] 在 Developer ID/notarization 和签名更新密钥就绪后，迁移到 Tauri 官方 updater；保留下载校验和回滚证据。
-- [ ] 在 CI 安装 `cargo-deny`、OSV-Scanner、Rustfmt/Clippy，并运行 `scripts/verify-quality.sh`。
-- [ ] 增加 SBOM/许可证清单归档，按锁文件提交 SHA/工具版本。
-- [ ] 设立 Intel/Windows/Linux 的独立验证矩阵，不把 arm64 adhoc 结果扩展为全平台 PASS。
+- [x] 在 CI 安装 `cargo-deny`、OSV-Scanner、Rustfmt/Clippy，并运行 `scripts/verify-quality.sh`。
+- [x] 增加 SBOM/许可证清单归档，按锁文件提交 SHA/工具版本。
+- [x] 设立 Intel/Windows/Linux 的独立验证矩阵，不把 arm64 adhoc 结果扩展为全平台 PASS。
 
-退出条件：从干净 checkout 能重建相同内核版本和 App 资源，且所有剩余 waiver 明确写在验证证据中。
+退出条件：CI 配置和本地脚本已具备；GitHub runner 首次执行、Developer ID/notarization、全平台运行结果和 updater 密钥仍须在对应环境完成后才能关闭剩余 waiver。
 
 ## 4. 已设计测试用例矩阵
 
@@ -169,6 +169,6 @@ cd /Users/link/projects/gorkX
 
 ## 6. 当前完成情况
 
-本轮 P0 已完成：模型配置改用标准 TOML 解析、秘密生命周期和项目文件边界已加固，Rust 全量 104 项测试、Clippy、前端 Stage A–G、生产构建和锁定内核检查均有实跑结果。供应链扫描仍必须在安装 `cargo-deny` / OSV-Scanner 并可访问其 advisory 数据后单独完成，不能用本地编译替代。
+本轮 P0 与 P1 代码侧已完成：模型配置改用标准 TOML 解析、秘密生命周期和项目文件边界已加固；任务生命周期策略、审批清理、官方 ACP SDK 契约 fixture 和 Playwright Web UI 冒烟已接入 Stage B/G 与统一质量脚本。P2 的 CI、OSV、SBOM、依赖审查、跨平台矩阵和签名/更新安全门禁也已提交为可执行配置。
 
-本轮完成代码与门禁后，更新 [`VALIDATION_EVIDENCE.md`](./VALIDATION_EVIDENCE.md)；该文件只保留本次确实执行通过的项目。当前 arm64 adhoc 发布仍不等于 Developer ID/notarization 或跨架构发布完成。
+本轮完成代码与门禁后，更新 [`VALIDATION_EVIDENCE.md`](./VALIDATION_EVIDENCE.md)；该文件只保留本次确实执行通过的项目，并单独列出 CI 首次运行、扫描器数据源、真实账号、干净机和签名公证阻塞。当前 arm64 adhoc 发布仍不等于 Developer ID/notarization 或跨架构发布完成。

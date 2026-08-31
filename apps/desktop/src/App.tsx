@@ -293,6 +293,15 @@ import {
   shouldShowInRunCenter,
   type TaskRunPhase,
 } from './lib/taskRunStatus';
+import {
+  decidePromptDispatch,
+  enqueueUniqueApproval,
+  reduceTaskLifecycle,
+  removeApprovalByKey,
+  removeApprovalsForThread,
+  selectApprovalKey,
+  type TaskLifecycleState,
+} from './lib/taskLifecycle';
 import { RunCenterPanel, type RunCenterRow } from './components/RunCenterPanel';
 import './App.css';
 
@@ -435,6 +444,21 @@ type PendingApproval =
   | { key: string; kind: 'question'; threadId: string; createdAt: number; request: UserQuestionRequest }
   | { key: string; kind: 'plan'; threadId: string; createdAt: number; request: PlanApprovalRequest }
   | { key: string; kind: 'trust'; threadId: string; createdAt: number; request: FolderTrustRequest };
+
+function taskLifecycleStateFor(
+  thread: Pick<Thread, 'busy' | 'error' | 'client' | 'sessionId' | 'queue'>,
+  approvalKeys: readonly string[],
+): TaskLifecycleState {
+  return {
+    busy: thread.busy,
+    error: thread.error,
+    clientAttached: Boolean(thread.client),
+    sessionId: thread.sessionId,
+    approvalKeys,
+    runningPromptId: thread.queue?.runningPromptId ?? null,
+    reconnectAttempted: false,
+  };
+}
 
 /** Text entered in the desktop search-scope form becomes the kernel's native
  * ACP metadata, not an instruction hidden in the prompt. */
@@ -1024,6 +1048,9 @@ function App() {
     () => approvalQueue.find((entry) => entry.key === activeApprovalKey) ?? approvalQueue[0] ?? null,
     [activeApprovalKey, approvalQueue],
   );
+  useEffect(() => {
+    setActiveApprovalKey((previous) => selectApprovalKey(approvalQueue, previous));
+  }, [approvalQueue]);
   const approvalInboxRows = useMemo<ApprovalInboxRow[]>(() => approvalQueue.map((entry) => {
     const thread = threads.find((item) => item.id === entry.threadId);
     const projectLabel = thread?.cwd
@@ -1092,7 +1119,7 @@ function App() {
     return out;
   }, [active]);
   const enqueueApproval = useCallback((entry: PendingApproval) => {
-    setApprovalQueue((previous) => previous.some((item) => item.key === entry.key) ? previous : [...previous, entry]);
+    setApprovalQueue((previous) => enqueueUniqueApproval(previous, entry));
     setActiveApprovalKey((previous) => previous ?? entry.key);
     // Cross-task decisions are easy to miss if only the origin thread is open.
     // Open the inbox so the user can jump without hunting the sidebar.
@@ -1109,7 +1136,7 @@ function App() {
     );
   }, []);
   const removeApproval = useCallback((key: string) => {
-    setApprovalQueue((previous) => previous.filter((item) => item.key !== key));
+    setApprovalQueue((previous) => removeApprovalByKey(previous, key));
     setActiveApprovalKey((previous) => previous === key ? null : previous);
   }, []);
   const activeFollowUpMode = resolveBusyFollowUpMode({ busy: Boolean(active?.busy) });
@@ -2191,9 +2218,18 @@ function App() {
     const detail = sanitizeText(raw);
     const friendly = visibleTaskError(detail);
     const current = threadsRef.current.find((thread) => thread.id === threadId);
+    const nextLifecycle = current
+      ? reduceTaskLifecycle(
+          taskLifecycleStateFor(
+            current,
+            approvalQueue.filter((entry) => entry.threadId === threadId).map((entry) => entry.key),
+          ),
+          { type: 'prompt_failed', error: detail },
+        )
+      : null;
     patchThread(threadId, {
-      busy: false,
-      error: detail,
+      busy: nextLifecycle?.busy ?? false,
+      error: nextLifecycle?.error ?? detail,
       ...(isPlaceholderTitle(current?.title || '')
         ? {
             title: isGrokBuildAccessDenied(detail)
@@ -2215,7 +2251,7 @@ function App() {
     if (requiresAccountReauthentication(detail)) {
       void refreshAccount();
     }
-  }, [appendLine, patchThread, refreshAccount, visibleTaskError]);
+  }, [appendLine, approvalQueue, patchThread, refreshAccount, visibleTaskError]);
 
   const appendPromptCompletionNotice = useCallback(
     (threadId: string, result: unknown, stoppedCopy = t('systemStopReason')) => {
@@ -2577,9 +2613,16 @@ function App() {
       client.onQueueChanged = (queue) => {
         const live = threadsRef.current.find((thread) => thread.id === threadId);
         if (!live?.sessionId || queue.sessionId !== live.sessionId) return;
+        const nextLifecycle = reduceTaskLifecycle(
+          taskLifecycleStateFor(
+            live,
+            approvalQueue.filter((entry) => entry.threadId === threadId).map((entry) => entry.key),
+          ),
+          { type: 'queue_changed', runningPromptId: queue.runningPromptId },
+        );
         patchThread(threadId, {
           queue,
-          ...(queue.runningPromptId && !live.busy ? { busy: true } : {}),
+          busy: nextLifecycle.busy,
         });
       };
 
@@ -2740,11 +2783,19 @@ function App() {
         if (live?.sessionId && activeIdRef.current === threadId) {
           setVoiceError(t('voiceErrorSessionClosed'));
         }
+        const existingError = live?.error?.trim() || '';
+        const nextLifecycle = live
+          ? reduceTaskLifecycle(
+              taskLifecycleStateFor(
+                live,
+                approvalQueue.filter((entry) => entry.threadId === threadId).map((entry) => entry.key),
+              ),
+              { type: 'process_exited', error: existingError || null },
+            )
+          : null;
         // The request cannot be answered once its ACP process is gone. Do not
         // leave a stale approval that looks actionable in another task.
-        setApprovalQueue((previous) => previous.filter((item) => item.threadId !== threadId));
-        setActiveApprovalKey(null);
-        const existingError = live?.error?.trim() || '';
+        setApprovalQueue((previous) => removeApprovalsForThread(previous, threadId));
         const buildDenied =
           isGrokBuildAccessDenied(existingError)
           || humanizeEngineError(existingError) === 'GROKX_BUILD_ACCESS_DENIED';
@@ -2752,13 +2803,13 @@ function App() {
           isGrokQuotaBlocked(existingError)
           || humanizeEngineError(existingError) === 'GROKX_QUOTA_BLOCKED';
         patchThread(threadId, {
-          busy: false,
+          busy: nextLifecycle?.busy ?? false,
           client: null,
           queue: null,
           // If the prompt/session request already gave us a useful reason,
           // do not replace it with the generic process-exit symptom.
           // Store the stable English token; UI maps it via i18n.
-          error: existingError || AGENT_PROCESS_EXITED,
+          error: nextLifecycle?.error ?? AGENT_PROCESS_EXITED,
         });
         // Skip the generic exit line when we already recorded a real cause
         // (especially Build 403 — re-saying "exited" only adds noise).
@@ -2794,7 +2845,7 @@ function App() {
         }
       };
     },
-    [appendLine, appendOrMerge, enqueueApproval, markTaskFailed, patchThread],
+    [appendLine, appendOrMerge, approvalQueue, enqueueApproval, markTaskFailed, patchThread],
   );
 
   /** Map kernel/voice failures to short desktop copy (never raw stack traces). */
@@ -3539,7 +3590,14 @@ function App() {
     }
     if (agent.busy) return;
     appendLine(agent.id, { id: nid(), role: 'user', text: visibleText });
-    patchThread(agent.id, { busy: true, error: null });
+    const startedLifecycle = reduceTaskLifecycle(
+      taskLifecycleStateFor(
+        threadsRef.current.find((thread) => thread.id === agent.id) ?? agent,
+        approvalQueue.filter((entry) => entry.threadId === agent.id).map((entry) => entry.key),
+      ),
+      { type: 'prompt_started' },
+    );
+    patchThread(agent.id, { busy: startedLifecycle.busy, error: startedLifecycle.error });
     try {
       const result = await action(agent);
       if (typeof result === 'string' && result.trim()) {
@@ -5174,28 +5232,55 @@ function App() {
     if (!text && atts.length === 0) return;
     const promptBody = `${text}${attachmentsPromptBlock(atts)}`.trim();
 
-    // Restored snapshot has sessionId but no live agent — reconnect in place (do NOT create a 2nd row)
-    if (active?.sessionId && !active.client) {
-      if (active.busy) return;
+    // Route every submission through one deterministic policy. This keeps a
+    // restored session from creating a duplicate row and makes busy-task
+    // queueing/reconnect failure behave identically for keyboard and button
+    // submissions.
+    let live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
+    let dispatch = decidePromptDispatch({
+      text,
+      attachmentCount: atts.length,
+      choiceSubmission,
+      hasActiveThread: Boolean(active || live),
+      hasSession: Boolean(live?.sessionId),
+      hasClient: Boolean(live?.client),
+      busy: Boolean(live?.busy),
+    });
+    if (dispatch.kind === 'reconnect') {
+      if (!live) return;
       try {
-        await reconnectThread(active.id);
+        await reconnectThread(live.id);
       } catch {
         return;
       }
+      live = threadsRef.current.find((thread) => thread.id === live?.id);
+      dispatch = decidePromptDispatch({
+        text,
+        attachmentCount: atts.length,
+        choiceSubmission,
+        hasActiveThread: Boolean(active || live),
+        hasSession: Boolean(live?.sessionId),
+        hasClient: Boolean(live?.client),
+        busy: Boolean(live?.busy),
+      });
     }
-
-    // No thread / brand-new stub without session: create one and send (Codex home composer)
-    const live = threadsRef.current.find((th) => th.id === (active?.id || activeId));
-    // While busy, text is queued for the next normal turn. The expert `/btw`
-    // compatibility path is the one exception: it has its own native side-
-    // question route below. Attachments still use the normal queue because
-    // the side-question encoder is text-only in this desktop surface.
-    const busyAsideCommand = !choiceSubmission && atts.length === 0 && /^\/btw(?:\s|$)/i.test(text);
-    if (live?.busy && text && !choiceSubmission && !busyAsideCommand) {
-      if (live.client && live.sessionId) {
+    if (dispatch.kind === 'ignore') return;
+    if (dispatch.kind === 'create') {
+      if (!choiceSubmission) {
+        setDraft('');
+        setComposerAtts([]);
+      }
+      setSlashOpen(false);
+      setAtOpen(false);
+      await createThread({ initialPrompt: promptBody, initialAttachments: atts });
+      return;
+    }
+    if (dispatch.kind === 'queue_native' || dispatch.kind === 'queue_local') {
+      if (!live) return;
+      if (dispatch.kind === 'queue_native') {
         void queueNativeFollowUp(live, text);
       } else {
-        setQueuedFollowUps((prev) => ({ ...prev, [live.id]: text }));
+        setQueuedFollowUps((previous) => ({ ...previous, [live!.id]: text }));
       }
       setDraft('');
       setSlashOpen(false);
@@ -5206,22 +5291,7 @@ function App() {
       });
       return;
     }
-    if (!live?.client || !live.sessionId) {
-      if (live?.busy) return;
-      if (!active || !active.sessionId) {
-        if (!choiceSubmission) {
-          setDraft('');
-          setComposerAtts([]);
-        }
-        setSlashOpen(false);
-        setAtOpen(false);
-        await createThread({ initialPrompt: promptBody, initialAttachments: atts });
-        return;
-      }
-      // sessionId present but reconnect failed
-      return;
-    }
-    if (live.busy) return;
+    if (dispatch.kind !== 'send' || !live?.client || !live.sessionId) return;
 
     // Use the live agent (may have been reconnected above)
     const agent = live;
@@ -5482,12 +5552,25 @@ function App() {
       }
       if (agent.pendingSearchScope !== undefined) patchThread(agent.id, { pendingSearchScope: undefined });
     } catch (e) {
-      patchThread(agent.id, {
-        error: e instanceof Error ? e.message : String(e),
-      });
+      const detail = e instanceof Error ? e.message : String(e);
+      const failedLifecycle = reduceTaskLifecycle(
+        taskLifecycleStateFor(
+          threadsRef.current.find((thread) => thread.id === agent.id) ?? agent,
+          approvalQueue.filter((entry) => entry.threadId === agent.id).map((entry) => entry.key),
+        ),
+        { type: 'prompt_failed', error: detail },
+      );
+      patchThread(agent.id, { busy: failedLifecycle.busy, error: failedLifecycle.error });
     } finally {
       const turns = (agent.userTurnCount || 0) + 1;
-      patchThread(agent.id, { busy: false, userTurnCount: turns });
+      const finishedLifecycle = reduceTaskLifecycle(
+        taskLifecycleStateFor(
+          threadsRef.current.find((thread) => thread.id === agent.id) ?? agent,
+          approvalQueue.filter((entry) => entry.threadId === agent.id).map((entry) => entry.key),
+        ),
+        { type: 'prompt_completed' },
+      );
+      patchThread(agent.id, { busy: finishedLifecycle.busy, userTurnCount: turns });
       // Auto-learn: after each meaningful non-slash turn, dump session notes
       if (!text.startsWith('/') && displayText.trim().length >= 8) {
         const th = threadsRef.current.find((x) => x.id === agent.id);
@@ -5558,12 +5641,19 @@ function App() {
     cancelingTurnRef.current = current.id;
     try {
       await current.client.cancel(current.sessionId);
-      patchThread(current.id, { busy: false });
+      const nextLifecycle = reduceTaskLifecycle(
+        taskLifecycleStateFor(
+          current,
+          approvalQueue.filter((entry) => entry.threadId === current.id).map((entry) => entry.key),
+        ),
+        { type: 'cancel_completed' },
+      );
+      patchThread(current.id, { busy: nextLifecycle.busy });
       appendLine(current.id, { id: nid(), role: 'system', text: t('stop') });
     } finally {
       if (cancelingTurnRef.current === current.id) cancelingTurnRef.current = null;
     }
-  }, [appendLine, patchThread]);
+  }, [approvalQueue, appendLine, patchThread]);
 
   // Grok Build 1.0.6 treats a single Escape as a stop gesture. Keep menus and
   // dialogs first-class: their own handlers prevent the event, while a running

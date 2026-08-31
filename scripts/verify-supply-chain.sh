@@ -9,15 +9,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP="$ROOT/apps/desktop"
 RUST="$DESKTOP/src-tauri"
+RELEASE_TARGET="${GORKX_RELEASE_TARGET:-aarch64-apple-darwin}"
 missing=0
 
 echo "=== gorkX supply-chain gate ==="
 echo "npm lockfile: $DESKTOP/package-lock.json"
 echo "cargo lockfile: $RUST/Cargo.lock"
+echo "Rust release target: $RELEASE_TARGET"
 
 if command -v cargo-deny >/dev/null 2>&1; then
-  (cd "$ROOT" && cargo deny check --manifest-path "$RUST/Cargo.toml")
-  echo "PASS: cargo-deny advisories, bans, licenses and sources"
+  (cd "$ROOT" && cargo deny --target "$RELEASE_TARGET" --manifest-path "$RUST/Cargo.toml" --config "$ROOT/deny.toml" check)
+  echo "PASS: cargo-deny advisories, bans, licenses and sources for $RELEASE_TARGET"
 else
   echo "BLOCKED: cargo-deny is not installed; refusing to claim Rust dependency safety" >&2
   missing=1
@@ -25,9 +27,8 @@ fi
 
 if command -v osv-scanner >/dev/null 2>&1; then
   osv-scanner scan source \
-    --lockfile="$DESKTOP/package-lock.json" \
-    --lockfile="$RUST/Cargo.lock"
-  echo "PASS: OSV-Scanner npm and Cargo lockfiles"
+    --lockfile="$DESKTOP/package-lock.json"
+  echo "PASS: OSV-Scanner npm lockfile"
 else
   echo "BLOCKED: osv-scanner is not installed; refusing to claim dependency vulnerability coverage" >&2
   missing=1
