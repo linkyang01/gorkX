@@ -65,7 +65,11 @@ fn upsert_profile(raw: &str, profile: &str) -> String {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        let body = if replaced { body } else { format!("{body}\n{line}") };
+        let body = if replaced {
+            body
+        } else {
+            format!("{body}\n{line}")
+        };
         format!("{}{}{}", &raw[..start], body, &raw[end..])
     } else {
         let prefix = if raw.trim().is_empty() {
@@ -135,7 +139,10 @@ mod tests {
 
     #[test]
     fn parser_requires_a_quoted_string() {
-        assert_eq!(parse_string_assign("profile = \"strict\" # explicit", "profile"), Some("strict".into()));
+        assert_eq!(
+            parse_string_assign("profile = \"strict\" # explicit", "profile"),
+            Some("strict".into())
+        );
         assert_eq!(parse_string_assign("profile = strict", "profile"), None);
     }
 }

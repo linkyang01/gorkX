@@ -125,7 +125,9 @@ pub fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
     }
     #[cfg(debug_assertions)]
     {
-        let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("grok");
+        let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("grok");
         if bundled.is_file() {
             return bundled;
         }
@@ -162,10 +164,7 @@ pub fn apply_engine_env(cmd: &mut std::process::Command) {
     let support = app_support_dir();
     let home = grok_home();
     let process_home = engine_process_home();
-    cmd.env(
-        "GORKX_COMPUTER_LEASE_DIR",
-        support.join("computer-control"),
-    );
+    cmd.env("GORKX_COMPUTER_LEASE_DIR", support.join("computer-control"));
     cmd.env("GROK_HOME", &home);
     cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
@@ -176,10 +175,7 @@ pub fn apply_engine_env_tokio(cmd: &mut tokio::process::Command) {
     let support = app_support_dir();
     let home = grok_home();
     let process_home = engine_process_home();
-    cmd.env(
-        "GORKX_COMPUTER_LEASE_DIR",
-        support.join("computer-control"),
-    );
+    cmd.env("GORKX_COMPUTER_LEASE_DIR", support.join("computer-control"));
     cmd.env("GROK_HOME", &home);
     cmd.env("HOME", process_home);
     cmd.env("PATH", default_path_env());
@@ -229,10 +225,18 @@ mod tests {
                 .and_then(|(_, value)| value.as_ref())
                 .map(|value| value.to_string_lossy().into_owned())
         };
-        assert_eq!(value("HOME"), Some(engine_process_home().display().to_string()));
+        assert_eq!(
+            value("HOME"),
+            Some(engine_process_home().display().to_string())
+        );
         assert_eq!(
             value("GORKX_COMPUTER_LEASE_DIR"),
-            Some(app_support_dir().join("computer-control").display().to_string())
+            Some(
+                app_support_dir()
+                    .join("computer-control")
+                    .display()
+                    .to_string()
+            )
         );
         assert_eq!(value("GROK_HOME"), Some(grok_home().display().to_string()));
     }

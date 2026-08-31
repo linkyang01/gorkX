@@ -36,10 +36,10 @@ fn media_kind(mime_type: &str, bytes: &[u8]) -> Result<(&'static str, &'static s
     match mime_type {
         "image/png" if bytes.starts_with(b"\x89PNG\r\n\x1a\n") => Ok(("png", "image")),
         "image/jpeg" if bytes.starts_with(&[0xff, 0xd8, 0xff]) => Ok(("jpg", "image")),
-        "image/gif" if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") => Ok(("gif", "image")),
-        "image/webp"
-            if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" =>
-        {
+        "image/gif" if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") => {
+            Ok(("gif", "image"))
+        }
+        "image/webp" if bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP" => {
             Ok(("webp", "image"))
         }
         "image/png" | "image/jpeg" | "image/gif" | "image/webp" => {
@@ -59,11 +59,20 @@ fn media_dir(thread_id: &str) -> Result<std::path::PathBuf, String> {
     Ok(root)
 }
 
-fn persist_image(dir: &std::path::Path, mime_type: &str, bytes: &[u8]) -> Result<SavedAgentImage, String> {
+fn persist_image(
+    dir: &std::path::Path,
+    mime_type: &str,
+    bytes: &[u8],
+) -> Result<SavedAgentImage, String> {
     let (extension, _) = media_kind(mime_type.trim(), bytes)?;
     fs::create_dir_all(dir).map_err(|e| format!("create media directory: {e}"))?;
     let seq = IMAGE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let name = format!("agent-{}-{}.{}", chrono::Utc::now().timestamp_millis(), seq, extension);
+    let name = format!(
+        "agent-{}-{}.{}",
+        chrono::Utc::now().timestamp_millis(),
+        seq,
+        extension
+    );
     let final_path = dir.join(&name);
     let temp_path = dir.join(format!(".{name}.tmp"));
     fs::write(&temp_path, bytes).map_err(|e| format!("write agent image: {e}"))?;
@@ -98,10 +107,14 @@ pub fn media_save_agent_image(
 }
 
 pub fn remove_thread_media(thread_id: &str) {
-    let Ok(root) = crate::store::db_path().map(|path| path.parent().map(|p| p.join("media")).unwrap_or_default()) else {
+    let Ok(root) = crate::store::db_path()
+        .map(|path| path.parent().map(|p| p.join("media")).unwrap_or_default())
+    else {
         return;
     };
-    let Ok(id) = safe_thread_id(thread_id) else { return };
+    let Ok(id) = safe_thread_id(thread_id) else {
+        return;
+    };
     let _ = fs::remove_dir_all(root.join(id));
 }
 
@@ -112,8 +125,16 @@ mod tests {
 
     #[test]
     fn accepts_only_matching_raster_headers() {
-        assert_eq!(media_kind("image/png", b"\x89PNG\r\n\x1a\nbody").unwrap().0, "png");
-        assert_eq!(media_kind("image/jpeg", &[0xff, 0xd8, 0xff, 0xdb]).unwrap().0, "jpg");
+        assert_eq!(
+            media_kind("image/png", b"\x89PNG\r\n\x1a\nbody").unwrap().0,
+            "png"
+        );
+        assert_eq!(
+            media_kind("image/jpeg", &[0xff, 0xd8, 0xff, 0xdb])
+                .unwrap()
+                .0,
+            "jpg"
+        );
         assert!(media_kind("image/png", b"not an image").is_err());
         assert!(media_kind("image/svg+xml", b"<svg/>").is_err());
     }

@@ -259,16 +259,21 @@ fn recover_expired_claims(conn: &mut Connection, now: i64) -> Result<usize, Stri
         if job.enabled && expired {
             job.claimed_at = None;
             job.failure_count = job.failure_count.saturating_add(1);
-            let output = "Previous background run did not report completion before its lease expired.".to_string();
+            let output =
+                "Previous background run did not report completion before its lease expired."
+                    .to_string();
             job.last_error = Some(output.clone());
             job.next_run_at = retry_at(job.failure_count, now);
-            append_run_tx(&tx, SchedulerRun {
-                job_id: job.id.clone(),
-                title: job.title.clone(),
-                started_at: now,
-                ok: false,
-                output,
-            })?;
+            append_run_tx(
+                &tx,
+                SchedulerRun {
+                    job_id: job.id.clone(),
+                    title: job.title.clone(),
+                    started_at: now,
+                    ok: false,
+                    output,
+                },
+            )?;
             recovered += 1;
         }
     }
@@ -333,13 +338,16 @@ fn finalize_claim(
     if changed {
         save_jobs_tx(&tx, &jobs)?;
     }
-    append_run_tx(&tx, SchedulerRun {
-        job_id: claimed.id.clone(),
-        title: claimed.title.clone(),
-        started_at: now,
-        ok,
-        output: output.chars().take(8_000).collect(),
-    })?;
+    append_run_tx(
+        &tx,
+        SchedulerRun {
+            job_id: claimed.id.clone(),
+            title: claimed.title.clone(),
+            started_at: now,
+            ok,
+            output: output.chars().take(8_000).collect(),
+        },
+    )?;
     tx.commit().map_err(|e| e.to_string())
 }
 
@@ -404,7 +412,7 @@ pub fn scheduler_status() -> Result<SchedulerStatus, String> {
             .map(|o| o.status.success())
             .unwrap_or(false);
         let installed = installed_app_executable().is_ok();
-        return Ok(SchedulerStatus {
+        Ok(SchedulerStatus {
             supported: installed,
             enabled: installed && path.is_file() && loaded,
             label: LABEL.into(),
@@ -413,7 +421,7 @@ pub fn scheduler_status() -> Result<SchedulerStatus, String> {
             } else {
                 "Background scheduling requires the installed gorkX.app.".into()
             },
-        });
+        })
     }
     #[cfg(not(target_os = "macos"))]
     Ok(SchedulerStatus {
@@ -458,7 +466,7 @@ pub fn scheduler_enable() -> Result<SchedulerStatus, String> {
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
-        return scheduler_status();
+        scheduler_status()
     }
     #[cfg(not(target_os = "macos"))]
     Err("Background scheduler currently requires macOS launchd.".into())
@@ -476,7 +484,7 @@ pub fn scheduler_disable() -> Result<SchedulerStatus, String> {
         if path.is_file() {
             std::fs::remove_file(&path).map_err(|e| format!("remove launchd plist: {e}"))?;
         }
-        return scheduler_status();
+        scheduler_status()
     }
     #[cfg(not(target_os = "macos"))]
     Err("Background scheduler currently requires macOS launchd.".into())
@@ -583,7 +591,8 @@ mod tests {
     fn failed_job_uses_persisted_backoff() {
         let now = 1_000_000_i64;
         let mut conn = memory_conn(&[job("b", now)]);
-        let summary = process_due_jobs(&mut conn, now, |_| Err("engine unavailable".into())).unwrap();
+        let summary =
+            process_due_jobs(&mut conn, now, |_| Err("engine unavailable".into())).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (1, 0, 1));
         let updated = read_jobs(&conn).unwrap();
         assert_eq!(updated[0].failure_count, 1);
@@ -597,7 +606,8 @@ mod tests {
         let mut pending = job("a", now + 60_000);
         pending.claimed_at = Some(now - 5 * 60_000);
         let mut conn = memory_conn(&[pending]);
-        let summary = process_due_jobs(&mut conn, now, |_| panic!("live job was reclaimed")).unwrap();
+        let summary =
+            process_due_jobs(&mut conn, now, |_| panic!("live job was reclaimed")).unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 0));
     }
 
@@ -630,7 +640,10 @@ mod tests {
         let mut pending = job("a", now + 60_000);
         pending.claimed_at = Some(now - CLAIM_LEASE_MS);
         let mut conn = memory_conn(&[pending]);
-        let summary = process_due_jobs(&mut conn, now, |_| panic!("expired job should back off first")).unwrap();
+        let summary = process_due_jobs(&mut conn, now, |_| {
+            panic!("expired job should back off first")
+        })
+        .unwrap();
         assert_eq!((summary.due, summary.succeeded, summary.failed), (0, 0, 1));
         let updated = read_jobs(&conn).unwrap();
         assert_eq!(updated[0].claimed_at, None);

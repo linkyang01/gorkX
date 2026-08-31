@@ -15,7 +15,11 @@ const PLAYWRIGHT_MCP_PACKAGE: &str = "@playwright/mcp@0.0.78";
 fn normalize_allowed_origins(raw: Option<String>) -> Result<Option<String>, String> {
     let Some(raw) = raw else { return Ok(None) };
     let mut origins = Vec::new();
-    for origin in raw.split(';').map(str::trim).filter(|value| !value.is_empty()) {
+    for origin in raw
+        .split(';')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         // MCP treats this as an allow list, so accept origins only—not paths,
         // credentials, wildcards, or a shell-shaped free-form argument.
         let rest = origin
@@ -26,7 +30,9 @@ fn normalize_allowed_origins(raw: Option<String>) -> Result<Option<String>, Stri
             || rest.contains(['/', '?', '#', '@', '*'])
             || rest.chars().any(char::is_whitespace)
         {
-            return Err("allowed origins must be plain http(s) origins without paths or wildcards".into());
+            return Err(
+                "allowed origins must be plain http(s) origins without paths or wildcards".into(),
+            );
         }
         origins.push(origin.to_string());
     }
@@ -43,12 +49,19 @@ fn normalize_allowed_origins(raw: Option<String>) -> Result<Option<String>, Stri
 fn playwright_mcp_args(allowed_origins: Option<String>) -> Result<Vec<String>, String> {
     let allowed_origins = normalize_allowed_origins(allowed_origins)?;
     let mut args = vec![
-        "mcp".into(), "add".into(), "playwright".into(), "--".into(),
-        "npx".into(), "-y".into(), PLAYWRIGHT_MCP_PACKAGE.into(),
-        "--browser".into(), "chrome".into(),
+        "mcp".into(),
+        "add".into(),
+        "playwright".into(),
+        "--".into(),
+        "npx".into(),
+        "-y".into(),
+        PLAYWRIGHT_MCP_PACKAGE.into(),
+        "--browser".into(),
+        "chrome".into(),
         // A browser task starts with no persisted profile and cannot leave a
         // service worker running after the MCP process exits.
-        "--isolated".into(), "--block-service-workers".into(),
+        "--isolated".into(),
+        "--block-service-workers".into(),
     ];
     if let Some(origins) = allowed_origins {
         args.push("--allowed-origins".into());
@@ -135,7 +148,11 @@ fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
     let rest = url
         .strip_prefix("https://")
         .ok_or_else(|| "Remote MCP addresses must use https://".to_string())?;
-    if rest.is_empty() || rest.contains('@') || rest.chars().any(char::is_whitespace) || url.len() > 2048 {
+    if rest.is_empty()
+        || rest.contains('@')
+        || rest.chars().any(char::is_whitespace)
+        || url.len() > 2048
+    {
         return Err("Enter a valid HTTPS MCP address without embedded credentials.".into());
     }
     let transport = input.transport.trim().to_ascii_lowercase();
@@ -143,8 +160,14 @@ fn remote_mcp_args(input: &RemoteMcpInput) -> Result<Vec<String>, String> {
         return Err("Remote MCP transport must be HTTP or SSE.".into());
     }
     Ok(vec![
-        "mcp".into(), "add".into(), "--transport".into(), transport,
-        "--scope".into(), scope, name, url.into(),
+        "mcp".into(),
+        "add".into(),
+        "--transport".into(),
+        transport,
+        "--scope".into(),
+        scope,
+        name,
+        url.into(),
     ])
 }
 
@@ -155,11 +178,28 @@ fn local_mcp_args(input: &LocalMcpInput) -> Result<Vec<String>, String> {
     if !command.is_file() {
         return Err("Select a regular local executable file.".into());
     }
-    let args = input.args.iter().map(|arg| arg.trim()).filter(|arg| !arg.is_empty()).collect::<Vec<_>>();
-    if args.len() > 48 || args.iter().any(|arg| arg.len() > 1024 || arg.contains('\0')) {
+    let args = input
+        .args
+        .iter()
+        .map(|arg| arg.trim())
+        .filter(|arg| !arg.is_empty())
+        .collect::<Vec<_>>();
+    if args.len() > 48
+        || args
+            .iter()
+            .any(|arg| arg.len() > 1024 || arg.contains('\0'))
+    {
         return Err("Local MCP arguments are invalid or too long.".into());
     }
-    let mut out = vec!["mcp".into(), "add".into(), "--scope".into(), scope, name, "--".into(), command.display().to_string()];
+    let mut out = vec![
+        "mcp".into(),
+        "add".into(),
+        "--scope".into(),
+        scope,
+        name,
+        "--".into(),
+        command.display().to_string(),
+    ];
     out.extend(args.into_iter().map(str::to_string));
     Ok(out)
 }
@@ -230,7 +270,10 @@ fn parse_skill_frontmatter(text: &str) -> BTreeMap<String, String> {
     let mut current_val = String::new();
     let flush = |key: &Option<String>, val: &str, map: &mut BTreeMap<String, String>| {
         if let Some(k) = key {
-            let v = val.trim().trim_matches(|c| c == '"' || c == '\'').to_string();
+            let v = val
+                .trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string();
             if !k.is_empty() {
                 map.insert(k.clone(), v);
             }
@@ -252,7 +295,10 @@ fn parse_skill_frontmatter(text: &str) -> BTreeMap<String, String> {
             current_key = Some(k.trim().to_string());
             current_val = v.trim().to_string();
             // folded block indicators
-            if current_val == ">" || current_val == "|" || current_val == ">-" || current_val == "|-"
+            if current_val == ">"
+                || current_val == "|"
+                || current_val == ">-"
+                || current_val == "|-"
             {
                 current_val.clear();
             }
@@ -285,12 +331,17 @@ fn first_paragraph(body: &str) -> String {
     }
     if out.len() > 220 {
         out.truncate(217);
-        out.push_str("…");
+        out.push('…');
     }
     out
 }
 
-fn collect_skills_in_dir(dir: &Path, scope: &str, out: &mut Vec<SkillInfo>, seen: &mut BTreeMap<String, usize>) {
+fn collect_skills_in_dir(
+    dir: &Path,
+    scope: &str,
+    out: &mut Vec<SkillInfo>,
+    seen: &mut BTreeMap<String, usize>,
+) {
     if !dir.is_dir() {
         return;
     }
@@ -400,11 +451,7 @@ fn push_skill_file(
         SkillInfo {
             name,
             description: desc,
-            path: skill_md
-                .parent()
-                .unwrap_or(skill_md)
-                .display()
-                .to_string(),
+            path: skill_md.parent().unwrap_or(skill_md).display().to_string(),
             scope: scope.into(),
             user_invocable: invocable,
             when_to_use: fm.get("when-to-use").cloned().unwrap_or_default(),
@@ -461,7 +508,11 @@ fn discover_skills(project: Option<&str>) -> (Vec<SkillInfo>, Vec<String>) {
         }
     }
 
-    skills.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    skills.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
     (skills, roots)
 }
 
@@ -483,10 +534,7 @@ fn parse_mcp_list(val: serde_json::Value) -> Vec<McpServerInfo> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("unnamed")
                 .to_string();
-            let enabled = obj
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
+            let enabled = obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
             let scope = obj
                 .get("scope")
                 .and_then(|v| v.as_str())
@@ -701,7 +749,7 @@ fn strip_terminal_escapes(raw: &str) -> String {
         match chars.next() {
             // CSI: ESC [ followed by parameter/intermediate bytes, ending in a final byte.
             Some('[') => {
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if ('@'..='~').contains(&next) {
                         break;
                     }
@@ -730,9 +778,16 @@ fn redact_mcp_doctor_output(raw: String) -> String {
         .lines()
         .map(|line| {
             let lower = line.to_ascii_lowercase();
-            let sensitive = ["token", "api_key", "apikey", "secret", "password", "authorization"]
-                .iter()
-                .any(|needle| lower.contains(needle));
+            let sensitive = [
+                "token",
+                "api_key",
+                "apikey",
+                "secret",
+                "password",
+                "authorization",
+            ]
+            .iter()
+            .any(|needle| lower.contains(needle));
             if !sensitive {
                 return line.to_string();
             }
@@ -764,7 +819,11 @@ pub async fn extensions_mcp_doctor(grok_cmd: Option<String>) -> Result<String, S
 
 #[cfg(test)]
 mod tests {
-    use super::{local_mcp_args, marketplace_source, plugin_name, playwright_mcp_args, redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput, PLAYWRIGHT_MCP_PACKAGE};
+    use super::{
+        local_mcp_args, marketplace_source, playwright_mcp_args, plugin_name,
+        redact_mcp_doctor_output, remote_mcp_args, LocalMcpInput, RemoteMcpInput,
+        PLAYWRIGHT_MCP_PACKAGE,
+    };
 
     #[test]
     fn doctor_output_redacts_sensitive_values() {
@@ -803,11 +862,14 @@ mod tests {
 
     #[test]
     fn playwright_mcp_uses_isolated_profile_and_checked_allowlist() {
-        let args = playwright_mcp_args(Some("https://example.com;https://docs.example.com".into())).unwrap();
+        let args = playwright_mcp_args(Some("https://example.com;https://docs.example.com".into()))
+            .unwrap();
         assert!(args.iter().any(|arg| arg == "--isolated"));
         assert!(args.iter().any(|arg| arg == "--block-service-workers"));
         assert!(args.iter().any(|arg| arg == "--allowed-origins"));
-        assert!(args.iter().any(|arg| arg == "https://example.com;https://docs.example.com"));
+        assert!(args
+            .iter()
+            .any(|arg| arg == "https://example.com;https://docs.example.com"));
         assert!(playwright_mcp_args(Some("https://example.com/path".into())).is_err());
         assert!(playwright_mcp_args(Some("*".into())).is_err());
     }
@@ -819,27 +881,89 @@ mod tests {
             url: "https://mcp.example.com/connect".into(),
             transport: "http".into(),
             scope: "user".into(),
-        }).unwrap();
-        assert_eq!(valid, vec!["mcp", "add", "--transport", "http", "--scope", "user", "notion", "https://mcp.example.com/connect"]);
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "bad name".into(), url: "https://mcp.example.com".into(), transport: "http".into(), scope: "user".into() }).is_err());
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "http://localhost:3000".into(), transport: "http".into(), scope: "user".into() }).is_err());
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://token@example.com/mcp".into(), transport: "sse".into(), scope: "user".into() }).is_err());
-        assert!(remote_mcp_args(&RemoteMcpInput { name: "safe".into(), url: "https://mcp.example.com".into(), transport: "http".into(), scope: "shared".into() }).is_err());
+        })
+        .unwrap();
+        assert_eq!(
+            valid,
+            vec![
+                "mcp",
+                "add",
+                "--transport",
+                "http",
+                "--scope",
+                "user",
+                "notion",
+                "https://mcp.example.com/connect"
+            ]
+        );
+        assert!(remote_mcp_args(&RemoteMcpInput {
+            name: "bad name".into(),
+            url: "https://mcp.example.com".into(),
+            transport: "http".into(),
+            scope: "user".into()
+        })
+        .is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput {
+            name: "safe".into(),
+            url: "http://localhost:3000".into(),
+            transport: "http".into(),
+            scope: "user".into()
+        })
+        .is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput {
+            name: "safe".into(),
+            url: "https://token@example.com/mcp".into(),
+            transport: "sse".into(),
+            scope: "user".into()
+        })
+        .is_err());
+        assert!(remote_mcp_args(&RemoteMcpInput {
+            name: "safe".into(),
+            url: "https://mcp.example.com".into(),
+            transport: "http".into(),
+            scope: "shared".into()
+        })
+        .is_err());
     }
 
     #[test]
     fn local_mcp_uses_an_executable_and_separate_arguments() {
         let args = local_mcp_args(&LocalMcpInput {
-            name: "local-smoke".into(), command: "/usr/bin/true".into(),
-            args: vec!["--flag".into(), "value with spaces".into()], scope: "user".into(),
-        }).unwrap();
-        assert_eq!(args, vec!["mcp", "add", "--scope", "user", "local-smoke", "--", "/usr/bin/true", "--flag", "value with spaces"]);
-        assert!(local_mcp_args(&LocalMcpInput { name: "local".into(), command: "/missing".into(), args: vec![], scope: "user".into() }).is_err());
+            name: "local-smoke".into(),
+            command: "/usr/bin/true".into(),
+            args: vec!["--flag".into(), "value with spaces".into()],
+            scope: "user".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            args,
+            vec![
+                "mcp",
+                "add",
+                "--scope",
+                "user",
+                "local-smoke",
+                "--",
+                "/usr/bin/true",
+                "--flag",
+                "value with spaces"
+            ]
+        );
+        assert!(local_mcp_args(&LocalMcpInput {
+            name: "local".into(),
+            command: "/missing".into(),
+            args: vec![],
+            scope: "user".into()
+        })
+        .is_err());
     }
 
     #[test]
     fn marketplace_source_accepts_a_single_safe_reference() {
-        assert_eq!(marketplace_source(" linkyang01/gorkX ").unwrap(), "linkyang01/gorkX");
+        assert_eq!(
+            marketplace_source(" linkyang01/gorkX ").unwrap(),
+            "linkyang01/gorkX"
+        );
         assert!(marketplace_source("\nhttps://example.com/market.git").is_err());
         assert!(marketplace_source("\0").is_err());
     }
@@ -879,8 +1003,11 @@ pub async fn extensions_mcp_add_remote(
 ) -> Result<String, String> {
     let args = remote_mcp_args(&input)?;
     let project_dir = if input.scope.trim().eq_ignore_ascii_case("project") {
-        let raw = project.ok_or_else(|| "Select a project folder before adding a project MCP connection.".to_string())?;
-        let path = fs::canonicalize(raw.trim()).map_err(|_| "Selected project folder is unavailable.".to_string())?;
+        let raw = project.ok_or_else(|| {
+            "Select a project folder before adding a project MCP connection.".to_string()
+        })?;
+        let path = fs::canonicalize(raw.trim())
+            .map_err(|_| "Selected project folder is unavailable.".to_string())?;
         if !path.is_dir() {
             return Err("Selected project folder is unavailable.".into());
         }
@@ -896,7 +1023,9 @@ pub async fn extensions_mcp_add_remote(
             let mut cmd = Command::new(&bin);
             cmd.args(&refs).current_dir(cwd);
             crate::paths::apply_engine_env(&mut cmd);
-            let out = cmd.output().map_err(|e| format!("spawn {}: {e}", bin.display()))?;
+            let out = cmd
+                .output()
+                .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
             if out.status.success() {
                 Ok(String::from_utf8_lossy(&out.stdout).to_string())
             } else {
@@ -921,11 +1050,18 @@ pub async fn extensions_mcp_add_local(
 ) -> Result<String, String> {
     let args = local_mcp_args(&input)?;
     let project_dir = if input.scope.trim().eq_ignore_ascii_case("project") {
-        let raw = project.ok_or_else(|| "Select a project folder before adding a project MCP connection.".to_string())?;
-        let path = fs::canonicalize(raw.trim()).map_err(|_| "Selected project folder is unavailable.".to_string())?;
-        if !path.is_dir() { return Err("Selected project folder is unavailable.".into()); }
+        let raw = project.ok_or_else(|| {
+            "Select a project folder before adding a project MCP connection.".to_string()
+        })?;
+        let path = fs::canonicalize(raw.trim())
+            .map_err(|_| "Selected project folder is unavailable.".to_string())?;
+        if !path.is_dir() {
+            return Err("Selected project folder is unavailable.".into());
+        }
         Some(path)
-    } else { None };
+    } else {
+        None
+    };
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -934,11 +1070,20 @@ pub async fn extensions_mcp_add_local(
             let mut cmd = Command::new(&bin);
             cmd.args(&refs).current_dir(cwd);
             crate::paths::apply_engine_env(&mut cmd);
-            let out = cmd.output().map_err(|e| format!("spawn {}: {e}", bin.display()))?;
-            if out.status.success() { Ok(String::from_utf8_lossy(&out.stdout).to_string()) }
-            else { Err(String::from_utf8_lossy(&out.stderr).to_string()) }
-        } else { run_grok_text(&bin, &refs) }
-    }).await.map_err(|e| e.to_string())?
+            let out = cmd
+                .output()
+                .map_err(|e| format!("spawn {}: {e}", bin.display()))?;
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
+            } else {
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
+            }
+        } else {
+            run_grok_text(&bin, &refs)
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -956,9 +1101,7 @@ pub async fn extensions_plugin_install(
         let mut cmd = Command::new(&bin);
         cmd.args(["plugin", "install", &src]);
         crate::paths::apply_engine_env(&mut cmd);
-        let out = cmd
-            .output()
-            .map_err(|e| e.to_string())?;
+        let out = cmd.output().map_err(|e| e.to_string())?;
         let mut s = String::from_utf8_lossy(&out.stdout).to_string();
         let err = String::from_utf8_lossy(&out.stderr);
         if !err.trim().is_empty() {
@@ -1025,7 +1168,10 @@ fn plugin_readout(raw: String) -> String {
     if clean.len() <= MAX_PLUGIN_READOUT {
         clean
     } else {
-        format!("{}\n… plugin output truncated", &clean[..MAX_PLUGIN_READOUT])
+        format!(
+            "{}\n… plugin output truncated",
+            &clean[..MAX_PLUGIN_READOUT]
+        )
     }
 }
 
@@ -1039,7 +1185,7 @@ pub async fn extensions_plugin_details(
     tauri::async_runtime::spawn_blocking(move || {
         run_grok_text(&bin, &["plugin", "details", &name])
             .map(plugin_readout)
-            .map_err(|error| plugin_readout(error))
+            .map_err(plugin_readout)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1050,8 +1196,8 @@ pub async fn extensions_plugin_validate(
     path: String,
     grok_cmd: Option<String>,
 ) -> Result<String, String> {
-    let path = fs::canonicalize(path.trim())
-        .map_err(|_| "Plugin folder is unavailable.".to_string())?;
+    let path =
+        fs::canonicalize(path.trim()).map_err(|_| "Plugin folder is unavailable.".to_string())?;
     if !path.is_dir() {
         return Err("Plugin folder is unavailable.".into());
     }
@@ -1060,7 +1206,7 @@ pub async fn extensions_plugin_validate(
     tauri::async_runtime::spawn_blocking(move || {
         run_grok_text(&bin, &["plugin", "validate", &path])
             .map(plugin_readout)
-            .map_err(|error| plugin_readout(error))
+            .map_err(plugin_readout)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1147,40 +1293,53 @@ pub async fn extensions_marketplace(grok_cmd: Option<String>) -> Result<Marketpl
 
 fn marketplace_source(raw: &str) -> Result<String, String> {
     let value = raw.trim();
-    if value.is_empty()
-        || value.len() > 2048
-        || raw.contains('\0')
-        || raw.contains(['\n', '\r'])
-    {
+    if value.is_empty() || value.len() > 2048 || raw.contains('\0') || raw.contains(['\n', '\r']) {
         return Err("Enter a valid marketplace git URL, GitHub shorthand, or local path.".into());
     }
     Ok(value.into())
 }
 
 #[tauri::command]
-pub async fn extensions_marketplace_add(source: String, grok_cmd: Option<String>) -> Result<String, String> {
+pub async fn extensions_marketplace_add(
+    source: String,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
     let source = marketplace_source(&source)?;
     let bin = grok_bin(grok_cmd.as_deref());
-    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["plugin", "marketplace", "add", &source]))
-        .await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        run_grok_text(&bin, &["plugin", "marketplace", "add", &source])
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn extensions_marketplace_update(source: Option<String>, grok_cmd: Option<String>) -> Result<String, String> {
+pub async fn extensions_marketplace_update(
+    source: Option<String>,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
     let source = source.map(|value| marketplace_source(&value)).transpose()?;
     let bin = grok_bin(grok_cmd.as_deref());
     tauri::async_runtime::spawn_blocking(move || match source {
         Some(value) => run_grok_text(&bin, &["plugin", "marketplace", "update", &value]),
         None => run_grok_text(&bin, &["plugin", "marketplace", "update"]),
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn extensions_marketplace_remove(source: String, grok_cmd: Option<String>) -> Result<String, String> {
+pub async fn extensions_marketplace_remove(
+    source: String,
+    grok_cmd: Option<String>,
+) -> Result<String, String> {
     let source = marketplace_source(&source)?;
     let bin = grok_bin(grok_cmd.as_deref());
-    tauri::async_runtime::spawn_blocking(move || run_grok_text(&bin, &["plugin", "marketplace", "remove", &source]))
-        .await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        run_grok_text(&bin, &["plugin", "marketplace", "remove", &source])
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

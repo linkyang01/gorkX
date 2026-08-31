@@ -46,7 +46,7 @@ fn host_arch() -> &'static str {
 
 fn compare_semver(a: &str, b: &str) -> i32 {
     let parse = |s: &str| -> Vec<u32> {
-        s.split(|c| c == '.' || c == '+' || c == '-')
+        s.split(['.', '+', '-'])
             .map(|p| p.parse::<u32>().unwrap_or(0))
             .collect()
     };
@@ -109,11 +109,8 @@ fn pick_dmg_asset(assets: &[serde_json::Value]) -> Option<(String, String, u64)>
         let size = a.get("size").and_then(|x| x.as_u64()).unwrap_or(0);
         candidates.push((score, name.to_string(), url.to_string(), size));
     }
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
-    candidates
-        .into_iter()
-        .next()
-        .map(|(_, n, u, s)| (n, u, s))
+    candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
+    candidates.into_iter().next().map(|(_, n, u, s)| (n, u, s))
 }
 
 fn fetch_latest_release_json(
@@ -168,9 +165,7 @@ fn dmg_url_for_tag(tag: &str) -> (String, String) {
     let ver = strip_v(tag);
     let arch = host_arch();
     let name = format!("gorkX_{ver}_{arch}.dmg");
-    let url = format!(
-        "https://github.com/{OWNER}/{REPO}/releases/download/v{ver}/{name}"
-    );
+    let url = format!("https://github.com/{OWNER}/{REPO}/releases/download/v{ver}/{name}");
     // also try without v prefix in download path
     (name, url)
 }
@@ -268,9 +263,8 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
                     latest
                 },
                 update_available,
-                html_url: html.or_else(|| {
-                    Some(format!("https://github.com/{OWNER}/{REPO}/releases"))
-                }),
+                html_url: html
+                    .or_else(|| Some(format!("https://github.com/{OWNER}/{REPO}/releases"))),
                 dmg_url,
                 dmg_name,
                 dmg_bytes,
@@ -334,7 +328,7 @@ pub fn app_update_check(current_version: Option<String>) -> Result<AppUpdateChec
 fn downloads_dir() -> PathBuf {
     dirs::download_dir()
         .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
-        .unwrap_or_else(|| std::env::temp_dir())
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 /// Do not replace a previously complete DMG until the new response is fully
@@ -345,7 +339,8 @@ fn write_download_atomically(dest: &std::path::Path, bytes: &[u8]) -> Result<(),
     let temp = dest.with_extension(format!("download-{id}"));
     let result = (|| {
         let mut file = File::create(&temp).map_err(|e| format!("写入失败: {e}"))?;
-        file.write_all(bytes).map_err(|e| format!("写入失败: {e}"))?;
+        file.write_all(bytes)
+            .map_err(|e| format!("写入失败: {e}"))?;
         file.sync_all().map_err(|e| format!("写入失败: {e}"))?;
         std::fs::rename(&temp, dest).map_err(|e| format!("写入失败: {e}"))
     })();
@@ -357,7 +352,10 @@ fn write_download_atomically(dest: &std::path::Path, bytes: &[u8]) -> Result<(),
 
 /// Download the latest (or given) DMG into Downloads and open it for the user to install.
 #[tauri::command]
-pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> Result<AppUpdateInstallResult, String> {
+pub fn app_update_install(
+    dmg_url: Option<String>,
+    dmg_name: Option<String>,
+) -> Result<AppUpdateInstallResult, String> {
     let client = http_client()?;
     let (url, name) = if let (Some(u), Some(n)) = (dmg_url.clone(), dmg_name.clone()) {
         if !u.trim().is_empty() && !n.trim().is_empty() {
@@ -375,9 +373,7 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
         let chk = app_update_check(None)?;
         if !chk.update_available {
             // still allow re-download of current latest
-            let u = chk
-                .dmg_url
-                .ok_or_else(|| "无可用安装包".to_string())?;
+            let u = chk.dmg_url.ok_or_else(|| "无可用安装包".to_string())?;
             let n = chk.dmg_name.unwrap_or_else(|| "gorkX-update.dmg".into());
             (u, n)
         } else {
@@ -417,9 +413,7 @@ pub fn app_update_install(dmg_url: Option<String>, dmg_name: Option<String>) -> 
             note: format!("下载 HTTP {} — {}", resp.status(), url),
         });
     }
-    let bytes = resp
-        .bytes()
-        .map_err(|e| format!("读取下载内容失败: {e}"))?;
+    let bytes = resp.bytes().map_err(|e| format!("读取下载内容失败: {e}"))?;
     if bytes.len() < 1_000_000 {
         // A gorkX DMG is tens of MB. Never save a tiny error page or arbitrary
         // response as a file the OS will subsequently open.
@@ -480,10 +474,22 @@ mod tests {
     fn release_dmg_validator_rejects_untrusted_or_mismatched_assets() {
         for (url, name) in [
             ("https://example.com/gorkX.dmg", "gorkX.dmg"),
-            ("http://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg", "gorkX.dmg"),
-            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg?token=x", "gorkX.dmg"),
-            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.zip", "gorkX.zip"),
-            ("https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg", "other.dmg"),
+            (
+                "http://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg",
+                "gorkX.dmg",
+            ),
+            (
+                "https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg?token=x",
+                "gorkX.dmg",
+            ),
+            (
+                "https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.zip",
+                "gorkX.zip",
+            ),
+            (
+                "https://github.com/linkyang01/gorkX/releases/download/v0.4.3/gorkX.dmg",
+                "other.dmg",
+            ),
         ] {
             assert!(validate_release_dmg(url, name).is_err(), "{url}");
         }

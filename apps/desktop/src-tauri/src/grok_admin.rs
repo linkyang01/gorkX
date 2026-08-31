@@ -32,7 +32,9 @@ fn worktree_id(value: &str) -> bool {
     !value.is_empty()
         && !value.starts_with('-')
         && value.len() <= 200
-        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn existing_dir(value: &str) -> bool {
@@ -57,18 +59,26 @@ fn allowed_admin_args(args: &[String]) -> bool {
         | ["worktree", "db", "stats"]
         | ["worktree", "db", "path"]
         | ["worktree", "db", "rebuild"] => true,
-        ["worktree", "list", "--json", "--repo", repo] => !repo.is_empty() && !repo.starts_with('-'),
+        ["worktree", "list", "--json", "--repo", repo] => {
+            !repo.is_empty() && !repo.starts_with('-')
+        }
         ["sessions", "list", "-n", limit] => positive_limit(limit),
-        ["sessions", "search", "-n", limit, "--", query] => positive_limit(limit) && !query.is_empty(),
+        ["sessions", "search", "-n", limit, "--", query] => {
+            positive_limit(limit) && !query.is_empty()
+        }
         ["sessions", "delete", id] => session_id(id),
         ["export", id, "--clipboard"] => session_id(id),
         ["export", id, output] => session_id(id) && output.ends_with(".md") && !output.is_empty(),
-        ["trace", id, "--local", "--output", output] => session_id(id)
-            && output.ends_with(".tar.gz")
-            && !output.starts_with('-')
-            && !output.is_empty(),
+        ["trace", id, "--local", "--output", output] => {
+            session_id(id)
+                && output.ends_with(".tar.gz")
+                && !output.starts_with('-')
+                && !output.is_empty()
+        }
         ["trace", id, "--json"] => session_id(id),
-        ["worktree", "rm", "-f", ids @ ..] => !ids.is_empty() && ids.iter().all(|id| worktree_id(id)),
+        ["worktree", "rm", "-f", ids @ ..] => {
+            !ids.is_empty() && ids.iter().all(|id| worktree_id(id))
+        }
         ["worktree", "rm", ids @ ..] => !ids.is_empty() && ids.iter().all(|id| worktree_id(id)),
         ["memory", "clear", "--workspace", "-y"]
         | ["memory", "clear", "--global", "-y"]
@@ -147,14 +157,44 @@ mod tests {
         assert!(allowed_admin_args(&args(&["setup"])));
         assert!(allowed_admin_args(&args(&["setup", "--json"])));
         assert!(allowed_admin_args(&args(&["inspect", "--json"])));
-        assert!(allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--", "auth failure"])));
-        assert!(allowed_admin_args(&args(&["export", "12345678-1234-1234-1234-123456789abc", "--clipboard"])));
-        assert!(allowed_admin_args(&args(&["trace", "12345678-1234-1234-1234-123456789abc", "--local", "--output", "/tmp/task.tar.gz"])));
-        assert!(allowed_admin_args(&args(&["trace", "12345678-1234-1234-1234-123456789abc", "--json"])));
-        assert!(allowed_admin_args(&args(&["memory", "clear", "--workspace", "-y"])));
+        assert!(allowed_admin_args(&args(&[
+            "sessions",
+            "search",
+            "-n",
+            "40",
+            "--",
+            "auth failure"
+        ])));
+        assert!(allowed_admin_args(&args(&[
+            "export",
+            "12345678-1234-1234-1234-123456789abc",
+            "--clipboard"
+        ])));
+        assert!(allowed_admin_args(&args(&[
+            "trace",
+            "12345678-1234-1234-1234-123456789abc",
+            "--local",
+            "--output",
+            "/tmp/task.tar.gz"
+        ])));
+        assert!(allowed_admin_args(&args(&[
+            "trace",
+            "12345678-1234-1234-1234-123456789abc",
+            "--json"
+        ])));
+        assert!(allowed_admin_args(&args(&[
+            "memory",
+            "clear",
+            "--workspace",
+            "-y"
+        ])));
         assert!(allowed_admin_args(&args(&["worktree", "db", "stats"])));
         assert!(allowed_admin_args(&args(&["worktree", "db", "rebuild"])));
-        assert!(allowed_admin_args(&args(&["workspace", "status", "--json"])));
+        assert!(allowed_admin_args(&args(&[
+            "workspace",
+            "status",
+            "--json"
+        ])));
     }
 
     #[test]
@@ -162,8 +202,21 @@ mod tests {
         assert!(!allowed_admin_args(&args(&["update"])));
         assert!(!allowed_admin_args(&args(&["update", "--version"])));
         assert!(!allowed_admin_args(&args(&["logout"])));
-        assert!(!allowed_admin_args(&args(&["sessions", "search", "-n", "40", "--dangerous", "query"])));
+        assert!(!allowed_admin_args(&args(&[
+            "sessions",
+            "search",
+            "-n",
+            "40",
+            "--dangerous",
+            "query"
+        ])));
         assert!(!allowed_admin_args(&args(&["worktree", "rm", "--all"])));
-        assert!(!allowed_admin_args(&args(&["workspace", "start", "--cwd", "-", "--json"])));
+        assert!(!allowed_admin_args(&args(&[
+            "workspace",
+            "start",
+            "--cwd",
+            "-",
+            "--json"
+        ])));
     }
 }

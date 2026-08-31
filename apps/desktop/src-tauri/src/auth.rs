@@ -146,10 +146,7 @@ fn auth_login_browser_sync(force: bool) -> Result<AuthLoginResult, String> {
         .map_err(|e| e.to_string())?;
 
     // 1) Start device authorization — scopes must include grok-cli:access
-    let form = [
-        ("client_id", OIDC_CLIENT_ID),
-        ("scope", OIDC_SCOPES),
-    ];
+    let form = [("client_id", OIDC_CLIENT_ID), ("scope", OIDC_SCOPES)];
     let resp = client
         .post(DEVICE_CODE_URL)
         .header("Accept", "application/json")
@@ -205,19 +202,14 @@ fn auth_login_browser_sync(force: bool) -> Result<AuthLoginResult, String> {
                 ok: false,
                 email: None,
                 display_name: None,
-                note: format!(
-                    "登录超时。请再点登录，浏览器打开后完成授权（验证码 {user_code}）"
-                ),
+                note: format!("登录超时。请再点登录，浏览器打开后完成授权（验证码 {user_code}）"),
                 verification_uri: Some(verify_url),
             });
         }
         std::thread::sleep(Duration::from_secs(sleep_secs));
 
         let tok_form = [
-            (
-                "grant_type",
-                "urn:ietf:params:oauth:grant-type:device_code",
-            ),
+            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ("device_code", device_code.as_str()),
             ("client_id", OIDC_CLIENT_ID),
         ];
@@ -369,16 +361,15 @@ fn open_url_in_browser(url: &str) {
 }
 
 /// email, first, last, user_id, profile picture asset id or URL
-fn fetch_userinfo(
-    client: &reqwest::blocking::Client,
-    access: &str,
-) -> (
+type UserInfo = (
     Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
-) {
+);
+
+fn fetch_userinfo(client: &reqwest::blocking::Client, access: &str) -> UserInfo {
     let resp = client
         .get(USERINFO_URL)
         .header("Authorization", format!("Bearer {access}"))
@@ -446,12 +437,11 @@ fn avatar_cache_paths() -> (std::path::PathBuf, std::path::PathBuf) {
 /// On failure returns None → UI must show the default letter avatar.
 /// Cloudflare on assets.x.ai returns 403 (error 1010) without a normal UA.
 pub fn resolve_avatar_data_url(token: &str) -> Option<String> {
-    let asset = profile_asset_from_auth_file()
-        .or_else(|| {
-            let a = fetch_profile_asset_id(token)?;
-            persist_profile_asset_id(&a);
-            Some(a)
-        })?;
+    let asset = profile_asset_from_auth_file().or_else(|| {
+        let a = fetch_profile_asset_id(token)?;
+        persist_profile_asset_id(&a);
+        Some(a)
+    })?;
     let (meta_path, img_path) = avatar_cache_paths();
     // Local cache hit
     if let Ok(cached_asset) = std::fs::read_to_string(&meta_path) {
@@ -524,12 +514,15 @@ fn bytes_to_data_url(bytes: &[u8], content_type: Option<&str>) -> Option<String>
                 "image/webp"
             }
         });
-    Some(format!("data:{mime};base64,{}", base64_standard_encode(bytes)))
+    Some(format!(
+        "data:{mime};base64,{}",
+        base64_standard_encode(bytes)
+    ))
 }
 
 fn base64_standard_encode(data: &[u8]) -> String {
     const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 3 <= data.len() {
         let n = ((data[i] as u32) << 16) | ((data[i + 1] as u32) << 8) | (data[i + 2] as u32);
@@ -592,7 +585,8 @@ pub fn profile_asset_from_auth_file() -> Option<String> {
 pub fn coding_data_retention_opt_out_from_auth_file() -> Option<bool> {
     fn find(value: &Value) -> Option<bool> {
         match value {
-            Value::Object(map) => map.get("coding_data_retention_opt_out")
+            Value::Object(map) => map
+                .get("coding_data_retention_opt_out")
                 .or_else(|| map.get("codingDataRetentionOptOut"))
                 .and_then(Value::as_bool)
                 .or_else(|| map.values().find_map(find)),
@@ -723,8 +717,8 @@ pub fn ensure_bearer_token() -> Result<AuthProfile, String> {
         }
     }
 
-    let (token, email, display) = pick_session(&file)
-        .ok_or_else(|| "auth.json has no access token".to_string())?;
+    let (token, email, display) =
+        pick_session(&file).ok_or_else(|| "auth.json has no access token".to_string())?;
     Ok(AuthProfile {
         token,
         email,
@@ -777,12 +771,9 @@ fn load_auth_file(path: &Path) -> Result<AuthFile, String> {
     let obj = root
         .as_object()
         .ok_or_else(|| "auth.json root is not an object".to_string())?;
-    let provider_key = select_provider_key(obj)
-        .ok_or_else(|| "auth.json has no provider entry".to_string())?;
-    Ok(AuthFile {
-        root,
-        provider_key,
-    })
+    let provider_key =
+        select_provider_key(obj).ok_or_else(|| "auth.json has no provider entry".to_string())?;
+    Ok(AuthFile { root, provider_key })
 }
 
 /// Migrate the auth mode written by older gorkX builds before handing the
@@ -865,12 +856,11 @@ fn select_provider_key(obj: &Map<String, Value>) -> Option<String> {
             continue;
         }
         let exp = parse_expires_at(o.get("expires_at").and_then(|x| x.as_str())).unwrap_or(0);
-        let score = exp
-            .saturating_add(if o.get("refresh_token").is_some() {
-                1_000_000_000
-            } else {
-                0
-            });
+        let score = exp.saturating_add(if o.get("refresh_token").is_some() {
+            1_000_000_000
+        } else {
+            0
+        });
         if best.as_ref().map(|(_, s)| score > *s).unwrap_or(true) {
             best = Some((k.clone(), score));
         }
@@ -888,7 +878,7 @@ fn select_provider_key(obj: &Map<String, Value>) -> Option<String> {
     best.map(|(k, _)| k)
 }
 
-fn entry_map<'a>(file: &'a AuthFile) -> Option<&'a Map<String, Value>> {
+fn entry_map(file: &AuthFile) -> Option<&Map<String, Value>> {
     if file.provider_key.is_empty() {
         return file.root.as_object();
     }
@@ -897,7 +887,7 @@ fn entry_map<'a>(file: &'a AuthFile) -> Option<&'a Map<String, Value>> {
         .and_then(|v| v.as_object())
 }
 
-fn entry_map_mut<'a>(file: &'a mut AuthFile) -> Option<&'a mut Map<String, Value>> {
+fn entry_map_mut(file: &mut AuthFile) -> Option<&mut Map<String, Value>> {
     if file.provider_key.is_empty() {
         return file.root.as_object_mut();
     }
@@ -1004,7 +994,7 @@ fn parse_expires_at(s: Option<&str>) -> Option<u64> {
 }
 
 fn days_from_civil(y: i32, m: u32, d: u32) -> Option<i64> {
-    if m < 1 || m > 12 || d < 1 || d > 31 {
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
         return None;
     }
     let y = y as i64;
@@ -1042,15 +1032,20 @@ pub fn token_has_cli_access(token: &str) -> bool {
     let scope = jwt_claim(token, "scope")
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_default();
-    scope.split_whitespace().any(|s| s == "grok-cli:access")
-        || scope.contains("grok-cli")
+    scope.split_whitespace().any(|s| s == "grok-cli:access") || scope.contains("grok-cli")
 }
 
 /// Human membership name from access-token JWT + optional plan id string.
 /// Prefer explicit `subscription_tier` / plan id when present; else JWT `tier`.
 pub fn membership_label_from_token(token: &str) -> Option<String> {
     // String plan ids first (if present)
-    for key in ["subscription_tier", "plan", "plan_id", "tier_name", "product"] {
+    for key in [
+        "subscription_tier",
+        "plan",
+        "plan_id",
+        "tier_name",
+        "product",
+    ] {
         if let Some(v) = jwt_claim(token, key) {
             if let Some(s) = v.as_str() {
                 if let Some(label) = plan_id_to_label(s) {
@@ -1085,7 +1080,7 @@ pub fn membership_label_from_token(token: &str) -> Option<String> {
 
 /// Map xAI plan id (from binary enums / telemetry) → display name.
 pub fn plan_id_to_label(id: &str) -> Option<String> {
-    let s = id.trim().to_ascii_lowercase().replace('-', "_").replace(' ', "_");
+    let s = id.trim().to_ascii_lowercase().replace(['-', ' '], "_");
     let label = match s.as_str() {
         "supergrok_heavy" | "super_grok_heavy" => "SuperGrok Heavy",
         "supergrok" | "super_grok" => "SuperGrok",
@@ -1165,10 +1160,7 @@ fn refresh_and_persist(path: &Path, file: &AuthFile) -> Result<AuthFile, String>
         .or_else(|| {
             // provider key is often `https://auth.x.ai::CLIENT_ID`
             if file.provider_key.contains("::") {
-                file.provider_key
-                    .rsplit("::")
-                    .next()
-                    .map(|s| s.to_string())
+                file.provider_key.rsplit("::").next().map(|s| s.to_string())
             } else {
                 None
             }
@@ -1181,8 +1173,8 @@ fn refresh_and_persist(path: &Path, file: &AuthFile) -> Result<AuthFile, String>
         .trim_end_matches('/')
         .to_string();
 
-    let token_url = discover_token_endpoint(&issuer)
-        .unwrap_or_else(|| format!("{issuer}/oauth2/token"));
+    let token_url =
+        discover_token_endpoint(&issuer).unwrap_or_else(|| format!("{issuer}/oauth2/token"));
 
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
@@ -1241,7 +1233,8 @@ fn refresh_and_persist(path: &Path, file: &AuthFile) -> Result<AuthFile, String>
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, format!("{pretty}\n")).map_err(|e| e.to_string())?;
     if let Err(e) = std::fs::rename(&tmp, path) {
-        std::fs::write(path, format!("{pretty}\n")).map_err(|e2| format!("write auth: {e} / {e2}"))?;
+        std::fs::write(path, format!("{pretty}\n"))
+            .map_err(|e2| format!("write auth: {e} / {e2}"))?;
         let _ = std::fs::remove_file(&tmp);
     }
     Ok(updated)

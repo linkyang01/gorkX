@@ -118,11 +118,14 @@ pub async fn git_snapshot(
     tauri::async_runtime::spawn_blocking(move || {
         git_snapshot_blocking(cwd, allow_workspace_preview.unwrap_or(false))
     })
-        .await
-        .map_err(|e| e.to_string())?
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-fn git_snapshot_blocking(cwd: String, allow_workspace_preview: bool) -> Result<GitSnapshot, String> {
+fn git_snapshot_blocking(
+    cwd: String,
+    allow_workspace_preview: bool,
+) -> Result<GitSnapshot, String> {
     let root = Path::new(&cwd);
     if !root.is_dir() {
         return Ok(GitSnapshot {
@@ -224,13 +227,7 @@ fn workspace_snapshot(root: &Path) -> GitSnapshot {
         ".cache",
     ];
     let mut scored: Vec<(u64, String)> = Vec::new();
-    fn walk(
-        dir: &Path,
-        root: &Path,
-        depth: usize,
-        skip: &[&str],
-        out: &mut Vec<(u64, String)>,
-    ) {
+    fn walk(dir: &Path, root: &Path, depth: usize, skip: &[&str], out: &mut Vec<(u64, String)>) {
         if depth > 3 || out.len() > 80 {
             return;
         }
@@ -273,7 +270,7 @@ fn workspace_snapshot(root: &Path) -> GitSnapshot {
         }
     }
     walk(root, root, 0, &skip, &mut scored);
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_by_key(|item| std::cmp::Reverse(item.0));
     scored.truncate(48);
     let files: Vec<GitFileEntry> = scored
         .iter()
@@ -457,14 +454,23 @@ pub async fn git_unstage(cwd: String, path: Option<String>) -> Result<(), String
 
 #[cfg(test)]
 mod tests {
-    use super::{existing_project_child, git_file_diff, git_snapshot_blocking, parse_status_entries, relative_project_path, workspace_snapshot};
+    use super::{
+        existing_project_child, git_file_diff, git_snapshot_blocking, parse_status_entries,
+        relative_project_path, workspace_snapshot,
+    };
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn accepts_only_relative_project_paths() {
-        assert_eq!(relative_project_path("src/main.rs").as_deref(), Ok("src/main.rs"));
-        assert_eq!(relative_project_path("./README.md").as_deref(), Ok("./README.md"));
+        assert_eq!(
+            relative_project_path("src/main.rs").as_deref(),
+            Ok("src/main.rs")
+        );
+        assert_eq!(
+            relative_project_path("./README.md").as_deref(),
+            Ok("./README.md")
+        );
         assert!(relative_project_path("../secret").is_err());
         assert!(relative_project_path("/etc/passwd").is_err());
         assert!(relative_project_path("").is_err());
@@ -492,13 +498,20 @@ mod tests {
             .as_nanos();
         let project = std::env::temp_dir().join(format!("gorkx-review-selected-{suffix}"));
         fs::create_dir_all(&project).unwrap();
-        fs::write(project.join("private-looking.txt"), "not for an inbox preview").unwrap();
+        fs::write(
+            project.join("private-looking.txt"),
+            "not for an inbox preview",
+        )
+        .unwrap();
 
         let denied = git_snapshot_blocking(project.display().to_string(), false).unwrap();
         assert!(!denied.is_git);
         assert!(denied.files.is_empty());
         let allowed = git_snapshot_blocking(project.display().to_string(), true).unwrap();
-        assert!(allowed.files.iter().any(|file| file.path == "private-looking.txt"));
+        assert!(allowed
+            .files
+            .iter()
+            .any(|file| file.path == "private-looking.txt"));
 
         fs::remove_dir_all(project).unwrap();
     }
@@ -541,7 +554,12 @@ mod tests {
         let outside = base.join("outside.txt");
         fs::create_dir_all(&project).unwrap();
         fs::write(&outside, "private").unwrap();
-        assert!(Command::new("git").args(["init", "-q"]).current_dir(&project).status().unwrap().success());
+        assert!(Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&project)
+            .status()
+            .unwrap()
+            .success());
         symlink(&outside, project.join("outside-link")).unwrap();
 
         let result = tauri::async_runtime::block_on(git_file_diff(

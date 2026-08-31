@@ -1,8 +1,8 @@
 //! Local SQLite store for thread metadata + recent chat snapshots.
 
+use chrono::{Duration, NaiveDate};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
-use chrono::{Duration, NaiveDate};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
@@ -214,7 +214,10 @@ impl AppStore {
             "ALTER TABLE chat_lines ADD COLUMN parent_subagent_id TEXT",
             [],
         );
-        let _ = conn.execute("ALTER TABLE chat_lines ADD COLUMN attachments_json TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE chat_lines ADD COLUMN attachments_json TEXT",
+            [],
+        );
         let _ = conn.execute("ALTER TABLE chat_lines ADD COLUMN at INTEGER", []);
         Ok(Self {
             conn: Mutex::new(conn),
@@ -312,10 +315,12 @@ pub fn store_record_daily_token_usage(
     }
     let conn = store.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono_like_now().parse::<i64>().unwrap_or(0);
-    let inserted = conn.execute(
-        "INSERT OR IGNORE INTO token_usage_events (event_key, recorded_at) VALUES (?1, ?2)",
-        params![event_key, now],
-    ).map_err(|e| e.to_string())?;
+    let inserted = conn
+        .execute(
+            "INSERT OR IGNORE INTO token_usage_events (event_key, recorded_at) VALUES (?1, ?2)",
+            params![event_key, now],
+        )
+        .map_err(|e| e.to_string())?;
     if inserted == 0 {
         return read_daily_usage(&conn, &day);
     }
@@ -326,7 +331,10 @@ pub fn store_record_daily_token_usage(
     // `totalTokens` is the kernel's full prompt sum (including cache). If an
     // older response omits it, input + output is the only non-overlapping
     // fallback available; cache/reasoning remain separately displayed.
-    let total = usage.total_tokens.map(|value| value.max(0)).unwrap_or(input + output);
+    let total = usage
+        .total_tokens
+        .map(|value| value.max(0))
+        .unwrap_or(input + output);
     conn.execute(
         "INSERT INTO daily_token_usage (day, total_tokens, input_tokens, output_tokens, cached_read_tokens, reasoning_tokens, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT(day) DO UPDATE SET total_tokens = total_tokens + excluded.total_tokens, input_tokens = input_tokens + excluded.input_tokens, output_tokens = output_tokens + excluded.output_tokens, cached_read_tokens = cached_read_tokens + excluded.cached_read_tokens, reasoning_tokens = reasoning_tokens + excluded.reasoning_tokens, updated_at = excluded.updated_at",
         params![day, total, input, output, cached, reasoning, now],
@@ -360,13 +368,13 @@ pub fn store_get_daily_token_usage(
         .optional()
         .map_err(|e| e.to_string())?;
     Ok(row.unwrap_or(DailyTokenUsageRow {
-            day,
-            total_tokens: 0,
-            input_tokens: 0,
-            output_tokens: 0,
-            cached_read_tokens: 0,
-            reasoning_tokens: 0,
-            updated_at: 0,
+        day,
+        total_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cached_read_tokens: 0,
+        reasoning_tokens: 0,
+        updated_at: 0,
     }))
 }
 
@@ -413,7 +421,10 @@ pub fn store_get_daily_token_usage_range(
 }
 
 #[tauri::command]
-pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result<Vec<ThreadMetaRow>, String> {
+pub fn store_list_threads(
+    store: State<'_, AppStore>,
+    project: String,
+) -> Result<Vec<ThreadMetaRow>, String> {
     let conn = store.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
@@ -463,7 +474,11 @@ pub fn store_list_threads(store: State<'_, AppStore>, project: String) -> Result
     Ok(rows)
 }
 
-fn search_thread_history(conn: &Connection, query: &str, limit: usize) -> Result<Vec<ThreadSearchHit>, String> {
+fn search_thread_history(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ThreadSearchHit>, String> {
     let needle = query.trim();
     if needle.is_empty() {
         return Ok(vec![]);
@@ -502,28 +517,30 @@ fn search_thread_history(conn: &Connection, query: &str, limit: usize) -> Result
             "#,
         )
         .map_err(|e| e.to_string())?;
-    let rows = stmt.query_map(params![needle, limit as i64], |r| {
-        let archived: i64 = r.get(10)?;
-        Ok(ThreadSearchHit {
-            id: r.get(0)?,
-            project: r.get(1)?,
-            title: r.get(2)?,
-            session_id: r.get(3)?,
-            model_id: r.get(4)?,
-            cwd: r.get(5)?,
-            worktree_path: r.get(6)?,
-            effort: r.get(7)?,
-            chat_mode: r.get(8)?,
-            updated_at: r.get(9)?,
-            archived: archived != 0,
-            session_goal_text: r.get(11)?,
-            session_goal_status: r.get(12)?,
-            session_goal_message: r.get(13)?,
-            excerpt: r.get::<_, String>(14)?.chars().take(420).collect(),
+    let rows = stmt
+        .query_map(params![needle, limit as i64], |r| {
+            let archived: i64 = r.get(10)?;
+            Ok(ThreadSearchHit {
+                id: r.get(0)?,
+                project: r.get(1)?,
+                title: r.get(2)?,
+                session_id: r.get(3)?,
+                model_id: r.get(4)?,
+                cwd: r.get(5)?,
+                worktree_path: r.get(6)?,
+                effort: r.get(7)?,
+                chat_mode: r.get(8)?,
+                updated_at: r.get(9)?,
+                archived: archived != 0,
+                session_goal_text: r.get(11)?,
+                session_goal_status: r.get(12)?,
+                session_goal_message: r.get(13)?,
+                excerpt: r.get::<_, String>(14)?.chars().take(420).collect(),
+            })
         })
-    })
-    .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 /// Search only gorkX's own persisted task metadata and chat snapshots. This
@@ -626,10 +643,8 @@ pub fn rename_project_folder(old_path: String, new_name: String) -> Result<Strin
     for ch in raw.chars() {
         if ch.is_alphanumeric() || ch == '-' || ch == '_' {
             safe.push(ch);
-        } else if ch.is_whitespace() {
-            if !safe.ends_with('-') {
-                safe.push('-');
-            }
+        } else if ch.is_whitespace() && !safe.ends_with('-') {
+            safe.push('-');
         }
     }
     let safe = safe.trim_matches('-').to_string();
@@ -700,10 +715,8 @@ pub fn create_named_project(name: String) -> Result<String, String> {
     for ch in raw.chars() {
         if ch.is_alphanumeric() || ch == '-' || ch == '_' {
             safe.push(ch);
-        } else if ch.is_whitespace() {
-            if !safe.ends_with('-') {
-                safe.push('-');
-            }
+        } else if ch.is_whitespace() && !safe.ends_with('-') {
+            safe.push('-');
         }
     }
     let safe = safe.trim_matches('-').to_string();
@@ -766,7 +779,9 @@ pub struct ProductUsageRow {
 }
 
 /// Load profile + a **usable** bearer (OIDC refresh / adopt ~/.grok when needed).
-fn load_auth_token_and_profile() -> Result<(Option<String>, Option<String>, Option<String>), String> {
+type AuthTokenProfile = (Option<String>, Option<String>, Option<String>);
+
+fn load_auth_token_and_profile() -> Result<AuthTokenProfile, String> {
     match crate::auth::ensure_bearer_token() {
         Ok(p) => Ok((Some(p.token), p.email, p.display_name)),
         Err(e) => {
@@ -775,13 +790,13 @@ fn load_auth_token_and_profile() -> Result<(Option<String>, Option<String>, Opti
             if path.is_file() {
                 if let Ok(raw) = std::fs::read_to_string(&path) {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
-                        let email = v
-                            .as_object()
-                            .and_then(|obj| {
-                                obj.values().find_map(|val| {
-                                    val.get("email").and_then(|x| x.as_str()).map(|s| s.to_string())
-                                })
-                            });
+                        let email = v.as_object().and_then(|obj| {
+                            obj.values().find_map(|val| {
+                                val.get("email")
+                                    .and_then(|x| x.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                        });
                         return Ok((None, email, None));
                     }
                 }
@@ -1031,7 +1046,11 @@ fn parse_billing_body(
         .get("currentPeriod")
         .or_else(|| cfg.get("current_period"));
     let period_type = period
-        .and_then(|p| p.get("type").or_else(|| p.get("periodType")).or_else(|| p.get("period_type")))
+        .and_then(|p| {
+            p.get("type")
+                .or_else(|| p.get("periodType"))
+                .or_else(|| p.get("period_type"))
+        })
         .and_then(|x| x.as_str())
         .map(|s| s.to_string());
     let period_start = period
@@ -1111,7 +1130,6 @@ fn billing_percent(value: &serde_json::Value) -> Option<f64> {
     (0.0..=100.0).contains(&raw).then_some(raw)
 }
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelContextInfo {
@@ -1180,7 +1198,10 @@ fn first_model_id(models: &serde_json::Map<String, serde_json::Value>) -> Option
     // Prefer non-hidden entries; fall back to first key
     for (k, entry) in models {
         let info = entry.get("info").unwrap_or(entry);
-        let hidden = info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false);
+        let hidden = info
+            .get("hidden")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false);
         if !hidden {
             return Some(k.clone());
         }
@@ -1192,7 +1213,11 @@ fn visible_models_from_cache(v: &serde_json::Value) -> Vec<CachedModelRow> {
     let mut rows = Vec::new();
     for (id, entry) in models_map_from_cache(v) {
         let info = entry.get("info").unwrap_or(&entry);
-        if info.get("hidden").and_then(|x| x.as_bool()).unwrap_or(false) {
+        if info
+            .get("hidden")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
+        {
             continue;
         }
         rows.push(CachedModelRow {
@@ -1217,7 +1242,9 @@ fn visible_models_from_cache(v: &serde_json::Value) -> Vec<CachedModelRow> {
 /// successful refresh of an old cache. This keeps the desktop model picker
 /// honest when the account's entitlement changes or the network is offline.
 #[tauri::command]
-pub fn subscription_models_snapshot(refresh: Option<bool>) -> Result<SubscriptionModelsSnapshot, String> {
+pub fn subscription_models_snapshot(
+    refresh: Option<bool>,
+) -> Result<SubscriptionModelsSnapshot, String> {
     let requested_refresh = refresh.unwrap_or(false);
     let refresh_error = if requested_refresh {
         refresh_models_cache_from_network().err()
@@ -1267,7 +1294,11 @@ pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow
     // Custom / third-party models from config.toml
     if let Ok(snap) = crate::models_config::list_custom_models() {
         for m in snap.custom_models {
-            let id = if m.id.is_empty() { m.model.clone() } else { m.id.clone() };
+            let id = if m.id.is_empty() {
+                m.model.clone()
+            } else {
+                m.id.clone()
+            };
             if seen.contains(&id) {
                 continue;
             }
@@ -1290,7 +1321,8 @@ pub fn list_available_models(refresh: Option<bool>) -> Result<Vec<CachedModelRow
 
 fn refresh_models_cache_from_network() -> Result<(), String> {
     let (token, _, _) = load_auth_token_and_profile()?;
-    let token = token.ok_or_else(|| "not logged in (no auth session in App GROK_HOME)".to_string())?;
+    let token =
+        token.ok_or_else(|| "not logged in (no auth session in App GROK_HOME)".to_string())?;
     if !crate::auth::token_has_cli_access(&token) {
         return Err("login missing grok-cli:access — sign out and log in again".into());
     }
@@ -1329,10 +1361,7 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
             if id.is_empty() {
                 continue;
             }
-            map.insert(
-                id,
-                serde_json::json!({ "info": item }),
-            );
+            map.insert(id, serde_json::json!({ "info": item }));
         }
     } else if let Some(obj) = body.as_object() {
         // flat map of id -> info
@@ -1340,7 +1369,10 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
             if k == "object" || k == "data" {
                 continue;
             }
-            if v.get("info").is_some() || v.get("name").is_some() || v.get("context_window").is_some() {
+            if v.get("info").is_some()
+                || v.get("name").is_some()
+                || v.get("context_window").is_some()
+            {
                 map.insert(k.clone(), v.clone());
             }
         }
@@ -1356,8 +1388,11 @@ fn refresh_models_cache_from_network() -> Result<(), String> {
         "origin": url,
         "models": map,
     });
-    std::fs::write(&path, serde_json::to_string_pretty(&out).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())?;
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&out).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1373,7 +1408,10 @@ fn chrono_like_now() -> String {
 
 #[cfg(test)]
 mod model_cache_tests {
-    use super::{billing_percent, parse_billing_body, search_thread_history, usage_days, valid_usage_day, visible_models_from_cache};
+    use super::{
+        billing_percent, parse_billing_body, search_thread_history, usage_days, valid_usage_day,
+        visible_models_from_cache,
+    };
     use rusqlite::{params, Connection};
 
     #[test]
@@ -1407,7 +1445,8 @@ mod model_cache_tests {
               thread_id TEXT, project TEXT, seq INTEGER, text TEXT
             );
             "#,
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO thread_meta VALUES (?1, ?2, ?3, NULL, NULL, ?2, NULL, 'high', 'agent', ?4, ?5, NULL, NULL, NULL)",
             params!["a", "/project-a", "Quarterly report", 20_i64, 0_i64],
@@ -1419,7 +1458,8 @@ mod model_cache_tests {
         conn.execute(
             "INSERT INTO chat_lines VALUES (?1, ?2, ?3, ?4)",
             params!["b", "/project-b", 0_i64, "请比较两种方案的成本与风险"],
-        ).unwrap();
+        )
+        .unwrap();
 
         let title_hits = search_thread_history(&conn, "report", 36).unwrap();
         assert_eq!(title_hits.len(), 1);
@@ -1481,12 +1521,22 @@ mod model_cache_tests {
             Some("Person".into()),
             Some("SuperGrok".into()),
             None,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(summary.credit_usage_percent, Some(17.0));
         assert_eq!(summary.quota_label.as_deref(), Some("已用 17% · 剩 83%"));
-        assert_eq!(summary.period_type.as_deref(), Some("USAGE_PERIOD_TYPE_WEEKLY"));
-        assert_eq!(summary.period_start.as_deref(), Some("2026-07-25T12:51:38+00:00"));
-        assert_eq!(summary.period_end.as_deref(), Some("2026-08-01T12:51:38+00:00"));
+        assert_eq!(
+            summary.period_type.as_deref(),
+            Some("USAGE_PERIOD_TYPE_WEEKLY")
+        );
+        assert_eq!(
+            summary.period_start.as_deref(),
+            Some("2026-07-25T12:51:38+00:00")
+        );
+        assert_eq!(
+            summary.period_end.as_deref(),
+            Some("2026-08-01T12:51:38+00:00")
+        );
         let product_usage = summary.product_usage.unwrap();
         assert_eq!(product_usage.len(), 2);
         assert_eq!(product_usage[0].product, "GrokBuild");
@@ -1517,9 +1567,11 @@ pub fn model_context_info(model_id: Option<String>) -> Result<ModelContextInfo, 
         auto_compact_percent: 80,
         compactions_remaining: None,
     };
-    let Some(entry) = models.get(&mid).cloned().or_else(|| {
-        models.values().next().cloned()
-    }) else {
+    let Some(entry) = models
+        .get(&mid)
+        .cloned()
+        .or_else(|| models.values().next().cloned())
+    else {
         return Ok(default);
     };
     let info = entry.get("info").unwrap_or(&entry);
@@ -1541,13 +1593,9 @@ pub fn model_context_info(model_id: Option<String>) -> Result<ModelContextInfo, 
         .and_then(|x| x.as_str())
         .unwrap_or(&mid)
         .to_string();
-    let compactions_remaining = info.get("compactions_remaining").and_then(|x| {
-        if x.is_null() {
-            None
-        } else {
-            x.as_i64()
-        }
-    });
+    let compactions_remaining =
+        info.get("compactions_remaining")
+            .and_then(|x| if x.is_null() { None } else { x.as_i64() });
     Ok(ModelContextInfo {
         model_id: resolved_id,
         name,
@@ -1697,8 +1745,7 @@ pub fn store_db_path() -> Result<String, String> {
 #[tauri::command]
 pub fn store_data_dir() -> Result<String, String> {
     let p = db_path()?;
-    Ok(p
-        .parent()
+    Ok(p.parent()
         .map(|d| d.display().to_string())
         .unwrap_or_else(|| p.display().to_string()))
 }
@@ -1714,9 +1761,12 @@ fn chat_thread_ids(conn: &Connection, project: Option<&str>) -> Result<Vec<Strin
     };
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(params), |row| row.get::<_, String>(0))
+        .query_map(rusqlite::params_from_iter(params), |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

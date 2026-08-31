@@ -21,6 +21,22 @@ Developer ID 与 Apple 公证、原生 Intel 验收继续保留在 waiver 中。
 | 受限发布门 | **PASS WITH EXPLICIT WAIVER**：以用户本轮发布授权、`GORKX_RELEASE_SCOPE=arm64_adhoc`、`GORKX_LIMITED_RELEASE_WAIVER=1`、当前真实 prompt、既有真实第三方模型/麦克风证据和 `GORKX_ARCH_VERIFIED=arm64` 运行 `scripts/verify-release-readiness.sh`；结果 `releaseCandidateReady: true`、`canShipPublicArtifacts: true`、`blockers: []`。waiver 明确保留 clean-machine、Developer ID/notarization 和 x86_64 范围，不将其写成通过。 |
 | 公开发布 | **PUBLISHED**：提交 `e782fe946a8eec43db94e8fc972075b04b7e27a9` 已推送到 `main`，annotated tag `v1.3.1` 解引用到同一提交；[GitHub Release v1.3.1](https://github.com/linkyang01/gorkX/releases/tag/v1.3.1) 为非 draft、非 prerelease，资产 `gorkX_1.3.1_aarch64.dmg` 状态为 `uploaded`、大小 `71,006,820` bytes，GitHub digest 与本地均为 `sha256:c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62`。从公开下载 URL 重新下载后再次只读挂载，App 1.3.1、arm64 主程序/内核、Grok Build 1.0.12、许可证、隔离 `GROK_HOME` 与完整签名完整性均 **PASS**；签名仍为 ad-hoc，未公证。 |
 
+## 2026-08-31 · 8 分质量提升 P0 源码与回归门禁
+
+本条只登记本轮实际退出成功的源码、构建和锁定内核检查；供应链扫描工具缺失不列为通过项。
+
+| 项 | 结果 |
+|---|---|
+| 前端 Stage A–G | **PASS**：`cd apps/desktop && npm run test:stages`；包含 HookDenied、队列、审批、连接器、模型验证和发布一致性回归。 |
+| TypeScript 与 Web 包 | **PASS**：`cd apps/desktop && npm run typecheck && npm run build`，随后 `scripts/verify-desktop-web-build.sh`；初始 JS gzip `185,971 / 512,000` bytes，懒加载面板检查通过。 |
+| Rust 格式、编译与静态检查 | **PASS**：`cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check`、`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --offline --locked`、`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --all-targets --offline --locked -- -D warnings`。 |
+| Rust 全量单测 | **PASS**：`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --offline --locked`；104/104 passed。 |
+| 模型配置安全回归 | **PASS**：`models_config::tests` 17/17 passed；覆盖标准 TOML、注释/引号/逗号/未知字段保留、非法/超大配置、env_key 校验、Keychain 生命周期决策、原子私有配置写入、请求元数据和秘密 Debug 脱敏。 |
+| ACP 文件边界回归 | **PASS**：`workspace::tests::client_file_read_is_project_bounded_and_rejects_symlinks`；项目内文本可读，项目外路径和符号链接均拒绝；`fs/read_text_file` 已接入同一原生边界。 |
+| Hook 阻止文案回归 | **PASS**：`cd apps/desktop && node --experimental-strip-types src/lib/taskRunStatus.test.ts`；上游 `Turn blocked by a hook` 的 `stopReason`、`stop_reason`、`message` 与 `HookDenied` 均识别为 Hook 阻止，普通取消仍保持原语义。 |
+| 锁定内核源码、补丁与 ACP | **PASS**：`scripts/verify-grok-kernel-source.sh`、`scripts/verify-grok-kernel-patches.sh`、`node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok`；锁定提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`，0001–0007 重放检查和无认证 ACP initialize 均通过。 |
+| 变更一致性 | **PASS**：`bash -n scripts/verify-quality.sh scripts/verify-supply-chain.sh` 与 `git diff --check` 通过；`.cache/`、`target/`、`node_modules/` 未纳入源码提交范围。 |
+
 ## 2026-08-31 · Grok Build 1.0.12 内核同步与桌面回归
 
 本条记录对应源码分支 `agent/grok-build-1.0.12-sync`。只记录本轮实际通过的

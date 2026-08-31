@@ -76,13 +76,19 @@ fn read_snapshot() -> Result<SubagentsConfigSnapshot, String> {
 
 fn section_range(raw: &str, section: &str) -> Option<(usize, usize)> {
     let marker = format!("[{section}]");
-    let start = raw.lines().scan(0usize, |offset, line| {
-        let at = *offset;
-        *offset += line.len() + 1;
-        Some((at, line))
-    }).find_map(|(at, line)| (line.trim() == marker).then_some(at))?;
+    let start = raw
+        .lines()
+        .scan(0usize, |offset, line| {
+            let at = *offset;
+            *offset += line.len() + 1;
+            Some((at, line))
+        })
+        .find_map(|(at, line)| (line.trim() == marker).then_some(at))?;
     let tail = &raw[start + marker.len()..];
-    let end = tail.find("\n[").map(|at| start + marker.len() + at + 1).unwrap_or(raw.len());
+    let end = tail
+        .find("\n[")
+        .map(|at| start + marker.len() + at + 1)
+        .unwrap_or(raw.len());
     Some((start, end))
 }
 
@@ -91,18 +97,30 @@ fn upsert_bool(raw: &str, section: &str, key: &str, value: bool) -> String {
     if let Some((start, end)) = section_range(raw, section) {
         let existing = &raw[start..end];
         let mut replaced = false;
-        let body = existing.lines().map(|current| {
-            if parse_bool_assign(current.trim(), key).is_some() {
-                replaced = true;
-                line.clone()
-            } else {
-                current.to_string()
-            }
-        }).collect::<Vec<_>>().join("\n");
-        let body = if replaced { body } else { format!("{body}\n{line}") };
+        let body = existing
+            .lines()
+            .map(|current| {
+                if parse_bool_assign(current.trim(), key).is_some() {
+                    replaced = true;
+                    line.clone()
+                } else {
+                    current.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let body = if replaced {
+            body
+        } else {
+            format!("{body}\n{line}")
+        };
         format!("{}{}{}", &raw[..start], body, &raw[end..])
     } else {
-        let prefix = if raw.trim().is_empty() { String::new() } else { format!("{}\n\n", raw.trim_end()) };
+        let prefix = if raw.trim().is_empty() {
+            String::new()
+        } else {
+            format!("{}\n\n", raw.trim_end())
+        };
         format!("{prefix}[{section}]\n{line}\n")
     }
 }
@@ -135,7 +153,9 @@ pub fn subagents_config_set_type_enabled(
 ) -> Result<SubagentsConfigSnapshot, String> {
     let key = match agent_type.as_str() {
         "explore" | "plan" => agent_type,
-        _ => return Err("only the built-in explore and plan agent types can be changed here".into()),
+        _ => {
+            return Err("only the built-in explore and plan agent types can be changed here".into())
+        }
     };
     let path = config_toml_path();
     let raw = fs::read_to_string(path).unwrap_or_default();
@@ -157,7 +177,10 @@ mod tests {
 
     #[test]
     fn bool_parser_ignores_non_boolean_values() {
-        assert_eq!(parse_bool_assign("enabled = true # explicit", "enabled"), Some(true));
+        assert_eq!(
+            parse_bool_assign("enabled = true # explicit", "enabled"),
+            Some(true)
+        );
         assert_eq!(parse_bool_assign("enabled = \"true\"", "enabled"), None);
     }
 }

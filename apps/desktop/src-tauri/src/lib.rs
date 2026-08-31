@@ -9,15 +9,15 @@ mod extensions;
 mod git_panel;
 mod github;
 mod grok_admin;
-mod memory;
 mod media;
-mod models_config;
 mod media_tools_config;
+mod memory;
+mod models_config;
 mod paths;
 mod personal_rules;
 mod pty;
-mod scheduler;
 mod sandbox_config;
+mod scheduler;
 mod store;
 mod subagents_config;
 mod terminal;
@@ -25,13 +25,13 @@ mod workspace;
 
 use agent_bridge::AgentPool;
 use std::sync::Arc;
-use terminal::TerminalPool;
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager,
 };
+use terminal::TerminalPool;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -253,27 +253,24 @@ pub fn run() {
             reveal_in_finder,
         ])
         .on_window_event(move |window, event| {
-            match event {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Red close / Cmd+W: always quit the whole process.
                 // (With a system tray, closing the window alone would otherwise leave the app running.)
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    api.prevent_close();
-                    let app = window.app_handle().clone();
-                    // Best-effort agent cleanup in background — never block exit on it.
-                    if let Some(pool) = app.try_state::<Arc<AgentPool>>() {
-                        let pool = pool.inner().clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = tokio::time::timeout(
-                                std::time::Duration::from_millis(800),
-                                pool.stop_all(),
-                            )
-                            .await;
-                        });
-                    }
-                    // Exit immediately so the red button always feels like Quit.
-                    app.exit(0);
+                api.prevent_close();
+                let app = window.app_handle().clone();
+                // Best-effort agent cleanup in background — never block exit on it.
+                if let Some(pool) = app.try_state::<Arc<AgentPool>>() {
+                    let pool = pool.inner().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = tokio::time::timeout(
+                            std::time::Duration::from_millis(800),
+                            pool.stop_all(),
+                        )
+                        .await;
+                    });
                 }
-                _ => {}
+                // Exit immediately so the red button always feels like Quit.
+                app.exit(0);
             }
         })
         .run(tauri::generate_context!())

@@ -218,7 +218,8 @@ fn write_connector_meta(meta: &GithubConnectorMeta) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("create app support dir: {e}"))?;
     }
-    let raw = serde_json::to_string_pretty(meta).map_err(|e| format!("serialize GitHub meta: {e}"))?;
+    let raw =
+        serde_json::to_string_pretty(meta).map_err(|e| format!("serialize GitHub meta: {e}"))?;
     std::fs::write(&path, raw).map_err(|e| format!("write GitHub meta: {e}"))
 }
 
@@ -354,11 +355,7 @@ fn github_get(
     }
 }
 
-fn github_read_error(
-    status: reqwest::StatusCode,
-    context: &str,
-    token_present: bool,
-) -> String {
+fn github_read_error(status: reqwest::StatusCode, context: &str, token_present: bool) -> String {
     if !token_present && matches!(status.as_u16(), 401 | 403) {
         return format!(
             "GitHub HTTP {status} while {context}. Anonymous public reads may be rate-limited or blocked; add a read-only token to continue."
@@ -427,16 +424,23 @@ pub fn github_start_oauth() -> Result<GithubOAuthStart, String> {
     let response = client()?
         .post(DEVICE_FLOW_URL)
         .header("Accept", "application/json")
-        .form(&[("client_id", GITHUB_OAUTH_CLIENT_ID), ("scope", GITHUB_OAUTH_SCOPES)])
+        .form(&[
+            ("client_id", GITHUB_OAUTH_CLIENT_ID),
+            ("scope", GITHUB_OAUTH_SCOPES),
+        ])
         .send()
         .map_err(|e| format!("GitHub authorization could not start: {e}"))?;
     if !response.status().is_success() {
-        return Err(format!("GitHub authorization could not start (HTTP {}).", response.status()));
+        return Err(format!(
+            "GitHub authorization could not start (HTTP {}).",
+            response.status()
+        ));
     }
     let body: GithubDeviceCodeResponse = response
         .json()
         .map_err(|e| format!("GitHub authorization response: {e}"))?;
-    if body.device_code.is_empty() || body.user_code.is_empty() || body.verification_uri.is_empty() {
+    if body.device_code.is_empty() || body.user_code.is_empty() || body.verification_uri.is_empty()
+    {
         return Err("GitHub authorization response is incomplete.".into());
     }
     let interval = body.interval.max(5);
@@ -473,14 +477,26 @@ pub fn github_poll_oauth(attempt_id: String) -> Result<GithubOAuthPoll, String> 
             .lock()
             .map_err(|_| "GitHub authorization state is unavailable.".to_string())?;
         let Some(flow) = pending.get_mut(&attempt_id) else {
-            return Ok(GithubOAuthPoll { status: "expired".into(), github: None, message: Some("This GitHub authorization request has expired. Start again.".into()) });
+            return Ok(GithubOAuthPoll {
+                status: "expired".into(),
+                github: None,
+                message: Some("This GitHub authorization request has expired. Start again.".into()),
+            });
         };
         if flow.expires_at <= now {
             pending.remove(&attempt_id);
-            return Ok(GithubOAuthPoll { status: "expired".into(), github: None, message: Some("This GitHub authorization request has expired. Start again.".into()) });
+            return Ok(GithubOAuthPoll {
+                status: "expired".into(),
+                github: None,
+                message: Some("This GitHub authorization request has expired. Start again.".into()),
+            });
         }
         if flow.next_poll_at > now {
-            return Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None });
+            return Ok(GithubOAuthPoll {
+                status: "pending".into(),
+                github: None,
+                message: None,
+            });
         }
         flow.next_poll_at = now + Duration::from_secs(5);
         flow.device_code.clone()
@@ -498,31 +514,62 @@ pub fn github_poll_oauth(attempt_id: String) -> Result<GithubOAuthPoll, String> 
     let body: GithubDeviceTokenResponse = response
         .json()
         .map_err(|e| format!("GitHub authorization response: {e}"))?;
-    if let Some(token) = body.access_token.as_deref().filter(|token| !token.trim().is_empty()) {
-        let login = whoami(&token)?;
-        token_store(&token)?;
-        PENDING_OAUTH.lock().ok().and_then(|mut pending| pending.remove(&attempt_id));
+    if let Some(token) = body
+        .access_token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty())
+    {
+        let login = whoami(token)?;
+        token_store(token)?;
+        PENDING_OAUTH
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.remove(&attempt_id));
         return Ok(GithubOAuthPoll {
             status: "connected".into(),
-            github: Some(connected_status(&token, login, "GitHub connected with browser authorization.")),
+            github: Some(connected_status(
+                token,
+                login,
+                "GitHub connected with browser authorization.",
+            )),
             message: None,
         });
     }
     match body.error.as_deref() {
-        Some("authorization_pending") => Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None }),
+        Some("authorization_pending") => Ok(GithubOAuthPoll {
+            status: "pending".into(),
+            github: None,
+            message: None,
+        }),
         Some("slow_down") => {
             if let Ok(mut pending) = PENDING_OAUTH.lock() {
                 if let Some(flow) = pending.get_mut(&attempt_id) {
-                    flow.next_poll_at = Instant::now() + Duration::from_secs(body.interval.unwrap_or(10).max(10));
+                    flow.next_poll_at =
+                        Instant::now() + Duration::from_secs(body.interval.unwrap_or(10).max(10));
                 }
             }
-            Ok(GithubOAuthPoll { status: "pending".into(), github: None, message: None })
+            Ok(GithubOAuthPoll {
+                status: "pending".into(),
+                github: None,
+                message: None,
+            })
         }
         Some("expired_token") | Some("access_denied") => {
-            PENDING_OAUTH.lock().ok().and_then(|mut pending| pending.remove(&attempt_id));
-            Ok(GithubOAuthPoll { status: "cancelled".into(), github: None, message: Some(oauth_error(&body)) })
+            PENDING_OAUTH
+                .lock()
+                .ok()
+                .and_then(|mut pending| pending.remove(&attempt_id));
+            Ok(GithubOAuthPoll {
+                status: "cancelled".into(),
+                github: None,
+                message: Some(oauth_error(&body)),
+            })
         }
-        _ => Ok(GithubOAuthPoll { status: "error".into(), github: None, message: Some(oauth_error(&body)) }),
+        _ => Ok(GithubOAuthPoll {
+            status: "error".into(),
+            github: None,
+            message: Some(oauth_error(&body)),
+        }),
     }
 }
 
@@ -570,7 +617,11 @@ pub fn github_connect_readonly(token: String) -> Result<GithubStatus, String> {
     }
     let login = whoami(token)?;
     token_store(token)?;
-    Ok(connected_status(token, login, "Connected with a user-provided token."))
+    Ok(connected_status(
+        token,
+        login,
+        "Connected with a user-provided token.",
+    ))
 }
 
 #[tauri::command]
@@ -583,7 +634,10 @@ pub fn github_test_connection() -> GithubStatus {
         Err(error) => {
             let method = auth_method(&token);
             let meta = clear_last_verified_keep_identity(&error);
-            let revoked = error.contains("401") || error.contains("403") || error.contains("HTTP 401") || error.contains("HTTP 403");
+            let revoked = error.contains("401")
+                || error.contains("403")
+                || error.contains("HTTP 401")
+                || error.contains("HTTP 403");
             GithubStatus {
                 configured: true,
                 connected: false,
@@ -678,7 +732,17 @@ fn github_branch_name(value: &str) -> bool {
         && !value.ends_with('/')
         && !value.contains("..")
         && !value.contains("//")
-        && !value.bytes().any(|b| b.is_ascii_control() || b == b' ' || b == b'~' || b == b'^' || b == b':' || b == b'?' || b == b'*' || b == b'[' || b == b'\\')
+        && !value.bytes().any(|b| {
+            b.is_ascii_control()
+                || b == b' '
+                || b == b'~'
+                || b == b'^'
+                || b == b':'
+                || b == b'?'
+                || b == b'*'
+                || b == b'['
+                || b == b'\\'
+        })
 }
 
 fn valid_comment_body(value: &str) -> bool {
@@ -712,11 +776,17 @@ fn current_pushed_branch(cwd: &str) -> Result<String, String> {
 /// Create a pull request only after the UI gives a separate explicit
 /// confirmation. This command never creates or pushes a local branch.
 #[tauri::command]
-pub fn github_create_pull_request(input: GithubCreatePullRequestInput) -> Result<GithubCreatedPullRequest, String> {
-    let token = token_read().ok_or_else(|| "Connect a GitHub token with Pull requests: write permission first.".to_string())?;
+pub fn github_create_pull_request(
+    input: GithubCreatePullRequestInput,
+) -> Result<GithubCreatedPullRequest, String> {
+    let token = token_read().ok_or_else(|| {
+        "Connect a GitHub token with Pull requests: write permission first.".to_string()
+    })?;
     let title = input.title.trim();
     if title.is_empty() || title.len() > 256 || title.bytes().any(|b| b.is_ascii_control()) {
-        return Err("Pull request title must be 1–256 characters without control characters.".into());
+        return Err(
+            "Pull request title must be 1–256 characters without control characters.".into(),
+        );
     }
     if input.body.len() > 65_536 {
         return Err("Pull request description is too long (maximum 65,536 characters).".into());
@@ -748,11 +818,24 @@ pub fn github_create_pull_request(input: GithubCreatePullRequestInput) -> Result
             status => format!("GitHub HTTP {status} while creating the pull request (response details hidden)."),
         });
     }
-    let body: serde_json::Value = response.json().map_err(|e| format!("GitHub response: {e}"))?;
+    let body: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("GitHub response: {e}"))?;
     Ok(GithubCreatedPullRequest {
-        number: body.get("number").and_then(|v| v.as_u64()).ok_or_else(|| "GitHub create response has no PR number.".to_string())?,
-        title: body.get("title").and_then(|v| v.as_str()).unwrap_or(title).to_string(),
-        url: body.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        number: body
+            .get("number")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| "GitHub create response has no PR number.".to_string())?,
+        title: body
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or(title)
+            .to_string(),
+        url: body
+            .get("html_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         head,
         base: base.to_string(),
         draft: input.draft,
@@ -763,8 +846,13 @@ pub fn github_create_pull_request(input: GithubCreatePullRequestInput) -> Result
 /// separate confirmation before calling this command; no model/tool call can
 /// silently publish text through the GitHub adapter.
 #[tauri::command]
-pub fn github_create_pr_comment(input: GithubCreateIssueCommentInput) -> Result<GithubCreatedIssueComment, String> {
-    let token = token_read().ok_or_else(|| "Connect a GitHub token with Issues: write or Pull requests: write permission first.".to_string())?;
+pub fn github_create_pr_comment(
+    input: GithubCreateIssueCommentInput,
+) -> Result<GithubCreatedIssueComment, String> {
+    let token = token_read().ok_or_else(|| {
+        "Connect a GitHub token with Issues: write or Pull requests: write permission first."
+            .to_string()
+    })?;
     if input.pr_number == 0 {
         return Err("Choose a pull request before commenting.".into());
     }
@@ -774,7 +862,10 @@ pub fn github_create_pr_comment(input: GithubCreateIssueCommentInput) -> Result<
     }
     let (owner, repo) = github_repo_from_remote(&input.cwd)?;
     let response = client()?
-        .post(format!("{API}/repos/{owner}/{repo}/issues/{}/comments", input.pr_number))
+        .post(format!(
+            "{API}/repos/{owner}/{repo}/issues/{}/comments",
+            input.pr_number
+        ))
         .bearer_auth(token)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2026-03-10")
@@ -789,11 +880,26 @@ pub fn github_create_pr_comment(input: GithubCreateIssueCommentInput) -> Result<
             status => format!("GitHub HTTP {status} while posting the comment (response details hidden)."),
         });
     }
-    let body: serde_json::Value = response.json().map_err(|e| format!("GitHub response: {e}"))?;
+    let body: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("GitHub response: {e}"))?;
     Ok(GithubCreatedIssueComment {
-        url: body.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        author: body.get("user").and_then(|v| v.get("login")).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        created_at: body.get("created_at").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        url: body
+            .get("html_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        author: body
+            .get("user")
+            .and_then(|v| v.get("login"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        created_at: body
+            .get("created_at")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
     })
 }
 
@@ -810,8 +916,8 @@ fn list_open_prs(cwd: &str, token: Option<&str>) -> Result<Vec<GithubPullRequest
         format!("{API}/repos/{owner}/{repo}/pulls?state=open&per_page=100"),
         token,
     )
-        .send()
-        .map_err(|e| format!("GitHub network: {e}"))?;
+    .send()
+    .map_err(|e| format!("GitHub network: {e}"))?;
     if !response.status().is_success() {
         return Err(github_read_error(
             response.status(),
@@ -865,8 +971,8 @@ pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCh
         format!("{API}/repos/{owner}/{repo}/pulls/{pr_number}"),
         token.as_deref(),
     )
-        .send()
-        .map_err(|e| format!("GitHub network: {e}"))?;
+    .send()
+    .map_err(|e| format!("GitHub network: {e}"))?;
     if !pull.status().is_success() {
         return Err(github_read_error(
             pull.status(),
@@ -885,8 +991,8 @@ pub fn github_list_pr_checks(cwd: String, pr_number: u64) -> Result<Vec<GithubCh
         format!("{API}/repos/{owner}/{repo}/commits/{sha}/check-runs?per_page=100"),
         token.as_deref(),
     )
-        .send()
-        .map_err(|e| format!("GitHub network: {e}"))?;
+    .send()
+    .map_err(|e| format!("GitHub network: {e}"))?;
     if !checks.status().is_success() {
         return Err(github_read_error(
             checks.status(),
@@ -1074,5 +1180,4 @@ mod tests {
         assert!(!valid_comment_body("bad\0comment"));
         assert!(!valid_comment_body(&"a".repeat(65_537)));
     }
-
 }

@@ -37,10 +37,14 @@ fn config_path() -> PathBuf {
 }
 
 /// This is a gorkX-only preference, not a Grok Build config.toml key.
-fn auto_learn_settings_path() -> PathBuf { app_support_dir().join("memory-settings.json") }
+fn auto_learn_settings_path() -> PathBuf {
+    app_support_dir().join("memory-settings.json")
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct AutoLearnSettings { auto_learn: bool }
+struct AutoLearnSettings {
+    auto_learn: bool,
+}
 
 fn read_bool_in_section(section: &str, key: &str, default: bool) -> bool {
     let path = config_path();
@@ -61,13 +65,13 @@ fn read_bool_in_section(section: &str, key: &str, default: bool) -> bool {
             }
         }
     }
-    if key == "enabled" {
-        if matches!(
+    if key == "enabled"
+        && matches!(
             std::env::var("GROK_MEMORY").as_deref(),
             Ok("1") | Ok("true") | Ok("TRUE")
-        ) {
-            return true;
-        }
+        )
+    {
+        return true;
     }
     default
 }
@@ -183,7 +187,8 @@ fn read_config_enabled() -> bool {
 }
 
 fn read_auto_learn() -> bool {
-    std::fs::read_to_string(auto_learn_settings_path()).ok()
+    std::fs::read_to_string(auto_learn_settings_path())
+        .ok()
         .and_then(|raw| serde_json::from_str::<AutoLearnSettings>(&raw).ok())
         .map(|settings| settings.auto_learn)
         .unwrap_or(true)
@@ -191,8 +196,13 @@ fn read_auto_learn() -> bool {
 
 fn write_auto_learn(enabled: bool) -> Result<(), String> {
     let path = auto_learn_settings_path();
-    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
-    let body = serde_json::to_vec_pretty(&AutoLearnSettings { auto_learn: enabled }).map_err(|error| error.to_string())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let body = serde_json::to_vec_pretty(&AutoLearnSettings {
+        auto_learn: enabled,
+    })
+    .map_err(|error| error.to_string())?;
     std::fs::write(path, body).map_err(|error| error.to_string())
 }
 
@@ -203,11 +213,18 @@ fn strip_legacy_auto_learn(raw: &str) -> (String, Option<bool>) {
     let mut kept = Vec::new();
     for line in raw.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with('[') { in_memory = trimmed == "[memory]"; }
+        if trimmed.starts_with('[') {
+            in_memory = trimmed == "[memory]";
+        }
         if in_memory {
             if let Some((key, value)) = trimmed.split_once('=') {
                 if key.trim() == "auto_learn" {
-                    let value = value.split('#').next().unwrap_or("").trim().to_ascii_lowercase();
+                    let value = value
+                        .split('#')
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_ascii_lowercase();
                     migrated = Some(matches!(value.as_str(), "true" | "1" | "yes"));
                     continue;
                 }
@@ -216,7 +233,9 @@ fn strip_legacy_auto_learn(raw: &str) -> (String, Option<bool>) {
         kept.push(line);
     }
     let mut next = kept.join("\n");
-    if raw.ends_with('\n') && !next.ends_with('\n') { next.push('\n'); }
+    if raw.ends_with('\n') && !next.ends_with('\n') {
+        next.push('\n');
+    }
     (next, migrated)
 }
 
@@ -225,12 +244,17 @@ fn migrate_legacy_auto_learn() -> Result<(), String> {
     let raw = std::fs::read_to_string(&path).unwrap_or_default();
     let (next, legacy) = strip_legacy_auto_learn(&raw);
     let Some(legacy) = legacy else { return Ok(()) };
-    if !auto_learn_settings_path().is_file() { write_auto_learn(legacy)?; }
+    if !auto_learn_settings_path().is_file() {
+        write_auto_learn(legacy)?;
+    }
     std::fs::write(path, next).map_err(|error| error.to_string())
 }
 
 /// Run before Grok Build starts so the engine never sees the obsolete key.
-pub fn migrate_legacy_auto_learn_config() -> Result<(), String> { ensure_dirs()?; migrate_legacy_auto_learn() }
+pub fn migrate_legacy_auto_learn_config() -> Result<(), String> {
+    ensure_dirs()?;
+    migrate_legacy_auto_learn()
+}
 
 fn project_slug(project: &str) -> String {
     let p = project.trim();
@@ -295,9 +319,7 @@ pub fn ensure_memory_layout(project: Option<&str>) -> Result<(), String> {
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         ensure_seed_file(
             &dir.join("MEMORY.md"),
-            &format!(
-                "# 项目记忆\n\n路径：`{proj}`\n\n## 约定\n\n## 命令\n\n## 坑\n\n"
-            ),
+            &format!("# 项目记忆\n\n路径：`{proj}`\n\n## 约定\n\n## 命令\n\n## 坑\n\n"),
         )?;
     }
     // Ensure config has memory section with defaults if missing
@@ -317,10 +339,7 @@ fn walk_md(dir: &Path, scope: &str, out: &mut Vec<MemoryFileRow>) {
     for ent in rd.flatten() {
         let p = ent.path();
         if p.is_dir() {
-            let name = p
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("project");
+            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("project");
             if name == "sessions" {
                 // list session dumps too
                 walk_md(&p, "session", out);
@@ -417,7 +436,7 @@ fn strip_legacy_answer_mode_template(s: &str) -> String {
 
 #[tauri::command]
 pub fn memory_status(project: Option<String>) -> Result<MemoryStatus, String> {
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     let root = memory_root();
     let mut files = Vec::new();
     if root.is_dir() {
@@ -488,7 +507,7 @@ pub fn memory_read_file(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn memory_open_dir() -> Result<String, String> {
-    let _ = ensure_memory_layout(None)?;
+    ensure_memory_layout(None)?;
     let root = memory_root();
     #[cfg(target_os = "macos")]
     {
@@ -510,12 +529,20 @@ pub fn memory_append_note(
     }
     // refuse secrets-ish
     let lower = body.to_lowercase();
-    for bad in ["api_key", "apikey", "secret", "password", "token=", "sk-", "begin private"] {
+    for bad in [
+        "api_key",
+        "apikey",
+        "secret",
+        "password",
+        "token=",
+        "sk-",
+        "begin private",
+    ] {
         if lower.contains(bad) {
             return Err("refused: looks like a secret".into());
         }
     }
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     if !read_config_enabled() {
         write_bool_in_section("[memory]", "enabled", true)?;
     }
@@ -553,7 +580,7 @@ pub fn memory_append_note(
 /// appends win when the char budget is exceeded — not the seed headers at the top.
 #[tauri::command]
 pub fn memory_injection_context(project: Option<String>) -> Result<String, String> {
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     if !read_config_enabled() {
         return Ok(String::new());
     }
@@ -578,7 +605,10 @@ pub fn memory_injection_context(project: Option<String>) -> Result<String, Strin
             .unwrap_or_default();
         let p = strip_seed_noise(&pm);
         if !p.is_empty() {
-            parts.push(format!("【项目约定 · {proj}】\n{}", truncate_tail(&p, 1500)));
+            parts.push(format!(
+                "【项目约定 · {proj}】\n{}",
+                truncate_tail(&p, 1500)
+            ));
         }
     }
     if parts.is_empty() {
@@ -609,10 +639,7 @@ fn gc_session_dumps(sessions_dir: &Path) -> Result<u32, String> {
         if p.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
         }
-        let name = p
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
+        let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
         // Never GC the merge archive itself
         if name == "_archive.md" {
             continue;
@@ -627,7 +654,7 @@ fn gc_session_dumps(sessions_dir: &Path) -> Result<u32, String> {
         return Ok(0);
     }
     // Newest first — drop the tail
-    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.sort_by_key(|item| std::cmp::Reverse(item.1));
     let to_drop: Vec<PathBuf> = files
         .into_iter()
         .skip(MAX_SESSION_DUMPS)
@@ -639,7 +666,9 @@ fn gc_session_dumps(sessions_dir: &Path) -> Result<u32, String> {
         if let Ok(body) = std::fs::read_to_string(p) {
             let title = body
                 .lines()
-                .find(|l| l.trim_start().starts_with("- 标题：") || l.trim_start().starts_with("# "))
+                .find(|l| {
+                    l.trim_start().starts_with("- 标题：") || l.trim_start().starts_with("# ")
+                })
                 .unwrap_or("(session)")
                 .trim()
                 .trim_start_matches('#')
@@ -667,9 +696,7 @@ fn gc_session_dumps(sessions_dir: &Path) -> Result<u32, String> {
         } else {
             index_lines.push_str(&format!(
                 "- {}\n",
-                p.file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("dump")
+                p.file_name().and_then(|s| s.to_str()).unwrap_or("dump")
             ));
         }
     }
@@ -730,7 +757,7 @@ pub fn memory_record_session(
     if summary.chars().count() < 24 {
         return Ok(());
     }
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     let root = memory_root();
     let sessions = root.join("sessions");
     std::fs::create_dir_all(&sessions).map_err(|e| e.to_string())?;
@@ -754,7 +781,11 @@ pub fn memory_record_session(
     // Promote durable-looking lines into AGENT or project MEMORY
     let promote = extract_preference_lines(summary);
     if !promote.is_empty() {
-        let target = if project.as_ref().map(|p| !p.trim().is_empty()).unwrap_or(false) {
+        let target = if project
+            .as_ref()
+            .map(|p| !p.trim().is_empty())
+            .unwrap_or(false)
+        {
             "project"
         } else {
             "agent"
@@ -771,7 +802,9 @@ pub fn memory_record_session(
 fn extract_preference_lines(summary: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in summary.lines() {
-        let t = line.trim().trim_start_matches(['-', '*', '•', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ')', ' ']);
+        let t = line.trim().trim_start_matches([
+            '-', '*', '•', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ')', ' ',
+        ]);
         if t.chars().count() < 8 || t.chars().count() > 200 {
             continue;
         }
@@ -924,7 +957,7 @@ pub fn memory_forget(
     if q.chars().count() < 2 {
         return Err("forget query too short".into());
     }
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     let root = memory_root();
     let sc = scope.unwrap_or_else(|| "all".into());
     let mut paths: Vec<PathBuf> = Vec::new();
@@ -1033,7 +1066,7 @@ pub fn memory_search(
     if q.chars().count() < 2 {
         return Err("search query too short".into());
     }
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     let root = memory_root();
     let mut paths: Vec<(PathBuf, String)> = Vec::new();
     paths.push((root.join("USER.md"), "user".into()));
@@ -1093,7 +1126,7 @@ pub fn memory_search(
 /// Deduplicate blank-heavy / repeated bullet lines in core memory files (local compact).
 #[tauri::command]
 pub fn memory_compact(project: Option<String>) -> Result<MemoryStatus, String> {
-    let _ = ensure_memory_layout(project.as_deref())?;
+    ensure_memory_layout(project.as_deref())?;
     let root = memory_root();
     let mut paths = vec![root.join("USER.md"), root.join("AGENT.md")];
     if let Some(proj) = project.as_ref().filter(|p| !p.trim().is_empty()) {

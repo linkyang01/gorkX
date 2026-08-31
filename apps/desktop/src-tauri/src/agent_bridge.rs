@@ -13,8 +13,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex;
 
-use crate::paths;
 use crate::models_config;
+use crate::paths;
 
 /// Soft ceiling only to avoid runaway process spawn (not a product "max 4 agents" limit).
 pub const MAX_AGENTS: usize = 64;
@@ -69,7 +69,13 @@ fn resolve_grok_bin(override_cmd: Option<&str>) -> PathBuf {
 fn sanitize_engine_diagnostic(raw: &str) -> String {
     let lower = raw.to_ascii_lowercase();
     let sensitive = [
-        "token", "api_key", "apikey", "secret", "password", "authorization", "rt_prefix",
+        "token",
+        "api_key",
+        "apikey",
+        "secret",
+        "password",
+        "authorization",
+        "rt_prefix",
     ]
     .iter()
     .any(|needle| lower.contains(needle));
@@ -90,9 +96,9 @@ fn sanitize_disallowed_tools(tools: Option<&[String]>) -> Option<String> {
         .filter(|tool| {
             !tool.is_empty()
                 && tool.len() <= 64
-                && tool
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '(' || c == ')')
+                && tool.chars().all(|c| {
+                    c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '(' || c == ')'
+                })
         })
         .take(32)
         .collect();
@@ -108,6 +114,7 @@ fn sanitize_disallowed_tools(tools: Option<&[String]>) -> Option<String> {
 /// - `default`  → ask (interactive ACP permissions)
 /// - `auto`     → workspace-friendly (still interactive for risky ops; no yolo)
 /// - `full`     → Full Access (`--always-approve`)
+///
 /// Reasoning effort and web research are real CLI flags. Keep them at process
 /// start: ACP opens a session inside an already running engine process.
 ///
@@ -126,12 +133,15 @@ fn sanitize_permission_rule_list(rules: Option<&[String]>) -> Vec<String> {
                 && rule.len() <= 200
                 && rule != "*"
                 && rule != "**"
-                && !rule.chars().any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '\n' | '\r'))
+                && !rule
+                    .chars()
+                    .any(|c| matches!(c, ';' | '|' | '&' | '`' | '$' | '\n' | '\r'))
         })
         .take(32)
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn agent_cli_args(
     permission_mode: &str,
     reasoning_effort: Option<&str>,
@@ -184,13 +194,15 @@ fn agent_cli_args(
     // the pre-release "coming soon" route. The bundled 1.0 CLI supports this
     // flag on every agent transport.
     args.push("--no-leader".into());
-    match permission_mode {
-        "full" => args.push("--always-approve".into()),
-        _ => {}
+    if permission_mode == "full" {
+        args.push("--always-approve".into());
     }
     if let Some(effort) = reasoning_effort {
         let e = effort.trim().to_lowercase();
-        if matches!(e.as_str(), "low" | "medium" | "high" | "minimal" | "xhigh" | "none") {
+        if matches!(
+            e.as_str(),
+            "low" | "medium" | "high" | "minimal" | "xhigh" | "none"
+        ) {
             args.push("--reasoning-effort".into());
             args.push(e);
         }
@@ -216,6 +228,7 @@ fn resolve_agent_working_directory(working_directory: Option<String>) -> Result<
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn agent_start(
     app: AppHandle,
     pool: State<'_, Arc<AgentPool>>,
@@ -403,10 +416,7 @@ pub async fn agent_write(
 }
 
 #[tauri::command]
-pub async fn agent_stop(
-    pool: State<'_, Arc<AgentPool>>,
-    agent_id: String,
-) -> Result<(), String> {
+pub async fn agent_stop(pool: State<'_, Arc<AgentPool>>, agent_id: String) -> Result<(), String> {
     let mut agents = pool.agents.lock().await;
     let Some(mut agent) = agents.remove(&agent_id) else {
         return Ok(());
@@ -530,28 +540,36 @@ fn engine_doctor_findings(bin: &Path) -> Result<Vec<KernelDoctorFinding>, String
         .output()
         .map_err(|error| format!("run Grok Build doctor: {error}"))?;
     if !output.status.success() {
-        return Err(sanitize_engine_diagnostic(&String::from_utf8_lossy(&output.stderr)));
+        return Err(sanitize_engine_diagnostic(&String::from_utf8_lossy(
+            &output.stderr,
+        )));
     }
     let document: EngineDoctorDocument = serde_json::from_slice(&output.stdout)
         .map_err(|error| format!("Grok Build returned invalid doctor data: {error}"))?;
-    Ok(document.findings.into_iter().map(|finding| KernelDoctorFinding {
-        id: finding.id,
-        disposition: finding.disposition,
-        message: finding.message,
-        note: finding.note,
-        remediation: finding.remediation.map(|value| match value {
-            serde_json::Value::String(value) => value,
-            value => value.to_string(),
-        }),
-        automatic_fix_id: finding.automatic_remediation.map(|fix| fix.fix_id),
-    }).collect())
+    Ok(document
+        .findings
+        .into_iter()
+        .map(|finding| KernelDoctorFinding {
+            id: finding.id,
+            disposition: finding.disposition,
+            message: finding.message,
+            note: finding.note,
+            remediation: finding.remediation.map(|value| match value {
+                serde_json::Value::String(value) => value,
+                value => value.to_string(),
+            }),
+            automatic_fix_id: finding.automatic_remediation.map(|fix| fix.fix_id),
+        })
+        .collect())
 }
 
 fn safe_doctor_fix_id(value: &str) -> bool {
     !value.is_empty()
         && !value.starts_with('-')
         && value.len() <= 120
-        && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[tauri::command]
@@ -617,7 +635,10 @@ pub async fn kernel_doctor(grok_cmd: Option<String>) -> Result<KernelDoctor, Str
 /// Execute a remediation which the current Grok Build diagnostic explicitly
 /// advertised. The renderer cannot pass arbitrary `grok` subcommands here.
 #[tauri::command]
-pub async fn kernel_doctor_fix(fix_id: String, grok_cmd: Option<String>) -> Result<KernelDoctorFix, String> {
+pub async fn kernel_doctor_fix(
+    fix_id: String,
+    grok_cmd: Option<String>,
+) -> Result<KernelDoctorFix, String> {
     if !safe_doctor_fix_id(&fix_id) {
         return Err("Invalid Grok Build doctor repair identifier.".into());
     }
@@ -641,7 +662,9 @@ pub async fn kernel_doctor_fix(fix_id: String, grok_cmd: Option<String>) -> Resu
             .map_err(|error| format!("run Grok Build doctor repair: {error}"))?;
         let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
         if !output.stderr.is_empty() {
-            if !text.is_empty() { text.push('\n'); }
+            if !text.is_empty() {
+                text.push('\n');
+            }
             text.push_str(&String::from_utf8_lossy(&output.stderr));
         }
         Ok(KernelDoctorFix {
@@ -732,7 +755,8 @@ cargo build -p xai-grok-pager-bin --release\n\
     let source_url = "https://github.com/xai-org/grok-build".to_string();
     let channel = channel_for(&bin, override_set);
     let resolved = dunce_canonicalize(&bin);
-    let engine_app_owned = paths::engine_is_app_owned(&bin) || channel == "app" || channel == "runtime";
+    let engine_app_owned =
+        paths::engine_is_app_owned(&bin) || channel == "app" || channel == "runtime";
     let independent_ready = engine_app_owned && ghome.starts_with(paths::app_support_dir());
 
     let base = |installed: bool, version: String, detail: String| GrokStatus {
@@ -773,11 +797,7 @@ cargo build -p xai-grok-pager-bin --release\n\
             } else {
                 "Engine found — sign in (Settings → Account) so auth lands in App GROK_HOME.".into()
             };
-            Ok(base(
-                true,
-                version,
-                detail,
-            ))
+            Ok(base(true, version, detail))
         }
         Ok(out) => {
             let err = sanitize_engine_diagnostic(String::from_utf8_lossy(&out.stderr).trim());
@@ -817,13 +837,19 @@ mod tests {
         let safe = sanitize_engine_diagnostic(
             "auth refresh failed rt_prefix=\"value-that-must-not-escape\" token expired",
         );
-        assert_eq!(safe, "[engine diagnostic redacted: credential-related detail omitted]");
+        assert_eq!(
+            safe,
+            "[engine diagnostic redacted: credential-related detail omitted]"
+        );
         assert!(!safe.contains("value-that-must-not-escape"));
     }
 
     #[test]
     fn engine_stderr_keeps_non_sensitive_diagnostics() {
-        assert_eq!(sanitize_engine_diagnostic("connection refused"), "connection refused");
+        assert_eq!(
+            sanitize_engine_diagnostic("connection refused"),
+            "connection refused"
+        );
     }
 
     #[test]
@@ -862,7 +888,16 @@ mod tests {
             &[],
             &[],
         );
-        assert_eq!(enabled, vec!["agent", "--no-leader", "--reasoning-effort", "high", "stdio"]);
+        assert_eq!(
+            enabled,
+            vec![
+                "agent",
+                "--no-leader",
+                "--reasoning-effort",
+                "high",
+                "stdio"
+            ]
+        );
 
         let disabled = agent_cli_args(
             "full",

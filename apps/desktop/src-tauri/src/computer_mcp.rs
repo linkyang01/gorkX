@@ -240,7 +240,11 @@ mod tests {
         let catalog = tool_definitions();
         let tools = catalog.as_array().unwrap();
         assert_eq!(tools.len(), 6);
-        assert!(tools.iter().any(|tool| tool["name"] == "gorkx_computer_screenshot"));
-        assert!(!tools.iter().any(|tool| tool["name"].as_str().unwrap_or_default().contains("shell")));
+        assert!(tools
+            .iter()
+            .any(|tool| tool["name"] == "gorkx_computer_screenshot"));
+        assert!(!tools
+            .iter()
+            .any(|tool| tool["name"].as_str().unwrap_or_default().contains("shell")));
     }
 }

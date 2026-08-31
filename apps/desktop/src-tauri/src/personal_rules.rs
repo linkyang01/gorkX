@@ -28,7 +28,9 @@ fn rules_path() -> PathBuf {
 fn refuse_symlink(path: &Path, label: &str) -> Result<(), String> {
     if let Ok(meta) = std::fs::symlink_metadata(path) {
         if meta.file_type().is_symlink() {
-            return Err(format!("Personal instructions {label} must not be a symbolic link."));
+            return Err(format!(
+                "Personal instructions {label} must not be a symbolic link."
+            ));
         }
     }
     Ok(())
@@ -39,7 +41,9 @@ fn normalized_content(content: String) -> Result<String, String> {
         return Err("Personal instructions contain an invalid character.".into());
     }
     if content.chars().count() > MAX_RULES_CHARS {
-        return Err(format!("Personal instructions are limited to {MAX_RULES_CHARS} characters."));
+        return Err(format!(
+            "Personal instructions are limited to {MAX_RULES_CHARS} characters."
+        ));
     }
     Ok(content.replace("\r\n", "\n").trim().to_string())
 }
@@ -51,18 +55,25 @@ pub fn personal_rules_get() -> Result<PersonalRulesSnapshot, String> {
     refuse_symlink(&dir, "folder")?;
     refuse_symlink(&path, "file")?;
     let content = if path.is_file() {
-        normalized_content(std::fs::read_to_string(&path).map_err(|e| format!("read personal instructions: {e}"))?)?
+        normalized_content(
+            std::fs::read_to_string(&path)
+                .map_err(|e| format!("read personal instructions: {e}"))?,
+        )?
     } else {
         String::new()
     };
-    Ok(PersonalRulesSnapshot { content, path: path.display().to_string() })
+    Ok(PersonalRulesSnapshot {
+        content,
+        path: path.display().to_string(),
+    })
 }
 
 #[tauri::command]
 pub fn personal_rules_set(content: String) -> Result<PersonalRulesSnapshot, String> {
     let content = normalized_content(content)?;
     let dir = rules_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("create personal instructions folder: {e}"))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("create personal instructions folder: {e}"))?;
     refuse_symlink(&dir, "folder")?;
     let path = rules_path();
     refuse_symlink(&path, "file")?;
@@ -79,7 +90,10 @@ pub fn personal_rules_set(content: String) -> Result<PersonalRulesSnapshot, Stri
         std::fs::rename(&temp, &path).map_err(|e| format!("save personal instructions: {e}"))?;
     }
 
-    Ok(PersonalRulesSnapshot { content, path: path.display().to_string() })
+    Ok(PersonalRulesSnapshot {
+        content,
+        path: path.display().to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -88,7 +102,10 @@ mod tests {
 
     #[test]
     fn normalizes_line_endings_and_whitespace() {
-        assert_eq!(normalized_content("\r\nWrite clearly.\r\n".into()).unwrap(), "Write clearly.");
+        assert_eq!(
+            normalized_content("\r\nWrite clearly.\r\n".into()).unwrap(),
+            "Write clearly."
+        );
     }
 
     #[test]

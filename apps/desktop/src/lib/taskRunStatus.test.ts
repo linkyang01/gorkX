@@ -124,6 +124,21 @@ assert.deepEqual(
   { kind: 'hook_blocked' },
 );
 assert.deepEqual(
+  promptCompletionNotice({ stop_reason: 'Turn blocked by a hook' }),
+  { kind: 'hook_blocked' },
+);
+assert.deepEqual(
+  promptCompletionNotice({ message: 'Turn blocked by a hook' }),
+  { kind: 'hook_blocked' },
+);
+assert.deepEqual(
+  promptCompletionNotice({
+    stop_reason: 'cancelled',
+    _meta: { cancellation_category: 'hook_denied' },
+  }),
+  { kind: 'hook_blocked' },
+);
+assert.deepEqual(
   promptCompletionNotice({
     stopReason: 'cancelled',
     _meta: { cancellationCategory: 'PermissionCancelled' },

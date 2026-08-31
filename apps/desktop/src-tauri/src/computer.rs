@@ -6,8 +6,8 @@
 //! is sent to the current foreground application through macOS System Events.
 //! The App never runs arbitrary AppleScript supplied by a task or the model.
 
-use base64::Engine as _;
 use crate::paths;
+use base64::Engine as _;
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -174,7 +174,9 @@ pub fn computer_control_emergency_stop(
     ComputerAccessibilityStatus {
         granted: check_accessibility(),
         enabled: false,
-        detail: "Emergency stop applied. No further local Computer action will run until re-enabled.".into(),
+        detail:
+            "Emergency stop applied. No further local Computer action will run until re-enabled."
+                .into(),
     }
 }
 
@@ -260,7 +262,10 @@ pub(crate) fn execute_osascript(
     #[cfg(target_os = "macos")]
     {
         if !control_lease_active() {
-            return Err("Local Computer controls are disabled or the gorkX session is no longer running.".into());
+            return Err(
+                "Local Computer controls are disabled or the gorkX session is no longer running."
+                    .into(),
+            );
         }
         let output = std::process::Command::new("/usr/bin/osascript")
             .args(["-e", script])
@@ -299,12 +304,16 @@ pub(crate) fn execute_osascript(
 
 pub(crate) fn capture_full_screen() -> Result<(String, Vec<u8>), String> {
     if !control_lease_active() {
-        return Err("Local Computer controls are disabled or the gorkX session is no longer running.".into());
+        return Err(
+            "Local Computer controls are disabled or the gorkX session is no longer running."
+                .into(),
+        );
     }
     #[cfg(target_os = "macos")]
     {
         let dir = paths::app_support_dir().join("computer-captures");
-        fs::create_dir_all(&dir).map_err(|error| format!("create Computer capture directory: {error}"))?;
+        fs::create_dir_all(&dir)
+            .map_err(|error| format!("create Computer capture directory: {error}"))?;
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|error| format!("clock: {error}"))?
@@ -322,12 +331,13 @@ pub(crate) fn capture_full_screen() -> Result<(String, Vec<u8>), String> {
                 String::from_utf8_lossy(&output.stderr).trim().to_string()
             });
         }
-        let bytes = fs::read(&path).map_err(|error| format!("read Computer screenshot: {error}"))?;
+        let bytes =
+            fs::read(&path).map_err(|error| format!("read Computer screenshot: {error}"))?;
         let _ = fs::remove_file(&path);
         if bytes.is_empty() || bytes.len() > 20 * 1024 * 1024 {
             return Err("macOS returned an invalid or oversized Computer screenshot.".into());
         }
-        return Ok(("image/png".into(), bytes));
+        Ok(("image/png".into(), bytes))
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -357,7 +367,8 @@ fn set_control_lease(enabled: bool) -> Result<(), String> {
         }
     }
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("create Computer control state: {error}"))?;
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("create Computer control state: {error}"))?;
     }
     let mut options = OpenOptions::new();
     options.create(true).truncate(true).write(true);
@@ -400,7 +411,10 @@ pub(crate) fn control_lease_active() -> bool {
 
 pub(crate) fn screenshot_as_base64() -> Result<(String, String), String> {
     let (mime_type, bytes) = capture_full_screen()?;
-    Ok((mime_type, base64::engine::general_purpose::STANDARD.encode(bytes)))
+    Ok((
+        mime_type,
+        base64::engine::general_purpose::STANDARD.encode(bytes),
+    ))
 }
 
 pub(crate) fn check_accessibility() -> bool {
@@ -412,14 +426,14 @@ pub(crate) fn check_accessibility() -> bool {
                 "tell application \"System Events\" to get UI elements enabled",
             ])
             .output();
-        return output
+        output
             .map(|result| {
                 result.status.success()
                     && String::from_utf8_lossy(&result.stdout)
                         .trim()
                         .eq_ignore_ascii_case("true")
             })
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -467,7 +481,9 @@ pub(crate) fn validate_text(text: &str) -> Result<(), String> {
     if length > 2_000 {
         return Err("Text input is limited to 2,000 characters per action.".into());
     }
-    if text.chars().any(|character| character == '\0' || (character.is_control() && character != '\n' && character != '\t')) {
+    if text.chars().any(|character| {
+        character == '\0' || (character.is_control() && character != '\n' && character != '\t')
+    }) {
         return Err("Text input contains unsupported control characters.".into());
     }
     Ok(())

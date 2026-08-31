@@ -59,10 +59,7 @@ fn env_pairs(env: Option<Vec<serde_json::Value>>) -> Vec<(String, String)> {
                     .or_else(|| obj.get("key"))
                     .and_then(|x| x.as_str())
                     .unwrap_or("");
-                let value = obj
-                    .get("value")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
+                let value = obj.get("value").and_then(|x| x.as_str()).unwrap_or("");
                 if !name.is_empty() {
                     out.push((name.to_string(), value.to_string()));
                 }
@@ -102,8 +99,7 @@ pub async fn terminal_create(
     let (program, invocation_args) = terminal_invocation(&command, &args);
     let mut cmd = Command::new(program);
     cmd.args(invocation_args);
-    cmd
-        .current_dir(&workdir)
+    cmd.current_dir(&workdir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::null())
@@ -343,7 +339,9 @@ pub async fn shell_exec(command: String, cwd: Option<String>) -> Result<ShellRes
 }
 
 #[tauri::command]
-pub async fn terminal_list(pool: State<'_, Arc<TerminalPool>>) -> Result<Vec<serde_json::Value>, String> {
+pub async fn terminal_list(
+    pool: State<'_, Arc<TerminalPool>>,
+) -> Result<Vec<serde_json::Value>, String> {
     let map = pool.inner.lock().await;
     let mut list: Vec<_> = map
         .iter()

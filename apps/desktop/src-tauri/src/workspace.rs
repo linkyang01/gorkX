@@ -3,10 +3,10 @@
 use serde::Serialize;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,7 +62,8 @@ fn workspace_root(cwd: &str) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err("not a directory".into());
     }
-    root.canonicalize().map_err(|e| format!("resolve workspace: {e}"))
+    root.canonicalize()
+        .map_err(|e| format!("resolve workspace: {e}"))
 }
 
 fn agents_path(root: &Path) -> PathBuf {
@@ -104,7 +105,9 @@ fn read_agents_file(root: &Path) -> Result<ProjectInstructionsSnapshot, String> 
 
 fn write_agents_file(root: &Path, content: &str) -> Result<ProjectInstructionsSnapshot, String> {
     if content.len() > MAX_AGENTS_BYTES || content.as_bytes().contains(&0) {
-        return Err("AGENTS.md must be plain text up to 200 KB and cannot contain NUL bytes.".into());
+        return Err(
+            "AGENTS.md must be plain text up to 200 KB and cannot contain NUL bytes.".into(),
+        );
     }
     let path = agents_path(root);
     if let Ok(meta) = fs::symlink_metadata(&path) {
@@ -128,7 +131,8 @@ fn write_agents_file(root: &Path, content: &str) -> Result<ProjectInstructionsSn
             .map_err(|e| format!("create temporary AGENTS.md: {e}"))?;
         file.write_all(content.as_bytes())
             .map_err(|e| format!("write temporary AGENTS.md: {e}"))?;
-        file.sync_all().map_err(|e| format!("sync temporary AGENTS.md: {e}"))?;
+        file.sync_all()
+            .map_err(|e| format!("sync temporary AGENTS.md: {e}"))?;
         fs::rename(&tmp, &path).map_err(|e| format!("replace AGENTS.md: {e}"))?;
         Ok(())
     })();
@@ -148,7 +152,10 @@ pub fn workspace_read_agents_md(cwd: String) -> Result<ProjectInstructionsSnapsh
 }
 
 #[tauri::command]
-pub fn workspace_write_agents_md(cwd: String, content: String) -> Result<ProjectInstructionsSnapshot, String> {
+pub fn workspace_write_agents_md(
+    cwd: String,
+    content: String,
+) -> Result<ProjectInstructionsSnapshot, String> {
     let root = workspace_root(&cwd)?;
     write_agents_file(&root, &content)
 }
@@ -282,7 +289,10 @@ pub fn workspace_write_hook_definition(
     }
     let parsed: serde_json::Value =
         serde_json::from_str(&content).map_err(|e| format!("invalid Hook JSON: {e}"))?;
-    if !parsed.get("hooks").is_some_and(serde_json::Value::is_object) {
+    if !parsed
+        .get("hooks")
+        .is_some_and(serde_json::Value::is_object)
+    {
         return Err("Hook JSON must contain a hooks object".into());
     }
     let root = workspace_root(&cwd)?;
@@ -405,7 +415,9 @@ pub fn workspace_create_hook_verification_project() -> Result<HookVerificationPr
             .status()
             .map_err(|e| format!("initialize temporary Hook project Git repository: {e}"))?;
         if !git.success() {
-            return Err(format!("initialize temporary Hook project Git repository exited with {git}"));
+            return Err(format!(
+                "initialize temporary Hook project Git repository exited with {git}"
+            ));
         }
         let root = project
             .canonicalize()
@@ -440,7 +452,10 @@ pub fn workspace_read_hook_verification_marker(
     let metadata = match fs::symlink_metadata(&target) {
         Ok(meta) => meta,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(HookVerificationMarker { status: "missing".into(), path });
+            return Ok(HookVerificationMarker {
+                status: "missing".into(),
+                path,
+            });
         }
         Err(error) => return Err(format!("read Hook verification marker metadata: {error}")),
     };
@@ -453,7 +468,12 @@ pub fn workspace_read_hook_verification_marker(
     let bytes = fs::read(&target).map_err(|e| format!("read Hook verification marker: {e}"))?;
     let expected = format!("{marker_token}\n");
     Ok(HookVerificationMarker {
-        status: if bytes == expected.as_bytes() { "match" } else { "mismatch" }.into(),
+        status: if bytes == expected.as_bytes() {
+            "match"
+        } else {
+            "mismatch"
+        }
+        .into(),
         path,
     })
 }
@@ -491,7 +511,8 @@ fn hook_verification_project_root(raw: &str) -> Result<PathBuf, String> {
 #[tauri::command]
 pub fn workspace_remove_hook_verification_project(project_path: String) -> Result<(), String> {
     let root = hook_verification_project_root(&project_path)?;
-    fs::remove_dir_all(&root).map_err(|e| format!("remove temporary Hook verification project: {e}"))
+    fs::remove_dir_all(&root)
+        .map_err(|e| format!("remove temporary Hook verification project: {e}"))
 }
 
 /// ACP client-side text-file write. This is only called by the renderer when
@@ -520,8 +541,8 @@ pub fn workspace_validate_resource_attachment(
     if !requested.is_absolute() {
         return Err("resource path must be absolute".into());
     }
-    let original_meta = fs::symlink_metadata(&requested)
-        .map_err(|e| format!("read resource metadata: {e}"))?;
+    let original_meta =
+        fs::symlink_metadata(&requested).map_err(|e| format!("read resource metadata: {e}"))?;
     if original_meta.file_type().is_symlink() {
         return Err("resource attachment cannot be a symlink".into());
     }
@@ -566,7 +587,7 @@ const SKIP_DIRS: &[&str] = &[
 ];
 
 fn should_skip(name: &str) -> bool {
-    SKIP_DIRS.iter().any(|s| *s == name) || name.starts_with('.')
+    SKIP_DIRS.contains(&name) || name.starts_with('.')
 }
 
 fn walk(dir: &Path, root: &Path, out: &mut Vec<FileHit>, limit: usize) {
@@ -608,7 +629,11 @@ fn walk(dir: &Path, root: &Path, out: &mut Vec<FileHit>, limit: usize) {
 }
 
 #[tauri::command]
-pub async fn workspace_list_files(cwd: String, query: Option<String>, limit: Option<usize>) -> Result<Vec<FileHit>, String> {
+pub async fn workspace_list_files(
+    cwd: String,
+    query: Option<String>,
+    limit: Option<usize>,
+) -> Result<Vec<FileHit>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let root = PathBuf::from(&cwd);
         if !root.is_dir() {
@@ -644,7 +669,7 @@ pub async fn workspace_list_files(cwd: String, query: Option<String>, limit: Opt
                 Some((score, h))
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|item| std::cmp::Reverse(item.0));
         Ok(scored.into_iter().take(lim).map(|(_, h)| h).collect())
     })
     .await
@@ -669,8 +694,8 @@ pub fn workspace_read_text_file(cwd: String, path: String) -> Result<WorkspaceTe
     if !requested.is_absolute() {
         return Err("path must be absolute".into());
     }
-    let original_meta = fs::symlink_metadata(&requested)
-        .map_err(|e| format!("read file metadata: {e}"))?;
+    let original_meta =
+        fs::symlink_metadata(&requested).map_err(|e| format!("read file metadata: {e}"))?;
     if original_meta.file_type().is_symlink() {
         return Err("refusing to read a symlink".into());
     }
@@ -720,8 +745,8 @@ pub fn workspace_write_text_if_mtime(
     if !requested.is_absolute() {
         return Err("path must be absolute".into());
     }
-    let original_meta = fs::symlink_metadata(&requested)
-        .map_err(|e| format!("read file metadata: {e}"))?;
+    let original_meta =
+        fs::symlink_metadata(&requested).map_err(|e| format!("read file metadata: {e}"))?;
     if original_meta.file_type().is_symlink() {
         return Err("refusing to write through a symlink".into());
     }
@@ -822,7 +847,10 @@ pub fn read_workspace_file_preview(
     let mut out = String::new();
     for (i, line) in text.lines().enumerate() {
         if i >= lim {
-            out.push_str(&format!("\n… ({} more lines truncated)", text.lines().count().saturating_sub(lim)));
+            out.push_str(&format!(
+                "\n… ({} more lines truncated)",
+                text.lines().count().saturating_sub(lim)
+            ));
             break;
         }
         out.push_str(line);
@@ -834,22 +862,15 @@ pub fn read_workspace_file_preview(
 #[cfg(test)]
 mod tests {
     use super::{
-        read_agents_file,
-        safe_hook_file_name,
-        walk,
-        workspace_create_hook_verification_project,
-        workspace_read_hook_verification_marker,
-        workspace_remove_hook_verification_project,
-        workspace_validate_resource_attachment,
-        write_agents_file,
-        write_client_text_file,
-        FileHit,
+        read_agents_file, safe_hook_file_name, walk, workspace_create_hook_verification_project,
+        workspace_read_hook_verification_marker, workspace_remove_hook_verification_project,
+        workspace_validate_resource_attachment, write_agents_file, write_client_text_file, FileHit,
     };
     use std::fs;
-    use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[cfg(unix)]
     #[test]
@@ -909,7 +930,10 @@ mod tests {
         let root = project.canonicalize().unwrap();
 
         write_client_text_file(&root, "src/main.txt", "after\n").unwrap();
-        assert_eq!(fs::read_to_string(project.join("src/main.txt")).unwrap(), "after\n");
+        assert_eq!(
+            fs::read_to_string(project.join("src/main.txt")).unwrap(),
+            "after\n"
+        );
         assert!(write_client_text_file(&root, "../outside.txt", "unsafe").is_err());
         assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
 
@@ -917,8 +941,63 @@ mod tests {
     }
 
     #[test]
+    fn client_file_read_is_project_bounded_and_rejects_symlinks() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("gorkx-client-read-{nonce}"));
+        let project = base.join("project");
+        let outside = base.join("outside.txt");
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("inside.txt"), "safe").unwrap();
+        fs::write(&outside, "private").unwrap();
+
+        let inside = super::workspace_read_text_file(
+            project.display().to_string(),
+            project.join("inside.txt").display().to_string(),
+        )
+        .unwrap();
+        assert_eq!(inside.content, "safe");
+        assert!(super::workspace_read_text_file(
+            project.display().to_string(),
+            outside.display().to_string(),
+        )
+        .is_err());
+        let oversized = project.join("oversized.txt");
+        fs::write(&oversized, vec![b'a'; super::MAX_CLIENT_WRITE_BYTES + 1]).unwrap();
+        assert!(super::workspace_read_text_file(
+            project.display().to_string(),
+            oversized.display().to_string(),
+        )
+        .is_err());
+        let binary = project.join("binary.dat");
+        fs::write(&binary, [b'o', 0, b'k']).unwrap();
+        assert!(super::workspace_read_text_file(
+            project.display().to_string(),
+            binary.display().to_string(),
+        )
+        .is_err());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            symlink(&outside, project.join("linked.txt")).unwrap();
+            assert!(super::workspace_read_text_file(
+                project.display().to_string(),
+                project.join("linked.txt").display().to_string(),
+            )
+            .is_err());
+        }
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
     fn hook_definition_name_is_bounded() {
-        assert_eq!(safe_hook_file_name("check-shell.json").unwrap(), "check-shell.json");
+        assert_eq!(
+            safe_hook_file_name("check-shell.json").unwrap(),
+            "check-shell.json"
+        );
         assert!(safe_hook_file_name("../unsafe.json").is_err());
         assert!(safe_hook_file_name("hook.toml").is_err());
         assert!(safe_hook_file_name("hook file.json").is_err());
@@ -932,7 +1011,8 @@ mod tests {
             .as_nanos();
         let project = std::env::temp_dir().join(format!("gorkx-hook-{nonce}"));
         fs::create_dir_all(&project).unwrap();
-        let content = r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"printf ok"}]}]}}"#;
+        let content =
+            r#"{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"printf ok"}]}]}}"#;
         let path = super::workspace_write_hook_definition(
             project.display().to_string(),
             "startup.json".into(),
@@ -949,10 +1029,16 @@ mod tests {
         let verification = workspace_create_hook_verification_project().unwrap();
         let project = Path::new(&verification.project_path);
         assert!(project.join(".git").is_dir());
-        assert_eq!(verification.hook_file_name, "gorkx-session-start-verification.json");
+        assert_eq!(
+            verification.hook_file_name,
+            "gorkx-session-start-verification.json"
+        );
         #[cfg(unix)]
         {
-            assert_eq!(fs::metadata(project).unwrap().permissions().mode() & 0o777, 0o700);
+            assert_eq!(
+                fs::metadata(project).unwrap().permissions().mode() & 0o777,
+                0o700
+            );
             assert_eq!(
                 fs::metadata(project.join(".grok/hooks"))
                     .unwrap()
@@ -1001,7 +1087,8 @@ mod tests {
 
         let verification = workspace_create_hook_verification_project().unwrap();
         let project = Path::new(&verification.project_path);
-        let outside = project.with_file_name(format!("gorkx-hook-outside-{}", verification.marker_token));
+        let outside =
+            project.with_file_name(format!("gorkx-hook-outside-{}", verification.marker_token));
         fs::create_dir(&outside).unwrap();
         fs::remove_dir_all(project.join(".grok")).unwrap();
         symlink(&outside, project.join(".grok")).unwrap();
@@ -1048,17 +1135,20 @@ mod tests {
         let item = workspace_validate_resource_attachment(
             project.display().to_string(),
             delivered.display().to_string(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(item.name, "report.md");
         assert_eq!(item.size, 7);
         assert!(workspace_validate_resource_attachment(
             project.display().to_string(),
             outside.display().to_string(),
-        ).is_err());
+        )
+        .is_err());
         assert!(workspace_validate_resource_attachment(
             project.display().to_string(),
             "report.md".into(),
-        ).is_err());
+        )
+        .is_err());
         fs::remove_dir_all(base).unwrap();
     }
 
@@ -1080,7 +1170,8 @@ mod tests {
         assert!(workspace_validate_resource_attachment(
             project.display().to_string(),
             linked.display().to_string(),
-        ).is_err());
+        )
+        .is_err());
         fs::remove_dir_all(project).unwrap();
     }
 
