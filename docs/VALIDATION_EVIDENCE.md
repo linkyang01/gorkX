@@ -19,6 +19,7 @@ Developer ID 与 Apple 公证、原生 Intel 验收继续保留在 waiver 中。
 | 当前真实认证回合 | **PASS**：隔离 App-owned 登录副本与一次性 Git 项目执行 `node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --authenticated --resource`；`initialize`、`authenticate(cached_token)`、`session/new`、`session/load`、真实 `session/prompt` resource-link 和后续只读控制检查均通过，临时目录已清理。 |
 | App / DMG | **PASS**：App 与 DMG 只读核验均为 arm64，App 版本 `1.3.1`、包内内核 `grok 1.0.12 (bc7f02eddd3d)`、许可证/声明、隔离 `GROK_HOME` 通过；签名完整性通过但级别为 `adhoc`，未公证。DMG 大小 `71,006,820` bytes，SHA-256=`c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62`。 |
 | 受限发布门 | **PASS WITH EXPLICIT WAIVER**：以用户本轮发布授权、`GORKX_RELEASE_SCOPE=arm64_adhoc`、`GORKX_LIMITED_RELEASE_WAIVER=1`、当前真实 prompt、既有真实第三方模型/麦克风证据和 `GORKX_ARCH_VERIFIED=arm64` 运行 `scripts/verify-release-readiness.sh`；结果 `releaseCandidateReady: true`、`canShipPublicArtifacts: true`、`blockers: []`。waiver 明确保留 clean-machine、Developer ID/notarization 和 x86_64 范围，不将其写成通过。 |
+| 公开发布 | **PUBLISHED**：提交 `e782fe946a8eec43db94e8fc972075b04b7e27a9` 已推送到 `main`，annotated tag `v1.3.1` 解引用到同一提交；[GitHub Release v1.3.1](https://github.com/linkyang01/gorkX/releases/tag/v1.3.1) 为非 draft、非 prerelease，资产 `gorkX_1.3.1_aarch64.dmg` 状态为 `uploaded`、大小 `71,006,820` bytes，GitHub digest 与本地均为 `sha256:c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62`。从公开下载 URL 重新下载后再次只读挂载，App 1.3.1、arm64 主程序/内核、Grok Build 1.0.12、许可证、隔离 `GROK_HOME` 与完整签名完整性均 **PASS**；签名仍为 ad-hoc，未公证。 |
 
 ## 2026-08-31 · Grok Build 1.0.12 内核同步与桌面回归
 
