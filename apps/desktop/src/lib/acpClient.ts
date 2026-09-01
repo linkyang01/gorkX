@@ -21,6 +21,33 @@ export type { PromptQueueEntry, PromptQueueState } from './promptQueue';
 export type PermissionMode = 'default' | 'auto' | 'full';
 
 /**
+ * Desktop voice language preferences. `zh` is a recognition preference: the
+ * current xAI STT endpoint does not document a Chinese formatting code, so
+ * the kernel lets the model auto-detect Chinese speech instead of sending an
+ * unsupported wire value.
+ */
+export const VOICE_LANGUAGE_OPTIONS = [
+  { value: 'auto', labelKey: 'voiceLanguageAuto' },
+  { value: 'zh', labelKey: 'voiceLanguageChinese' },
+  { value: 'en', labelKey: 'voiceLanguageEnglish' },
+  { value: 'ja', labelKey: 'voiceLanguageJapanese' },
+  { value: 'ko', labelKey: 'voiceLanguageKorean' },
+  { value: 'fr', labelKey: 'voiceLanguageFrench' },
+  { value: 'de', labelKey: 'voiceLanguageGerman' },
+  { value: 'es', labelKey: 'voiceLanguageSpanish' },
+  { value: 'vi', labelKey: 'voiceLanguageVietnamese' },
+] as const;
+
+export type VoiceLanguagePreference = (typeof VOICE_LANGUAGE_OPTIONS)[number]['value'];
+
+export function normalizeVoiceLanguage(value: string | null | undefined): VoiceLanguagePreference {
+  const normalized = (value || '').trim().toLowerCase();
+  return VOICE_LANGUAGE_OPTIONS.some((option) => option.value === normalized)
+    ? normalized as VoiceLanguagePreference
+    : 'auto';
+}
+
+/**
  * A Grok Build agent profile supplied with ACP `session/new`.
  *
  * The kernel accepts either the name of a discovered profile or a portable
@@ -2235,8 +2262,8 @@ export class AcpClient {
    * protocol reserves the leading underscore for extension requests, so the
    * desktop sends `_x.ai/*` while Grok Build receives `x.ai/*`.
    */
-  async startVoice(sessionId: string): Promise<void> {
-    await this.request('_x.ai/voice/start', { sessionId }, 15_000);
+  async startVoice(sessionId: string, language: VoiceLanguagePreference = 'auto'): Promise<void> {
+    await this.request('_x.ai/voice/start', { sessionId, language }, 15_000);
   }
 
   /** Release push-to-talk / finish the current native voice utterance. */

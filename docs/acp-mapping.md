@@ -55,7 +55,7 @@ successful capability.
 The complete repeatable route evidence is in the 2026-08-08 section of
 `VALIDATION_EVIDENCE.md`; it covers baseline lifecycle, voice, desktop actions,
 billing, search, prompt history/suggestion, session bundles, model reload and
-all 0001–0007 patch-backed extensions.
+all 0001–0008 patch-backed extensions.
 
 ## Diff panel note
 

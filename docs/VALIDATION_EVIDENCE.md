@@ -3,6 +3,30 @@
 本文件记录可复跑的本地验收，不将单机通过扩大解释为发布或完整端到端验收。
 发布门槛仍以 [NEXT_RELEASE_GATES.md](NEXT_RELEASE_GATES.md) 为准。
 
+## 2026-09-01 · Grok Build 1.0.12 sync 本地候选与语音复核
+
+本节只记录本轮在 `agent/grok-build-1.0.12-sync` 工作树实际执行并退出的检查。
+本地候选为 gorkX `1.3.2`，包内 Grok Build 为 `1.0.12`
+(`bc7f02eddd3d`)，补丁队列为 0001–0008。本轮没有创建 tag、DMG、GitHub
+Release 或上传资产；`.cache/`、构建 target 和忽略的 generated resources 不属于提交范围。
+
+| 项 | 结果 |
+|---|---|
+| 语音根因与修复 | **真实复核**：旧包曾以 `VOICE_PCM_SILENT` 失败，macOS unified log 指向缺少 `com.apple.security.device.audio-input` entitlement，且 helper 子进程分裂了 TCC 责任链。当前加入 `Entitlements.plist`，并由 Tauri agent bridge 设置 macOS `GROK_VOICE_CAPTURE=inprocess`；当前 bundle 的 entitlement 已读出为 `com.apple.security.device.audio-input=true`。 |
+| 语言设置 | **PASS（UI + 协议接线）**：Settings → Voice 显示“首选识别语言”，默认“自动识别（推荐）”；前端按下一次捕获传递语言偏好。中文选项不伪造 `language=zh`：内核映射为本地 `detect`，STT URL 省略 `language`，交给模型识别；支持的格式化语言才作为具体代码发送。 |
+| 锁定源码与补丁 | **PASS**：`scripts/verify-grok-kernel-source.sh vendor/grok-build` 验证锁定提交 `bc7f02eddd3d84085849dc19ed216f11c23b0571`；`scripts/verify-grok-kernel-patches.sh vendor/grok-build` 验证 0001–0008 全部可应用。 |
+| 内核 voice 单测 | **PASS**：在锁定源码临时 worktree 按 `kernel/patches/series` 应用 0001–0008 后，执行 `CARGO_TARGET_DIR=/private/tmp/gorkx-voice-tests-target CARGO_BUILD_JOBS=4 cargo test --manifest-path "$test_dir/Cargo.toml" -p xai-grok-voice --features audio --lib --locked`；**48 passed; 0 failed; 1 ignored**，含静音 PCM / STT 无转写区分、PCM 转发统计和 `detect`/`zh` 不带 `language=` 的回归。 |
+| 内核 release 构建 | **PASS**：`CARGO_TARGET_DIR=/private/tmp/gorkx-grok-voice-observed-target CARGO_BUILD_JOBS=4 scripts/build-grok-kernel.sh /private/tmp/gorkx-grok-voice-observed`；产物为 arm64 `grok 1.0.12 (bc7f02eddd3d)`，bundled resource SHA-256=`9bac332960434ace301910efc3f4d346bdae4162e95e613afd53ab5dbce4c7a8`。 |
+| ACP 控制面 | **PASS（无认证范围）**：`node scripts/verify-grok-acp.mjs apps/desktop/src-tauri/resources/grok --voice-controls --desktop-controls`；voice start/stop/shutdown 和 desktop 控制路由通过，脚本未发送模型提示词，也不替代真人麦克风验收。 |
+| 桌面前端 | **PASS**：`cd apps/desktop && npm run typecheck`、`npm run test:stages`（Stage A–G，含 `hookAuthoring`、`settingsFeedback`、`taskRunStatus`）和 `npm run verify:web-bundle` 均通过；最后一次 web bundle 初始 JS gzip 为 `187640/512000` bytes。 |
+| Rust 桌面 | **PASS**：`cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check`、`CARGO_BUILD_JOBS=4 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked`、`CARGO_BUILD_JOBS=4 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --lib --locked`（**104 passed; 0 failed**）和 `CARGO_BUILD_JOBS=4 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --all-targets --locked -- -D warnings` 均通过；测试包含 Hook marker 严格读取、符号链接拒绝和清理保护。 |
+| App 构建与包 | **PASS**：`npm run build:app` 完成；`GORKX_EXPECTED_APP_VERSION=1.3.2 scripts/verify-macos-app-bundle.sh apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app` 通过，主程序/内核 arm64、版本 1.3.2、许可证/声明和隔离 `GROK_HOME` 均在包内。签名完整性通过但 `SIGNING_LEVEL=adhoc`，Gatekeeper 拒绝和 notarization skip 为预期限制。 |
+| Hook-verification 安全 | **PASS（代码审查 + 自动化）**：复核 `be1a8171` 的 `stopHookVerificationTasks` fail-closed 改动；停止失败现在向上抛出，不再吞掉 `agent_stop` 错误，临时项目句柄因此保留。当前 Stage A–G、Rust 104 项测试和类型/Clippy 均通过。本轮未执行新的 authenticated Hook marker 任务，不新增该类真实证据。 |
+| 真实语音 UI | **部分通过，未扩大解释**：在当前重建的 gorkX.app 中，真实捕获进入可编辑草稿，观察到 `六二三四五 中国，中国 好，我中过。 12345`；已停止监听，发送按钮未触发，未产生新的用户消息。该结果证明 TCC/in-process/PCM/STT→draft 链路已恢复，但草稿含此前混合语音，不是干净单词级样本；因此 H3 的干净短语和手动发送仍为 **NOT RUN / NOT CLAIMED**。 |
+| Release readiness | **诚实阻断**：`scripts/verify-release-readiness.sh` 退出码 2；`releaseCandidateReady=true`、`canShipPublicArtifacts=false`。剩余阻断包含无本轮 authenticated prompt/clean-install/第三方模型/完整麦克风证据、ad-hoc 未公证、未完成双架构安装证据和未设置公开发版批准。没有据此创建任何公开发布资产。 |
+
+本轮语音实现是 Speech-to-Text，不是 macOS TTS：macOS CoreAudio 负责输入，xAI STT 负责转写，gorkX 不播放合成语音。xAI 的 STT 文档说明 `language` 用于格式化而非限定模型识别语言，因此中文选择采用自动识别路径。
+
 ## 2026-08-31 · Grok Build 1.0.12 sync 本次复核
 
 本节只记录本次会话实际执行并得到的结果。开始复核时工作树没有未提交的

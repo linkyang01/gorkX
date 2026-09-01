@@ -292,6 +292,13 @@ pub async fn agent_start(
         .kill_on_drop(true);
     paths::apply_engine_env_tokio(&mut command);
     models_config::apply_keychain_env_tokio(&mut command);
+    // The bundled kernel is a child of the authorized gorkX app. Keep desktop
+    // microphone capture in that process instead of spawning the macOS
+    // __mic-capture grandchild: TCC attributes protected-resource access to the
+    // responsible app/process chain, and a separately executed helper can
+    // otherwise receive silence even when gorkX is allowed to use the mic.
+    #[cfg(target_os = "macos")]
+    command.env("GROK_VOICE_CAPTURE", "inprocess");
     // Belt-and-suspenders for kernels that accept the root flags but do not yet
     // apply them on the agent stdio path: documented env force-disables.
     if !memory_on {

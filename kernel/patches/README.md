@@ -24,3 +24,12 @@ build gate rejects an environment that lacks it before compiling.
 Use `scripts/sync-grok-kernel-source.sh` to create or refresh the ignored
 `vendor/grok-build` checkout from the pinned upstream commit. It refuses an
 unexpected origin or local source edits.
+
+`0008-desktop-voice-capture-and-vad.patch` keeps the desktop ACP voice path in
+the responsible kernel process on macOS, carries the App's effective voice and
+endpoint settings into that adapter, carries the next-capture recognition
+language preference, and disables the STT server VAD gate for push-to-talk
+desktop dictation. Automatic detection is the default; Chinese is not sent as
+an undocumented `zh` formatting value. The latter is bounded by the existing
+explicit press/release and no-speech timeout controls; it is not a browser or
+background recorder.

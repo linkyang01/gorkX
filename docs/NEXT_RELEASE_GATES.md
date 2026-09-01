@@ -9,8 +9,8 @@
 > 已完成的可复跑本地证据记录在 `VALIDATION_EVIDENCE.md`；它不能替代
 > 本文要求的干净机器与真实账号人工闭环。
 
-> 当前公开版本为 gorkX `1.3.1` / Grok Build `1.0.12 (bc7f02eddd3d)`；本轮按
-> Apple Silicon `arm64_adhoc` 范围完成 tag、Release 和 DMG。下文仍保留 Beta
+> 当前公开版本为 gorkX `1.3.1` / Grok Build `1.0.12 (bc7f02eddd3d)`；本分支的
+> gorkX `1.3.2` 仅是 Apple Silicon 本地候选，未创建 tag、Release 或 DMG。下文仍保留 Beta
 > 门槛编号，完整分发条件没有被改写成通过；当前证据以
 > `VALIDATION_EVIDENCE.md` 的 2026-08-31 条目为准。
 
@@ -48,7 +48,7 @@ marker 闭环。证据见 `VALIDATION_EVIDENCE.md`，这些通过项不替代上
 2026-08-31，发布所有者明确批准 `v1.3.1` 以 Apple Silicon `arm64_adhoc` 范围
 正式发布。该决定通过独立 waiver 门记录，不改变以上完整分发门槛本身。
 
-已完成且有 [VALIDATION_EVIDENCE.md](VALIDATION_EVIDENCE.md) 记录的当前机器侧项目：内核升级到 Grok Build 1.0.12、0001–0007 补丁重建、App/DMG 包验收、当前隔离认证 resource-link prompt、原生语音和桌面动作 ACP 路由探针、模型目录刷新，以及普通用户路径不依赖输入 slash 指令的界面审计。原生检查点回退和只读子任务的完整认证回合证据仍按上一锁定内核记录保留，不能被本轮有限认证探针扩大解释。
+已完成且有 [VALIDATION_EVIDENCE.md](VALIDATION_EVIDENCE.md) 记录的当前机器侧项目：内核升级到 Grok Build 1.0.12、0001–0008 补丁重建、1.3.2 App 包验收、当前隔离认证 resource-link prompt、原生语音和桌面动作 ACP 路由探针、模型目录刷新，以及普通用户路径不依赖输入 slash 指令的界面审计。本轮未生成 DMG。原生检查点回退和只读子任务的完整认证回合证据仍按上一锁定内核记录保留，不能被本轮有限认证探针扩大解释。
 
 ## 不阻断 v0.5.0 Beta，但必须诚实标识
 

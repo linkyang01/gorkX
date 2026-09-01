@@ -91,7 +91,7 @@ new file mode 100644
 index 00000000..2d4a7caf
 --- /dev/null
 +++ b/crates/codegen/xai-grok-shell/src/agent/mvp_agent/voice.rs
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,188 @@
 +//! Native Grok Build voice exposed to ACP clients.
 +//!
 +//! The pager owns the low-memory macOS capture pipeline. This adapter keeps
@@ -121,14 +121,28 @@ index 00000000..2d4a7caf
 +    }
 +}
 +
-+fn parse_session_id(args: &acp::ExtRequest) -> Result<acp::SessionId, acp::Error> {
++fn parse_voice_params(args: &acp::ExtRequest) -> Result<(acp::SessionId, String), acp::Error> {
 +    let params: serde_json::Value = serde_json::from_str(args.params.get())
 +        .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
 +    let session_id = params
 +        .get("sessionId")
 +        .and_then(serde_json::Value::as_str)
 +        .ok_or_else(|| acp::Error::invalid_params().data("missing sessionId"))?;
-+    Ok(acp::SessionId::new(session_id))
++    let language = params
++        .get("language")
++        .and_then(serde_json::Value::as_str)
++        .unwrap_or("auto")
++        .trim();
++    let language = if language.is_empty() { "auto" } else { language };
++    if language.len() > 32
++        || !language
++            .chars()
++            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
++    {
++        return Err(acp::Error::invalid_params()
++            .data("language must be a short locale code"));
++    }
++    Ok((acp::SessionId::new(session_id), language.to_owned()))
 +}
 +
 +impl MvpAgent {
@@ -136,13 +150,13 @@ index 00000000..2d4a7caf
 +        &self,
 +        args: &acp::ExtRequest,
 +    ) -> Result<acp::ExtResponse, acp::Error> {
-+        let session_id = parse_session_id(args)?;
++        let (session_id, preferred_language) = parse_voice_params(args)?;
 +        if self.resident_handle(&session_id).is_none() {
 +            return Err(acp::Error::resource_not_found(Some("session not found".into())));
 +        }
 +        match args.method.as_ref() {
 +            "x.ai/voice/start" | "_x.ai/voice/start" => {
-+                self.start_voice(&session_id).await?
++                self.start_voice(&session_id, &preferred_language).await?
 +            }
 +            "x.ai/voice/stop" | "_x.ai/voice/stop" => {
 +                self.send_voice(&session_id, VoiceCommand::PttRelease)?
@@ -181,7 +195,11 @@ index 00000000..2d4a7caf
 +        }
 +    }
 +
-+    async fn start_voice(&self, session_id: &acp::SessionId) -> Result<(), acp::Error> {
++    async fn start_voice(
++        &self,
++        session_id: &acp::SessionId,
++        preferred_language: &str,
++    ) -> Result<(), acp::Error> {
 +        if self.voice_commands.borrow().contains_key(session_id) {
 +            return self.send_voice(session_id, VoiceCommand::PttPress);
 +        }
@@ -190,7 +208,29 @@ index 00000000..2d4a7caf
 +        let auth: SharedVoiceAuth = std::sync::Arc::new(AuthManagerVoiceAuth(
 +            crate::auth::shared_api_key_provider(self.auth_manager.clone()),
 +        ));
-+        let mut config = VoiceConfig::default();
++        // Use the same effective endpoint and voice settings as the rest of
++        // the desktop-owned Grok process. The previous default-only config
++        // silently ignored App proxy/voice settings. Desktop dictation also
++        // disables the server VAD gate: macOS input routes can be valid but
++        // quiet, and PTT release already provides the utterance boundary.
++        let endpoints_base = self.cfg.borrow().endpoints.xai_api_base_url.clone();
++        let mut config = crate::config::load_effective_config()
++            .ok()
++            .and_then(|raw| raw.as_table().cloned())
++            .map(|table| VoiceConfig::from_config_table(&table, Some(&endpoints_base)))
++            .unwrap_or_else(|| {
++                VoiceConfig::from_config_table(&toml::Table::new(), Some(&endpoints_base))
++            });
++        // ACP carries the desktop setting per capture. `detect` is a local
++        // sentinel understood by the STT URL builder; it is never sent to
++        // xAI. Chinese likewise relies on model detection because the current
++        // STT formatting catalog does not document a `zh` wire code.
++        config.language = if preferred_language.eq_ignore_ascii_case("auto") {
++            "detect".into()
++        } else {
++            preferred_language.to_owned()
++        };
++        config.vad_threshold = Some(0.0);
 +        config.client_identifier = "gorkx-acp".into();
 +        config.user_agent = format!("gorkX/{}", xai_grok_version::VERSION);
 +        let gateway = self.gateway.clone();
@@ -203,6 +243,10 @@ index 00000000..2d4a7caf
 +        tokio::task::spawn_local(async move {
 +            while let Some(event) = event_rx.recv().await {
 +                let body = match event {
++                    VoiceEvent::Ready => serde_json::json!({
++                        "sessionId": event_session_id,
++                        "kind": "ready"
++                    }),
 +                    VoiceEvent::InterimTranscript { text } => serde_json::json!({
 +                        "sessionId": event_session_id,
 +                        "kind": "interim",

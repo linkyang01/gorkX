@@ -11,6 +11,8 @@ import {
   type HooksSnapshot,
   type KernelDoctor,
   type PermissionMode,
+  VOICE_LANGUAGE_OPTIONS,
+  type VoiceLanguagePreference,
 } from '../lib/acpClient';
 import type { AccountSummary, SubscriptionModelsSnapshot } from '../lib/account';
 import {
@@ -281,6 +283,9 @@ interface Props {
   /** Renderer-only preference; native voice remains available via the composer button. */
   voiceShortcutEnabled: boolean;
   onVoiceShortcutEnabled: (enabled: boolean) => void;
+  /** Preferred language for the next native voice capture. */
+  voiceLanguage: VoiceLanguagePreference;
+  onVoiceLanguage: (language: VoiceLanguagePreference) => void;
   showMessageTimestamps: boolean;
   onShowMessageTimestamps: (enabled: boolean) => void;
   /** Native Grok Build profile used when starting the next task. */
@@ -405,6 +410,8 @@ export function SettingsPanel({
   onMaxAgentTurns,
   voiceShortcutEnabled,
   onVoiceShortcutEnabled,
+  voiceLanguage,
+  onVoiceLanguage,
   showMessageTimestamps,
   onShowMessageTimestamps,
   newTaskProfile,
@@ -2830,6 +2837,22 @@ export function SettingsPanel({
                     onChange={(event) => onVoiceShortcutEnabled(event.target.checked)}
                   />
                 </label>
+                <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+                  <div>
+                    <div className="settings-row-title">{t('settingsVoiceLanguage')}</div>
+                    <div className="settings-row-hint">{t('settingsVoiceLanguageHint')}</div>
+                  </div>
+                  <select
+                    className="settings-select"
+                    value={voiceLanguage}
+                    aria-label={t('settingsVoiceLanguage')}
+                    onChange={(event) => onVoiceLanguage(event.target.value as VoiceLanguagePreference)}
+                  >
+                    {VOICE_LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+                    ))}
+                  </select>
+                </div>
                 <p className="settings-row-hint" style={{ marginTop: 8 }}>
                   {t('settingsVoiceSettingsHint')}
                 </p>

@@ -56,6 +56,8 @@ import {
   type KernelSessionSearchHit,
   type PromptQueueEntry,
   type PromptQueueState,
+  normalizeVoiceLanguage,
+  type VoiceLanguagePreference,
 } from './lib/acpClient';
 import type { ArchivedTaskRow, HookManagementAction, HookVerificationTaskResult, SettingsSection } from './components/SettingsPanel';
 import { ToolTimeline, type ToolEvent } from './components/ToolTimeline';
@@ -736,6 +738,13 @@ function App() {
       return true;
     }
   });
+  const [voiceLanguage, setVoiceLanguage] = useState<VoiceLanguagePreference>(() => {
+    try {
+      return normalizeVoiceLanguage(localStorage.getItem('gorkx.voiceLanguage'));
+    } catch {
+      return 'auto';
+    }
+  });
   const [kernelOpen, setKernelOpen] = useState(false);
   // Opt-in panels: empty Review/Terminal never occupy the main stage by default.
   const [reviewOpen, setReviewOpen] = useState(() =>
@@ -761,6 +770,8 @@ function App() {
   const [draft, setDraft] = useState('');
   /** Session currently holding Grok Build's native microphone pipeline. */
   const [voiceListeningSessionId, setVoiceListeningSessionId] = useState<string | null>(null);
+  /** Session whose microphone and STT handshake has completed. */
+  const [voiceReadySessionId, setVoiceReadySessionId] = useState<string | null>(null);
   /** Streaming text is intentionally preview-only until Grok Build finalizes it. */
   const [voiceInterim, setVoiceInterim] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -2703,6 +2714,11 @@ function App() {
         // transcript from a background task in the currently visible draft.
         if (!sessionId || sessionId !== live?.sessionId || activeIdRef.current !== threadId) return;
         const kind = typeof params?.kind === 'string' ? params.kind : '';
+        if (kind === 'ready') {
+          setVoiceReadySessionId(sessionId);
+          setVoiceError(null);
+          return;
+        }
         if (kind === 'interim' && typeof params?.text === 'string') {
           setVoiceInterim(params.text);
           setVoiceError(null);
@@ -2723,6 +2739,7 @@ function App() {
           setVoiceError(`${message}${hint}`);
           setVoiceInterim('');
           setVoiceListeningSessionId(null);
+          setVoiceReadySessionId(null);
         }
       };
 
@@ -2782,6 +2799,7 @@ function App() {
         // is no microphone stream to stop or transcript to receive, so never
         // leave the composer claiming it is still listening.
         setVoiceListeningSessionId((current) => current === live?.sessionId ? null : current);
+        setVoiceReadySessionId((current) => current === live?.sessionId ? null : current);
         setVoiceInterim('');
         if (live?.sessionId && activeIdRef.current === threadId) {
           setVoiceError(t('voiceErrorSessionClosed'));
@@ -2882,6 +2900,7 @@ function App() {
       if (voiceListeningSessionId === sessionId) {
         await current.client.stopVoice(sessionId);
         setVoiceListeningSessionId(null);
+        setVoiceReadySessionId(null);
         setVoiceInterim('');
         return;
       }
@@ -2892,15 +2911,17 @@ function App() {
           await previous.client.shutdownVoice(voiceListeningSessionId).catch(() => undefined);
         }
       }
-      await current.client.startVoice(sessionId);
+      setVoiceReadySessionId(null);
+      await current.client.startVoice(sessionId, voiceLanguage);
       setVoiceListeningSessionId(sessionId);
       setVoiceInterim('');
     } catch (error) {
       setVoiceListeningSessionId(null);
+      setVoiceReadySessionId(null);
       setVoiceInterim('');
       setVoiceError(humanizeVoiceError(error));
     }
-  }, [humanizeVoiceError, voiceListeningSessionId]);
+  }, [humanizeVoiceError, voiceLanguage, voiceListeningSessionId]);
 
   useEffect(() => {
     toggleNativeVoiceRef.current = () => { void toggleNativeVoice(); };
@@ -8558,7 +8579,7 @@ function App() {
                 />
                 {voiceInterim || voiceError || voiceListeningSessionId === active.sessionId ? (
                   <div className="voice-hint" role={voiceError ? 'alert' : 'status'}>
-                    {voiceError || voiceInterim || t('voiceListening')}
+                    {voiceError || voiceInterim || (voiceReadySessionId === active.sessionId ? t('voiceListening') : t('voiceStarting'))}
                   </div>
                 ) : null}
                 <div className="composer-send-row">
@@ -9130,6 +9151,16 @@ function App() {
           setVoiceShortcutEnabled(enabled);
           try {
             localStorage.setItem('gorkx.voiceShortcutEnabled', enabled ? '1' : '0');
+          } catch {
+            /* browser preview */
+          }
+        }}
+        voiceLanguage={voiceLanguage}
+        onVoiceLanguage={(language) => {
+          const next = normalizeVoiceLanguage(language);
+          setVoiceLanguage(next);
+          try {
+            localStorage.setItem('gorkx.voiceLanguage', next);
           } catch {
             /* browser preview */
           }

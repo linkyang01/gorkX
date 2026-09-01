@@ -3,18 +3,18 @@
 > 用途：交给 Grok 继续开发 gorkX。  
 > 原则：按阶段执行、每一步可验证；没有真实链路就标记限制，不得用静态 UI、slash 文本或本地假数据冒充完成。  
 > 范围：默认只更新源码和验证记录；**tag、GitHub Release、DMG 仍须用户明确批准**。
-> 本轮用户已明确批准，gorkX `1.3.1` 按 Apple Silicon `arm64_adhoc` 范围完成发布；后续版本继续遵守同一批准规则。
+> 本轮目标是完成 gorkX `1.3.2` 的本地源码同步、真实验收和提交；按原始边界不创建 tag、GitHub Release 或 DMG。后续公开发布仍需单独明确批准并通过完整发布门。
 
 ## 0. 当前基线（2026-08-31）
 
 | 项 | 值 |
 |---|---|
 | 工作区 | `/Users/link/projects/gorkX` |
-| 分支 | `agent/grok-build-1.0.12-sync`；本轮发布后 `main` 更新到 `v1.3.1` |
-| 近期主线 | Grok Build 1.0.12 锁定源码同步、0001–0007 补丁重放、bundled kernel 重建、前端/Rust/无认证 ACP 控制面回归 |
-| 发布版本 | gorkX `1.3.1`；Apple Silicon `arm64_adhoc` 已按批准范围发布；完整分发门禁仍保留为 waiver |
-| 包内 Grok Build | `1.0.12 (bc7f02eddd3d)` + 补丁 0001–0007 |
-| App 包 | `gorkX_1.3.1_aarch64.dmg` 已生成并只读核验；SHA-256=`c372662bf1b4d7a5fa93bd220ae7137679666a4da616e76dd72642f6900e5f62` |
+| 分支 | `agent/grok-build-1.0.12-sync`；本轮只提交本地候选，不更新 `main` |
+| 近期主线 | Grok Build 1.0.12 锁定源码同步、0001–0008 补丁重放、bundled kernel 重建、前端/Rust/无认证 ACP 控制面回归 |
+| 发布版本 | 公开基线为 gorkX `1.3.1`；本分支为 `1.3.2` arm64 本地候选，未创建公开发布资产 |
+| 包内 Grok Build | `1.0.12 (bc7f02eddd3d)` + 补丁 0001–0008 |
+| App 包 | `apps/desktop/src-tauri/target/release/bundle/macos/gorkX.app` 已实际重建并核验；本轮未生成 DMG |
 | 功能矩阵 | `docs/FEATURES.md` · 对齐 `docs/DESKTOP_ALIGNMENT_PLAN.md` · 证据 `docs/VALIDATION_EVIDENCE.md` |
 
 ### 阶段完成度（诚实）
@@ -23,7 +23,7 @@
 |---|---|
 | **0** 子 Agent WIP 收口 | **已完成** |
 | **正式完备条**（本目标） | **加强达标**：门禁全绿 + 25 主路径 + 暗色白底守卫 + ACP 主 prompt PASS + 子任务 completed；见 `docs/evidence/one-shot-complete-20260801/SUMMARY.md` |
-| **1** H1/H2/H3 发布阻断 | **未达成**：机器侧 1.0.12 内核、前端/Rust 和无认证 ACP 控制矩阵已全绿；仍需干净机安装/重开、用户自己的三方 endpoint、真实账号模型回合与 macOS 麦克风真人证据 |
+| **1** H1/H2/H3 发布阻断 | **未达成**：H3 已观察到真实采集进入可编辑草稿且未自动发送，但本次不是干净单词级识别，也未手动发送；仍需干净机安装/重开、用户自己的三方 endpoint、真实账号模型回合与完整 H3 证据 |
 | **2** 深化 Real | **ACP 级主对话与子任务已有 live 证据**；App GUI 点按 / 重开恢复仍待人工 |
 | **3** 连接器闭环 | Calendar 等 **Soon**；GitHub 代码已有，revoke live 待人工 |
 
@@ -39,7 +39,7 @@
 2. **委派 GUI 录像**（⇧⌘B → 树 → 停止/Inspect）；ACP 已 completed。  
 3. **阶段 1**：H1 / H2 / H3 — **用户侧**；不得伪造。  
 4. **连接器**：仅当有官方 OAuth 链时推进；否则保持 Soon。  
-5. **后续发版**：下一版本仍须明确版本号、验收范围和用户批准后，才可 tag / DMG / Release；当前公开版本为 `v1.3.1`。
+5. **后续发版**：下一版本仍须明确版本号、验收范围和用户批准后，才可 tag / DMG / Release；当前公开基线为 `v1.3.1`，本分支 `1.3.2` 仅是本地候选。
 
 ### 门禁（每次合入前）
 
