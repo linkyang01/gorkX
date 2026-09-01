@@ -1,5 +1,7 @@
 # gorkX 1.3.2
 
+已于 2026-09-01 以 tag `v1.3.2` 发布到 [GitHub Release](https://github.com/linkyang01/gorkX/releases/tag/v1.3.2)，公开范围为 Apple Silicon `arm64_adhoc`。
+
 本版本对应锁定的 Grok Build `1.0.12`（`bc7f02eddd3d84085849dc19ed216f11c23b0571`，包内显示 `1.0.12 (bc7f02eddd3d)`）。
 
 Apple Silicon 资产：`gorkX_1.3.2_aarch64.dmg`（70,278,947 bytes）

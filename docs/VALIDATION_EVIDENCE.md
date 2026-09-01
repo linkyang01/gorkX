@@ -8,8 +8,8 @@
 本节只记录本轮在 `agent/grok-build-1.0.12-sync` 工作树实际执行并退出的检查。
 本地候选为 gorkX `1.3.2`，包内 Grok Build 为 `1.0.12`
 (`bc7f02eddd3d`)，补丁队列为 0001–0008。门禁通过前没有创建 tag 或 GitHub
-Release；随后只生成了待发布的 Apple Silicon DMG，并完成了挂载核验。`.cache/`、
-构建 target 和忽略的 generated resources 不属于提交范围。
+Release；随后生成、核验并发布了 Apple Silicon DMG。`.cache/`、构建 target 和忽略的
+generated resources 不属于提交范围。
 
 | 项 | 结果 |
 |---|---|
@@ -28,6 +28,7 @@ Release；随后只生成了待发布的 Apple Silicon DMG，并完成了挂载�
 | Hook-verification 安全 | **PASS（真实认证 marker + task）**：复核 `be1a8171` 的 `stopHookVerificationTasks` fail-closed 改动；使用一次性认证副本执行 `GORKX_HOOK_TEST_AUTH_DIR="$AUTH_COPY" node scripts/verify-grok-hook.mjs apps/desktop/src-tauri/resources/grok --authenticated`。真实 ACP control session、未授信项目不执行、原生 hooks/action trust、reload 加载受限 Hook、Grok Build 真实 `SessionStart` marker、真实任务期间 marker 未被正文改写、撤销信任和临时项目清理全部返回 `PASS`；marker 未由 renderer 补写。 |
 | 真实语音 UI | **PASS（真实中文自然讲话，范围明确）**：在当前重建的 gorkX.app 中，真实 macOS 麦克风捕获经 in-process PCM/STT 进入可编辑草稿，观察到非空中文转写（以 `你用 Proser 那种 Proser Pro...` 开头）；停止监听后草稿仍保留、开关为 off，发送按钮未触发，未产生新的用户消息。此前一次未控制讲话的捕获返回 `VOICE_STT_NO_TRANSCRIPT`，并记录了非零 PCM 统计；该失败尝试不计为通过。当前 H3 证明的是“真实输入→中文转写→可编辑草稿→停止不自动发送”，不宣称预设逐字短语。 |
 | Release readiness | **PASS WITH EXPLICIT WAIVER（Apple Silicon 受限发布）**：以本轮用户“解决这些问题，然后发布新版”的明确批准，以及 `GORKX_USER_APPROVED_SHIP=1 GORKX_REAL_PROMPT_PASSED=1 GORKX_THIRD_PARTY_MODEL_PASSED=1 GORKX_MICROPHONE_PASSED=1 GORKX_ARCH_VERIFIED=arm64 GORKX_RELEASE_SCOPE=arm64_adhoc GORKX_LIMITED_RELEASE_WAIVER=1 scripts/verify-release-readiness.sh` 运行；退出码 `0`，`releaseCandidateReady=true`、`canShipPublicArtifacts=true`、`blockers=[]`。waiver 明确保留干净机安装/登录/重开、Developer ID/Apple 公证和 x86_64 范围，不将它们记为通过；Windows/Linux 仍为 warning。 |
+| GitHub Release 公开资产 | **PUBLISHED**：`edeb4b88` 已推送到 `agent/grok-build-1.0.12-sync`，annotated tag `v1.3.2` 解引用到同一提交；[GitHub Release v1.3.2](https://github.com/linkyang01/gorkX/releases/tag/v1.3.2) 为非 draft、非 prerelease，资产 `gorkX_1.3.2_aarch64.dmg` 状态为 `uploaded`、大小 `70,278,947` bytes，GitHub digest 与公开下载复验均为 `sha256:7cf85c307a320ff9c578c1e3e5aa4117b8262eb7971838bee630939424fc1132`。公开下载后再次只读挂载，App 1.3.2、arm64 主程序/内核、Grok Build 1.0.12、许可证和完整 ad-hoc 签名均 **PASS**；仍未公证。 |
 
 本轮语音实现是 Speech-to-Text，不是 macOS TTS：macOS CoreAudio 负责输入，xAI STT 负责转写，gorkX 不播放合成语音。xAI 的 STT 文档说明 `language` 用于格式化而非限定模型识别语言，因此中文选择采用自动识别路径。
 
