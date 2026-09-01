@@ -27,6 +27,20 @@ Release 或上传资产；`.cache/`、构建 target 和忽略的 generated resou
 
 本轮语音实现是 Speech-to-Text，不是 macOS TTS：macOS CoreAudio 负责输入，xAI STT 负责转写，gorkX 不播放合成语音。xAI 的 STT 文档说明 `language` 用于格式化而非限定模型识别语言，因此中文选择采用自动识别路径。
 
+## 2026-09-01 · 多项目侧栏布局修复
+
+本节只记录本次侧栏覆盖问题修复实际执行并退出成功的检查。未创建 tag、DMG、
+GitHub Release 或上传资产；`.cache/`、构建 target 和忽略的 generated resources
+不属于提交范围。
+
+| 项 | 结果 |
+|---|---|
+| 侧栏布局修复 | **PASS（源码）**：`apps/desktop/src/App.tsx` 将项目控制区与运行中心放入固定栏，将项目/任务行放入独立滚动栏；`apps/desktop/src/App.css` 为固定栏和滚动栏设置明确的 flex 高度边界与 `min-height: 0`，长项目列表不能覆盖运行中心。 |
+| 桌面前端 | **PASS**：`cd apps/desktop && npm run typecheck`、`npm run test:stages`（Stage A–G）和 `npm run verify:web-bundle` 均通过；本次 Web bundle 初始 JS gzip 为 `187673/512000` bytes，Vite 大 chunk 仍为非阻断 warning。 |
+| App 构建 | **PASS**：`cd apps/desktop && npm run build:app` 完成，生成并签名当前 `gorkX.app`；构建过程未生成 DMG。 |
+| 真实 UI 回归 | **PASS（范围明确）**：在当前重建的 `gorkX.app` 中临时加入 5 个现有本地目录形成长项目列表，向下滚动项目/任务区后，“运行中心 / 暂无运行中或待决定的任务”仍保持在上方可见，未被项目内容覆盖；测试目录随后已从应用中移除。 |
+| 真实运行任务边界 | **未执行**：本次没有启动模型任务或伪造运行中心中的活动任务记录；仅验收空状态与长列表布局。 |
+
 ## 2026-08-31 · Grok Build 1.0.12 sync 本次复核
 
 本节只记录本次会话实际执行并得到的结果。开始复核时工作树没有未提交的

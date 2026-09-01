@@ -6552,100 +6552,103 @@ function App() {
         <div className="nav-divider" />
 
         {/* Codex-style: 项目 (folder-based) + 任务 (no project) */}
-        <section className="block grow">
-          {/* ── 项目 ── */}
-          <div className="block-head">
-            <span className="block-title">{t('projectsSection')}</span>
-            <div className="add-project-wrap">
-              <button
-                type="button"
-                className="btn btn-sm"
-                title={t('addProject')}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setAddProjectMenuOpen((v) => !v);
-                  setProjectMenuPath(null);
-                }}
-              >
-                <IconPlus size={14} />
-              </button>
-              {addProjectMenuOpen ? (
-                <div className="pop-menu project-pop-menu" role="menu" style={{ right: 0, left: 'auto' }}>
-                  <button
-                    type="button"
-                    className="pop-menu-item"
-                    onClick={() => {
-                      setAddProjectMenuOpen(false);
-                      void createProjectByName();
-                    }}
-                  >
-                    <IconPlus size={14} /> {t('createProjectByName')}
-                  </button>
-                  <button
-                    type="button"
-                    className="pop-menu-item"
-                    onClick={() => {
-                      setAddProjectMenuOpen(false);
-                      void pickProject();
-                    }}
-                  >
-                    <IconOpenFolder size={14} /> {t('openProjectFolder')}
-                  </button>
-                </div>
+        <section className="block grow sidebar-workspace">
+          <div className="sidebar-fixed">
+            {/* ── 项目 ── */}
+            <div className="block-head">
+              <span className="block-title">{t('projectsSection')}</span>
+              <div className="add-project-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('addProject')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setAddProjectMenuOpen((v) => !v);
+                    setProjectMenuPath(null);
+                  }}
+                >
+                  <IconPlus size={14} />
+                </button>
+                {addProjectMenuOpen ? (
+                  <div className="pop-menu project-pop-menu" role="menu" style={{ right: 0, left: 'auto' }}>
+                    <button
+                      type="button"
+                      className="pop-menu-item"
+                      onClick={() => {
+                        setAddProjectMenuOpen(false);
+                        void createProjectByName();
+                      }}
+                    >
+                      <IconPlus size={14} /> {t('createProjectByName')}
+                    </button>
+                    <button
+                      type="button"
+                      className="pop-menu-item"
+                      onClick={() => {
+                        setAddProjectMenuOpen(false);
+                        void pickProject();
+                      }}
+                    >
+                      <IconOpenFolder size={14} /> {t('openProjectFolder')}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="sidebar-task-filter" style={{ padding: '0 10px 8px' }}>
+              <label className="sr-only" htmlFor="task-filter-input">
+                {t('taskSearchPlaceholder')}
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t('taskSearchAll')}
+                  aria-label={t('taskSearchAll')}
+                  onClick={() => setTaskSearchOpen(true)}
+                  style={{ padding: 3, minWidth: 24 }}
+                >
+                  <IconSearch size={14} />
+                </button>
+                <input
+                  id="task-filter-input"
+                  type="search"
+                  value={taskFilter}
+                  onChange={(e) => setTaskFilter(e.target.value)}
+                  placeholder={t('taskSearchPlaceholder')}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 12,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--hairline)',
+                    background: 'var(--bg-elevated, transparent)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Stage B: cross-task run center — only non-idle ACP-backed tasks */}
+            <div className="block-head run-center-head" style={{ marginTop: 4 }}>
+              <span className="block-title">{t('runCenterTitle')}</span>
+              {runCenterRows.length ? (
+                <span className="run-center-count">{runCenterRows.length}</span>
               ) : null}
             </div>
-          </div>
-
-          <div className="sidebar-task-filter" style={{ padding: '0 10px 8px' }}>
-            <label className="sr-only" htmlFor="task-filter-input">
-              {t('taskSearchPlaceholder')}
-            </label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                title={t('taskSearchAll')}
-                aria-label={t('taskSearchAll')}
-                onClick={() => setTaskSearchOpen(true)}
-                style={{ padding: 3, minWidth: 24 }}
-              >
-                <IconSearch size={14} />
-              </button>
-              <input
-                id="task-filter-input"
-                type="search"
-                value={taskFilter}
-                onChange={(e) => setTaskFilter(e.target.value)}
-                placeholder={t('taskSearchPlaceholder')}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 12,
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  border: '1px solid var(--hairline)',
-                  background: 'var(--bg-elevated, transparent)',
-                }}
+            <div className="run-center-wrap">
+              <RunCenterPanel
+                rows={runCenterRows}
+                activeId={activeId}
+                onSelect={focusThreadFromRunCenter}
               />
             </div>
           </div>
 
-          {/* Stage B: cross-task run center — only non-idle ACP-backed tasks */}
-          <div className="block-head run-center-head" style={{ marginTop: 4 }}>
-            <span className="block-title">{t('runCenterTitle')}</span>
-            {runCenterRows.length ? (
-              <span className="run-center-count">{runCenterRows.length}</span>
-            ) : null}
-          </div>
-          <div className="run-center-wrap">
-            <RunCenterPanel
-              rows={runCenterRows}
-              activeId={activeId}
-              onSelect={focusThreadFromRunCenter}
-            />
-          </div>
-
-          {(() => {
+          <div className="sidebar-scroll">
+            {(() => {
             const q = taskFilter.trim().toLowerCase();
             const matchTitle = (title: string) =>
               !q || title.toLowerCase().includes(q);
@@ -6916,56 +6919,57 @@ function App() {
             });
           })()}
 
-          {/* ── 任务（无项目会话，对齐 Codex） ── */}
-          <div className="block-head" style={{ marginTop: 14 }}>
-            <span className="block-title">{t('tasksSection')}</span>
-          </div>
-          <div className="task-list">
-            {(() => {
-              const q = taskFilter.trim().toLowerCase();
-              const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
-              const inbox = inboxAll.filter(
-                (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
-              );
-              return inbox.map((th) => {
-                const info = threadRunInfo(th);
-                return (
-                <ThreadListRow
-                  key={th.id}
-                  thread={{
-                    ...th,
-                    runPhase: info.phase,
-                    runStep: info.step,
-                    runStalled: info.stalled,
-                  }}
-                  siblings={inboxAll}
-                  activeId={activeId}
-                  onSelect={() => {
-                    setProject('');
-                    selectThread(th.id);
-                  }}
-                  onRename={() => void renameThread(th.id)}
-                  onArchive={() => {
-                    if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
-                  }}
-                  onDelete={() => {
-                    if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
-                  }}
-                />
+            {/* ── 任务（无项目会话，对齐 Codex） ── */}
+            <div className="block-head" style={{ marginTop: 14 }}>
+              <span className="block-title">{t('tasksSection')}</span>
+            </div>
+            <div className="task-list">
+              {(() => {
+                const q = taskFilter.trim().toLowerCase();
+                const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
+                const inbox = inboxAll.filter(
+                  (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
                 );
-              });
-            })()}
-            {(() => {
-              const q = taskFilter.trim().toLowerCase();
-              const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
-              const count = inboxAll.filter(
-                (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
-              ).length;
-              if (count > 0) return null;
-              return (
-                <div className="hint">{q ? t('taskSearchEmpty') : t('noTasksYet')}</div>
-              );
-            })()}
+                return inbox.map((th) => {
+                  const info = threadRunInfo(th);
+                  return (
+                  <ThreadListRow
+                    key={th.id}
+                    thread={{
+                      ...th,
+                      runPhase: info.phase,
+                      runStep: info.step,
+                      runStalled: info.stalled,
+                    }}
+                    siblings={inboxAll}
+                    activeId={activeId}
+                    onSelect={() => {
+                      setProject('');
+                      selectThread(th.id);
+                    }}
+                    onRename={() => void renameThread(th.id)}
+                    onArchive={() => {
+                      if (confirm(t('archiveThreadConfirm'))) void archiveThread(th.id);
+                    }}
+                    onDelete={() => {
+                      if (confirm(t('deleteThreadConfirm'))) void deleteThread(th.id);
+                    }}
+                  />
+                  );
+                });
+              })()}
+              {(() => {
+                const q = taskFilter.trim().toLowerCase();
+                const inboxAll = threadsForScope(threads, NO_PROJECT_KEY);
+                const count = inboxAll.filter(
+                  (th) => !q || threadListLabel(th, inboxAll, t('newThread')).toLowerCase().includes(q),
+                ).length;
+                if (count > 0) return null;
+                return (
+                  <div className="hint">{q ? t('taskSearchEmpty') : t('noTasksYet')}</div>
+                );
+              })()}
+            </div>
           </div>
         </section>
         </div>

@@ -1167,15 +1167,33 @@ body {
   flex: 1;
   min-height: 0;
   margin-top: 8px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   padding-bottom: 4px;
-  /* allow project ··· menus to paint outside row; still scroll list */
 }
 
 .block.grow .proj-group {
   overflow: visible;
+}
+
+/* Keep project controls and the run center in their own non-scrolling lane.
+   Only the project/task rows may grow and scroll, so a long project list can
+   never paint over the run-center status above it. */
+.sidebar-workspace {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-fixed {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .block-title {
